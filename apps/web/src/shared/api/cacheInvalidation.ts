@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { achievementKeys } from "@/shared/api/achievementQueryOptions";
 import { matchDetailCacheFilter } from "@/shared/api/detailCache";
 import {
   heldEventKeys,
@@ -24,6 +25,7 @@ async function invalidateAnalysisState(queryClient: QueryClient): Promise<void> 
     queryClient.invalidateQueries({ queryKey: seriesAnalysisKeys.adminRoot() }),
     queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.all() }),
     queryClient.invalidateQueries({ queryKey: seriesPlayerRadarKeys.scopeStatusRoot() }),
+    queryClient.invalidateQueries({ queryKey: achievementKeys.all() }),
   ]);
 }
 

@@ -59,6 +59,8 @@ export type MatchFormValues = Omit<ConfirmMatchFormValues, "noteBody"> & {
   matchDraftId?: string;
   noteBody: string;
   numericDrafts?: MatchNumericDrafts;
+  expectedVersion?: string;
+  initialResultFingerprint?: string;
 };
 
 /** Match context edited independently of score rows, OCR evidence, and workflow identifiers. */
@@ -128,5 +130,6 @@ export function createEmptyMatchForm(nowIso: string): MatchFormValues {
     players: emptyPlayers(),
     seasonMasterId: "",
     noteBody: "",
+    achievements: [],
   };
 }

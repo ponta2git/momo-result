@@ -64,7 +64,7 @@ describe("PlayerRadarSection", () => {
     expect(screen.getAllByText("参考値")).toHaveLength(1);
     expect(screen.getByText("40試合未満・8開催未満")).toBeVisible();
     for (const chart of screen.getAllByRole("img")) {
-      expect(chart).toHaveAccessibleDescription(/^点数は参考値です。/u);
+      expect(chart).toHaveAccessibleDescription(/^成績6軸の点数は参考値です。/u);
       expect(within(chart).queryByText("参考")).not.toBeInTheDocument();
     }
     await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));

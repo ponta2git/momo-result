@@ -147,6 +147,9 @@ export const matchHandlers = [
   http.get("/api/matches/:matchId/identity", ({ params }) =>
     HttpResponse.json({
       matchId: String(params["matchId"]),
+      gameTitleId: "gt_momotetsu_2",
+      mapMasterId: "map_east",
+      version: "0",
       matchNoInEvent: 1,
       playedAt: now,
       gameTitleName: "桃太郎電鉄2",

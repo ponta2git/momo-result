@@ -2,6 +2,7 @@ import type { components } from "@/shared/api/generated";
 import type { ContractValidator } from "@/shared/api/seriesAnalysisContractDecoder";
 
 export type SeriesAnalysisArtifactResponseByContract = {
+  achievements: components["schemas"]["SeriesAnalysisAchievementsResponse"];
   aggregateV5: components["schemas"]["SeriesAnalysisAggregateV5Response"];
   drilldown: components["schemas"]["SeriesAnalysisDrilldownResponse"];
   matchContext: components["schemas"]["SeriesAnalysisMatchContextResponse"];
@@ -12,6 +13,9 @@ export type SeriesAnalysisArtifactResponseByContract = {
 };
 
 export const seriesAnalysisArtifactValidatorLoaders = {
+  achievements: async () =>
+    (await import("./series-analysis-achievements-validators.generated"))
+      .validateSeriesAnalysisAchievements,
   aggregateV5: async () =>
     (await import("./series-analysis-aggregate-v5-validators.generated"))
       .validateSeriesAnalysisAggregateV5,

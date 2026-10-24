@@ -481,6 +481,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/achievements/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAchievementsCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/achievements/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postApiAchievementsItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/achievements/items/{achievementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putApiAchievementsItemsAchievementid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/achievements/items/{achievementId}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postApiAchievementsItemsAchievementidRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/achievements/claims/{claimId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putApiAchievementsClaimsClaimid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/matches/{matchId}/achievements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["postApiMatchesMatchidAchievements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/achievements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiAchievements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analytics/series-comparison/v2/options": {
         parameters: {
             query?: never;
@@ -981,6 +1093,70 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AchievementCatalogResponse */
+        AchievementCatalogResponse: {
+            gameTitleId: string;
+            items?: components["schemas"]["AchievementItemResponse"][];
+            claims?: components["schemas"]["AchievementClaimResponse"][];
+            members?: components["schemas"]["AchievementMemberResponse"][];
+            maps?: components["schemas"]["AchievementMapResponse"][];
+        };
+        /** AchievementClaimResponse */
+        AchievementClaimResponse: {
+            claimId: string;
+            achievementId: string;
+            memberId: string;
+            sourceKind: string;
+            state: string;
+            matchId: string | null;
+            achievedAt: string | null;
+            generationId: string;
+            version: string;
+            updatedByDisplayName: string;
+            updatedAt: string;
+        };
+        /** AchievementItemResponse */
+        AchievementItemResponse: {
+            achievementId: string;
+            gameTitleId: string;
+            name: string;
+            notes: string;
+            common: boolean;
+            mapMasterIds?: string[];
+            ruleKind: string;
+            threshold: string | null;
+            /** Format: int32 */
+            stars: number;
+            appliesFrom: string | null;
+            retiredAt: string | null;
+            version: string;
+        };
+        /** AchievementMapResponse */
+        AchievementMapResponse: {
+            mapMasterId: string;
+            displayName: string;
+        };
+        /** AchievementMemberResponse */
+        AchievementMemberResponse: {
+            memberId: string;
+            displayName: string;
+        };
+        /** AchievementSavedResponse */
+        AchievementSavedResponse: {
+            saved: boolean;
+        };
+        /** AddMatchAchievementRequest */
+        AddMatchAchievementRequest: {
+            achievementId: string;
+            memberId: string;
+            expectedItemVersion: string;
+            expectedClaimVersion?: string | null;
+        };
+        /** AddMatchAchievementsRequest */
+        AddMatchAchievementsRequest: {
+            expectedMatchVersion: string;
+            achievements?: components["schemas"]["AddMatchAchievementRequest"][];
+        };
         /** AdjacentHeldEventResponse */
         AdjacentHeldEventResponse: {
             id: string;
@@ -1037,6 +1213,7 @@ export interface components {
             draftIds: components["schemas"]["ConfirmMatchDraftIds"];
             players?: components["schemas"]["PlayerResultRequest"][];
             noteBody?: string;
+            achievements?: components["schemas"]["AddMatchAchievementRequest"][];
         };
         /** ConfirmMatchResponse */
         ConfirmMatchResponse: {
@@ -1045,6 +1222,27 @@ export interface components {
             /** Format: int32 */
             matchNoInEvent: number;
             createdAt: string;
+        };
+        /** CorrectAchievementClaimRequest */
+        CorrectAchievementClaimRequest: {
+            expectedVersion: string;
+            expectedItemVersion: string;
+            state: string;
+            matchId?: string | null;
+            achievedAt?: string | null;
+            expectedMatchVersion?: string | null;
+        };
+        /** CreateAchievementRequest */
+        CreateAchievementRequest: {
+            gameTitleId: string;
+            name: string;
+            notes: string;
+            common: boolean;
+            mapMasterIds?: string[];
+            ruleKind: string;
+            threshold?: string | null;
+            /** Format: int32 */
+            stars: number;
         };
         /** CreateGameTitleRequest */
         CreateGameTitleRequest: {
@@ -1348,6 +1546,7 @@ export interface components {
             mapName?: string;
             publicId?: string;
             heldEventPublicId?: string;
+            version: string;
         };
         /** MatchDraftDetailResponse */
         MatchDraftDetailResponse: {
@@ -1405,6 +1604,9 @@ export interface components {
             gameTitleName?: string;
             seasonName?: string;
             publicId?: string;
+            gameTitleId: string;
+            mapMasterId: string;
+            version: string;
         };
         /** MatchListPaginationResponse */
         MatchListPaginationResponse: {
@@ -1654,6 +1856,10 @@ export interface components {
             matchId: string;
             version: string;
         };
+        /** RetireAchievementRequest */
+        RetireAchievementRequest: {
+            expectedVersion: string;
+        };
         /** SeasonMasterListResponse */
         SeasonMasterListResponse: {
             items?: components["schemas"]["SeasonMasterResponse"][];
@@ -1666,6 +1872,165 @@ export interface components {
             /** Format: int32 */
             displayOrder: number;
             createdAt: string;
+        };
+        /** Series Analysis Achievements Resource v1 */
+        SeriesAnalysisAchievementsResponse: {
+            gameTitleId: string;
+            items: {
+                achievementId: string;
+                appliesFrom: null | string;
+                common: boolean;
+                mapMasterIds: string[];
+                players: [
+                    {
+                        dateUnknown: boolean;
+                        firstAchievedAt: null | string;
+                        memberId: string;
+                        proofs: {
+                            achievedAt: null | string;
+                            claimId: null | string;
+                            generationId: null | string;
+                            heldEventId: null | string;
+                            /** @enum {string} */
+                            kind: "manual" | "import" | "derived" | "automatic";
+                            matchId: null | string;
+                            sourceAchievementId: null | string;
+                            /** @enum {string} */
+                            state: "achieved" | "unconfirmed";
+                            matchAvailable: boolean;
+                            heldEventAvailable: boolean;
+                        }[];
+                        /** @enum {string} */
+                        status: "achieved" | "unconfirmed" | "not_recorded";
+                        displayName: string;
+                    },
+                    {
+                        dateUnknown: boolean;
+                        firstAchievedAt: null | string;
+                        memberId: string;
+                        proofs: {
+                            achievedAt: null | string;
+                            claimId: null | string;
+                            generationId: null | string;
+                            heldEventId: null | string;
+                            /** @enum {string} */
+                            kind: "manual" | "import" | "derived" | "automatic";
+                            matchId: null | string;
+                            sourceAchievementId: null | string;
+                            /** @enum {string} */
+                            state: "achieved" | "unconfirmed";
+                            matchAvailable: boolean;
+                            heldEventAvailable: boolean;
+                        }[];
+                        /** @enum {string} */
+                        status: "achieved" | "unconfirmed" | "not_recorded";
+                        displayName: string;
+                    },
+                    {
+                        dateUnknown: boolean;
+                        firstAchievedAt: null | string;
+                        memberId: string;
+                        proofs: {
+                            achievedAt: null | string;
+                            claimId: null | string;
+                            generationId: null | string;
+                            heldEventId: null | string;
+                            /** @enum {string} */
+                            kind: "manual" | "import" | "derived" | "automatic";
+                            matchId: null | string;
+                            sourceAchievementId: null | string;
+                            /** @enum {string} */
+                            state: "achieved" | "unconfirmed";
+                            matchAvailable: boolean;
+                            heldEventAvailable: boolean;
+                        }[];
+                        /** @enum {string} */
+                        status: "achieved" | "unconfirmed" | "not_recorded";
+                        displayName: string;
+                    },
+                    {
+                        dateUnknown: boolean;
+                        firstAchievedAt: null | string;
+                        memberId: string;
+                        proofs: {
+                            achievedAt: null | string;
+                            claimId: null | string;
+                            generationId: null | string;
+                            heldEventId: null | string;
+                            /** @enum {string} */
+                            kind: "manual" | "import" | "derived" | "automatic";
+                            matchId: null | string;
+                            sourceAchievementId: null | string;
+                            /** @enum {string} */
+                            state: "achieved" | "unconfirmed";
+                            matchAvailable: boolean;
+                            heldEventAvailable: boolean;
+                        }[];
+                        /** @enum {string} */
+                        status: "achieved" | "unconfirmed" | "not_recorded";
+                        displayName: string;
+                    }
+                ];
+                retired: boolean;
+                /** @enum {string} */
+                ruleKind: "manual" | "total_assets" | "destination" | "suri_no_ginji" | "event_average_rank";
+                stars: number;
+                threshold: null | string;
+                name: string;
+                notes: string;
+            }[];
+            /** @constant */
+            schemaVersion: 1;
+            scope: {
+                /** @constant */
+                kind: "overall";
+                displayName: string;
+            };
+            summaries: {
+                mapMasterId: null | string;
+                players: [
+                    {
+                        earnedPoints: number;
+                        memberId: string;
+                        score: null | number;
+                        displayName: string;
+                    },
+                    {
+                        earnedPoints: number;
+                        memberId: string;
+                        score: null | number;
+                        displayName: string;
+                    },
+                    {
+                        earnedPoints: number;
+                        memberId: string;
+                        score: null | number;
+                        displayName: string;
+                    },
+                    {
+                        earnedPoints: number;
+                        memberId: string;
+                        score: null | number;
+                        displayName: string;
+                    }
+                ];
+                totalPoints: number;
+            }[];
+            artifact: {
+                algorithmVersion: string;
+                artifactId: string;
+                /** @constant */
+                artifactSchemaVersion: 7;
+                gameTitleId: string;
+                inputRevision: string;
+                publishedAt: string;
+                radarBasisCreatedAt: string | null;
+                radarBasisAppliedAt: string | null;
+            };
+            maps: {
+                mapMasterId: string;
+                displayName: string;
+            }[];
         };
         /** SeriesAnalysisAdminOverviewResponse */
         SeriesAnalysisAdminOverviewResponse: {
@@ -2920,7 +3285,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3017,7 +3382,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3112,7 +3477,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3194,7 +3559,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3268,7 +3633,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3308,8 +3673,8 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "running" | "succeeded" | "failed" | "timed_out";
             /** @enum {string} */
-            trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation";
-            coalescedTriggers: ("manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation")[];
+            trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation" | "achievement_mutation";
+            coalescedTriggers: ("manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation" | "achievement_mutation")[];
             /** @enum {string} */
             requestedBy: "administrator" | "mixed" | "system";
             /** Format: int32 */
@@ -3422,7 +3787,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3439,7 +3804,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3530,7 +3895,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3653,7 +4018,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3696,7 +4061,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3917,7 +4282,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 6;
+                artifactSchemaVersion: 7;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3980,7 +4345,7 @@ export interface components {
                 /** @enum {string} */
                 status: "queued" | "running" | "succeeded" | "failed" | "timed_out";
                 /** @enum {string} */
-                trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation";
+                trigger: "manual" | "artifact_schema_update" | "algorithm_update" | "initial_backfill" | "match_mutation" | "achievement_mutation";
                 requestedAt: string;
                 startedAt: string | null;
                 finishedAt: string | null;
@@ -6477,6 +6842,14 @@ export interface components {
                 heldEventCount: number;
             };
         };
+        /** UpdateAchievementRequest */
+        UpdateAchievementRequest: {
+            name: string;
+            notes: string;
+            /** Format: int32 */
+            stars: number;
+            expectedVersion: string;
+        };
         /** UpdateGameTitleRequest */
         UpdateGameTitleRequest: {
             name: string;
@@ -6519,6 +6892,8 @@ export interface components {
             playedAt: string;
             draftIds: components["schemas"]["ConfirmMatchDraftIds"];
             players?: components["schemas"]["PlayerResultRequest"][];
+            expectedVersion: string;
+            achievements?: components["schemas"]["AddMatchAchievementRequest"][];
         };
         /** UpdateMatchResponse */
         UpdateMatchResponse: {
@@ -7968,6 +8343,324 @@ export interface operations {
                 };
             };
             /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getApiAchievementsCatalog: {
+        parameters: {
+            query: {
+                gameTitleId: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementCatalogResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    postApiAchievementsItems: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAchievementRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementItemResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putApiAchievementsItemsAchievementid: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                achievementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAchievementRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementItemResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    postApiAchievementsItemsAchievementidRetire: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                achievementId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetireAchievementRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementItemResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putApiAchievementsClaimsClaimid: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                claimId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectAchievementClaimRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementClaimResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    postApiMatchesMatchidAchievements: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                matchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMatchAchievementsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementSavedResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    getApiAchievements: {
+        parameters: {
+            query: {
+                gameTitleId: string;
+                artifactId: string;
+            };
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesAnalysisAchievementsResponse"];
+                };
+            };
+            /** @description Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId */
             400: {
                 headers: {
                     [name: string]: unknown;

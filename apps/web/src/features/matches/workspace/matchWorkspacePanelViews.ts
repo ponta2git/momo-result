@@ -1,3 +1,4 @@
+import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import type {
   MatchFormValues,
   MatchSetupValues,
@@ -103,7 +104,10 @@ export type MatchWorkspaceConfirmationDialogView = {
     mapName: string | undefined;
     seasonName: string | undefined;
   };
-  values: Pick<MatchFormValues, "matchNoInEvent" | "noteBody" | "players">;
+  values: Pick<MatchFormValues, "matchNoInEvent" | "noteBody" | "players"> & {
+    achievements?: readonly MatchAchievementSelection[] | undefined;
+    playedAt?: string;
+  };
 };
 
 export type MatchWorkspaceBlockedReviewView = {

@@ -41,6 +41,20 @@ export const playerRadarAxes = [
 ] as const;
 
 export type PlayerRadarAxisId = (typeof playerRadarAxes)[number]["id"];
+
+export const playerAchievementAxis = {
+  id: "achievement",
+  label: "実績達成",
+  chartLabel: ["実績達成", "作品通算"],
+  description: "対象の実績に対する作品通算の獲得ポイント。",
+} as const;
+
+/** Already calculated by the publication; the chart never recalculates this score. */
+export type PlayerAchievementScore = {
+  earnedPoints: number;
+  totalPoints: number;
+  score: number | null;
+};
 export type PlayerRadarSampleQuality = "no_target" | "insufficient" | "reference" | "standard";
 export type PlayerRadarUnavailableReason =
   | "no_target"
@@ -105,9 +119,11 @@ export function formatPlayerRadarBoundary(axisId: PlayerRadarAxisId, value: numb
   return `${approximate}${formatPlayerRadarRawValue(axisId, value)}${axisId === "averageRank" ? "以下" : "以上"}`;
 }
 
-export function playerRadarScoreLabel(cell: PlayerRadarCell | undefined): string {
+export function playerRadarScoreLabel(
+  cell: Pick<PlayerRadarCell, "score" | "scoreUnavailableReasons"> | undefined,
+): string {
   if (!cell) return "未採点";
-  if (cell.score !== null) return `${cell.score}点`;
+  if (cell.score !== null) return `${formatDecimal(cell.score)}点`;
   return cell.scoreUnavailableReasons.includes("no_target") ? "対象なし" : "未採点";
 }
 

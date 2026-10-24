@@ -14,7 +14,7 @@ import { makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 export const analysisArtifact = {
   algorithmVersion: "series-analysis-v7",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 6,
+  artifactSchemaVersion: 7,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
@@ -68,7 +68,7 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 6,
+      artifactSchemaVersion: 7,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,

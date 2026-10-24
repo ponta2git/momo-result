@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
@@ -30,8 +31,11 @@ import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 // The timed assertions exercise operation lifecycle after the real wire validators load.
-beforeAll(
-  () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+beforeAll(() =>
+  Promise.all([
+    import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+    decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+  ]),
 );
 
 function renderPage(guarded = false) {

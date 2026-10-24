@@ -10,6 +10,7 @@ import type {
   SeriesAnalysisSelection,
   SeriesAnalysisViewId,
 } from "@/features/seriesComparison/model/seriesAnalysisSelection";
+import { achievementKeys } from "@/shared/api/achievementQueryOptions";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import type {
@@ -188,6 +189,13 @@ export function useSeriesAnalysisReads({
       selection,
       refreshPublication: async () => {
         const result = await refetchStatus({ cancelRefetch: false });
+        const currentArtifactId = result.data?.currentArtifact?.artifactId;
+        if (!result.isError && selection.gameTitleId && currentArtifactId) {
+          await queryClient.invalidateQueries({
+            queryKey: achievementKeys.publication(selection.gameTitleId, currentArtifactId),
+            exact: true,
+          });
+        }
         return result.isError
           ? undefined
           : { artifactId: result.data?.currentArtifact?.artifactId };

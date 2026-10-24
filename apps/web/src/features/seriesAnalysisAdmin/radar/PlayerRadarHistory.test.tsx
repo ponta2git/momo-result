@@ -6,6 +6,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import type {
   PlayerRadarRevision,
   PlayerRadarRevisionDetail,
@@ -27,8 +28,11 @@ import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
 setupMsw();
-beforeAll(
-  () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+beforeAll(() =>
+  Promise.all([
+    import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+    decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+  ]),
 );
 
 function revision(id = "revision-1"): PlayerRadarRevision {

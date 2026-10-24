@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { matchesSeriesAnalysisScope } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { SeriesAnalysisNavigation } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { OutlookWorkspaceProvider } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
+import { AchievementRadarSection } from "@/features/seriesComparison/page/AchievementRadarSection";
 import {
   preloadSeriesAnalysisView,
   SeriesAnalysisContent,
@@ -35,6 +36,14 @@ export function SeriesComparisonPage() {
 function SeriesComparisonPageContent() {
   const comparison = useSeriesComparison();
   const { filters, focus, options, resource, status } = comparison;
+  const emptyAchievementRadar = filters.selection.gameTitleId ? (
+    <AchievementRadarSection
+      gameTitleId={filters.selection.gameTitleId}
+      artifactId={status.data?.currentArtifact?.artifactId}
+      mapMasterId={filters.selection.mapMasterId}
+      seasonMasterId={filters.selection.seasonMasterId}
+    />
+  ) : null;
   const purposeChanging =
     resource.bundle !== undefined &&
     (filters.activeView === "outlook"
@@ -51,7 +60,8 @@ function SeriesComparisonPageContent() {
     resource.loading ||
     resource.shielded ||
     focus.shielded ||
-    focus.loading;
+    focus.loading ||
+    comparison.achievementsFetching;
   const [requestedRetryTarget, setRequestedRetryTarget] = useState<
     "options" | "status" | "resource"
   >();
@@ -195,16 +205,19 @@ function SeriesComparisonPageContent() {
                   作品とシーズンの選択を保って、マップの指定を解除します。
                 </Notice>
               ) : resource.scopeState === "empty" ? (
-                <EmptyState
-                  placement="embedded"
-                  title="この範囲に確定済みの試合がありません"
-                  description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
-                  action={
-                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
-                      全シーズン・全マップに戻す
-                    </Button>
-                  }
-                />
+                <div className="grid gap-4">
+                  <EmptyState
+                    placement="embedded"
+                    title="この範囲に確定済みの試合がありません"
+                    description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
+                    action={
+                      <Button variant="secondary" onClick={comparison.actions.clearScope}>
+                        全シーズン・全マップに戻す
+                      </Button>
+                    }
+                  />
+                  {emptyAchievementRadar}
+                </div>
               ) : resource.scopeState === "awaiting_analysis" && status.data?.currentArtifact ? (
                 <Notice tone="info" title="この条件の分析を準備しています">
                   記録はありますが、この条件の分析結果はまだ公開されていません。計算後に状態を更新してください。
@@ -265,21 +278,24 @@ function SeriesComparisonPageContent() {
                       fallback={<ComparisonSkeleton view={filters.activeView} />}
                       strategy="preserve-inert"
                     >
-                      <EmptyState
-                        action={
-                          filters.selection.mapMasterId || filters.selection.seasonMasterId ? (
-                            <Button variant="secondary" onClick={comparison.actions.clearScope}>
-                              全シーズン・全マップに戻す
-                            </Button>
-                          ) : (
-                            <LinkButton to="/matches">試合一覧を開く</LinkButton>
-                          )
-                        }
-                        icon={<BarChart3 />}
-                        placement="embedded"
-                        title="この範囲に確定済みの試合がありません"
-                        description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
-                      />
+                      <div className="grid gap-4">
+                        <EmptyState
+                          action={
+                            filters.selection.mapMasterId || filters.selection.seasonMasterId ? (
+                              <Button variant="secondary" onClick={comparison.actions.clearScope}>
+                                全シーズン・全マップに戻す
+                              </Button>
+                            ) : (
+                              <LinkButton to="/matches">試合一覧を開く</LinkButton>
+                            )
+                          }
+                          icon={<BarChart3 />}
+                          placement="embedded"
+                          title="この範囲に確定済みの試合がありません"
+                          description="総合、別シーズン、別マップを選ぶと表示できる場合があります。"
+                        />
+                        {emptyAchievementRadar}
+                      </div>
                     </StaleShield>
                   ) : (
                     <SeriesAnalysisContent

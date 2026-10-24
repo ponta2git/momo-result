@@ -61,6 +61,9 @@ function MatchConfirmSummary({
           label: "試合番号",
           value: formatMatchNoInEvent(values.matchNoInEvent),
         },
+        ...(values.playedAt
+          ? [{ id: "played-at", label: "対戦日時", value: formatDateTimeLong(values.playedAt) }]
+          : []),
         { id: "game-title", label: "作品", value: gameTitleName ?? "未選択" },
         { id: "season", label: "シーズン", value: seasonName ?? "未選択" },
         { id: "map", label: "マップ", value: mapName ?? "未選択" },
@@ -168,6 +171,18 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
       <form action={view.actions.onConfirm} className="grid min-w-0 gap-6">
         <MatchConfirmSummary {...view.summary} values={view.values} />
         <PlayerLedger values={view.values} />
+        {view.values.achievements?.length ? (
+          <section aria-label="今回記録する実績" className="grid gap-2">
+            <h3 className={contentText.heading}>今回記録する実績</h3>
+            <ul className="grid gap-1">
+              {view.values.achievements.map((entry) => (
+                <li key={`${entry.achievementId}:${entry.memberId}`} className={contentText.body}>
+                  {entry.achievementName}・{memberDisplayName(entry.memberId)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {view.values.noteBody.trim().length > 0 ? (
           <section aria-labelledby="confirm-match-note-heading" className="grid gap-1">
             <h3 className={contentText.heading} id="confirm-match-note-heading">

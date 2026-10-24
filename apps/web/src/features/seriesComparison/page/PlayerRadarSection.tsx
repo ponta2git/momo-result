@@ -1,7 +1,11 @@
+import { useState } from "react";
+
 import { AnalysisSection } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
+import type { AchievementScorePlayer } from "@/shared/achievements/AchievementScoreTable";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
+import { formatDecimal } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
 import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
@@ -9,6 +13,7 @@ import {
   formatPlayerRadarBoundary,
   formatPlayerRadarRawValue,
   playerRadarAxes,
+  playerAchievementAxis,
   playerRadarScoreLabel,
   playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
@@ -18,6 +23,7 @@ import type {
   PlayerRadarDisplay,
   PlayerRadarUnavailableReason,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -55,9 +61,23 @@ function RadarValue({
   );
 }
 
-export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
+export function PlayerRadarSection({
+  radar,
+  achievements,
+  achievementsHref,
+}: {
+  radar: PlayerRadarDisplay;
+  achievements?: readonly AchievementScorePlayer[] | undefined;
+  achievementsHref?: string | undefined;
+}) {
   const players = orderFixedMembers(radar.players);
-  const hasScores = players.some((player) => player.axes.some((axis) => axis.score !== null));
+  const hasScores =
+    players.some((player) => player.axes.some((axis) => axis.score !== null)) ||
+    Boolean(achievements?.some((player) => player.score !== null));
+  const displayAxes = achievements
+    ? [...playerRadarAxes, playerAchievementAxis]
+    : [...playerRadarAxes];
+  const [detailsOpen, setDetailsOpen] = useState(!hasScores);
   const cells = players.flatMap((player) => player.axes);
   const referenceScoresGrouped = playerRadarScoresAreReference(players);
   const referenceReasons = [
@@ -78,7 +98,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
           aria-label="レーダーの使用基準"
           className={cn(radar.basis ? contentText.supporting : contentText.body, "tabular-nums")}
         >
-          作品共通・
+          {achievements ? "成績6軸：" : ""}作品共通・
           {radar.basis
             ? radar.basis.appliedAt
               ? `${formatDateOnly(radar.basis.appliedAt)}適用`
@@ -90,6 +110,7 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
       <div className="grid gap-4">
         {referenceScoresGrouped ? (
           <div className="flex flex-wrap items-center gap-2">
+            {achievements ? <span className={contentText.supporting}>成績6軸</span> : null}
             <SeriesAnalysisQualityAdvisory status="reference" />
             {referenceReasons.length > 0 ? (
               <p className={contentText.supporting}>{referenceReasons.join("・")}</p>
@@ -97,13 +118,19 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
           </div>
         ) : null}
         {sharedReasons.includes("insufficient_matches") ? (
-          <p className={cn(contentText.body, readableTextWidthClass)}>3試合未満のため未採点</p>
+          <p className={cn(contentText.body, readableTextWidthClass)}>
+            {achievements ? "成績6軸は" : ""}3試合未満のため未採点
+          </p>
         ) : null}
         {hasScores ? (
           <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
             {players.map((player) => (
               <div className="w-full max-w-sm min-w-0" key={player.memberId}>
-                <PlayerRadarChart player={player} referenceScoresGrouped={referenceScoresGrouped} />
+                <PlayerRadarChart
+                  player={player}
+                  referenceScoresGrouped={referenceScoresGrouped}
+                  achievement={achievements?.find((entry) => entry.memberId === player.memberId)}
+                />
               </div>
             ))}
           </div>
@@ -114,10 +141,13 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
             panelSpacing="sm"
             summary="数値を表で見る"
             triggerVariant="supporting"
-            defaultOpen={!hasScores}
+            open={detailsOpen}
+            onOpenChange={setDetailsOpen}
           >
             <DataTable
-              caption={{ content: "6軸の点数と元の成績" }}
+              caption={{
+                content: achievements ? "7軸の点数と元の成績・実績ポイント" : "6軸の点数と元の成績",
+              }}
               columns={[
                 {
                   header: "観点",
@@ -135,22 +165,53 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
                   key: player.memberId,
                   minWidth: "8.5rem",
                   tabular: true,
-                  renderCell: (axis: (typeof playerRadarAxes)[number]) => (
-                    <RadarValue
-                      cell={player.axes.find((cell) => cell.axisId === axis.id)}
-                      sharedReasons={sharedReasons}
-                      referenceScoresGrouped={referenceScoresGrouped}
-                    />
-                  ),
+                  renderCell: (axis: (typeof displayAxes)[number]) => {
+                    if (axis.id === "achievement") {
+                      const score = achievements?.find(
+                        (entry) => entry.memberId === player.memberId,
+                      );
+                      return (
+                        <div className="grid gap-1">
+                          <p className={contentText.compactPrimary}>
+                            {score?.score === null
+                              ? "採点対象外"
+                              : score
+                                ? `${formatDecimal(score.score)}点`
+                                : "未取得"}
+                          </p>
+                          {score ? (
+                            <p>
+                              {score.earnedPoints}／{score.totalPoints}ポイント
+                            </p>
+                          ) : null}
+                          <p className={contentText.supporting}>作品通算</p>
+                        </div>
+                      );
+                    }
+                    return (
+                      <RadarValue
+                        cell={player.axes.find((cell) => cell.axisId === axis.id)}
+                        sharedReasons={sharedReasons}
+                        referenceScoresGrouped={referenceScoresGrouped}
+                      />
+                    );
+                  },
                 })),
               ]}
               density="compact"
               getRowKey={(axis) => axis.id}
-              rows={[...playerRadarAxes]}
+              rows={displayAxes}
               stickyRowHeader
               verticalAlign="top"
             />
           </Disclosure>
+          {achievementsHref ? (
+            <div className="my-2">
+              <LinkButton to={achievementsHref} variant="secondary" size="sm">
+                実績リストを開く
+              </LinkButton>
+            </div>
+          ) : null}
           <Disclosure
             ariaLabel="レーダーの採点基準"
             summary="採点基準"
@@ -164,9 +225,19 @@ export function PlayerRadarSection({ radar }: { radar: PlayerRadarDisplay }) {
                   items={[
                     {
                       id: "quality",
-                      label: "採点対象",
+                      label: achievements ? "成績6軸" : "採点対象",
                       value: "3試合以上（40試合未満または8開催未満は参考値）",
                     },
+                    ...(achievements
+                      ? [
+                          {
+                            id: "achievement",
+                            label: "実績達成",
+                            value:
+                              "作品通算の獲得ポイントの割合を1〜10点で表示します。1＋9×（獲得ポイント÷対象ポイント）。対象項目がない場合は採点対象外です。",
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </div>

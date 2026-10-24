@@ -3,17 +3,26 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import {
   playerRadarAxes,
+  playerAchievementAxis,
   playerRadarScoreLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import type { PlayerRadarPlayer } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type {
+  PlayerAchievementScore,
+  PlayerRadarPlayer,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { dataVizSeriesPresentation } from "@/shared/seriesAnalysis/seriesPresentation";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
 const ticks = [2, 4, 6, 8, 10];
 
-function coordinate(center: { x: number; y: number }, index: number, distance: number) {
-  const angle = -Math.PI / 2 + (index * Math.PI) / 3;
+function coordinate(
+  center: { x: number; y: number },
+  index: number,
+  distance: number,
+  axisCount: number,
+) {
+  const angle = -Math.PI / 2 + (index * 2 * Math.PI) / axisCount;
   return {
     x: center.x + Math.cos(angle) * distance,
     y: center.y + Math.sin(angle) * distance,
@@ -25,10 +34,12 @@ export function PlayerRadarChart({
   player,
   referenceScoresGrouped,
   comparison,
+  achievement,
 }: {
   player: PlayerRadarPlayer;
   referenceScoresGrouped: boolean;
   comparison?: { before: PlayerRadarPlayer | null } | undefined;
+  achievement?: PlayerAchievementScore | undefined;
 }) {
   const figureId = useId();
   const figureRef = useRef<HTMLElement>(null);
@@ -46,30 +57,44 @@ export function PlayerRadarChart({
     return () => observer.disconnect();
   }, []);
   // Keep text and marks in CSS pixels; resize the geometry inside its allotted column.
-  const radius = Math.min(128, (width / 2 - 36) / Math.cos(Math.PI / 6) - 36);
+  const axes = achievement ? [...playerRadarAxes, playerAchievementAxis] : playerRadarAxes;
+  const radius = Math.max(
+    24,
+    Math.min(128, achievement ? width / 2 - 76 : (width / 2 - 36) / Math.cos(Math.PI / 6) - 36),
+  );
   const center = { x: width / 2, y: radius + 70 };
   const hasReferenceScore =
     !referenceScoresGrouped &&
     player.axes.some((axis) => axis.sampleQuality === "reference" && axis.score !== null);
   const height = Math.ceil(radius * 2 + (hasReferenceScore ? 160 : 144));
   const presentation = dataVizSeriesPresentation(player.memberId);
-  const vertices = playerRadarAxes.map((axis, index) => {
-    const cell = player.axes.find((value) => value.axisId === axis.id);
+  const vertices = axes.map((axis, index) => {
+    const cell =
+      axis.id === "achievement" && achievement
+        ? {
+            score: achievement.score,
+            sampleQuality: "standard" as const,
+            scoreUnavailableReasons: achievement.score === null ? (["no_target"] as const) : [],
+          }
+        : player.axes.find((value) => value.axisId === axis.id);
     return {
       axis,
       cell,
       point:
         cell?.score !== null && cell?.score !== undefined
-          ? coordinate(center, index, (radius * cell.score) / 10)
+          ? coordinate(center, index, (radius * cell.score) / 10, axes.length)
           : null,
     };
   });
-  const beforeVertices = playerRadarAxes.map((axis, index) => {
+  const beforeVertices = axes.map((axis, index) => {
     const cell = comparison?.before?.axes.find((value) => value.axisId === axis.id);
     return {
       axis,
       cell,
-      point: cell?.score != null ? coordinate(center, index, (radius * cell.score) / 10) : null,
+      point:
+        cell?.score != null
+          ? coordinate(center, index, (radius * cell.score) / 10, axes.length)
+          : null,
     };
   });
   const areaPoints = vertices.map(({ point }) => point);
@@ -93,10 +118,10 @@ export function PlayerRadarChart({
         width={width}
       >
         <title id={`${figureId}-title`}>
-          {player.displayName}の6軸レーダー{comparison ? "（適用中／変更案）" : ""}
+          {player.displayName}の{axes.length}軸レーダー{comparison ? "（適用中／変更案）" : ""}
         </title>
         <desc id={`${figureId}-description`}>
-          {referenceScoresGrouped ? "点数は参考値です。" : ""}
+          {referenceScoresGrouped ? "成績6軸の点数は参考値です。" : ""}
           {vertices
             .map(({ axis, cell }, index) => {
               const beforeLabel = playerRadarScoreLabel(beforeVertices[index]?.cell);
@@ -117,16 +142,16 @@ export function PlayerRadarChart({
           {ticks.map((tick) => (
             <polygon
               key={tick}
-              points={playerRadarAxes
+              points={axes
                 .map((_, index) => {
-                  const point = coordinate(center, index, (radius * tick) / 10);
+                  const point = coordinate(center, index, (radius * tick) / 10, axes.length);
                   return `${point.x},${point.y}`;
                 })
                 .join(" ")}
             />
           ))}
-          {playerRadarAxes.map((axis, index) => {
-            const edge = coordinate(center, index, radius);
+          {axes.map((axis, index) => {
+            const edge = coordinate(center, index, radius, axes.length);
             return <line key={axis.id} x1={center.x} x2={edge.x} y1={center.y} y2={edge.y} />;
           })}
         </g>
@@ -147,11 +172,11 @@ export function PlayerRadarChart({
             const before = beforeVertices[index]?.cell;
             const beforeLabel = playerRadarScoreLabel(before);
             const afterLabel = playerRadarScoreLabel(cell);
-            const label = coordinate(center, index, radius + 36);
+            const label = coordinate(center, index, radius + 36, axes.length);
             const reference =
               !referenceScoresGrouped && cell?.sampleQuality === "reference" && cell.score !== null;
             const labelHeight = axis.chartLabel.length * 16 + (reference ? 36 : 20);
-            const top = index === 3 ? label.y - 24 : label.y - labelHeight / 2;
+            const top = axes.length === 6 && index === 3 ? label.y - 24 : label.y - labelHeight / 2;
             return (
               <g key={axis.id} textAnchor="middle">
                 <text x={label.x} y={top + 12}>

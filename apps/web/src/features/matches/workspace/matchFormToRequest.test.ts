@@ -18,10 +18,37 @@ function validForm(): MatchFormValues {
     heldEventId: "held-1",
     mapMasterId: "map_east",
     seasonMasterId: "season_current",
+    expectedVersion: "0",
   };
 }
 
 describe("toConfirmMatchRequest", () => {
+  it("preserves new achievement identities and versions while omitting their display-only labels", () => {
+    const values = validForm();
+    values.matchDraftId = "ocr-draft-1";
+    values.achievements = [
+      {
+        achievementId: "achievement-1",
+        achievementName: "確認画面の表示名",
+        memberId: "member_ponta",
+        expectedItemVersion: "4",
+        expectedClaimVersion: "2",
+      },
+    ];
+    expect(toConfirmMatchRequest(values)).toMatchObject({
+      matchDraftId: "ocr-draft-1",
+      achievements: [
+        {
+          achievementId: "achievement-1",
+          memberId: "member_ponta",
+          expectedItemVersion: "4",
+          expectedClaimVersion: "2",
+        },
+      ],
+    });
+    expect(toConfirmMatchRequest(values).achievements?.[0]).not.toHaveProperty("achievementName");
+  });
+
   it("converts the local datetime input into a UTC ISO string", () => {
     const result = toConfirmMatchRequest(validForm());
 

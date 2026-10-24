@@ -8,9 +8,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { SeriesComparisonPage } from "@/features/seriesComparison/page/SeriesComparisonPage";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { createDeferred } from "@/test/deferred";
+import { makeAchievedResource } from "@/test/msw/achievementFixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisOptions,
   makeSeriesAnalysisScopeStatus,
 } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
@@ -44,6 +46,58 @@ function renderScope() {
 }
 
 describe("SeriesComparison empty scope", () => {
+  it("reads title-wide achievement points for a new map with no comparison aggregate", async () => {
+    const reads: string[] = [];
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/options", () => {
+        const options = makeSeriesAnalysisOptions();
+        options.titles = options.titles.map((title) => ({
+          ...title,
+          confirmedMatchCount: 0,
+          maps: [],
+          seasons: [],
+          seasonMapPairs: [],
+        }));
+        return HttpResponse.json(options);
+      }),
+      http.get("/api/analytics/series-comparison/v2/scope-status", ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        return HttpResponse.json(
+          makeSeriesAnalysisScopeStatus({
+            artifactId: params.get("artifactId"),
+            seasonMasterId: "season_current",
+            mapMasterId: "map_empty",
+            seasonName: "今シーズン",
+            mapName: "新しいマップ",
+            state: "empty",
+            currentHasMatches: false,
+            publishedHasMatches: params.has("artifactId") ? false : null,
+          }),
+        );
+      }),
+      http.get("/api/analytics/series-comparison/v5/aggregate", () => {
+        reads.push("aggregate");
+        return new HttpResponse(null, { status: 404 });
+      }),
+      http.get("/api/achievements", ({ request }) => {
+        reads.push(new URL(request.url).search);
+        return HttpResponse.json(makeAchievedResource());
+      }),
+    );
+    const { client } = renderScope();
+    const scores = await screen.findByRole("table", { name: "実績達成・作品通算" });
+    const ponta = within(scores).getByRole("row", { name: /ぽんた/u });
+    expect(within(ponta).getByText("10点")).toBeVisible();
+    expect(within(ponta).getByText("4／4")).toBeVisible();
+    expect(screen.getByRole("link", { name: "実績リストを開く" })).toHaveAttribute(
+      "href",
+      "/achievements?gameTitleId=gt_momotetsu_2&mapMasterId=map_empty",
+    );
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(reads).toEqual(["?gameTitleId=gt_momotetsu_2&artifactId=artifact-current"]);
+    expect(screen.queryByRole("img", { name: /レーダー/u })).not.toBeInTheDocument();
+  });
+
   it("preserves valid masters absent from the match directory without fetching an empty artifact", async () => {
     const user = userEvent.setup();
     let aggregateReads = 0;

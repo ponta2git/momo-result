@@ -1,5 +1,6 @@
 import {
   Activity,
+  Award,
   BarChart3,
   CalendarDays,
   Database,
@@ -19,6 +20,7 @@ import { Button } from "@/shared/ui/actions/Button";
 const primaryItems = [
   { icon: <Trophy />, label: "試合", to: "/matches" },
   { icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
+  { icon: <Award />, label: "実績", to: "/achievements" },
   { icon: <ScanLine />, label: "OCR", to: "/ocr/new" },
   { icon: <CalendarDays />, label: "開催", to: "/held-events" },
   { icon: <Download />, label: "出力", to: "/exports" },

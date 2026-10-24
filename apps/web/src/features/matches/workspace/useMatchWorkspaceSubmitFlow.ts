@@ -5,6 +5,7 @@ import type { NavigateOptions } from "react-router-dom";
 import {
   toConfirmMatchRequest,
   toUpdateMatchRequest,
+  isAchievementOnlyUpdate,
 } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchWorkspaceOperationError } from "@/features/matches/workspace/matchWorkspaceOperationError";
@@ -78,7 +79,12 @@ export function useMatchWorkspaceSubmitFlow({
         return;
       }
       showToast({
-        title: result.kind === "confirm" ? "試合を確定しました" : "試合を保存しました",
+        title:
+          result.kind === "confirm"
+            ? "試合を確定しました"
+            : result.achievementOnly
+              ? "実績の記録を保存しました"
+              : "試合を保存しました",
         tone: "success",
       });
       if (result.kind === "confirm") setConfirmOpen(false);
@@ -109,7 +115,12 @@ export function useMatchWorkspaceSubmitFlow({
     return null;
   }, null);
   const saveChanges = useCallback(
-    (latestValues: MatchFormValues) => updateMatch(matchId, toUpdateMatchRequest(latestValues)),
+    (latestValues: MatchFormValues) =>
+      updateMatch(
+        matchId,
+        toUpdateMatchRequest(latestValues),
+        isAchievementOnlyUpdate(latestValues),
+      ),
     [matchId, updateMatch],
   );
   const cancelDraftConfirmed = useCallback(async () => {

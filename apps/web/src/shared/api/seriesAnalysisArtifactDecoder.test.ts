@@ -20,7 +20,7 @@ import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/
 const artifact = {
   algorithmVersion: "series-analysis-v7",
   artifactId: "artifact-1",
-  artifactSchemaVersion: 6,
+  artifactSchemaVersion: 7,
   gameTitleId: "title-1",
   inputRevision: "1",
   publishedAt: "2026-08-29T00:00:00Z",

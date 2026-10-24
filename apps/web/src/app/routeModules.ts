@@ -1,5 +1,10 @@
 export { LoginPage } from "@/features/auth/LoginPage";
 
+export const loadAchievementsPage = () =>
+  import("@/features/achievements/AchievementsPage").then((module) => ({
+    default: module.AchievementsPage,
+  }));
+
 export const loadDraftReviewPage = () =>
   import("@/features/matches/workspace/DraftReviewPage").then((module) => ({
     default: module.DraftReviewPage,
@@ -60,6 +65,7 @@ const routePreloaders: Array<{
   matches: (pathname: string) => boolean;
   preload: () => Promise<unknown>;
 }> = [
+  { matches: (pathname) => pathname === "/achievements", preload: loadAchievementsPage },
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
   { matches: (pathname) => pathname === "/held-events", preload: loadHeldEventsPage },
   {

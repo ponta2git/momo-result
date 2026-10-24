@@ -1,3 +1,4 @@
+import { achievementHandlers } from "@/test/msw/achievementHandlers";
 import { authHandlers } from "@/test/msw/authHandlers";
 import { exportHandlers } from "@/test/msw/exportHandlers";
 import { heldEventHandlers } from "@/test/msw/heldEventHandlers";
@@ -10,6 +11,7 @@ export { resetMswStores } from "@/test/msw/fixtures";
 
 export const handlers = [
   ...authHandlers,
+  ...achievementHandlers,
   ...ocrHandlers,
   ...heldEventHandlers,
   ...matchHandlers,

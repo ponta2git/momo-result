@@ -1,3 +1,4 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -8,20 +9,30 @@ import { DriversView } from "@/features/seriesComparison/page/SeriesAnalysisDriv
 import { FlowView } from "@/features/seriesComparison/page/SeriesAnalysisFlowView";
 import { OverviewView } from "@/features/seriesComparison/page/SeriesAnalysisOverviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
+import { achievementKeys } from "@/shared/api/achievementQueryOptions";
+import { makeAchievementResource } from "@/test/msw/achievementFixtures";
 import {
   makeSeriesAnalysisAggregate,
   makeSeriesAnalysisMatchContext,
 } from "@/test/msw/seriesAnalysisFixtures";
+import { createTestQueryClient } from "@/test/queryClient";
 
 describe("rich series analysis views", () => {
   it("keeps rank counts and crown evidence tied to the displayed data", () => {
     const response = makeSeriesAnalysisAggregate();
+    const client = createTestQueryClient();
+    client.setQueryData(
+      achievementKeys.publication(response.artifact.gameTitleId, response.artifact.artifactId),
+      makeAchievementResource({ artifact: response.artifact }),
+    );
     render(
-      <OverviewView
-        focusedItemIds={["rank-distribution:member_ponta:1"]}
-        response={response}
-        onDrilldown={vi.fn()}
-      />,
+      <QueryClientProvider client={client}>
+        <OverviewView
+          focusedItemIds={["rank-distribution:member_ponta:1"]}
+          response={response}
+          onDrilldown={vi.fn()}
+        />
+      </QueryClientProvider>,
       { wrapper: MemoryRouter },
     );
 

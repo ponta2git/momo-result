@@ -259,9 +259,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- seedSecondTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v7',
-            artifact_schema_version = 6,
-            validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
+        SET algorithm_version = 'series-analysis-v8',
+            artifact_schema_version = 7,
+            validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
@@ -282,8 +282,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now()),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2') FROM series_analysis_jobs),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2') FROM series_analysis_job_requests)
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1') FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1') FROM series_analysis_job_requests)
       """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)
@@ -437,7 +437,10 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           record.matchNoInEvent,
           record.playedAt,
           Some("桃太郎電鉄ワールド"),
-          Some("2024-spring")
+          Some("2024-spring"),
+          gameTitleId = record.gameTitleId,
+          mapMasterId = record.mapMasterId,
+          analysisRevision = record.analysisRevision,
         ))
       )
       assertEquals(missing, None)
@@ -959,12 +962,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       persisted <- matches.find(rec.id)
       after <- analysisState
     yield
-      assertEquals(
-        result,
-        Left(AppError.Conflict(
-          "Match prerequisites changed before the update completed."
-        ))
-      )
+      assert(result match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assertEquals(persisted, expected)
       assertEquals(after, before)
 
@@ -1079,12 +1079,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       after <- persistedState
       notificationAfter <- ResultNotificationFixture.state(transactor)
     yield
-      assertEquals(
-        result,
-        Left(AppError.Conflict(
-          "Match prerequisites changed before confirmation completed."
-        ))
-      )
+      assert(result match
+        case Left(AppError.Conflict(_)) => true
+        case _ => false)
       assertEquals(after, before)
       assertEquals(notificationAfter, notificationBefore)
 

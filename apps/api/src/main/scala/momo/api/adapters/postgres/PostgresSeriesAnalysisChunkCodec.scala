@@ -152,6 +152,16 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       scopeName: Option[String],
       config: SeriesAnalysisReadConfig,
       mapNames: Map[String, String],
+  ): Either[AppError, SeriesAnalysisChunk] =
+    hydrateAndRender(chunk, memberNames, scopeName, config, mapNames, None)
+
+  def hydrateAndRender(
+      chunk: DecodedSeriesAnalysisChunk,
+      memberNames: Map[String, String],
+      scopeName: Option[String],
+      config: SeriesAnalysisReadConfig,
+      mapNames: Map[String, String],
+      achievementMetadata: Option[AchievementDisplayMetadata],
   ): Either[AppError, SeriesAnalysisChunk] = scopeName
     .filter(displayName =>
       displayName.nonEmpty && memberNames.values.forall(_.nonEmpty) &&
@@ -161,7 +171,12 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     .flatMap { displayName =>
       Either.cond(
         chunk.nodeCount <= config.maxJsonNodes,
-        hydratePayload(chunk, memberNames, displayName, mapNames),
+        achievementMetadata.fold(hydratePayload(chunk, memberNames, displayName, mapNames))(
+          PostgresAchievementDisplayOps.hydrate(
+            hydratePayload(chunk, memberNames, displayName, mapNames),
+            _
+          )
+        ),
         AppError.Internal("Analysis artifact exceeds the JSON node bound."),
       )
     }

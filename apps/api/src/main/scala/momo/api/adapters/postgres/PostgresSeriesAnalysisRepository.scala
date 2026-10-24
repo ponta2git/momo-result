@@ -41,6 +41,18 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
       chunkPipeline(request)
     )
 
+  /** Validate and retain only four durable player records before taking any retirement locks. */
+  private[postgres] def retirementItem(title: GameTitleId, artifactId: String, itemId: UUID)
+      : F[Either[AppError, PostgresAchievementRetirementOps.Artifact]] =
+    PostgresSeriesAnalysisRepository.boundedChunkRead(decodeSemaphore, readConfig)(
+      decodeChunk(SeriesAnalysisChunkRequest(
+        SeriesAnalysisChunkKind.Achievements,
+        title,
+        artifactId,
+        SeriesAnalysisScope.Overall
+      )).map(_.flatMap((chunk, _) => PostgresAchievementRetirementOps.decode(chunk, itemId)))
+    )
+
   override def scopeStatus(request: SeriesAnalysisScopeStatusRequest)
       : F[Either[AppError, SeriesAnalysisScopeStatus]] =
     PostgresSeriesAnalysisScopeStatusOps.read(request).transact(transactor)
@@ -68,6 +80,11 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
                   chunk.memberIds,
                   readConfig,
                   PostgresSeriesAnalysisChunkCodec.radarMapIds(chunk.payload),
+                ).flatMap(metadata =>
+                  if request.kind == SeriesAnalysisChunkKind.Achievements then
+                    PostgresAchievementDisplayOps.read(chunk.artifact.gameTitleId, chunk.payload)
+                      .map(value => metadata.copy(achievementMetadata = Some(value)))
+                  else metadata.pure[ConnectionIO]
                 ).map(_.asRight[AppError])
           )
       metadata.flatMap {
@@ -79,6 +96,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
               metadata.scopeName,
               readConfig,
               metadata.mapNames,
+              metadata.achievementMetadata,
             )
           )
       }
@@ -172,18 +190,18 @@ object PostgresSeriesAnalysisRepository:
       Semaphore[F](readConfig.decodeConcurrency.toLong)
         .map(new PostgresSeriesAnalysisRepository(transactor, readConfig, _, identities))
 
-  private[postgres] def boundedChunkRead[F[_]: Async](
+  private[postgres] def boundedChunkRead[F[_]: Async, A](
       semaphore: Semaphore[F],
       config: SeriesAnalysisReadConfig,
   )(
-      read: F[Either[AppError, SeriesAnalysisChunk]]
-  ): F[Either[AppError, SeriesAnalysisChunk]] = semaphore.tryPermit.use {
+      read: F[Either[AppError, A]]
+  ): F[Either[AppError, A]] = semaphore.tryPermit.use {
     case false => AppError.AnalysisReadBusy(config.busyRetryAfterSeconds)
-        .asLeft[SeriesAnalysisChunk].pure[F]
+        .asLeft[A].pure[F]
     case true => read.timeoutTo(
         config.readTimeout,
         AppError.AnalysisReadBusy(config.busyRetryAfterSeconds)
-          .asLeft[SeriesAnalysisChunk].pure[F],
+          .asLeft[A].pure[F],
       )
   }
 

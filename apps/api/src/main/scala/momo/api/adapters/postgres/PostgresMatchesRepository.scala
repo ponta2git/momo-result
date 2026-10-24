@@ -16,7 +16,7 @@ import momo.api.adapters.postgres.PostgresMatchInsertOps.replaceMatchChildren
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchNoInEvent, MatchRecord, MatchUpdate}
+import momo.api.domain.{AchievementMutationContext, MatchNoInEvent, MatchRecord, MatchUpdate}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{MatchesAlg, MatchesRepository}
 
@@ -76,14 +76,54 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           yield affected
 
         (for
+          lockedSources <-
+            PostgresAchievementMatchLocks.lockMatches(List(id), List(change.input.heldEventId))
           previous <- current
+          _ <- PostgresAchievementWriteOps.ensure(
+            change.expectedVersion.forall(_ == previous.analysisRevision),
+            "The match changed. Refresh before saving."
+          )
           oldTitle = previous.gameTitleId
           record = change.applyTo(previous)
+          events = (lockedSources.map(_.heldEventId) :+ record.heldEventId).distinct
+          beforeTitles <- PostgresAchievementMatchLocks.affectedTitles(events)
+          achievementItems <-
+            PostgresAchievementWriteOps.lockForMatch(record.id, change.achievements)
+          _ <- PostgresAchievementWriteOps.ensure(
+            achievementItems.isEmpty || change.updatedByAccountId.nonEmpty,
+            "An account is required to update achievement evidence."
+          )
+          achievementContext = AchievementMutationContext(
+            change.updatedByAccountId.getOrElse(previous.createdByAccountId),
+            updatedAt
+          )
           previousRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
           affected <- updateMatch(record)
           _ <- if affected == 1 then replaceMatchChildren(record)
           else notFound[Unit]("match", record.id.value)
-          _ <- enqueueMatchMutation(List(oldTitle, record.gameTitleId))
+          source = PostgresAchievementMatchLocks.MatchSource(
+            record.id,
+            record.heldEventId,
+            record.gameTitleId,
+            record.mapMasterId,
+            record.playedAt,
+            record.analysisRevision
+          )
+          _ <- PostgresAchievementWriteOps.followMatch(
+            record.id,
+            Some(source),
+            achievementItems,
+            achievementContext
+          )
+          _ <- PostgresAchievementWriteOps.addDeclarations(
+            source,
+            change.achievements,
+            achievementItems,
+            achievementContext
+          )
+          afterTitles <- PostgresAchievementMatchLocks.affectedTitles(events)
+          _ <-
+            enqueueMatchMutation(beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId))
           currentRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
           _ <- if previousRadarInput != currentRadarInput then
             PostgresSeriesPlayerRadarMutationOps.changed(
@@ -103,8 +143,10 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             conflict[MatchRecord]("Match prerequisites changed before the update completed.")
         }
 
-      override def delete(id: MatchId): ConnectionIO[Boolean] =
+      override def delete(id: MatchId, actor: Option[AccountId]): ConnectionIO[Boolean] =
         for
+          sources <- PostgresAchievementMatchLocks.lockMatches(List(id))
+          beforeTitles <- PostgresAchievementMatchLocks.affectedTitles(sources.map(_.heldEventId))
           previous <- sql"""
           SELECT ${ids.wireId("matches")}, ${ids.wireReference(
               Entity.GameTitles,
@@ -114,6 +156,20 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           WHERE id = ${ids.lookup(Entity.Matches, id.value)}
           FOR UPDATE
         """.query[(MatchId, GameTitleId)].option
+          achievementItems <- PostgresAchievementWriteOps.lockForMatch(id, Nil)
+          _ <- PostgresAchievementWriteOps.ensure(
+            achievementItems.isEmpty || actor.nonEmpty,
+            "An account is required to unlink achievement evidence."
+          )
+          at <- sql"SELECT now()".query[Instant].unique
+          _ <- actor.traverse_(account =>
+            PostgresAchievementWriteOps.followMatch(
+              id,
+              None,
+              achievementItems,
+              AchievementMutationContext(account, at)
+            )
+          )
           _ <-
             sql"SELECT ${ids.wireId("match_drafts")} FROM match_drafts WHERE confirmed_match_id = ${ids.lookup(Entity.Matches, id.value)} ORDER BY ${ids.wireId("match_drafts")} FOR UPDATE"
               .query[MatchDraftId].to[List]
@@ -125,7 +181,7 @@ object PostgresMatches extends PostgresMatchesReadSupport:
               _ > 0
             )
           _ <- previous.filter(_ => deleted).toList.traverse_((wireId, title) =>
-            enqueueMatchMutation(List(title)) *>
+            enqueueMatchMutation(beforeTitles :+ title) *>
               PostgresSeriesPlayerRadarMutationOps.changed(List(title), wireId, true)
           )
           _ <- PostgresResultNotificationCancellation.afterDeletion(

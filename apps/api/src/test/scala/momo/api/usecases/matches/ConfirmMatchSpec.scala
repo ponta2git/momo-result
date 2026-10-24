@@ -270,6 +270,7 @@ final class ConfirmMatchSpec extends MomoCatsEffectSuite:
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
+        achievements: List[momo.api.domain.AddMatchAchievement],
     ): IO[Either[AppError, MatchConfirmationResult]] =
       IO.pure(Left(AppError.Conflict("confirmation conflict")))
 

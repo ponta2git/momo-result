@@ -14,6 +14,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer
 import org.testcontainers.utility.DockerImageName
 
 import momo.api.config.DatabaseConfig
+import momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract
 import momo.api.db.Database
 
 /**
@@ -32,8 +33,8 @@ object IntegrationDb:
   private val Username = "summit"
   private val Password = "summit"
   private val CanonicalSchema = sys.env.get("MOMO_API_IDENTITY_SCHEMA").contains("canonical")
-  private val LegacyLastMigration = "0082_"
-  private val CanonicalSchemaBoundary = "0093_"
+  private val LegacyLastMigration = "0083_"
+  private val CanonicalSchemaBoundary = "0097_"
   private val StatementBreakpoint = raw"(?m)-->\s*statement-breakpoint\s*".r
 
   final case class Settings(jdbcUrl: String, user: String, password: String)
@@ -159,7 +160,12 @@ object IntegrationDb:
    * dependencies; using TRUNCATE ... CASCADE keeps it terse.
    */
   def truncateAppTables(transactor: Transactor[IO]): IO[Unit] =
-    (sql"""
+    val achievements = if CanonicalSchema then sql"""
+      TRUNCATE TABLE achievement_retired_manual_sources, achievement_retired_snapshots,
+        achievement_claims, achievement_item_maps, achievement_items
+      RESTART IDENTITY CASCADE
+    """.update.run.void else ().pure[ConnectionIO]
+    (achievements *> sql"""
       TRUNCATE TABLE
         discord_notifications,
         series_analysis_match_context_artifacts,
@@ -198,9 +204,9 @@ object IntegrationDb:
       UPDATE discord_notification_settings SET enabled = true, generation = 0
     """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v7',
-          artifact_schema_version = 6,
-          validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2',
+      SET algorithm_version = 'series-analysis-v8',
+          artifact_schema_version = ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion},
+          validation_contract_id = ${SeriesAnalysisArtifactContract.ValidationContractId},
           updated_at = clock_timestamp()
       WHERE singleton_key = 'current'
     """.update.run.void *> (

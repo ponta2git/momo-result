@@ -200,6 +200,7 @@ final case class MatchRecord(
     createdByMemberId: Option[MemberId],
     createdAt: Instant,
     note: MatchNote = MatchNote.Empty,
+    analysisRevision: Long = 0L,
 )
 
 object MatchRecord:

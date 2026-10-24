@@ -2752,6 +2752,614 @@
         }
       }
     },
+    "/api/achievements/catalog" : {
+      "get" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "getApiAchievementsCatalog",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementCatalogResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/achievements/items" : {
+      "post" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "postApiAchievementsItems",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateAchievementRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementItemResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/achievements/items/{achievementId}" : {
+      "put" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "putApiAchievementsItemsAchievementid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "achievementId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateAchievementRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementItemResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/achievements/items/{achievementId}/retire" : {
+      "post" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "postApiAchievementsItemsAchievementidRetire",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "achievementId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetireAchievementRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementItemResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/achievements/claims/{claimId}" : {
+      "put" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "putApiAchievementsClaimsClaimid",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "claimId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrectAchievementClaimRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementClaimResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/matches/{matchId}/achievements" : {
+      "post" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "postApiMatchesMatchidAchievements",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "matchId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddMatchAchievementsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementSavedResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/achievements" : {
+      "get" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "getApiAchievements",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "artifactId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SeriesAnalysisAchievementsResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter gameTitleId, Invalid value for: query parameter artifactId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/analytics/series-comparison/v2/options" : {
       "get" : {
         "tags" : [
@@ -6027,6 +6635,256 @@
   },
   "components" : {
     "schemas" : {
+      "AchievementCatalogResponse" : {
+        "title" : "AchievementCatalogResponse",
+        "type" : "object",
+        "required" : [
+          "gameTitleId"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AchievementItemResponse"
+            }
+          },
+          "claims" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AchievementClaimResponse"
+            }
+          },
+          "members" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AchievementMemberResponse"
+            }
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AchievementMapResponse"
+            }
+          }
+        }
+      },
+      "AchievementClaimResponse" : {
+        "title" : "AchievementClaimResponse",
+        "type" : "object",
+        "required" : [
+          "claimId",
+          "achievementId",
+          "memberId",
+          "sourceKind",
+          "state",
+          "matchId",
+          "achievedAt",
+          "generationId",
+          "version",
+          "updatedByDisplayName",
+          "updatedAt"
+        ],
+        "properties" : {
+          "claimId" : {
+            "type" : "string"
+          },
+          "achievementId" : {
+            "type" : "string"
+          },
+          "memberId" : {
+            "type" : "string"
+          },
+          "sourceKind" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "matchId" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "achievedAt" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "generationId" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "updatedByDisplayName" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AchievementItemResponse" : {
+        "title" : "AchievementItemResponse",
+        "type" : "object",
+        "required" : [
+          "achievementId",
+          "gameTitleId",
+          "name",
+          "notes",
+          "common",
+          "ruleKind",
+          "threshold",
+          "stars",
+          "appliesFrom",
+          "retiredAt",
+          "version"
+        ],
+        "properties" : {
+          "achievementId" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "common" : {
+            "type" : "boolean"
+          },
+          "mapMasterIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "ruleKind" : {
+            "type" : "string"
+          },
+          "threshold" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "stars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "appliesFrom" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "retiredAt" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "version" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AchievementMapResponse" : {
+        "title" : "AchievementMapResponse",
+        "type" : "object",
+        "required" : [
+          "mapMasterId",
+          "displayName"
+        ],
+        "properties" : {
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AchievementMemberResponse" : {
+        "title" : "AchievementMemberResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "displayName"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AchievementSavedResponse" : {
+        "title" : "AchievementSavedResponse",
+        "type" : "object",
+        "required" : [
+          "saved"
+        ],
+        "properties" : {
+          "saved" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "AddMatchAchievementRequest" : {
+        "title" : "AddMatchAchievementRequest",
+        "type" : "object",
+        "required" : [
+          "achievementId",
+          "memberId",
+          "expectedItemVersion"
+        ],
+        "properties" : {
+          "achievementId" : {
+            "type" : "string"
+          },
+          "memberId" : {
+            "type" : "string"
+          },
+          "expectedItemVersion" : {
+            "type" : "string"
+          },
+          "expectedClaimVersion" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AddMatchAchievementsRequest" : {
+        "title" : "AddMatchAchievementsRequest",
+        "type" : "object",
+        "required" : [
+          "expectedMatchVersion"
+        ],
+        "properties" : {
+          "expectedMatchVersion" : {
+            "type" : "string"
+          },
+          "achievements" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AddMatchAchievementRequest"
+            }
+          }
+        }
+      },
       "AdjacentHeldEventResponse" : {
         "title" : "AdjacentHeldEventResponse",
         "type" : "object",
@@ -6209,6 +7067,12 @@
           },
           "noteBody" : {
             "type" : "string"
+          },
+          "achievements" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AddMatchAchievementRequest"
+            }
           }
         }
       },
@@ -6234,6 +7098,89 @@
           },
           "createdAt" : {
             "type" : "string"
+          }
+        }
+      },
+      "CorrectAchievementClaimRequest" : {
+        "title" : "CorrectAchievementClaimRequest",
+        "type" : "object",
+        "required" : [
+          "expectedVersion",
+          "expectedItemVersion",
+          "state"
+        ],
+        "properties" : {
+          "expectedVersion" : {
+            "type" : "string"
+          },
+          "expectedItemVersion" : {
+            "type" : "string"
+          },
+          "state" : {
+            "type" : "string"
+          },
+          "matchId" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "achievedAt" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "expectedMatchVersion" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CreateAchievementRequest" : {
+        "title" : "CreateAchievementRequest",
+        "type" : "object",
+        "required" : [
+          "gameTitleId",
+          "name",
+          "notes",
+          "common",
+          "ruleKind",
+          "stars"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "common" : {
+            "type" : "boolean"
+          },
+          "mapMasterIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "ruleKind" : {
+            "type" : "string"
+          },
+          "threshold" : {
+            "type" : [
+              "string",
+              "null"
+            ]
+          },
+          "stars" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },
@@ -7092,7 +8039,8 @@
           "createdByAccountId",
           "createdAt",
           "note",
-          "navigation"
+          "navigation",
+          "version"
         ],
         "properties" : {
           "matchId" : {
@@ -7169,6 +8117,9 @@
             "type" : "string"
           },
           "heldEventPublicId" : {
+            "type" : "string"
+          },
+          "version" : {
             "type" : "string"
           }
         }
@@ -7332,7 +8283,10 @@
         "required" : [
           "matchId",
           "matchNoInEvent",
-          "playedAt"
+          "playedAt",
+          "gameTitleId",
+          "mapMasterId",
+          "version"
         ],
         "properties" : {
           "matchId" : {
@@ -7352,6 +8306,15 @@
             "type" : "string"
           },
           "publicId" : {
+            "type" : "string"
+          },
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          },
+          "version" : {
             "type" : "string"
           }
         }
@@ -8149,6 +9112,18 @@
           }
         }
       },
+      "RetireAchievementRequest" : {
+        "title" : "RetireAchievementRequest",
+        "type" : "object",
+        "required" : [
+          "expectedVersion"
+        ],
+        "properties" : {
+          "expectedVersion" : {
+            "type" : "string"
+          }
+        }
+      },
       "SeasonMasterListResponse" : {
         "title" : "SeasonMasterListResponse",
         "type" : "object",
@@ -8189,6 +9164,1141 @@
             "type" : "string"
           }
         }
+      },
+      "SeriesAnalysisAchievementsResponse" : {
+        "$comment" : "Generated by the API OpenAPI projection from the Rust-owned artifact schema; do not edit by hand.",
+        "$id" : "https://momo-result.local/schemas/series-analysis-achievements-response-v1.schema.json",
+        "$schema" : "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties" : false,
+        "properties" : {
+          "gameTitleId" : {
+            "maxLength" : 4096,
+            "minLength" : 1,
+            "type" : "string",
+            "x-momo-maxUtf8Bytes" : 4096
+          },
+          "items" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "achievementId" : {
+                  "maxLength" : 4096,
+                  "minLength" : 1,
+                  "type" : "string",
+                  "x-momo-maxUtf8Bytes" : 4096
+                },
+                "appliesFrom" : {
+                  "anyOf" : [
+                    {
+                      "type" : "null"
+                    },
+                    {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    }
+                  ]
+                },
+                "common" : {
+                  "type" : "boolean"
+                },
+                "mapMasterIds" : {
+                  "items" : {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  "maxItems" : 4096,
+                  "type" : "array"
+                },
+                "players" : {
+                  "items" : false,
+                  "maxItems" : 4,
+                  "minItems" : 4,
+                  "prefixItems" : [
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "dateUnknown" : {
+                          "type" : "boolean"
+                        },
+                        "firstAchievedAt" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          ]
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "proofs" : {
+                          "items" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "achievedAt" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "claimId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "generationId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "heldEventId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "kind" : {
+                                "enum" : [
+                                  "manual",
+                                  "import",
+                                  "derived",
+                                  "automatic"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "sourceAchievementId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "state" : {
+                                "enum" : [
+                                  "achieved",
+                                  "unconfirmed"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchAvailable" : {
+                                "type" : "boolean"
+                              },
+                              "heldEventAvailable" : {
+                                "type" : "boolean"
+                              }
+                            },
+                            "required" : [
+                              "achievedAt",
+                              "claimId",
+                              "generationId",
+                              "heldEventId",
+                              "kind",
+                              "matchId",
+                              "sourceAchievementId",
+                              "state",
+                              "matchAvailable",
+                              "heldEventAvailable"
+                            ],
+                            "type" : "object"
+                          },
+                          "maxItems" : 64,
+                          "type" : "array"
+                        },
+                        "status" : {
+                          "enum" : [
+                            "achieved",
+                            "unconfirmed",
+                            "not_recorded"
+                          ],
+                          "type" : "string"
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "dateUnknown",
+                        "firstAchievedAt",
+                        "memberId",
+                        "proofs",
+                        "status",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "dateUnknown" : {
+                          "type" : "boolean"
+                        },
+                        "firstAchievedAt" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          ]
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "proofs" : {
+                          "items" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "achievedAt" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "claimId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "generationId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "heldEventId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "kind" : {
+                                "enum" : [
+                                  "manual",
+                                  "import",
+                                  "derived",
+                                  "automatic"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "sourceAchievementId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "state" : {
+                                "enum" : [
+                                  "achieved",
+                                  "unconfirmed"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchAvailable" : {
+                                "type" : "boolean"
+                              },
+                              "heldEventAvailable" : {
+                                "type" : "boolean"
+                              }
+                            },
+                            "required" : [
+                              "achievedAt",
+                              "claimId",
+                              "generationId",
+                              "heldEventId",
+                              "kind",
+                              "matchId",
+                              "sourceAchievementId",
+                              "state",
+                              "matchAvailable",
+                              "heldEventAvailable"
+                            ],
+                            "type" : "object"
+                          },
+                          "maxItems" : 64,
+                          "type" : "array"
+                        },
+                        "status" : {
+                          "enum" : [
+                            "achieved",
+                            "unconfirmed",
+                            "not_recorded"
+                          ],
+                          "type" : "string"
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "dateUnknown",
+                        "firstAchievedAt",
+                        "memberId",
+                        "proofs",
+                        "status",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "dateUnknown" : {
+                          "type" : "boolean"
+                        },
+                        "firstAchievedAt" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          ]
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "proofs" : {
+                          "items" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "achievedAt" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "claimId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "generationId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "heldEventId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "kind" : {
+                                "enum" : [
+                                  "manual",
+                                  "import",
+                                  "derived",
+                                  "automatic"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "sourceAchievementId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "state" : {
+                                "enum" : [
+                                  "achieved",
+                                  "unconfirmed"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchAvailable" : {
+                                "type" : "boolean"
+                              },
+                              "heldEventAvailable" : {
+                                "type" : "boolean"
+                              }
+                            },
+                            "required" : [
+                              "achievedAt",
+                              "claimId",
+                              "generationId",
+                              "heldEventId",
+                              "kind",
+                              "matchId",
+                              "sourceAchievementId",
+                              "state",
+                              "matchAvailable",
+                              "heldEventAvailable"
+                            ],
+                            "type" : "object"
+                          },
+                          "maxItems" : 64,
+                          "type" : "array"
+                        },
+                        "status" : {
+                          "enum" : [
+                            "achieved",
+                            "unconfirmed",
+                            "not_recorded"
+                          ],
+                          "type" : "string"
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "dateUnknown",
+                        "firstAchievedAt",
+                        "memberId",
+                        "proofs",
+                        "status",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "dateUnknown" : {
+                          "type" : "boolean"
+                        },
+                        "firstAchievedAt" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maxLength" : 4096,
+                              "minLength" : 1,
+                              "type" : "string",
+                              "x-momo-maxUtf8Bytes" : 4096
+                            }
+                          ]
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "proofs" : {
+                          "items" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "achievedAt" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "claimId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "generationId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "heldEventId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "kind" : {
+                                "enum" : [
+                                  "manual",
+                                  "import",
+                                  "derived",
+                                  "automatic"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "sourceAchievementId" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                ]
+                              },
+                              "state" : {
+                                "enum" : [
+                                  "achieved",
+                                  "unconfirmed"
+                                ],
+                                "type" : "string"
+                              },
+                              "matchAvailable" : {
+                                "type" : "boolean"
+                              },
+                              "heldEventAvailable" : {
+                                "type" : "boolean"
+                              }
+                            },
+                            "required" : [
+                              "achievedAt",
+                              "claimId",
+                              "generationId",
+                              "heldEventId",
+                              "kind",
+                              "matchId",
+                              "sourceAchievementId",
+                              "state",
+                              "matchAvailable",
+                              "heldEventAvailable"
+                            ],
+                            "type" : "object"
+                          },
+                          "maxItems" : 64,
+                          "type" : "array"
+                        },
+                        "status" : {
+                          "enum" : [
+                            "achieved",
+                            "unconfirmed",
+                            "not_recorded"
+                          ],
+                          "type" : "string"
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "dateUnknown",
+                        "firstAchievedAt",
+                        "memberId",
+                        "proofs",
+                        "status",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    }
+                  ],
+                  "type" : "array"
+                },
+                "retired" : {
+                  "type" : "boolean"
+                },
+                "ruleKind" : {
+                  "enum" : [
+                    "manual",
+                    "total_assets",
+                    "destination",
+                    "suri_no_ginji",
+                    "event_average_rank"
+                  ],
+                  "type" : "string"
+                },
+                "stars" : {
+                  "maximum" : 5,
+                  "minimum" : 1,
+                  "type" : "integer",
+                  "x-momo-integerToken" : true
+                },
+                "threshold" : {
+                  "anyOf" : [
+                    {
+                      "type" : "null"
+                    },
+                    {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    }
+                  ]
+                },
+                "name" : {
+                  "minLength" : 1,
+                  "type" : "string"
+                },
+                "notes" : {
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "achievementId",
+                "appliesFrom",
+                "common",
+                "mapMasterIds",
+                "players",
+                "retired",
+                "ruleKind",
+                "stars",
+                "threshold",
+                "name",
+                "notes"
+              ],
+              "type" : "object"
+            },
+            "maxItems" : 4096,
+            "type" : "array"
+          },
+          "schemaVersion" : {
+            "const" : 1,
+            "minimum" : 0,
+            "type" : "integer",
+            "x-momo-integerToken" : true
+          },
+          "scope" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "kind" : {
+                "const" : "overall",
+                "type" : "string"
+              },
+              "displayName" : {
+                "minLength" : 1,
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "kind",
+              "displayName"
+            ],
+            "type" : "object"
+          },
+          "summaries" : {
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "mapMasterId" : {
+                  "anyOf" : [
+                    {
+                      "type" : "null"
+                    },
+                    {
+                      "maxLength" : 4096,
+                      "minLength" : 1,
+                      "type" : "string",
+                      "x-momo-maxUtf8Bytes" : 4096
+                    }
+                  ]
+                },
+                "players" : {
+                  "items" : false,
+                  "maxItems" : 4,
+                  "minItems" : 4,
+                  "prefixItems" : [
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "earnedPoints" : {
+                          "maximum" : 102400,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "score" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maximum" : 10.0,
+                              "minimum" : 1.0,
+                              "type" : "number",
+                              "x-momo-finiteF64" : true
+                            }
+                          ]
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "earnedPoints",
+                        "memberId",
+                        "score",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "earnedPoints" : {
+                          "maximum" : 102400,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "score" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maximum" : 10.0,
+                              "minimum" : 1.0,
+                              "type" : "number",
+                              "x-momo-finiteF64" : true
+                            }
+                          ]
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "earnedPoints",
+                        "memberId",
+                        "score",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "earnedPoints" : {
+                          "maximum" : 102400,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "score" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maximum" : 10.0,
+                              "minimum" : 1.0,
+                              "type" : "number",
+                              "x-momo-finiteF64" : true
+                            }
+                          ]
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "earnedPoints",
+                        "memberId",
+                        "score",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    },
+                    {
+                      "additionalProperties" : false,
+                      "properties" : {
+                        "earnedPoints" : {
+                          "maximum" : 102400,
+                          "minimum" : 0,
+                          "type" : "integer",
+                          "x-momo-integerToken" : true
+                        },
+                        "memberId" : {
+                          "maxLength" : 4096,
+                          "minLength" : 1,
+                          "type" : "string",
+                          "x-momo-maxUtf8Bytes" : 4096
+                        },
+                        "score" : {
+                          "anyOf" : [
+                            {
+                              "type" : "null"
+                            },
+                            {
+                              "maximum" : 10.0,
+                              "minimum" : 1.0,
+                              "type" : "number",
+                              "x-momo-finiteF64" : true
+                            }
+                          ]
+                        },
+                        "displayName" : {
+                          "minLength" : 1,
+                          "type" : "string"
+                        }
+                      },
+                      "required" : [
+                        "earnedPoints",
+                        "memberId",
+                        "score",
+                        "displayName"
+                      ],
+                      "type" : "object"
+                    }
+                  ],
+                  "type" : "array"
+                },
+                "totalPoints" : {
+                  "maximum" : 102400,
+                  "minimum" : 0,
+                  "type" : "integer",
+                  "x-momo-integerToken" : true
+                }
+              },
+              "required" : [
+                "mapMasterId",
+                "players",
+                "totalPoints"
+              ],
+              "type" : "object"
+            },
+            "maxItems" : 4097,
+            "type" : "array"
+          },
+          "artifact" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "algorithmVersion" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "artifactSchemaVersion" : {
+                "const" : 7,
+                "type" : "integer"
+              },
+              "gameTitleId" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "inputRevision" : {
+                "pattern" : "^(0|[1-9][0-9]*)$",
+                "type" : "string"
+              },
+              "publishedAt" : {
+                "maxLength" : 4096,
+                "minLength" : 1,
+                "type" : "string",
+                "x-momo-maxUtf8Bytes" : 4096
+              },
+              "radarBasisCreatedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              },
+              "radarBasisAppliedAt" : {
+                "anyOf" : [
+                  {
+                    "maxLength" : 4096,
+                    "minLength" : 1,
+                    "type" : "string",
+                    "x-momo-maxUtf8Bytes" : 4096
+                  },
+                  {
+                    "type" : "null"
+                  }
+                ]
+              }
+            },
+            "required" : [
+              "algorithmVersion",
+              "artifactId",
+              "artifactSchemaVersion",
+              "gameTitleId",
+              "inputRevision",
+              "publishedAt",
+              "radarBasisCreatedAt",
+              "radarBasisAppliedAt"
+            ],
+            "type" : "object"
+          },
+          "maps" : {
+            "type" : "array",
+            "items" : {
+              "additionalProperties" : false,
+              "properties" : {
+                "mapMasterId" : {
+                  "maxLength" : 4096,
+                  "minLength" : 1,
+                  "type" : "string",
+                  "x-momo-maxUtf8Bytes" : 4096
+                },
+                "displayName" : {
+                  "minLength" : 1,
+                  "type" : "string"
+                }
+              },
+              "required" : [
+                "mapMasterId",
+                "displayName"
+              ],
+              "type" : "object"
+            }
+          }
+        },
+        "required" : [
+          "gameTitleId",
+          "items",
+          "schemaVersion",
+          "scope",
+          "summaries",
+          "artifact",
+          "maps"
+        ],
+        "title" : "Series Analysis Achievements Resource v1",
+        "type" : "object",
+        "x-momo-series-analysis-resource-kind" : "achievements"
       },
       "SeriesAnalysisAdminOverviewResponse" : {
         "title" : "SeriesAnalysisAdminOverviewResponse",
@@ -17064,7 +19174,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 6,
+                "const" : 7,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -17703,7 +19813,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -18366,7 +20476,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -18848,7 +20958,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -19290,7 +21400,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -19499,7 +21609,8 @@
               "artifact_schema_update",
               "algorithm_update",
               "initial_backfill",
-              "match_mutation"
+              "match_mutation",
+              "achievement_mutation"
             ]
           },
           "coalescedTriggers" : {
@@ -19511,7 +21622,8 @@
                 "artifact_schema_update",
                 "algorithm_update",
                 "initial_backfill",
-                "match_mutation"
+                "match_mutation",
+                "achievement_mutation"
               ]
             }
           },
@@ -20105,7 +22217,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -20212,7 +22324,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 6,
+                    "const" : 7,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -20678,7 +22790,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 6,
+                "const" : 7,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -21411,7 +23523,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 6,
+                "const" : 7,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -21666,7 +23778,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 6,
+                "const" : 7,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -22942,7 +25054,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 6,
+                "const" : 7,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -23241,7 +25353,8 @@
                   "artifact_schema_update",
                   "algorithm_update",
                   "initial_backfill",
-                  "match_mutation"
+                  "match_mutation",
+                  "achievement_mutation"
                 ]
               },
               "requestedAt" : {
@@ -39379,6 +41492,31 @@
           "eligibility"
         ]
       },
+      "UpdateAchievementRequest" : {
+        "title" : "UpdateAchievementRequest",
+        "type" : "object",
+        "required" : [
+          "name",
+          "notes",
+          "stars",
+          "expectedVersion"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "stars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "expectedVersion" : {
+            "type" : "string"
+          }
+        }
+      },
       "UpdateGameTitleRequest" : {
         "title" : "UpdateGameTitleRequest",
         "type" : "object",
@@ -39475,7 +41613,8 @@
           "ownerMemberId",
           "mapMasterId",
           "playedAt",
-          "draftIds"
+          "draftIds",
+          "expectedVersion"
         ],
         "properties" : {
           "heldEventId" : {
@@ -39507,6 +41646,15 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/PlayerResultRequest"
+            }
+          },
+          "expectedVersion" : {
+            "type" : "string"
+          },
+          "achievements" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/AddMatchAchievementRequest"
             }
           }
         }

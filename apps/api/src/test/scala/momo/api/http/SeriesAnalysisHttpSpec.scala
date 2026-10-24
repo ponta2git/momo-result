@@ -60,7 +60,7 @@ final class SeriesAnalysisHttpSpec extends PostgresHttpAppTestFixtures:
       assertEquals(jsonField[String](statusBody, "artifactFreshness"), "unavailable")
       assertEquals(
         statusBody.hcursor.downField("desired").get[String]("algorithmVersion"),
-        Right("series-analysis-v7"),
+        Right("series-analysis-v8"),
       )
   }
 

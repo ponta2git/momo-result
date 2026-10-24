@@ -21,7 +21,7 @@ private[api] object SeriesAnalysisArtifactContract:
   locally:
     val fields = Set("$comment", "artifactSchemaVersion", "contractVersion", "validationContractId")
     if !Contract.asObject.exists(_.keys.toSet == fields) ||
-      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 6 ||
+      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 7 ||
       !ValidationContractId.matches("^[a-z0-9][a-z0-9._-]{0,127}$")
     then sys.error("Unsupported Series analysis publication contract")
 
@@ -32,6 +32,7 @@ private[api] object SeriesAnalysisArtifactContract:
     SeriesAnalysisChunkKind.MatchContext -> "series-analysis-match-context-v1.schema.json",
     SeriesAnalysisChunkKind.OutlookSummary -> "series-analysis-outlook-summary-v1.schema.json",
     SeriesAnalysisChunkKind.OutlookReference -> "series-analysis-outlook-reference-v1.schema.json",
+    SeriesAnalysisChunkKind.Achievements -> "series-analysis-achievements-v1.schema.json",
   )
 
   def supports(schemaVersion: Int, validationContractId: Option[String]): Boolean =

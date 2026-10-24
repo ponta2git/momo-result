@@ -1,6 +1,7 @@
 package momo.api.bootstrap
 
 import java.time.Instant
+import java.util.UUID
 
 import cats.effect.Async
 import cats.syntax.all.*
@@ -20,6 +21,57 @@ import momo.api.usecases.queue.{
 
 /** Adds worker wake hints after successful durable repository transitions. */
 private[bootstrap] object WorkerWakingRepositories:
+  def mapMasters[F[_]: Async: LoggerFactory](
+      delegate: MapMastersRepository[F],
+      sink: WorkerWakeSink[F],
+      onSinkClosed: F[Unit],
+  ): MapMastersRepository[F] =
+    val wake = WakeAfterCommit(sink, onSinkClosed)
+    new MapMastersRepository[F]:
+      export delegate.{list, find, update}
+      def createWithNextDisplayOrder(map: MapMaster): F[Either[AppError, MapMaster]] =
+        wake(delegate.createWithNextDisplayOrder(map), WorkerWakeKind.ProcessingJobs)(_.isRight)
+      def delete(id: MapMasterId): F[Either[AppError, Unit]] =
+        wake(delegate.delete(id), WorkerWakeKind.ProcessingJobs)(_.isRight)
+
+  def achievements[F[_]: Async: LoggerFactory](
+      delegate: AchievementsRepository[F],
+      sink: WorkerWakeSink[F],
+      onSinkClosed: F[Unit],
+  ): AchievementsRepository[F] =
+    val wake = WakeAfterCommit(sink, onSinkClosed)
+    new AchievementsRepository[F]:
+      export delegate.catalog
+      def create(
+          command: CreateAchievement,
+          context: AchievementMutationContext
+      ): F[Either[AppError, AchievementItem]] =
+        wake(delegate.create(command, context), WorkerWakeKind.ProcessingJobs)(_.isRight)
+      def update(
+          id: UUID,
+          command: UpdateAchievement,
+          context: AchievementMutationContext
+      ): F[Either[AppError, AchievementItem]] =
+        wake(delegate.update(id, command, context), WorkerWakeKind.ProcessingJobs)(_.isRight)
+      def retire(
+          id: UUID,
+          version: Long,
+          context: AchievementMutationContext
+      ): F[Either[AppError, AchievementItem]] =
+        wake(delegate.retire(id, version, context), WorkerWakeKind.ProcessingJobs)(_.isRight)
+      def correctClaim(
+          id: UUID,
+          command: CorrectAchievementClaim,
+          context: AchievementMutationContext
+      ): F[Either[AppError, AchievementClaim]] =
+        wake(delegate.correctClaim(id, command, context), WorkerWakeKind.ProcessingJobs)(_.isRight)
+      def addToMatch(
+          id: MatchId,
+          command: AddMatchAchievements,
+          context: AchievementMutationContext
+      ): F[Either[AppError, Unit]] =
+        wake(delegate.addToMatch(id, command, context), WorkerWakeKind.ProcessingJobs)(_.isRight)
+
   def ocrJobCreation[F[_]: Async: LoggerFactory](
       delegate: OcrJobCreationStore[F],
       sink: WorkerWakeSink[F],
@@ -96,8 +148,8 @@ private[bootstrap] object WorkerWakingRepositories:
         WorkerWakeKind.ProcessingJobs,
       )(_.isRight)
 
-      override def delete(id: MatchId): F[Boolean] = wake(
-        delegate.delete(id),
+      override def delete(id: MatchId, actor: Option[AccountId]): F[Boolean] = wake(
+        delegate.delete(id, actor),
         WorkerWakeKind.ProcessingJobs,
       )(identity)
 
@@ -125,8 +177,9 @@ private[bootstrap] object WorkerWakingRepositories:
           record: MatchRecord,
           draft: Option[MatchDraftConfirmation],
           updatedAt: Instant,
+          achievements: List[AddMatchAchievement],
       ): F[Either[AppError, MatchConfirmationResult]] = wake(
-        delegate.confirm(record, draft, updatedAt),
+        delegate.confirm(record, draft, updatedAt, achievements),
         WorkerWakeKind.ProcessingJobs,
       )(_.contains(MatchConfirmationResult.Confirmed))
 

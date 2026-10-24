@@ -117,9 +117,12 @@ object PostgresMatchDetail:
     """).query[AdjacentMatch].option
 
   def identity(id: MatchId, publicIds: PostgresPublicIds)(using
-      ids: PostgresIdentities): ConnectionIO[Option[MatchIdentity]] = (fr"""
+      ids: PostgresIdentities): ConnectionIO[Option[MatchIdentity]] =
+    (fr"""
     SELECT ${ids.wireId("m")}, m.match_no_in_event, m.played_at, gt.name, season.name,
-  """ ++ publicIds.column(fr"m.public_id") ++ fr"""
+  """ ++ publicIds.column(fr"m.public_id") ++ fr""",
+      ${ids.wireReference(Entity.GameTitles, fr"m.game_title_id")},
+      ${ids.wireReference(Entity.MapMasters, fr"m.map_master_id")}, m.analysis_revision
     FROM matches m
     LEFT JOIN game_titles gt ON gt.id = m.game_title_id
     LEFT JOIN season_masters season ON season.id = m.season_master_id

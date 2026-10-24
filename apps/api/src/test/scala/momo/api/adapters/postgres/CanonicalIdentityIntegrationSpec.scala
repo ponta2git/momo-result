@@ -283,7 +283,8 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           app,
           writePost(
             Uri.unsafeFromString(s"/api/matches/$matchId"),
-            body.mapObject(_.add("matchNoInEvent", Json.fromInt(2))),
+            body.mapObject(_.add("matchNoInEvent", Json.fromInt(2))
+              .add("expectedVersion", Json.fromString(jsonField[String](detail, "version")))),
             Some(fresh)
           ).withMethod(Method.PUT)
         )
@@ -401,14 +402,15 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
             canonical(Entity.HeldEvents, firstEvent).toString,
             2
           )
-            .mapObject(_.add("playedAt", Json.fromString(now.toString)).add(
-              "draftIds",
-              Json.obj(
-                "totalAssets" -> Json.fromString(opaqueDraft),
-                "revenue" -> Json.Null,
-                "incidentLog" -> Json.Null
-              )
-            ))
+            .mapObject(_.add("playedAt", Json.fromString(now.toString))
+              .add("expectedVersion", Json.fromString(jsonField[String](old, "version"))).add(
+                "draftIds",
+                Json.obj(
+                  "totalAssets" -> Json.fromString(opaqueDraft),
+                  "revenue" -> Json.Null,
+                  "incidentLog" -> Json.Null
+                )
+              ))
           key = fresh
           updated <- json(
             app,
@@ -884,7 +886,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         validation_contract_id, source_input_checksum, root_checksum, status,
         aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         outlook_summary_chunk_count, outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES ($artifactId, $title, 0, 'series-analysis-v7', 6, NULL,
+        VALUES ($artifactId, $title, 0, 'series-analysis-v8', 7, NULL,
           ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
           1, 0, 0, 0, 1, 4, ${size + 10}, ${size + 10}, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_analysis_scope_aggregate_artifacts
@@ -896,7 +898,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_analysis_outlook_reference_artifacts
           (artifact_id, scope_key, scope_kind, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
           SELECT $artifactId, 'overall', 'overall', legacy_id, $inventoryPayload, 2, 2, 1, 1, $inventoryHash FROM members""".update.run *>
-        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
+        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
           WHERE id = $artifactId AND status = 'staging'""".update.run *>
         sql"""UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
           WHERE id = $artifactId AND status = 'staging'""".update.run *>

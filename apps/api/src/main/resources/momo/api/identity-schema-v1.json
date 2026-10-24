@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "sourceSnapshots": [
-    "0082_snapshot.json",
-    "0093_snapshot.json"
+    "0083_snapshot.json",
+    "0097_snapshot.json"
   ],
   "optionalTables": [
     "worker_execution_slots"
@@ -4849,6 +4849,216 @@
   "canonical": {
     "columns": [
       {
+        "table": "achievement_claims",
+        "column": "achieved_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": false
+      },
+      {
+        "table": "achievement_claims",
+        "column": "generation_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "item_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "match_id",
+        "dataType": "uuid",
+        "notNull": false
+      },
+      {
+        "table": "achievement_claims",
+        "column": "member_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "source_kind",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "state",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "updated_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "updated_by_account_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_claims",
+        "column": "version",
+        "dataType": "bigint",
+        "notNull": true
+      },
+      {
+        "table": "achievement_item_maps",
+        "column": "item_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_item_maps",
+        "column": "map_master_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "applies_from",
+        "dataType": "date",
+        "notNull": false
+      },
+      {
+        "table": "achievement_items",
+        "column": "created_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "fixed_key",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
+        "table": "achievement_items",
+        "column": "game_title_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "name",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "notes",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "retired_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": false
+      },
+      {
+        "table": "achievement_items",
+        "column": "rule_kind",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "scope_kind",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "stars",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "threshold",
+        "dataType": "numeric",
+        "notNull": false
+      },
+      {
+        "table": "achievement_items",
+        "column": "updated_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "version",
+        "dataType": "bigint",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "column": "claim_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "column": "generation_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "column": "item_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "column": "created_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "column": "format_version",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "column": "item_id",
+        "dataType": "uuid",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "column": "snapshot",
+        "dataType": "jsonb",
+        "notNull": true
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "column": "source_input_revision",
+        "dataType": "bigint",
+        "notNull": true
+      },
+      {
         "table": "app_sessions",
         "column": "account_id",
         "dataType": "uuid",
@@ -6415,6 +6625,72 @@
         "notNull": true
       },
       {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "artifact_id",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "checksum",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "decoded_bytes",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "encoded_bytes",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "item_count",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "map_master_id",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "nesting_depth",
+        "dataType": "integer",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "payload",
+        "dataType": "bytea",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "scope_key",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "scope_kind",
+        "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "column": "season_master_id",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
         "table": "series_analysis_artifact_identities",
         "column": "game_title_id",
         "dataType": "uuid",
@@ -6436,6 +6712,12 @@
         "table": "series_analysis_artifact_identities",
         "column": "legacy_id",
         "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "series_analysis_artifacts",
+        "column": "achievement_chunk_count",
+        "dataType": "integer",
         "notNull": true
       },
       {
@@ -8645,87 +8927,51 @@
         "column": "width",
         "dataType": "integer",
         "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "attempt_id",
-        "dataType": "uuid",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "fencing_token",
-        "dataType": "bigint",
-        "notNull": true
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "holder_preemptible",
-        "dataType": "boolean",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "job_id",
-        "dataType": "uuid",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "lease_expires_at",
-        "dataType": "timestampwithtimezone",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "legacy_attempt_id",
-        "dataType": "text",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "legacy_job_id",
-        "dataType": "text",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "owner",
-        "dataType": "text",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "preempt_requested_at",
-        "dataType": "timestampwithtimezone",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "preempt_requested_by",
-        "dataType": "text",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "slot_key",
-        "dataType": "text",
-        "notNull": true
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "task_kind",
-        "dataType": "text",
-        "notNull": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "column": "updated_at",
-        "dataType": "timestampwithtimezone",
-        "notNull": true
       }
     ],
     "keys": [
+      {
+        "table": "achievement_claims",
+        "columns": "id",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_claims",
+        "columns": "item_id,member_id,source_kind",
+        "primary": false,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_item_maps",
+        "columns": "item_id,map_master_id",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_items",
+        "columns": "id",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_items",
+        "columns": "fixed_key",
+        "primary": false,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "columns": "item_id,claim_id,generation_id",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "columns": "item_id",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
       {
         "table": "app_sessions",
         "columns": "id_hash",
@@ -9123,6 +9369,12 @@
         "nullsNotDistinct": false
       },
       {
+        "table": "series_analysis_achievement_artifacts",
+        "columns": "artifact_id,scope_key",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
         "table": "series_analysis_artifact_identities",
         "columns": "id",
         "primary": true,
@@ -9475,15 +9727,89 @@
         "columns": "object_key",
         "primary": false,
         "nullsNotDistinct": false
-      },
-      {
-        "table": "worker_execution_slots",
-        "columns": "slot_key",
-        "primary": true,
-        "nullsNotDistinct": false
       }
     ],
     "foreignKeys": [
+      {
+        "table": "achievement_claims",
+        "columns": "item_id",
+        "targetTable": "achievement_items",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_claims",
+        "columns": "member_id",
+        "targetTable": "members",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_claims",
+        "columns": "match_id",
+        "targetTable": "matches",
+        "targetColumns": "id",
+        "onDelete": "n",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_claims",
+        "columns": "updated_by_account_id",
+        "targetTable": "momo_login_accounts",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_item_maps",
+        "columns": "item_id",
+        "targetTable": "achievement_items",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_item_maps",
+        "columns": "map_master_id",
+        "targetTable": "map_masters",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_items",
+        "columns": "game_title_id",
+        "targetTable": "game_titles",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "columns": "item_id",
+        "targetTable": "achievement_items",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_retired_manual_sources",
+        "columns": "claim_id",
+        "targetTable": "achievement_claims",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "achievement_retired_snapshots",
+        "columns": "item_id",
+        "targetTable": "achievement_items",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
       {
         "table": "app_sessions",
         "columns": "account_id",
@@ -9850,6 +10176,14 @@
         "targetTable": "game_titles",
         "targetColumns": "id",
         "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "series_analysis_achievement_artifacts",
+        "columns": "artifact_id",
+        "targetTable": "series_analysis_artifacts",
+        "targetColumns": "id",
+        "onDelete": "c",
         "onUpdate": "a"
       },
       {
@@ -10324,16 +10658,6 @@
         "table": "series_radar_operations",
         "name": "series_radar_operations_job_legacy_null_check",
         "expression": "job_idISNULL=legacy_job_idISNULL"
-      },
-      {
-        "table": "worker_execution_slots",
-        "name": "worker_execution_slots_job_legacy_null_check",
-        "expression": "job_idISNULL=legacy_job_idISNULL"
-      },
-      {
-        "table": "worker_execution_slots",
-        "name": "worker_execution_slots_attempt_legacy_null_check",
-        "expression": "attempt_idISNULL=legacy_attempt_idISNULL"
       }
     ],
     "navigationIndexes": [

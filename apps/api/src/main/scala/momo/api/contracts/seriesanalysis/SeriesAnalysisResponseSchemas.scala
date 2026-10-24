@@ -115,6 +115,14 @@ private[api] object SeriesAnalysisResponseSchemas:
     "series-analysis-outlook-examples-response-v1.schema.json",
   )
 
+  val achievements: Resource = Resource(
+    "achievements",
+    "achievements",
+    "SeriesAnalysisAchievementsResponse",
+    SeriesAnalysisChunkKind.Achievements,
+    "series-analysis-achievements-response-v1.schema.json",
+  )
+
   val resources: List[Resource] =
     List(
       aggregateV5,
@@ -123,7 +131,8 @@ private[api] object SeriesAnalysisResponseSchemas:
       matchContext,
       outlookSummary,
       outlookWindow,
-      outlookExamples
+      outlookExamples,
+      achievements,
     )
 
   def schemaFor(resource: Resource): Json =
@@ -138,6 +147,7 @@ private[api] object SeriesAnalysisResponseSchemas:
         matchContextResponseSchema(owner)
       else if resource eq outlookWindow then responseSchema(outlookWindowSchema(owner))
       else if resource eq outlookExamples then responseSchema(outlookExamplesSchema(owner))
+      else if resource eq achievements then achievementResponseSchema(owner)
       else responseSchema(owner)
     withMetadata(response, resource)
 
@@ -152,6 +162,45 @@ private[api] object SeriesAnalysisResponseSchemas:
   private def responseSchema(owner: Json): Json =
     val memberHydrated = addMemberDisplayNames(owner)
     mapBranches(memberHydrated)(addResponseEnvelope)
+
+  private def achievementResponseSchema(owner: Json): Json =
+    def project(value: Json): Json = value.arrayOrObject(
+      value,
+      values => Json.fromValues(values.map(project)),
+      fields =>
+        val nested =
+          Json.fromJsonObject(JsonObject.fromIterable(fields.toIterable.map((key, child) =>
+            key -> project(child)
+          )))
+        fields("properties").flatMap(_.asObject) match
+          case Some(properties) if properties.contains("achievementId") =>
+            addProperty(
+              addProperty(nested, "name", DisplayNameSchema, "achievement item"),
+              "notes",
+              Json.obj("type" -> Json.fromString("string")),
+              "achievement item"
+            )
+          case Some(properties)
+              if properties.contains("claimId") && properties.contains("matchId") =>
+            val boolean = Json.obj("type" -> Json.fromString("boolean"))
+            addProperty(
+              addProperty(nested, "matchAvailable", boolean, "achievement proof"),
+              "heldEventAvailable",
+              boolean,
+              "achievement proof"
+            )
+          case _ => nested,
+    )
+    addProperty(
+      responseSchema(project(owner)),
+      "maps",
+      Json.obj(
+        "type" -> Json.fromString("array"),
+        "items" ->
+          objectSchema(List("mapMasterId" -> TextSchema, "displayName" -> DisplayNameSchema)),
+      ),
+      "achievements response"
+    )
 
   private def outlookReferenceFields(owner: Json): List[(String, Json)] =
     List("schemaVersion", "scope", "source", "memberId")

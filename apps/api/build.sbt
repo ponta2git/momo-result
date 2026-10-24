@@ -150,6 +150,7 @@ lazy val root = (project in file("."))
           "series-analysis-match-context-v1.schema.json",
           "series-analysis-outlook-summary-v1.schema.json",
           "series-analysis-outlook-reference-v1.schema.json",
+          "series-analysis-achievements-v1.schema.json",
           "series-analysis-publication-contract-v2.json",
           "series-analysis-review-v4.schema.json",
         )

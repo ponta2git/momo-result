@@ -85,6 +85,7 @@ private[bootstrap] object HttpUseCaseWiring:
         UseCaseWiring.exportMatchLimits(config.resourceLimits),
       ),
       seriesAnalysis = AnalysisUseCaseWiring.analysis(seriesAnalysis),
+      achievements = new momo.api.usecases.achievements.ManageAchievements[F](achievements, now),
       seriesPlayerRadar = AnalysisUseCaseWiring.radar(seriesPlayerRadar),
       masters = MasterUseCaseWiring(
         gameTitles = gameTitles,

@@ -115,7 +115,7 @@ function shape(snapshot) {
   }
   return result;
 }
-const sourceSnapshots = ["0082_snapshot.json", "0093_snapshot.json"];
+const sourceSnapshots = ["0083_snapshot.json", "0097_snapshot.json"];
 const [legacy, canonical] = sourceSnapshots.map((name) =>
   shape(JSON.parse(readFileSync(resolve(migrations, "meta", name), "utf8"))),
 );

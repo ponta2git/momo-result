@@ -52,6 +52,20 @@ object SeriesAnalysisModule:
     }
 
     List(
+      SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.achievements) { _ =>
+        { case (title, artifact) =>
+          execution.execute(SeriesAnalysisCodec.chunk(
+            SeriesAnalysisChunkKind.Achievements,
+            title,
+            artifact,
+            None,
+            None,
+            None,
+            None,
+            None
+          ))(getChunk.run)(_.payload)
+        }
+      },
       SecuredEndpoint.readLogic(security, SeriesAnalysisEndpoints.options) { _ => _ =>
         security.respond(getOptions.run)(SeriesAnalysisOptionsResponse.from)
       },

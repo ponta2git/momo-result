@@ -8,7 +8,7 @@ import momo.api.errors.AppError
 
 trait MatchesAlg[F0[_]]:
   def update(id: MatchId, change: MatchUpdate, updatedAt: java.time.Instant): F0[MatchRecord]
-  def delete(id: MatchId): F0[Boolean]
+  def delete(id: MatchId, actor: Option[AccountId] = None): F0[Boolean]
   def find(id: MatchId): F0[Option[MatchRecord]]
   def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F0[Boolean]
   def existsMatchNoExcept(
@@ -24,7 +24,7 @@ trait MatchesRepository[F[_]]:
       change: MatchUpdate,
       updatedAt: java.time.Instant
   ): F[Either[AppError, MatchRecord]]
-  def delete(id: MatchId): F[Boolean]
+  def delete(id: MatchId, actor: Option[AccountId] = None): F[Boolean]
   def find(id: MatchId): F[Option[MatchRecord]]
   def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean]
   def existsMatchNoExcept(
@@ -45,7 +45,8 @@ object MatchesRepository:
           updatedAt: java.time.Instant,
       ): F[Either[AppError, MatchRecord]] =
         RepositoryResult.capture(liftK(alg.update(id, change, updatedAt)))
-      def delete(id: MatchId): F[Boolean] = liftK(alg.delete(id))
+      def delete(id: MatchId, actor: Option[AccountId]): F[Boolean] =
+        liftK(alg.delete(id, actor))
       def find(id: MatchId): F[Option[MatchRecord]] = liftK(alg.find(id))
       def existsMatchNo(heldEventId: HeldEventId, matchNoInEvent: MatchNoInEvent): F[Boolean] =
         liftK(alg.existsMatchNo(heldEventId, matchNoInEvent))

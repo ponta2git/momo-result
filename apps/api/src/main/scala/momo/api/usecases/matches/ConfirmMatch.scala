@@ -8,6 +8,7 @@ import cats.syntax.all.*
 
 import momo.api.domain.ids.*
 import momo.api.domain.{
+  AddMatchAchievement,
   MatchDraftConfirmability,
   MatchNote,
   MatchNoteBody,
@@ -51,6 +52,7 @@ final case class ConfirmMatchCommand(
     draftRefs: MatchDraftRefs,
     players: List[PlayerResult.Input],
     noteBody: Option[MatchNoteBody] = None,
+    achievements: List[AddMatchAchievement] = Nil,
 )
 
 final class ConfirmMatch[F[_]: Monad](
@@ -129,7 +131,12 @@ final class ConfirmMatch[F[_]: Monad](
               .map(_ => Some(draft))
           }
     confirmation <- EitherT(
-      confirmations.confirm(record, maybeDraft.map(MatchDraftConfirmation.from), createdAt)
+      confirmations.confirm(
+        record,
+        maybeDraft.map(MatchDraftConfirmation.from),
+        createdAt,
+        command.achievements
+      )
     )
     _ <- EitherT.fromEither[F](
       confirmation match

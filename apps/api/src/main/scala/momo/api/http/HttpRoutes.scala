@@ -23,6 +23,7 @@ import momo.api.auth.{
 }
 import momo.api.config.AppConfig
 import momo.api.http.modules.{
+  AchievementsModule,
   AdminAccountModule,
   AuthModule,
   ExportModule,
@@ -77,6 +78,7 @@ object HttpRoutes:
       matches: MatchModule.UseCases[F],
       exportMatches: ExportMatches[F],
       seriesAnalysis: SeriesAnalysisModule.UseCases[F],
+      achievements: momo.api.usecases.achievements.ManageAchievements[F],
       seriesPlayerRadar: SeriesPlayerRadarModule.UseCases[F],
       masters: MasterModule.UseCases[F],
       adminAccounts: AdminAccountModule.UseCases[F],
@@ -138,6 +140,7 @@ object HttpRoutes:
       ) :::
       MatchModule.routes(useCases.matches, context) :::
       SeriesAnalysisModule.routes(useCases.seriesAnalysis, context) :::
+      AchievementsModule.routes(useCases.achievements, context) :::
       SeriesPlayerRadarModule.routes(useCases.seriesPlayerRadar, context) :::
       MasterModule.routes(useCases.masters, context) :::
       AdminAccountModule.routes(useCases.adminAccounts, context) :::

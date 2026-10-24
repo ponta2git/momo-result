@@ -2,7 +2,7 @@ package momo.api.domain
 
 import java.time.Instant
 
-import momo.api.domain.ids.{HeldEventId, MatchId}
+import momo.api.domain.ids.{GameTitleId, HeldEventId, MapMasterId, MatchId}
 
 /** Current display metadata read alongside the records it describes. */
 final case class MatchLabels(
@@ -22,6 +22,9 @@ final case class MatchIdentity(
     gameTitleName: Option[String],
     seasonName: Option[String],
     publicId: Option[PublicId] = None,
+    gameTitleId: GameTitleId,
+    mapMasterId: MapMasterId,
+    analysisRevision: Long,
 )
 
 final case class MatchDetail(

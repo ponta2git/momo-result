@@ -85,6 +85,7 @@ object PostgresMapMasters:
               fr"map_masters.game_title_id"
             )}, name, display_order, created_at
         """.query[MapMasterRow].unique
+          _ <- refreshAchievements(row.gameTitleId)
         yield fromRow(row)).exceptSomeSqlState {
           case state if isUniqueViolation(state) =>
             conflict(s"map_master already exists: ${map.id.value} or ${map.name}")
@@ -105,6 +106,9 @@ object PostgresMapMasters:
       }
 
       override def delete(id: MapMasterId): ConnectionIO[Unit] = (for
+        title <-
+          sql"SELECT ${ids.wireReference(Entity.GameTitles, fr"game_title_id")} FROM map_masters WHERE id = ${ids.lookup(Entity.MapMasters, id.value)} FOR UPDATE"
+            .query[GameTitleId].option
         deletedDrafts <-
           deleteDiscardedDrafts(fr"map_master_id = ${ids.lookup(Entity.MapMasters, id.value)}")
         deleted <-
@@ -112,10 +116,22 @@ object PostgresMapMasters:
         _ <- deleted match
           case 1 => ().pure[ConnectionIO]
           case _ => notFound("map master", id.value)
+        _ <- title.traverse_(refreshAchievements)
         _ <- PostgresResultNotificationCancellation.afterDeletion(deletedDrafts, Nil)
       yield ()).exceptSomeSqlState {
         case state if isForeignKeyViolation(state) => conflict("map master is still referenced.")
       }
+
+  private def refreshAchievements(title: GameTitleId)(using
+      ids: PostgresIdentities): ConnectionIO[Unit] =
+    if ids == PostgresIdentities.Legacy then ().pure[ConnectionIO]
+    else
+      PostgresAchievementRetirementOps.state(title, lock = true) *>
+        sql"SELECT EXISTS(SELECT 1 FROM achievement_items WHERE game_title_id = ${ids.lookup(Entity.GameTitles, title.value)})"
+          .query[Boolean].unique.flatMap {
+            case true => PostgresSeriesAnalysisMutationOps.enqueueAchievementMutation(List(title))
+            case false => ().pure[ConnectionIO]
+          }
 
 end PostgresMapMasters
 

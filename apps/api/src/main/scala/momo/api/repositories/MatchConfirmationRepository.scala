@@ -3,7 +3,7 @@ package momo.api.repositories
 import java.time.Instant
 
 import momo.api.domain.ids.{MatchDraftId, OcrDraftId}
-import momo.api.domain.{MatchDraft, MatchRecord}
+import momo.api.domain.{AddMatchAchievement, MatchDraft, MatchRecord}
 import momo.api.errors.AppError
 
 final case class MatchDraftConfirmation(
@@ -33,4 +33,5 @@ trait MatchConfirmationRepository[F[_]]:
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
+      achievements: List[AddMatchAchievement] = Nil,
   ): F[Either[AppError, MatchConfirmationResult]]

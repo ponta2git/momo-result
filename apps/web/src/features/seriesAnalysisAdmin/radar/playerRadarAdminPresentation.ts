@@ -513,6 +513,9 @@ export function buildRadarAdministrationView({
                         axisId: axis.axisId,
                         thresholds: axis.thresholds ?? [],
                       })),
+                      ...(submittedRequest.manualInput.achievementCurve
+                        ? { achievementCurve: submittedRequest.manualInput.achievementCurve }
+                        : {}),
                     },
                   },
                 }

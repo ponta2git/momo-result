@@ -52,7 +52,7 @@ function renderFields(playedAt = "2025-12-31T15:00:00.000Z") {
 }
 
 describe("MatchAchievementFields", () => {
-  it("offers same-JST-day manual achievements, keeps saved direct claims read-only, and permits an independent imported claim", async () => {
+  it("offers active manual achievements for historical matches, keeps saved direct claims read-only, and permits an independent imported claim", async () => {
     const user = userEvent.setup();
     const catalog = makeAchievementCatalog({
       items: [
@@ -94,7 +94,7 @@ describe("MatchAchievementFields", () => {
     expect(
       screen.queryByRole("checkbox", { name: "手入力のテスト実績・いーゆー" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("翌日の実績")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "翌日の実績・ぽんた" })).toBeEnabled();
     expect(screen.queryByText("別マップの実績")).not.toBeInTheDocument();
     expect(screen.queryByText("自動実績")).not.toBeInTheDocument();
     expect(screen.queryByText("廃止済みの実績")).not.toBeInTheDocument();

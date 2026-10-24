@@ -103,7 +103,7 @@ const WorkspaceNote = memo(function WorkspaceNote({ editing }: { editing: Editor
   const value = useWorkspaceSnapshot(editing.note);
   const interaction = useWorkspaceInteraction();
   return (
-    <fieldset className="mt-4 min-w-0" disabled={interaction.disabled}>
+    <fieldset className="min-w-0" disabled={interaction.disabled}>
       <MatchNoteField
         value={value}
         error={interaction.errorPathSet.has("noteBody")}
@@ -174,7 +174,7 @@ export function MatchWorkspaceEditor({
           view.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
         )}
       >
-        <div className="order-2 min-w-0 2xl:order-none">
+        <div className="order-2 grid min-w-0 gap-4 2xl:order-none">
           <WorkspaceScore
             editing={editing}
             onPreferImageKindChange={preferImageKind}

@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -17,6 +18,7 @@ setupMsw();
 
 describe("AchievementRadarSection", () => {
   it("keeps a complete seven-axis snapshot after a new achievement resource fails instead of combining revisions", async () => {
+    const user = userEvent.setup();
     const client = createTestQueryClient();
     const resource = makeAchievedResource();
     client.setQueryData(
@@ -75,5 +77,10 @@ describe("AchievementRadarSection", () => {
     expect(
       screen.getByRole("img", { name: "ぽんたの7軸レーダー" }),
     ).not.toHaveAccessibleDescription(/平均順位：2点/u);
+    await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
+    expect(screen.getByRole("link", { name: "実績リストを開く" })).toHaveAttribute(
+      "href",
+      "/achievements?gameTitleId=gt_momotetsu_2",
+    );
   });
 });

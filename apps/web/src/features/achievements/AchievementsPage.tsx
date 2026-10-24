@@ -14,6 +14,7 @@ import {
   memberDisplayName,
   orderFixedMembers,
 } from "@/shared/domain/members";
+import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
@@ -22,8 +23,8 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
 import { SelectField } from "@/shared/ui/forms/SelectField";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
@@ -32,8 +33,6 @@ import { contentText } from "@/shared/ui/typography";
 export function AchievementsPage() {
   const {
     setSearch,
-    showRetired,
-    setShowRetired,
     editingClaimId,
     setEditingClaimId,
     operations,
@@ -47,6 +46,7 @@ export function AchievementsPage() {
     invalidMap,
     summary,
     items,
+    claims,
     selectedItem,
     selectedPlayer,
     editingClaim,
@@ -147,8 +147,8 @@ export function AchievementsPage() {
         {data ? (
           <StaleShield active={titleChanged} strategy="preserve-inert" fallback={null}>
             <div className="grid min-w-0 gap-6">
-              <section aria-label="実績達成・作品通算" className="grid min-w-0 gap-3">
-                <h2 className={cn(contentText.heading, "text-balance")}>実績達成・作品通算</h2>
+              <section aria-label="実績達成" className="grid min-w-0 gap-3">
+                <h2 className={cn(contentText.heading, "text-balance")}>実績達成</h2>
                 {summary ? (
                   <AchievementScoreTable
                     players={orderFixedMembers(summary.players).map((player) => ({
@@ -162,16 +162,9 @@ export function AchievementsPage() {
                 )}
               </section>
               <section aria-label="実績リスト" className="grid min-w-0 gap-3">
-                <p className={contentText.supporting}>
-                  達成状況を選ぶと、日時・根拠を確認できます。
-                </p>
-                <CheckboxField
-                  checked={showRetired}
-                  label="廃止済みを表示"
-                  onChange={(event) => setShowRetired(event.target.checked)}
-                />
+                <h2 className={contentText.heading}>達成状況</h2>
                 <DataTable
-                  caption={{ content: showRetired ? "廃止済みの実績" : "実績と4人の達成状況" }}
+                  caption={{ content: "実績と4人の達成状況" }}
                   columns={[
                     {
                       key: "achievement",
@@ -182,9 +175,12 @@ export function AchievementsPage() {
                         <div className="grid gap-1">
                           <p className={cn(contentText.body, "text-pretty")}>{item.name}</p>
                           <p className={contentText.supporting}>
-                            {"★".repeat(item.stars)}・
+                            <span aria-label={`難易度：星${item.stars}`}>
+                              {"★".repeat(item.stars)}
+                            </span>
+                            ・
                             {item.common
-                              ? "共通"
+                              ? "全マップ共通"
                               : item.mapMasterIds
                                   .map(
                                     (id) =>
@@ -203,7 +199,11 @@ export function AchievementsPage() {
                     },
                     ...canonicalResultMembers.map((member) => ({
                       key: member.memberId,
-                      header: member.displayName,
+                      header: (
+                        <MemberSequenceLabel memberId={member.memberId}>
+                          {member.displayName}
+                        </MemberSequenceLabel>
+                      ),
                       minWidth: "8rem",
                       renderCell: (item: (typeof items)[number]) => {
                         const player = item.players.find(
@@ -241,9 +241,7 @@ export function AchievementsPage() {
                   getRowKey={(item) => item.achievementId}
                   stickyRowHeader
                   verticalAlign="top"
-                  emptyState={
-                    <p>この範囲に{showRetired ? "廃止済みの" : "対象となる"}実績はありません。</p>
-                  }
+                  emptyState={<p>対象の実績はありません。</p>}
                 />
               </section>
             </div>
@@ -255,9 +253,9 @@ export function AchievementsPage() {
           triggerVariant="supporting"
           panelSpacing="sm"
         >
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             <p className={contentText.supporting}>
-              保存された最新の記録です。訂正した内容は集計後に上の達成状況へ反映されます。
+              訂正した内容は、集計が終わると達成状況に反映されます。
             </p>
             {catalog.isError ? (
               <Notice tone="danger" title="保存済みの記録を取得できません">
@@ -265,30 +263,14 @@ export function AchievementsPage() {
               </Notice>
             ) : null}
             {catalog.isLoading ? <Skeleton className="h-24" /> : null}
-            {catalog.data?.claims.length === 0 ? (
+            {catalog.data && claims.length === 0 ? (
               <p className={contentText.body}>手入力・移行の記録はありません。</p>
             ) : null}
-            <ul className="grid gap-2">
-              {(catalog.data?.claims ?? []).map((claim) => {
-                const item = catalog.data?.items.find(
-                  (value) => value.achievementId === claim.achievementId,
-                );
-                if (!item) return null;
-                const frozen = Boolean(item.retiredAt && item.ruleKind !== "manual");
-                return (
-                  <li key={claim.claimId} className="flex flex-wrap items-center gap-2">
-                    <span className={contentText.body}>
-                      {item.name}・{memberDisplayName(claim.memberId)}・
-                      {claim.sourceKind === "import" ? "移行時の申告" : "手入力"}・
-                      {claim.state === "cancelled"
-                        ? "取消済み"
-                        : claim.state === "unconfirmed"
-                          ? "未確認"
-                          : "達成済み"}
-                    </span>
-                    {frozen ? (
-                      <span className={contentText.supporting}>廃止時点の記録</span>
-                    ) : (
+            <ul className="grid gap-4">
+              {claims.map(({ claim, item }) => (
+                <li key={claim.claimId}>
+                  <ContentWithActions
+                    actions={
                       <Button
                         size="sm"
                         variant="secondary"
@@ -297,10 +279,24 @@ export function AchievementsPage() {
                       >
                         訂正
                       </Button>
-                    )}
-                  </li>
-                );
-              })}
+                    }
+                  >
+                    <div className="grid gap-1">
+                      <p className={contentText.body}>
+                        {item.name}・{memberDisplayName(claim.memberId)}
+                      </p>
+                      <p className={contentText.supporting}>
+                        {claim.sourceKind === "import" ? "移行時の申告" : "手入力"}・
+                        {claim.state === "cancelled"
+                          ? "取消済み"
+                          : claim.state === "unconfirmed"
+                            ? "未確認"
+                            : "達成済み"}
+                      </p>
+                    </div>
+                  </ContentWithActions>
+                </li>
+              ))}
             </ul>
           </div>
         </Disclosure>

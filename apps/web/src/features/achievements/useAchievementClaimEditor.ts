@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   achievementDateTimeFromInput,
   achievementDateTimeInput,
-  achievementJapanDate,
 } from "@/shared/achievements/achievementDates";
 import { achievementKeys, invalidateAchievementReads } from "@/shared/api/achievementQueryOptions";
 import { correctAchievementClaim } from "@/shared/api/achievements";
@@ -48,15 +47,12 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
     claim.version !== baseline.claim.version || item.version !== baseline.itemVersion;
   const frozen = Boolean(item.retiredAt && item.ruleKind !== "manual");
   const confirmationRequired = form.state === "unconfirmed";
-  const identityDay = matchIdentity ? achievementJapanDate(matchIdentity.playedAt) : null;
   const eligibleIdentity =
     !form.matchId ||
     Boolean(
       matchIdentity &&
       matchIdentity.gameTitleId === item.gameTitleId &&
-      (item.common || item.mapMasterIds.includes(matchIdentity.mapMasterId)) &&
-      identityDay &&
-      (!item.appliesFrom || identityDay >= item.appliesFrom),
+      (item.common || item.mapMasterIds.includes(matchIdentity.mapMasterId)),
     );
   const mutation = useMutation({
     mutationFn: (request: CorrectAchievementClaimRequest) =>

@@ -3,8 +3,6 @@ import { useState } from "react";
 
 import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchSetupValues } from "@/features/matches/workspace/matchFormTypes";
-import { achievementJapanDate } from "@/shared/achievements/achievementDates";
-import { orderAchievementItems } from "@/shared/achievements/achievementPresentation";
 import { achievementCatalogQueryOptions } from "@/shared/api/achievementQueryOptions";
 import type { AchievementItem } from "@/shared/api/achievements";
 
@@ -22,15 +20,11 @@ export function useMatchAchievementFields({
 }: MatchAchievementFieldsProps) {
   const [open, setOpen] = useState(values.length > 0);
   const catalog = useQuery(achievementCatalogQueryOptions(setup.gameTitleId || undefined));
-  const playedDate = achievementJapanDate(setup.playedAt);
   const applicable = (item: AchievementItem) =>
     !item.retiredAt &&
     item.ruleKind === "manual" &&
-    (item.common || item.mapMasterIds.includes(setup.mapMasterId)) &&
-    Boolean(playedDate && (!item.appliesFrom || playedDate >= item.appliesFrom));
-  const items = catalog.data
-    ? orderAchievementItems(catalog.data.items.filter(applicable), catalog.data.maps)
-    : [];
+    (item.common || item.mapMasterIds.includes(setup.mapMasterId));
+  const items = catalog.data?.items.filter(applicable) ?? [];
   const directClaim = (achievementId: string, memberId: string) =>
     catalog.data?.claims.find(
       (claim) =>

@@ -14,7 +14,7 @@ export type AchievementScorePlayer = PlayerAchievementScore & {
 export function AchievementScoreTable({ players }: { players: readonly AchievementScorePlayer[] }) {
   return (
     <DataTable
-      caption={{ content: "実績達成・作品通算" }}
+      caption={{ content: "実績達成の点数とポイント" }}
       columns={[
         {
           key: "member",
@@ -28,7 +28,7 @@ export function AchievementScoreTable({ players }: { players: readonly Achieveme
         },
         {
           key: "score",
-          header: "実績軸",
+          header: "点数",
           tabular: true,
           renderCell: (player) => (
             <span className={cn(contentText.compactPrimary, "whitespace-nowrap")}>

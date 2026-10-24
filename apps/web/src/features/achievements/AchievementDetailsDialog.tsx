@@ -14,6 +14,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
 export function AchievementDetailsDialog({
@@ -42,7 +43,7 @@ export function AchievementDetailsDialog({
         if (!open) onClose();
       }}
     >
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         <div className="grid gap-1">
           <p className={contentText.compactPrimary}>{achievementStatusLabel(player.status)}</p>
           {achievementDateLabel(player) ? (
@@ -53,7 +54,11 @@ export function AchievementDetailsDialog({
               日時不明の達成があるため、実際の初達成日時は確定していません。
             </p>
           ) : null}
-          {frozen ? <p className={contentText.supporting}>廃止時点の記録です。</p> : null}
+          {item.retired ? (
+            <p className={contentText.supporting}>
+              {frozen ? "廃止時点の記録です。" : "廃止した実績の記録です。"}
+            </p>
+          ) : null}
         </div>
         <section aria-label="達成の根拠" className="grid gap-3">
           <h2 className={cn(contentText.heading, "text-balance")}>達成の根拠</h2>
@@ -64,56 +69,53 @@ export function AchievementDetailsDialog({
             {player.proofs.map((proof, index) => (
               <li
                 key={`${proof.kind}:${proof.claimId ?? proof.matchId ?? proof.heldEventId ?? index}`}
-                className="grid gap-1"
               >
-                <p className={contentText.body}>
-                  {achievementProofLabel(proof.kind)}
-                  {proof.state === "unconfirmed" ? "・未確認" : ""}
-                </p>
-                <p className={cn(contentText.supporting, "tabular-nums")}>
-                  {proof.achievedAt ? formatDateTimeLong(proof.achievedAt) : "日時不明"}
-                </p>
-                {proof.sourceAchievementId ? (
-                  <p className={contentText.supporting}>
-                    {catalog?.items.find(
-                      (source) => source.achievementId === proof.sourceAchievementId,
-                    )?.name ?? "上位実績"}
-                    から補完
-                  </p>
-                ) : null}
-                {proof.matchId ? (
-                  proof.matchAvailable ? (
-                    <LinkButton
-                      to={`/matches/${encodeURIComponent(proof.matchId)}`}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      根拠の試合を開く
-                    </LinkButton>
-                  ) : (
-                    <p className={contentText.supporting}>根拠の試合は削除済みです。</p>
-                  )
-                ) : proof.heldEventId ? (
-                  proof.heldEventAvailable ? (
-                    <LinkButton
-                      to={`/held-events/${encodeURIComponent(proof.heldEventId)}`}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      根拠の開催を開く
-                    </LinkButton>
-                  ) : (
-                    <p className={contentText.supporting}>根拠の開催は削除済みです。</p>
-                  )
-                ) : (
-                  <p className={contentText.supporting}>根拠の試合・開催は不明です。</p>
-                )}
+                <ContentWithActions
+                  actions={
+                    proof.matchId && proof.matchAvailable ? (
+                      <LinkButton
+                        to={`/matches/${encodeURIComponent(proof.matchId)}`}
+                        size="sm"
+                        variant="quiet"
+                      >
+                        根拠の試合を開く
+                      </LinkButton>
+                    ) : !proof.matchId && proof.heldEventId && proof.heldEventAvailable ? (
+                      <LinkButton
+                        to={`/held-events/${encodeURIComponent(proof.heldEventId)}`}
+                        size="sm"
+                        variant="quiet"
+                      >
+                        根拠の開催を開く
+                      </LinkButton>
+                    ) : null
+                  }
+                >
+                  <div className="grid gap-1">
+                    <p className={contentText.body}>
+                      {proof.sourceAchievementId
+                        ? `${catalog?.items.find((source) => source.achievementId === proof.sourceAchievementId)?.name ?? "上位実績"}から補完`
+                        : achievementProofLabel(proof.kind)}
+                      {proof.state === "unconfirmed" ? "・未確認" : ""}
+                    </p>
+                    <p className={cn(contentText.supporting, "tabular-nums")}>
+                      {proof.achievedAt ? formatDateTimeLong(proof.achievedAt) : "日時不明"}
+                    </p>
+                    {proof.matchId && !proof.matchAvailable ? (
+                      <p className={contentText.supporting}>根拠の試合は削除済みです。</p>
+                    ) : proof.heldEventId && !proof.heldEventAvailable ? (
+                      <p className={contentText.supporting}>根拠の開催は削除済みです。</p>
+                    ) : !proof.matchId && !proof.heldEventId ? (
+                      <p className={contentText.supporting}>根拠の試合・開催は不明です。</p>
+                    ) : null}
+                  </div>
+                </ContentWithActions>
               </li>
             ))}
           </ul>
         </section>
         {!frozen && claims.length > 0 ? (
-          <section aria-label="保存済みの記録の訂正" className="grid gap-2">
+          <section aria-label="保存済みの記録の訂正" className="grid justify-items-start gap-2">
             <h2 className={cn(contentText.heading, "text-balance")}>保存済みの記録を訂正</h2>
             {claims.map((claim) => (
               <Button

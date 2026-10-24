@@ -22,7 +22,7 @@ export function MatchAchievementFields({
   const { open, setOpen, catalog, applicable, items, directClaim, outdated, remove, add } =
     useMatchAchievementFields({ setup, values, disabled, onChange });
   return (
-    <section aria-label="今回記録する実績" className="mt-5 min-w-0">
+    <section aria-label="今回記録する実績" className="min-w-0">
       <Disclosure
         summary={`実績を記録（任意）${values.length > 0 ? `・入力${values.length}件` : ""}`}
         ariaLabel="試合と一緒に実績を記録"
@@ -30,9 +30,9 @@ export function MatchAchievementFields({
         open={open}
         onOpenChange={setOpen}
       >
-        <div className="grid min-w-0 gap-3">
+        <div className="grid min-w-0 gap-4">
           <p className={contentText.supporting}>
-            今回確認した手入力の実績を選んでください。総資産・回数・開催平均は保存後に自動判定します。
+            達成した実績とプレーヤーを選んでください。試合結果から判定できる実績は自動で記録されます。
           </p>
           {!setup.gameTitleId || !setup.mapMasterId ? (
             <p className={contentText.body}>作品とマップを選ぶと対象の実績を表示します。</p>
@@ -59,7 +59,7 @@ export function MatchAchievementFields({
           {outdated.length > 0 ? (
             <Notice tone="warning" title="選択した実績を確認してください">
               <p>
-                作品・マップ・対戦日時、または保存済みの項目・記録が変わりました。入力を外すか、最新内容で選び直してください。
+                作品・マップ、または保存済みの実績が変わりました。入力を外すか、最新内容で選び直してください。
               </p>
               <ul className="mt-2 grid gap-2">
                 {outdated.map((entry) => {
@@ -139,7 +139,7 @@ export function MatchAchievementFields({
                         )}
                         aria-label={`${item.name}・${member.displayName}の保存済み実績を見る`}
                       >
-                        登録済み
+                        達成済み
                       </LinkButton>
                     ) : (
                       <CheckboxField
@@ -164,7 +164,7 @@ export function MatchAchievementFields({
               density="compact"
               stickyRowHeader
               verticalAlign="top"
-              emptyState={<p>この試合で入力できる手動の実績はありません。</p>}
+              emptyState={<p>この試合で入力する実績はありません。</p>}
             />
           ) : null}
         </div>

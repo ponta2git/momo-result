@@ -1,11 +1,11 @@
 import { useAchievementMatchPicker } from "@/features/achievements/useAchievementMatchPicker";
-import { achievementJapanDate } from "@/shared/achievements/achievementDates";
 import type { AchievementItem } from "@/shared/api/achievements";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
 export function AchievementMatchPicker({
@@ -21,10 +21,7 @@ export function AchievementMatchPicker({
 }) {
   const { setCursor, matches, pagination } = useAchievementMatchPicker(item);
   return (
-    <div className="grid gap-3">
-      <p className={contentText.supporting}>
-        古い試合から表示しています。対象マップ・適用開始日に合う試合を選んでください。
-      </p>
+    <div className="grid gap-4">
       {matches.isError ? (
         <Notice
           tone="danger"
@@ -44,37 +41,39 @@ export function AchievementMatchPicker({
         </Notice>
       ) : null}
       {matches.isLoading ? <Skeleton className="h-32" /> : null}
-      <ul className="grid gap-2">
+      <ul className="grid gap-4">
         {(matches.data?.items ?? []).map((match) => {
           const id = match.matchId;
-          const day = match.playedAt ? achievementJapanDate(match.playedAt) : null;
           const eligible = Boolean(
             id &&
-            day &&
-            (item.common || (match.mapMasterId && item.mapMasterIds.includes(match.mapMasterId))) &&
-            (!item.appliesFrom || day >= item.appliesFrom),
+            (item.common || (match.mapMasterId && item.mapMasterIds.includes(match.mapMasterId))),
           );
           return (
-            <li key={match.id} className="flex flex-wrap items-center justify-between gap-2">
-              <div className="grid gap-1">
-                <span className={cn(contentText.body, "tabular-nums")}>
-                  {formatDateTimeLong(match.playedAt)}・第{match.matchNoInEvent}試合
-                </span>
-                <span className={contentText.supporting}>
-                  {match.mapName ?? "マップ未取得"}
-                  {!eligible ? "・対象外" : ""}
-                </span>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={disabled || !eligible || !id || matches.isPlaceholderData}
-                onClick={() => {
-                  if (id) onSelect(id);
-                }}
+            <li key={match.id}>
+              <ContentWithActions
+                actions={
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={disabled || !eligible || !id || matches.isPlaceholderData}
+                    onClick={() => {
+                      if (id) onSelect(id);
+                    }}
+                  >
+                    {selectedId === id ? "選択中" : "この試合を選ぶ"}
+                  </Button>
+                }
               >
-                {selectedId === id ? "選択中" : "この試合を選ぶ"}
-              </Button>
+                <div className="grid gap-1">
+                  <span className={cn(contentText.body, "tabular-nums")}>
+                    {formatDateTimeLong(match.playedAt)}・第{match.matchNoInEvent}試合
+                  </span>
+                  <span className={contentText.supporting}>
+                    {match.mapName ?? "マップ未取得"}
+                    {eligible ? "" : "・対象外"}
+                  </span>
+                </div>
+              </ContentWithActions>
             </li>
           );
         })}

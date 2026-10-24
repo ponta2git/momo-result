@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -70,6 +70,49 @@ async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("AchievementsPage", () => {
+  it("uses the saved item order, omits retired items from ordinary lists, and preserves a retired item link", async () => {
+    const user = userEvent.setup();
+    const resource = makeAchievedResource();
+    const source = resource.items[0]!;
+    resource.items = [
+      { ...source, achievementId: "second-name", name: "到着8回" },
+      { ...source, achievementId: "first-name", name: "到着4回" },
+      { ...source, achievementId: "retired", name: "以前の実績", retired: true },
+    ];
+    const catalog = makeAchievementCatalog({
+      items: resource.items.map((item) =>
+        makeAchievementItem({
+          achievementId: item.achievementId,
+          name: item.name,
+          retiredAt: item.retired ? "2026-04-01T00:00:00Z" : null,
+        }),
+      ),
+      claims: [makeAchievementClaim({ achievementId: "retired" })],
+    });
+    server.use(
+      http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+      http.get("/api/achievements", () => HttpResponse.json(resource)),
+    );
+    const { router } = renderPage();
+    const table = await screen.findByRole("table", { name: "実績と4人の達成状況" });
+    expect(
+      within(table)
+        .getAllByRole("rowheader")
+        .map((cell) => cell.textContent),
+    ).toEqual([expect.stringContaining("到着8回"), expect.stringContaining("到着4回")]);
+    await user.click(screen.getByRole("button", { name: "保存済みの実績記録を訂正" }));
+    expect(screen.queryByText("以前の実績")).not.toBeInTheDocument();
+    expect(screen.getByText("手入力・移行の記録はありません。")).toBeVisible();
+    await act(() =>
+      router.navigate(
+        "/achievements?gameTitleId=gt_momotetsu_2&achievementId=retired&memberId=member_ponta",
+      ),
+    );
+    const details = await screen.findByRole("dialog", { name: "以前の実績・ぽんた" });
+    expect(within(details).getByText("廃止した実績の記録です。")).toBeVisible();
+    expect(within(details).getByRole("button", { name: "ぽんたの手入力を訂正" })).toBeEnabled();
+  });
+
   it("requires an explicit result before saving an unconfirmed import", async () => {
     const user = userEvent.setup();
     const claim = makeAchievementClaim({
@@ -183,11 +226,11 @@ describe("AchievementsPage", () => {
     );
     renderPage();
     expect(await screen.findByText("保存された変更の集計を待っています")).toBeVisible();
-    const points = await screen.findByRole("table", { name: "実績達成・作品通算" });
+    const points = await screen.findByRole("table", { name: "実績達成の点数とポイント" });
     expect(within(points).getByRole("row", { name: /ぽんた 10点 4／4/u })).toBeVisible();
     const achievements = screen.getByRole("table", { name: "実績と4人の達成状況" });
-    expect(within(achievements).getByText("★★・共通")).toBeVisible();
-    expect(within(achievements).queryByText("★★★★★・共通")).not.toBeInTheDocument();
+    expect(within(achievements).getByLabelText("難易度：星2")).toBeVisible();
+    expect(within(achievements).queryByLabelText("難易度：星5")).not.toBeInTheDocument();
     expect(within(achievements).getByText("日時不明")).toBeVisible();
   });
 

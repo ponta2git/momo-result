@@ -153,8 +153,17 @@ export function PlayerRadarSection({
                   header: "観点",
                   key: "axis",
                   rowHeader: true,
-                  minWidth: "7rem",
-                  renderCell: (axis) => <PlayerRadarAxisLabel label={axis.label} />,
+                  minWidth: "10rem",
+                  renderCell: (axis) => (
+                    <div className="grid justify-items-start gap-1">
+                      <PlayerRadarAxisLabel label={axis.label} />
+                      {axis.id === "achievement" && achievementsHref ? (
+                        <LinkButton to={achievementsHref} variant="quiet" size="sm">
+                          実績リストを開く
+                        </LinkButton>
+                      ) : null}
+                    </div>
+                  ),
                 },
                 ...players.map((player) => ({
                   header: (
@@ -184,7 +193,6 @@ export function PlayerRadarSection({
                               {score.earnedPoints}／{score.totalPoints}ポイント
                             </p>
                           ) : null}
-                          <p className={contentText.supporting}>作品通算</p>
                         </div>
                       );
                     }
@@ -205,13 +213,6 @@ export function PlayerRadarSection({
               verticalAlign="top"
             />
           </Disclosure>
-          {achievementsHref ? (
-            <div className="my-2">
-              <LinkButton to={achievementsHref} variant="secondary" size="sm">
-                実績リストを開く
-              </LinkButton>
-            </div>
-          ) : null}
           <Disclosure
             ariaLabel="レーダーの採点基準"
             summary="採点基準"
@@ -234,7 +235,7 @@ export function PlayerRadarSection({
                             id: "achievement",
                             label: "実績達成",
                             value:
-                              "作品通算の獲得ポイントの割合を1〜10点で表示します。1＋9×（獲得ポイント÷対象ポイント）。対象項目がない場合は採点対象外です。",
+                              "獲得ポイントの割合を、設定された達成率の基準に沿って1〜10点で表示します。対象項目がない場合は採点対象外です。",
                           },
                         ]
                       : []),

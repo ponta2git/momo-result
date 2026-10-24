@@ -85,7 +85,7 @@ describe("SeriesComparison empty scope", () => {
       }),
     );
     const { client } = renderScope();
-    const scores = await screen.findByRole("table", { name: "実績達成・作品通算" });
+    const scores = await screen.findByRole("table", { name: "実績達成の点数とポイント" });
     const ponta = within(scores).getByRole("row", { name: /ぽんた/u });
     expect(within(ponta).getByText("10点")).toBeVisible();
     expect(within(ponta).getByText("4／4")).toBeVisible();

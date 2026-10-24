@@ -47,10 +47,10 @@ export function AchievementRadarSection({
       </div>
     );
   return (
-    <AnalysisSection id="metric-player-radar" title="実績達成・作品通算">
+    <AnalysisSection id="metric-player-radar" title="実績達成">
       <div className="grid min-w-0 gap-3">
         <p className={contentText.supporting}>
-          この比較範囲の成績6軸は対象試合がありません。実績達成は作品通算で表示します。
+          この比較範囲には、成績6軸の対象となる試合がありません。
         </p>
         {players ? (
           <AchievementScoreTable players={players} />

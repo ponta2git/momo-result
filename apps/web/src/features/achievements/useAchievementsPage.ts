@@ -2,15 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { orderAchievementItems } from "@/shared/achievements/achievementPresentation";
 import { useAchievementPublication } from "@/shared/achievements/useAchievementPublication";
 import { achievementCatalogQueryOptions } from "@/shared/api/achievementQueryOptions";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { usePermissionFacts } from "@/shared/auth/useAuthorization";
+import { orderFixedMembers } from "@/shared/domain/members";
 
 export function useAchievementsPage() {
   const [search, setSearch] = useSearchParams();
-  const [showRetired, setShowRetired] = useState(false);
   const [editingClaimId, setEditingClaimId] = useState<string>();
   const operations = usePermissionFacts("operations");
   const titles = useQuery(gameTitlesQueryOptions());
@@ -24,15 +23,20 @@ export function useAchievementsPage() {
     data && mapMasterId && !data.maps.some((map) => map.mapMasterId === mapMasterId),
   );
   const summary = data?.summaries.find((entry) => (entry.mapMasterId ?? "") === mapMasterId);
-  const items = data
-    ? orderAchievementItems(
-        data.items.filter(
-          (item) =>
-            item.retired === showRetired &&
-            (!mapMasterId || item.common || item.mapMasterIds.includes(mapMasterId)),
-        ),
-        data.maps,
-      )
+  const items =
+    data?.items.filter(
+      (item) =>
+        !item.retired && (!mapMasterId || item.common || item.mapMasterIds.includes(mapMasterId)),
+    ) ?? [];
+  const currentCatalog = catalog.data;
+  const claims = currentCatalog
+    ? currentCatalog.items
+        .filter((item) => !item.retiredAt)
+        .flatMap((item) =>
+          orderFixedMembers(
+            currentCatalog.claims.filter((claim) => claim.achievementId === item.achievementId),
+          ).map((claim) => ({ claim, item })),
+        )
     : [];
   const selectedItem = data?.items.find(
     (item) => item.achievementId === search.get("achievementId"),
@@ -77,8 +81,6 @@ export function useAchievementsPage() {
 
   return {
     setSearch,
-    showRetired,
-    setShowRetired,
     editingClaimId,
     setEditingClaimId,
     operations,
@@ -92,6 +94,7 @@ export function useAchievementsPage() {
     invalidMap,
     summary,
     items,
+    claims,
     selectedItem,
     selectedPlayer,
     editingClaim,

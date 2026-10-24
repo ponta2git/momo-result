@@ -54,7 +54,7 @@ export function AchievementClaimEditorDialog({
         }}
       >
         <form
-          className="grid gap-5"
+          className="grid gap-6"
           onSubmit={(event) => {
             event.preventDefault();
             if (form.state === "cancelled" && baseline.claim.state !== "cancelled")
@@ -63,7 +63,7 @@ export function AchievementClaimEditorDialog({
           }}
         >
           <p className={contentText.supporting}>
-            {claim.sourceKind === "import" ? "移行時の申告" : "直接の手入力"}
+            {claim.sourceKind === "import" ? "移行時の申告" : "手入力の記録"}
             を訂正します。ほかの根拠による達成は維持されます。
           </p>
           {conflict ? (
@@ -128,7 +128,7 @@ export function AchievementClaimEditorDialog({
                       </Button>
                     }
                   >
-                    試合を選び直すか、根拠不明に変更してください。
+                    再読み込みするか、根拠の紐づけを外してください。
                   </Notice>
                 ) : null}
                 {!identity.isLoading && !eligibleIdentity ? (
@@ -178,7 +178,7 @@ export function AchievementClaimEditorDialog({
           ) : null}
           <DialogFooter>
             <Button variant="secondary" disabled={mutation.isPending} onClick={requestClose}>
-              閉じる
+              キャンセル
             </Button>
             <Button
               type="submit"

@@ -2,11 +2,16 @@ use serde_json::Value;
 
 use super::PayloadError;
 
+mod achievements;
 mod outlook;
 mod radar;
 
 const MAX_ITEMS: usize = 1_000_000;
 const MAX_TEXT_BYTES: usize = 4_096;
+
+pub(super) fn validate_achievements(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &achievements::ACHIEVEMENTS)
+}
 
 #[derive(Clone, Copy)]
 enum Schema {
@@ -1647,8 +1652,8 @@ mod json_schema_export_tests {
 
     use super::{
         AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, outlook, radar, validate, validate_aggregate,
-        validate_drilldown, validate_match_context, validate_review,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, achievements, outlook, radar, validate,
+        validate_aggregate, validate_drilldown, validate_match_context, validate_review,
     };
 
     const DRAFT_2020_12: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -1900,8 +1905,13 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 11] {
+    fn generated_schemas() -> [GeneratedSchema; 12] {
         [
+            document(
+                "series-analysis-achievements-v1.schema.json",
+                "Series Analysis Achievements Resource v1",
+                &achievements::ACHIEVEMENTS,
+            ),
             document(
                 "series-analysis-aggregate-v6.schema.json",
                 "Series Analysis Aggregate Resource v6",

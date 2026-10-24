@@ -26,6 +26,14 @@ pub(super) async fn copy_artifact_resources(
     directory: &Path,
     totals: &ArtifactTotals,
 ) -> Result<(), ControlError> {
+    copy_scope_resources(
+        transaction,
+        manifest,
+        directory,
+        ScopeResourceKind::Achievements,
+        totals.counts.achievements,
+    )
+    .await?;
     measure(
         "staging_copy_aggregate",
         copy_scope_resources(
@@ -83,6 +91,7 @@ pub(super) async fn copy_artifact_resources(
 
 #[derive(Clone, Copy)]
 enum ScopeResourceKind {
+    Achievements,
     Aggregate,
     Review,
     OutlookSummary,
@@ -91,6 +100,7 @@ enum ScopeResourceKind {
 impl ScopeResourceKind {
     const fn wire(self) -> &'static str {
         match self {
+            Self::Achievements => "achievements",
             Self::Aggregate => "aggregate",
             Self::Review => "review",
             Self::OutlookSummary => "outlook_summary",
@@ -99,6 +109,9 @@ impl ScopeResourceKind {
 
     const fn copy_statement(self) -> &'static str {
         match self {
+            Self::Achievements => {
+                "COPY series_analysis_achievement_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY"
+            }
             Self::Aggregate => {
                 "COPY series_analysis_scope_aggregate_artifacts (artifact_id, scope_key, scope_kind, season_master_id, map_master_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum) FROM STDIN BINARY"
             }
@@ -113,7 +126,8 @@ impl ScopeResourceKind {
 
     const fn common(self, resource: &ResourceManifest) -> Option<&CommonResource> {
         match (self, resource) {
-            (Self::Aggregate, ResourceManifest::Aggregate { common })
+            (Self::Achievements, ResourceManifest::Achievements { common })
+            | (Self::Aggregate, ResourceManifest::Aggregate { common })
             | (Self::Review, ResourceManifest::Review { common })
             | (Self::OutlookSummary, ResourceManifest::OutlookSummary { common }) => Some(common),
             _ => None,

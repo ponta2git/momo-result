@@ -46,6 +46,7 @@ struct ContextIdentity {
 
 #[derive(Debug, Eq, PartialEq)]
 struct ArtifactShape {
+    achievement_item_count: u64,
     aggregate_item_counts: BTreeMap<ScopeRef, u64>,
     contexts: BTreeSet<ContextIdentity>,
 }
@@ -96,6 +97,16 @@ async fn load_expected_shape(
         .await?;
     tokio::pin!(rows);
     let mut expected = ArtifactShape::empty_input();
+    let achievement_count = transaction.query_one(
+        "SELECT count(*)::bigint FROM achievement_items WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&game_title_id]
+    ).await?.try_get::<_, i64>(0)?;
+    expected.achievement_item_count = u64::try_from(achievement_count)
+        .map_err(|_error| ControlError::AuthoritativeInputContract)?;
+    if expected.achievement_item_count
+        > u64::try_from(momo_analysis_core::achievements::MAXIMUM_ITEMS)?
+    {
+        return Err(ControlError::AuthoritativeInputContract);
+    }
     let mut observed_matches = 0;
     while let Some(row) = rows.try_next().await? {
         expected.include_match(match_snapshot(&row)?)?;
@@ -155,6 +166,7 @@ fn match_snapshot(row: &Row) -> Result<MatchSnapshot, ControlError> {
 impl ArtifactShape {
     fn empty_input() -> Self {
         Self {
+            achievement_item_count: 0,
             aggregate_item_counts: BTreeMap::from([(ScopeRef::Overall, 0_u64)]),
             contexts: BTreeSet::new(),
         }
@@ -193,10 +205,14 @@ impl ArtifactShape {
 }
 
 fn candidate_shape(manifest: &ArtifactManifest) -> Result<ArtifactShape, ControlError> {
+    let mut achievement_item_count = 0;
     let mut aggregate_item_counts = BTreeMap::new();
     let mut contexts = BTreeSet::new();
     for resource in &manifest.resources {
         match resource {
+            ResourceManifest::Achievements { common } => {
+                achievement_item_count = common.item_count;
+            }
             ResourceManifest::Aggregate { common } => {
                 if aggregate_item_counts
                     .insert(common.scope.clone(), common.item_count)
@@ -226,6 +242,7 @@ fn candidate_shape(manifest: &ArtifactManifest) -> Result<ArtifactShape, Control
         }
     }
     Ok(ArtifactShape {
+        achievement_item_count,
         aggregate_item_counts,
         contexts,
     })

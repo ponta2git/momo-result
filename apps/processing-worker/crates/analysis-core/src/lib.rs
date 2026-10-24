@@ -6,6 +6,7 @@
 //! calculation changes reusable, locally testable, and impossible to couple accidentally to
 //! worker infrastructure.
 
+pub mod achievements;
 pub mod canonical;
 pub mod child;
 mod competition_rank;

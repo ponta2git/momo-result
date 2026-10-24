@@ -155,7 +155,9 @@ fn empty_title_still_produces_overall_aggregate_and_review() {
         u64::try_from(resources.len()).ok()
     );
     match resources.as_slice() {
-        [aggregate, outlook, review] => {
+        [achievements, aggregate, outlook, review] => {
+            assert_eq!(achievements.kind, ComputedResourceKind::Achievements);
+            assert_eq!(achievements.item_count, 0);
             assert_eq!(outlook.kind, ComputedResourceKind::OutlookSummary);
             assert_eq!(outlook.item_count, 0);
             assert_eq!(aggregate.scope, ScopeRef::Overall);
@@ -173,8 +175,8 @@ fn empty_title_still_produces_overall_aggregate_and_review() {
         }
         _ => assert_eq!(
             resources.len(),
-            3,
-            "empty title includes the no-target outlook summary"
+            4,
+            "empty title includes lifetime achievements and the no-target outlook summary"
         ),
     }
 }
@@ -196,7 +198,8 @@ fn every_match_context_is_generated_for_each_real_scope() {
                 resource.item_count,
                 resource.source_match_revision,
             )),
-            ComputedResourceKind::Aggregate
+            ComputedResourceKind::Achievements
+            | ComputedResourceKind::Aggregate
             | ComputedResourceKind::Review
             | ComputedResourceKind::Drilldown { .. }
             | ComputedResourceKind::OutlookSummary

@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::worker::{ControlOutcome, PostCommitEffects};
 
-pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v7";
+pub(crate) const ALGORITHM_VERSION: &str = "series-analysis-v8";
 
 mod capability;
 mod claim;

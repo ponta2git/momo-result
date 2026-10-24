@@ -6,6 +6,8 @@ use momo_analysis_core::model::{
 use thiserror::Error;
 use tokio_postgres::{Client, IsolationLevel, Row};
 
+mod achievements;
+
 // The query asks for one sentinel row beyond the capability-owned bound. The database adapter
 // therefore prevents an oversized snapshot from being materialized before domain validation.
 const ANALYSIS_INPUT_QUERY: &str = r#"SELECT
@@ -138,12 +140,14 @@ pub(super) async fn load_in_transaction(
             "input snapshot row count changed inside a repeatable-read transaction",
         ));
     }
+    let achievement_input = achievements::load(transaction, game_title_id).await?;
     AnalysisInput {
         game_title_id: String::from(game_title_id),
         input_revision,
         player_matches,
     }
     .try_into_normalized()
+    .and_then(|input| input.with_achievements(achievement_input))
     .map_err(|error| InputRepositoryError::InputContract(error.reason()))
 }
 

@@ -29,6 +29,7 @@ impl<'a> StagedResourceMetadata<'a> {
         let common = resource.common();
         let (scope_kind, season_master_id, map_master_id) = scope_columns(&common.scope);
         let (kind, member_id, metric_id, match_id, source_match_revision) = match resource {
+            ResourceManifest::Achievements { .. } => ("achievements", None, None, None, None),
             ResourceManifest::Aggregate { .. } => ("aggregate", None, None, None, None),
             ResourceManifest::Review { .. } => ("review", None, None, None, None),
             ResourceManifest::OutlookSummary { .. } => ("outlook_summary", None, None, None, None),
@@ -148,6 +149,9 @@ pub(super) async fn validate_staged_resource_metadata(
                UNION ALL\x20\
                SELECT 'outlook_reference', scope_key, scope_kind, season_master_id, map_master_id, member_id, NULL::text, NULL::text, NULL::bigint, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum\x20\
                FROM series_analysis_outlook_reference_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'achievements', scope_key, scope_kind, season_master_id, map_master_id, NULL::text, NULL::text, NULL::text, NULL::bigint, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum\x20\
+               FROM series_analysis_achievement_artifacts WHERE artifact_id = $1\x20\
              ) resources",
             [&manifest.artifact_id],
         )

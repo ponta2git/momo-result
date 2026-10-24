@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "sourceSnapshots": [
     "0083_snapshot.json",
-    "0097_snapshot.json"
+    "0100_snapshot.json"
   ],
   "optionalTables": [
     "worker_execution_slots"
@@ -4984,6 +4984,12 @@
         "table": "achievement_items",
         "column": "scope_kind",
         "dataType": "text",
+        "notNull": true
+      },
+      {
+        "table": "achievement_items",
+        "column": "sort_order",
+        "dataType": "integer",
         "notNull": true
       },
       {

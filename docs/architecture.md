@@ -35,7 +35,7 @@
 - 分析artifactのraw response shapeは、Rust所有のartifact schemaとAPI所有のmetadata projectionをTapirのnamed responseへ合成してHTTP契約とする。OpenAPI、Web型、runtime validatorはこの合成結果から生成し、派生物へshapeを手書きしない。
 - match-contextのHTTP v3は、保存時のsource revisionとの一致を調べる同じread snapshotからowner属性を付加する。revisionとownerを一つの値として運び、独立した表示名hydrateと混ぜない。保存payloadのchecksum・decode後に付加し、構造・参加者参照・応答上限を検証する。保存schemaとHTTP世代は分離し、APIで分析値を再計算しない。
 - 分析結果の分類・根拠はWorkerが所有し、画面内の遷移先、リンク文言、固定の指標説明はWebが所有する。保存成果物へ画面構造を埋め込まず、Webは分類から遷移先を決める。
-- 実績の編集用catalogと根拠は保存済みの最新状態を読み、閲覧用の達成集合・星・分子分母・点数は同一artifactの作品単位resourceから読む。項目名と備考だけはAPIの同じread snapshotでhydrateし、計算checksumには含めない。実績resourceは比較scopeの存在に依存せず、0試合の作品にも提供する。
+- 実績の編集用catalogと根拠は保存済みの最新状態を読み、閲覧用の達成集合・星・分子分母・点数は同一artifactの作品単位resourceから読む。項目名・備考・管理時に保存した表示順はAPIの同じread snapshotでhydrateし、計算checksumには含めない。表示順だけの更新は再集計せず、作品内の全項目を含む順序revisionで競合を検出する。実績resourceは比較scopeの存在に依存せず、0試合の作品にも提供する。
 - `apps/api/openapi.yaml` は内部 Web codegen 用の追跡する派生物であり、契約や公開 API documentation の正本ではない。Tapir から一時生成した spec を保守された OpenAPI-aware linter で構造検証し、tracked artifact と一致させ、その artifact から Web 型を生成する。手編集で差分を解消しない。
 - OpenAPI lint は unresolved reference、path / parameter、schema、operation identity など構造整合性に限定する。field の公開可否、認証、業務意味は endpoint、DTO、要求・domain 規約で決め、legacy 名や source 断片の文字列検査を契約にしない。
 - HTTP 層は入力・認証・エラー変換に閉じ、DB操作、業務分岐を直接持たない。

@@ -8,7 +8,7 @@
 | --- | --- |
 | 利用者体験、scope、指標の意味 | `docs/requirements/series-comparison.md` |
 | 行動仮説の生成・選定・表現 | `docs/requirements/series-review-playbook.md` |
-| 実績の判定・保存・廃止履歴と実績軸（追加要求・未実装） | [実績達成管理](player-achievements.md) |
+| 実績の判定・保存・廃止履歴と実績軸 | [実績達成管理](player-achievements.md) |
 | job、artifact、version、公開・復旧 | 本書 |
 | ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
 | runtime / parent-child | `docs/architecture.md` |
@@ -211,7 +211,7 @@ OCR同居を有効化する場合は、共通parent-child境界、processごと�
 - idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
 - 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
 - release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約は要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
-- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、実績の意味順を並べ直したりしない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
+- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、分析で求めた実績例の意味順を並べ直したりしない。実績達成リストの管理者が保存した表示順は、名前・備考と同じmetadataとしてAPIで反映する。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
 - 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、jobを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
 - 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。
 - release候補はmigration、runtimeのexact capability、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。本番操作の承認境界は公開運用規約に従う。

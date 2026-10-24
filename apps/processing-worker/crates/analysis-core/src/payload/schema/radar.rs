@@ -1,4 +1,6 @@
-use super::{COUNT, Field, ID, NULLABLE_ID, NULLABLE_NUMBER, NUMBER, Schema, field};
+use super::{
+    COUNT, Field, ID, NULLABLE_ID, NULLABLE_NUMBER, NUMBER, Schema, field, optional_field,
+};
 
 const AXIS: Schema = Schema::StringEnum(&[
     "averageRank",
@@ -56,6 +58,7 @@ const BASIS_COMMON: &[Field] = &[
     field("windowSize", &Schema::ExactUnsigned(20)),
     field("windowStride", &Schema::ExactUnsigned(1)),
     field("source", &SOURCE),
+    optional_field("achievementCurve", &super::achievements::CURVE),
 ];
 const GENERATED_BASIS: Schema = Schema::MergedObject(&[
     BASIS_COMMON,
@@ -80,27 +83,7 @@ const MANUAL_BASIS: Schema = Schema::MergedObject(&[
         field("manual", &MANUAL_PROVENANCE),
     ],
 ]);
-const GENERATED_BASIS_WITH_ACHIEVEMENTS: Schema = Schema::MergedObject(&[
-    BASIS_COMMON,
-    &[
-        field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6])),
-        field("achievementCurve", &super::achievements::CURVE),
-    ],
-]);
-const MANUAL_BASIS_WITH_ACHIEVEMENTS: Schema = Schema::MergedObject(&[
-    BASIS_COMMON,
-    &[
-        field("axes", &Schema::Tuple(&[&MANUAL_AXIS; 6])),
-        field("manual", &MANUAL_PROVENANCE),
-        field("achievementCurve", &super::achievements::CURVE),
-    ],
-]);
-pub(super) const BASIS: Schema = Schema::OneOf(&[
-    &GENERATED_BASIS,
-    &MANUAL_BASIS,
-    &GENERATED_BASIS_WITH_ACHIEVEMENTS,
-    &MANUAL_BASIS_WITH_ACHIEVEMENTS,
-]);
+pub(super) const BASIS: Schema = Schema::OneOf(&[&GENERATED_BASIS, &MANUAL_BASIS]);
 const NULLABLE_BASIS: Schema = Schema::Nullable(&BASIS);
 const PUBLISHED_BASIS: Schema = Schema::Object(&[
     field("basisId", &ID),

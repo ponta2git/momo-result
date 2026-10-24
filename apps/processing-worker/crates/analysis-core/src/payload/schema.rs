@@ -36,10 +36,23 @@ enum Schema {
 struct Field {
     name: &'static str,
     schema: &'static Schema,
+    required: bool,
 }
 
 const fn field(name: &'static str, schema: &'static Schema) -> Field {
-    Field { name, schema }
+    Field {
+        name,
+        schema,
+        required: true,
+    }
+}
+
+const fn optional_field(name: &'static str, schema: &'static Schema) -> Field {
+    Field {
+        name,
+        schema,
+        required: false,
+    }
 }
 
 const BOOL: Schema = Schema::Bool;
@@ -1509,19 +1522,6 @@ pub(super) fn validate_radar_monitoring(value: &Value) -> Result<(), PayloadErro
     validate(value, &radar::MONITORING)
 }
 
-fn validate_selected(
-    object: &serde_json::Map<String, Value>,
-    fields: &[Field],
-) -> Result<(), PayloadError> {
-    for field in fields {
-        validate(
-            object.get(field.name).ok_or(PayloadError::InvalidSchema)?,
-            field.schema,
-        )?;
-    }
-    Ok(())
-}
-
 fn validate(value: &Value, schema: &Schema) -> Result<(), PayloadError> {
     match schema {
         Schema::Bool => value
@@ -1593,27 +1593,25 @@ fn validate(value: &Value, schema: &Schema) -> Result<(), PayloadError> {
 }
 
 fn validate_object(value: &Value, fields: &[Field]) -> Result<(), PayloadError> {
-    let object = value.as_object().ok_or(PayloadError::InvalidSchema)?;
-    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(field.name)) {
-        return Err(PayloadError::InvalidSchema);
-    }
-    validate_selected(object, fields)
+    validate_merged_object(value, &[fields])
 }
 
 fn validate_merged_object(value: &Value, field_sets: &[&[Field]]) -> Result<(), PayloadError> {
     let object = value.as_object().ok_or(PayloadError::InvalidSchema)?;
-    let expected_count = field_sets.iter().map(|fields| fields.len()).sum::<usize>();
-    if object.len() != expected_count
-        || field_sets
-            .iter()
-            .flat_map(|fields| fields.iter())
-            .any(|field| !object.contains_key(field.name))
-    {
-        return Err(PayloadError::InvalidSchema);
+    let mut present = 0;
+    for field in field_sets.iter().flat_map(|fields| fields.iter()) {
+        match object.get(field.name) {
+            Some(field_value) => {
+                validate(field_value, field.schema)?;
+                present += 1;
+            }
+            None if field.required => return Err(PayloadError::InvalidSchema),
+            None => {}
+        }
     }
-    field_sets
-        .iter()
-        .try_for_each(|fields| validate_selected(object, fields))
+    (present == object.len())
+        .then_some(())
+        .ok_or(PayloadError::InvalidSchema)
 }
 
 fn validate_string_map(value: &Value, item: &Schema) -> Result<(), PayloadError> {
@@ -1697,7 +1695,9 @@ mod json_schema_export_tests {
                 "duplicate object field in schema descriptor: {}",
                 field.name
             );
-            required.push(field.name);
+            if field.required {
+                required.push(field.name);
+            }
         }
         required.sort_unstable();
         json!({

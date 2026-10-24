@@ -215,3 +215,54 @@ fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_cu
         AchievementCurve::default()
     );
 }
+
+#[test]
+fn optional_achievement_curve_keeps_strict_basis_shape_and_semantic_validation() {
+    let generated: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json"
+    ))
+    .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
+    let manual = serde_json::to_value(manual_basis(40))
+        .unwrap_or_else(|error| panic!("manual fixture: {error}"));
+    for mut value in [generated, manual] {
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .remove("achievementCurve");
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        let mut unknown = value.clone();
+        unknown
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert("unrecognized".to_owned(), serde_json::json!(true));
+        assert!(crate::payload::radar_basis_from_payload(&unknown).is_err());
+        let mut missing = value.clone();
+        missing
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .remove("source");
+        assert!(crate::payload::radar_basis_from_payload(&missing).is_err());
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert(
+                "achievementCurve".to_owned(),
+                serde_json::json!({"thresholds": [0, 10, 25, 50, 80]}),
+            );
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        for invalid in [
+            serde_json::Value::Null,
+            serde_json::json!({"thresholds": [0, 10, 25, 50]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 101]}),
+            serde_json::json!({"thresholds": [0, 25, 25, 50, 80]}),
+            serde_json::json!({"thresholds": [0, 30, 25, 50, 80]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 80], "unrecognized": true}),
+        ] {
+            value
+                .as_object_mut()
+                .unwrap_or_else(|| panic!("basis object"))
+                .insert("achievementCurve".to_owned(), invalid);
+            assert!(crate::payload::radar_basis_from_payload(&value).is_err());
+        }
+    }
+}

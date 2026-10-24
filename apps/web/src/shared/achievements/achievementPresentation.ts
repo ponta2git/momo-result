@@ -5,43 +5,12 @@ export type PublishedAchievement = AchievementResource["items"][number];
 export type PublishedAchievementPlayer = PublishedAchievement["players"][number];
 export type PublishedAchievementProof = PublishedAchievementPlayer["proofs"][number];
 
-const achievementNameOrder = new Intl.Collator("ja", { numeric: true });
-const ruleOrder = ["total_assets", "destination", "suri_no_ginji", "event_average_rank", "manual"];
-
-function thresholdOrder(item: Pick<PublishedAchievement, "threshold">) {
-  return item.threshold === null ? Number.POSITIVE_INFINITY : Number(item.threshold);
-}
-
-/** Keep all achievement lists in a meaningful order without depending on storage identifiers. */
-export function orderAchievementItems<
-  T extends Pick<
-    PublishedAchievement,
-    "achievementId" | "name" | "common" | "mapMasterIds" | "threshold"
-  > & { ruleKind: string },
->(items: readonly T[], maps: ReadonlyArray<AchievementResource["maps"][number]>): T[] {
-  const names = new Map(maps.map((map) => [map.mapMasterId, map.displayName]));
-  const mapLabel = (item: T) =>
-    item.mapMasterIds
-      .map((id) => names.get(id) ?? id)
-      .toSorted(achievementNameOrder.compare)
-      .join("・");
-  return items.toSorted(
-    (left, right) =>
-      Number(left.common) - Number(right.common) ||
-      achievementNameOrder.compare(mapLabel(left), mapLabel(right)) ||
-      ruleOrder.indexOf(left.ruleKind) - ruleOrder.indexOf(right.ruleKind) ||
-      thresholdOrder(left) - thresholdOrder(right) ||
-      achievementNameOrder.compare(left.name, right.name) ||
-      left.achievementId.localeCompare(right.achievementId),
-  );
-}
-
 export const achievementRuleOptions = [
   { value: "manual", label: "手入力" },
-  { value: "total_assets", label: "終了時の総資産が閾値以上" },
-  { value: "destination", label: "目的地到着回数が閾値以上" },
-  { value: "suri_no_ginji", label: "スリの銀次の回数が閾値以上" },
-  { value: "event_average_rank", label: "1開催4試合の平均順位が閾値以下" },
+  { value: "total_assets", label: "終了時の総資産" },
+  { value: "destination", label: "目的地到着回数" },
+  { value: "suri_no_ginji", label: "スリの銀次の回数" },
+  { value: "event_average_rank", label: "1開催4試合の平均順位" },
 ] as const;
 
 export function achievementStatusLabel(status: PublishedAchievementPlayer["status"]) {

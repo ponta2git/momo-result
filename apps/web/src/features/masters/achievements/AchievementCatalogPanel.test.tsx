@@ -58,7 +58,10 @@ describe("Achievement catalog management", () => {
       within(editor).getByRole("combobox", { name: "判定方法" }),
       "total_assets",
     );
-    await user.type(within(editor).getByRole("textbox", { name: "閾値（万円）" }), "200000");
+    await user.type(
+      within(editor).getByRole("textbox", { name: "総資産の下限（万円）" }),
+      "200000",
+    );
     await selectOption(user, within(editor).getByRole("combobox", { name: "難易度" }), "4");
     await user.click(within(editor).getByRole("checkbox", { name: "作品内の全マップで共通" }));
     await user.click(within(editor).getByRole("checkbox", { name: "東日本編" }));
@@ -131,5 +134,68 @@ describe("Achievement catalog management", () => {
       { name: "到着4回", notes: "条件を確認して入力します。", stars: 3, expectedVersion: "1" },
     ]);
     expect(retirements).toEqual([{ expectedVersion: "2" }]);
+  });
+
+  it("preserves an edited order after a failed save and publishes the saved order", async () => {
+    const user = userEvent.setup();
+    const catalog = makeAchievementCatalog({
+      items: [
+        makeAchievementItem({ achievementId: "first", name: "最初の実績", sortOrder: 0 }),
+        makeAchievementItem({ achievementId: "second", name: "次の実績", sortOrder: 1 }),
+        makeAchievementItem({
+          achievementId: "retired",
+          name: "以前の実績",
+          sortOrder: 2,
+          retiredAt: "2026-10-01T00:00:00Z",
+        }),
+      ],
+    });
+    const originalOrderRevision = catalog.orderRevision;
+    const requests: unknown[] = [];
+    server.use(
+      http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+      http.put("/api/achievements/catalog/order", async ({ request }) => {
+        requests.push(await request.json());
+        if (requests.length === 1)
+          return HttpResponse.json(
+            {
+              type: "about:blank",
+              title: "Unavailable",
+              status: 503,
+              code: "UNAVAILABLE",
+              detail: "保存に失敗しました。",
+            },
+            { status: 503 },
+          );
+        catalog.items = [catalog.items[1]!, catalog.items[0]!, catalog.items[2]!].map(
+          (item, sortOrder) => ({ ...item, sortOrder }),
+        );
+        catalog.orderRevision = "saved-order";
+        return HttpResponse.json(catalog);
+      }),
+    );
+    renderPanel();
+    await user.click(await screen.findByRole("button", { name: "表示順を変更" }));
+    const editor = screen.getByRole("dialog", { name: "実績の表示順" });
+    expect(within(editor).queryByText("以前の実績")).not.toBeInTheDocument();
+    await user.click(within(editor).getByRole("button", { name: "次の実績（共通）を上へ" }));
+    expect(within(editor).getByRole("button", { name: "次の実績（共通）を下へ" })).toHaveFocus();
+    await user.click(within(editor).getByRole("button", { name: "表示順を保存" }));
+    expect(await within(editor).findByText("表示順を保存できませんでした")).toBeVisible();
+    expect(within(editor).getAllByRole("listitem")[0]).toHaveTextContent("次の実績");
+    await user.click(within(editor).getByRole("button", { name: "表示順を保存" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "実績の表示順" })).not.toBeInTheDocument(),
+    );
+    const table = screen.getByRole("table", { name: "実績項目の管理" });
+    expect(within(table).getAllByRole("rowheader")[0]).toHaveTextContent("次の実績");
+    expect(within(table).getAllByRole("rowheader")[1]).toHaveTextContent("最初の実績");
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toEqual({
+      gameTitleId: catalog.gameTitleId,
+      expectedOrderRevision: originalOrderRevision,
+      achievementIds: ["second", "first", "retired"],
+    });
+    expect(requests[1]).toEqual(requests[0]);
   });
 });

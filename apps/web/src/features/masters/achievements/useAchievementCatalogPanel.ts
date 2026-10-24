@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useReportMasterEditStatus } from "@/features/masters/MastersEditStatus";
-import { orderAchievementItems } from "@/shared/achievements/achievementPresentation";
 import {
   achievementCatalogQueryOptions,
   achievementKeys,
@@ -59,7 +58,6 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   const authorization = useAuthorizationOperations();
   const idempotency = useIdempotencyKeyStore();
   const [selection, setSelection] = useState("");
-  const [showRetired, setShowRetired] = useState(false);
   const [editor, setEditor] = useState<{
     item?: AchievementItem;
     gameTitleId: string;
@@ -219,18 +217,12 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
       showToast({ title: "実績項目を保存しました", tone: "success" });
     }
   };
-  const items = catalog.data
-    ? orderAchievementItems(
-        catalog.data.items.filter((item) => Boolean(item.retiredAt) === showRetired),
-        catalog.data.maps,
-      )
-    : [];
+  const items = catalog.data?.items.filter((item) => !item.retiredAt) ?? [];
+  const retiredItems = catalog.data?.items.filter((item) => item.retiredAt) ?? [];
 
   return {
     gameTitleId,
     setSelection,
-    showRetired,
-    setShowRetired,
     editor,
     setEditor,
     retiring,
@@ -245,6 +237,7 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
     conflict,
     dirty,
     items,
+    retiredItems,
     save,
     closeEditor,
     updateForm,

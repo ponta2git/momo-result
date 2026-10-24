@@ -68,6 +68,7 @@ export function AchievementCatalogTable({
         {
           key: "stars",
           header: "難易度",
+          minWidth: "5.5rem",
           renderCell: (item) => (
             <span aria-label={`星${item.stars}`}>{"★".repeat(item.stars)}</span>
           ),
@@ -109,6 +110,7 @@ export function AchievementCatalogTable({
               {
                 key: "actions",
                 header: "操作",
+                minWidth: "9rem",
                 renderCell: (item: AchievementItem) => (
                   <div className="flex flex-wrap gap-2">
                     <Button

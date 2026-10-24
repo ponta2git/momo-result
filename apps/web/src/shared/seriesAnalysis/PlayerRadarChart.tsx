@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 
+import { formatDecimal } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import {
   playerRadarAxes,
@@ -200,7 +201,7 @@ export function PlayerRadarChart({
                   y={top + axis.chartLabel.length * 16 + 16}
                 >
                   {comparison && beforeLabel !== afterLabel
-                    ? `${before?.score ?? beforeLabel} → ${afterLabel}`
+                    ? `${before?.score == null ? beforeLabel : formatDecimal(before.score)} → ${afterLabel}`
                     : afterLabel}
                   {reference ? (
                     <tspan

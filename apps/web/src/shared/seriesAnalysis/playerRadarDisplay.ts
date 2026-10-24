@@ -49,10 +49,7 @@ export function playerRadarBasisDisplay(
   return {
     basisId: record.basisId,
     achievementCurve:
-      record.achievementCurve ??
-      ("achievementCurve" in record.basis
-        ? record.basis.achievementCurve
-        : defaultAchievementCurve),
+      record.achievementCurve ?? record.basis.achievementCurve ?? defaultAchievementCurve,
     createdAt: record.createdAt,
     appliedAt: record.appliedAt,
     definitionVersion: record.basis.definitionVersion,

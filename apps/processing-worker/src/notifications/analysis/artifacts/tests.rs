@@ -78,7 +78,7 @@ fn notification_reader_requires_the_current_attested_format() {
         validation_contract_id: Some(ARTIFACT_VALIDATION_CONTRACT_ID.to_owned()),
     };
     assert!(current_publication(&identity));
-    for version in [1, 2, 3, 4, 5, 6, 8] {
+    for version in [1, 2, 3, 4, 5, 6, 7, 9] {
         identity.artifact_schema_version = version;
         assert!(!current_publication(&identity));
     }
@@ -87,6 +87,7 @@ fn notification_reader_requires_the_current_attested_format() {
         None,
         Some("series-analysis-artifact-v3-full-validation-v1"),
         Some("series-analysis-artifact-v4-full-validation-v1"),
+        Some("series-analysis-artifact-v7-full-validation-v1"),
         Some("unknown"),
     ] {
         identity.validation_contract_id = contract.map(str::to_owned);

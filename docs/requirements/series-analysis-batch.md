@@ -52,7 +52,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 作品 A から B へ移る更新は、変更前後の確定済み集合の和集合を対象とする。
 - 計算入力へ影響する master 変更は revision を進め、計算意味も変わる場合は algorithm version も進める。表示名・localeなど表示専用 metadata はAPIでhydrateし、revisionへ含めない。
 - 実績機能の追加時は、実績・項目・星などの変更も同じ input revision と再計算 intent の対象にする。開催構成変更の影響作品とマップ追加時の扱いは[実績達成管理の保存と再計算](player-achievements.md#7-保存と再計算)に従う。実績だけの変更で試合結果の版を進めず、試合結果変更の通知対象となる要求も作らない。
-- algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合を持つ作品を永続 snapshot する。
+- algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合または実績項目を持つ作品を永続 snapshot する。
 - 実績機能の初回投入では、確定試合がなくても項目・移行実績を持つ作品を計算対象に含める。通常比較の試合由来scopeとは分けて固定4人と実績の対象範囲を入力に持ち、6軸の採点基準がなくても成果物を公開できるようにする。
 - snapshot 展開は再開可能かつ冪等にし、途中停止で対象を失わない。snapshot 後の新規対象は通常 trigger で扱う。
 

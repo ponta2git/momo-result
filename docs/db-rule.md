@@ -23,6 +23,8 @@
 - 分析の入力 revision は単調増加値とし、時刻を concurrency token にしない。入力 version、algorithm version、artifact schema version を区別する。
 - 分析の有効なalgorithm / artifact schema / validation contractの組はrelease singletonを正本とする。作品作成はsingletonを`FOR SHARE`で固定し、作品とtitle stateを同じtransactionで明示保存する。個別consumerが新規作品へversion定数を直書きしない。旧作成triggerとの共存中は既存stateの組が一致する場合だけ初期通知baselineを設定する。
 - 分析成果物は作品単位で原子的に公開し、失敗時は直前の成功成果物を維持する。current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
+- 実績の定義・直接入力と移行の根拠・廃止履歴は `momo-db` に保存する。根拠は項目・プレーヤー・入力元ごとの現在の申告であり、取消時も削除しない。編集版と申告の世代を分け、同じ申告の訂正は世代を維持し、取消後に別試合から新規入力するときは新しい世代にする。
+- 自動実績の廃止履歴は、定義と4人の統合結果を持つ独立した業務snapshotとして保存する。手入力の下位項目を廃止するときは、その時点で補完元となる根拠ID・世代だけを固定する。いずれも通常の分析artifact整理に依存せず、全編集履歴や有効項目の派生行は蓄積しない。
 - 分析のpublished artifact headerとchild resourceは改変不能とする。stagingの作成・差し替え、attempt保持cleanupによる許可済みprovenance変更、参照されないparentからのcascade cleanupを、公開内容の単独変更と区別する。
 - terminal job の保持期間と UI の表示件数を別契約として扱い、未完了 job を履歴 cleanup しない。
 - OCRのDiscord通知は送出全体の確定、分析通知は分析成功時点の固定snapshotを持つ。対象下書きの確定・取消・削除とopen送出のaborted化・通知の未開始部分取消は同じ業務commandでcommitする。掲載試合の削除も未開始通知の取消と同時に扱う。後日のメモ編集や元jobの整理で通知本文を書き換えない。
@@ -34,6 +36,7 @@
 
 - 大容量 staging は長い control lock から分離し、短い fenced transaction で完全性を再検証してから公開する。
 - 分析 claim / publication の lock 順は title state、job、request / artifact とし、複数 title state は作品ID順に取得する。実行資源の予約は各 Worker process が所有し、DB の共有 slot を取得しない。
+- 試合と実績を変更するAPIは、影響する開催、試合、実績項目、根拠、title stateの順にlockする。同じ種類の複数行はID順に取り、開催の全membershipを固定してから変更前後の影響作品を求める。実績廃止もこの順序に参加し、title state取得後に元試合のlockへ戻らない。
 - `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。旧 global slot / active lease / retained attempt の最大値を移行時に seed した後は旧 claim writer を再開しない。旧 worker への復帰は停止前 DB との組み合わせで行い、新 counter と旧 slot writer を混在させない。共有 slot は撤去済みであり、再導入しない。
 - campaign集計はtarget更新と同じREAD COMMITTED transactionに置き、campaign行をID順の `FOR NO KEY UPDATE` で取得してから別statementで再集計する。lock待ちを含む集計UPDATE単独では待機前のsnapshotを使うため、別作品のcommitを取りこぼす。FK挿入のKEY SHAREとは競合させない。
 - 分析release promotionはrelease advisory lock、reader capability registry、worker capability registry、release singleton、作品ID順のtitle stateの順でlockする。capability registryは判定後の登録・heartbeat割込みをcommitまで遮断し、singleton更新と既存title更新を同じtransactionで確定する。
@@ -84,3 +87,13 @@ canonical identity への切替では、全 writer を停止し、旧 schema 用
 通知の業務関数・trigger撤去は対応する全consumerとの停止切替を前提とする。新schemaに旧関数を呼ぶconsumerやtrigger依存のwriterを混在させない。停止中の切戻しはDBとconsumerを整合する組合せで行い、再開後は新規データを守る修正を優先する。
 
 破壊的変更、NOT NULL / 型変更、大量 backfill、旧 schema 削除は、旧新 consumer の同時稼働期間を考慮して複数段階へ分ける。deploy 順序、rollback、未移行データを実装前に決め、provider 固有の手順は `private/` に置く。validation contract導入後のrollback floorは、新columnとexact attestationを理解しつつ未移行artifactも検証して読めるtransitional consumerとし、導入前binaryへ戻さない。
+
+## 6. 実績の初期投入
+
+項目の固定ID・条件・星・備考は、`.momo-db-ref` に固定した `momo-db` の `seeds/momotetsu2-achievements-v1.json` を使う。個人の達成情報はmanifestやmigrationへ置かず、明示したTSVからconsumerの初期化commandで投入する。
+
+`apps/api` から `sbt --server --batch "runMain momo.api.tools.InitialAchievementImport --manifest <manifest.json> --mapping <mapping.json> --tsv <source.tsv>"` を実行する。接続先は `DATABASE_URL` で選ぶ。既定は書き込まないdry-runで、`--apply` を加えた場合だけ同じ保存部品で定義・移行根拠・再計算intentを一つのtransactionに保存する。
+
+mappingは `gameTitleId`、`eastMapId`、`westMapId`、`accountId` と、TSV順の4件の `players: [{"column": "TSVの列名", "memberId": "既存ID"}]` を持つJSONとする。commandは31項目と元TSVの一致、4列の対応、既存マスタの所属、有効な運用担当アカウントを検査し、sourceとmanifestのchecksumを出す。dry-runは後続のapply時点の競合や集計完了を保証しない。
+
+既存の同じ固定IDの定義と移行根拠は再実行で更新しない。取消・訂正済みの移行根拠も復活させない。下位達成の補完と自動達成はWorkerで計算し、import commandは重複した派生根拠を作らない。投入後は同じ世代のAPI・Workerで再計算結果を確認する。

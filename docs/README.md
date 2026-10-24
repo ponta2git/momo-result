@@ -21,6 +21,7 @@
 | 戦績比較 | `docs/requirements/series-comparison.md`、分析 batch 要求 | オーナー別比較は `docs/requirements/series-owner-comparison.md`、レーダー・万能性の比較・採点基準は `docs/requirements/series-player-radar.md`、総合成績の見通しは `docs/requirements/series-rank-outlook.md`、review は `docs/requirements/series-review-playbook.md`、UI は ui-rule | artifact schema、worker、Web、analysis / Web gate |
 | 開催一覧・詳細 | `docs/requirements/held-event-detail.md` | 業務前提は base、メモは match-note、実装境界は architecture | 対象 API / Web |
 | 試合メモ | `docs/requirements/match-note.md` | 変更する境界に応じて base、開催詳細、分析 batch、domain、UI | Tapir、momo-db、API / Web、DB と UI の変更経路 |
+| 実績リスト・初達成・実績軸 | `docs/requirements/player-achievements.md` | 権限は base、既存6軸は series-player-radar、再計算は分析 batch | 試合登録・編集、リスト管理、専用ページ、レーダー。実装時の境界は対象要求で確認 |
 | テスト / coverage / CI | `docs/test-rule.md`、`docs/dev-rule.md` | 実行設計は test-architecture、契約の意味は専門正本 | test 設定、workflow、対象経路の証拠 |
 | ローカル起動 / コマンド / Git | `docs/dev-rule.md` の該当章 | テスト選択は test-rule | package manifest、build 設定、script、workflow |
 | ポストモーテムの作成 / レビュー / 対策の再評価 | `.agents/skills/postmortem/SKILL.md` | 実装は変更対象の行。個別記録・台帳は参照を許可された場合だけ | 依頼した作業の完了条件と変更対象の gate |

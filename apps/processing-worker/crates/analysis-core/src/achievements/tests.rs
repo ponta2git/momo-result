@@ -147,6 +147,59 @@ fn zero_matches_still_scores_the_fixed_roster_and_future_maps() -> TestResult {
 }
 
 #[test]
+fn corrected_manual_history_can_have_an_unknown_date_only_after_unlinking() -> TestResult {
+    for retired in [false, true] {
+        let mut item = definition("manual", RuleKind::Manual, None);
+        item.retired = retired;
+        let mut source = input(vec![item]);
+        let mut root = claim("manual", ClaimKind::Direct);
+        root.achieved_at = None;
+        source.claims.push(root);
+        let payload = calculated(source.clone(), vec![])?;
+        assert!(valid_payload(&payload));
+        let achieved = player(&payload, "manual", "a")?;
+        assert_eq!(achieved.status, AchievementStatus::Achieved);
+        assert_eq!(achieved.first_achieved_at, None);
+        assert!(achieved.date_unknown);
+        assert_eq!(
+            achieved.proofs.first().ok_or("manual proof missing")?.kind,
+            ProofKind::Manual
+        );
+
+        let mut linked = source.clone();
+        linked
+            .claims
+            .first_mut()
+            .ok_or("manual claim missing")?
+            .match_id = Some("match-1".into());
+        assert_eq!(
+            calculated(linked, vec![]),
+            Err(AnalysisInputError::InvalidAchievements)
+        );
+        let mut invalid_player = achieved.clone();
+        invalid_player
+            .proofs
+            .first_mut()
+            .ok_or("manual proof missing")?
+            .match_id = Some("match-1".into());
+        assert!(!valid_player(&invalid_player));
+
+        source
+            .claims
+            .first_mut()
+            .ok_or("manual claim missing")?
+            .state = ClaimState::Cancelled;
+        let cancelled = calculated(source, vec![])?;
+        assert!(valid_payload(&cancelled));
+        assert_eq!(
+            player(&cancelled, "manual", "a")?.status,
+            AchievementStatus::NotRecorded
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn addition_uses_japanese_calendar_day_without_truncating_first_attainment() -> TestResult {
     let mut item = definition("assets", RuleKind::TotalAssets, Some("400000"));
     item.applies_from = Some("2026-01-01".into());

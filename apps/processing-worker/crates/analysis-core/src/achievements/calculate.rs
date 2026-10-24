@@ -415,7 +415,9 @@ pub fn valid_player(player: &PlayerAchievement) -> bool {
             || (proof.kind == ProofKind::Derived) != proof.source_achievement_id.is_some()
             || (matches!(proof.kind, ProofKind::Manual | ProofKind::Derived)
                 && proof.state != ProofState::Achieved)
-            || (proof.kind == ProofKind::Manual && proof.achieved_at.is_none())
+            || (proof.kind == ProofKind::Manual
+                && proof.match_id.is_some()
+                && proof.achieved_at.is_none())
             || (auto && (proof.state != ProofState::Achieved || proof.achieved_at.is_none()))
             || proof
                 .achieved_at

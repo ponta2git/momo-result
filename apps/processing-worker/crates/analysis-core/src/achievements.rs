@@ -319,7 +319,7 @@ impl AchievementInput {
                         .get(&claim.achievement_id)
                         .is_none_or(|item| item.rule_kind != RuleKind::Manual)
                         || claim.state == ClaimState::Unconfirmed
-                        || claim.achieved_at.is_none()))
+                        || (claim.match_id.is_some() && claim.achieved_at.is_none())))
                 || !crate::model::valid_input_id(&claim.claim_id)
                 || !crate::model::valid_input_id(&claim.generation_id)
                 || claim

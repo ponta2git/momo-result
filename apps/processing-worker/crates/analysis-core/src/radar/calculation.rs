@@ -82,6 +82,7 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         window_stride: 1,
         source: source_summary.clone(),
         axes: valid_axes,
+        achievement_curve: None,
         manual: None,
     });
     Ok(RadarCandidate {
@@ -101,6 +102,12 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
 /// Rejects non-finite values, a changed axis order, duplicate/reversed boundaries, and a rank
 /// threshold for ten points below the attainable rank of one.
 pub fn validate_manual_input(input: &RadarManualInput) -> Result<(), RadarError> {
+    if input
+        .achievement_curve
+        .is_some_and(|curve| !curve.is_valid())
+    {
+        return Err(RadarError::InvalidBasis);
+    }
     for (axis, expected) in input.axes.iter().zip(RadarAxis::ALL) {
         if axis.axis_id != expected
             || axis.thresholds.iter().any(|value| !value.is_finite())
@@ -146,6 +153,11 @@ pub fn create_manual_basis(
         window_size: RADAR_WINDOW_SIZE,
         window_stride: 1,
         source: source_basis.source.clone(),
+        achievement_curve: Some(
+            manual_input
+                .achievement_curve
+                .unwrap_or_else(|| source_basis.effective_achievement_curve()),
+        ),
         axes: manual_input.axes.clone().map(|axis| RadarAxisBasis {
             axis_id: axis.axis_id,
             q10: None,
@@ -239,6 +251,7 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
         || basis.source.match_count < RADAR_MINIMUM_MATCHES
         || basis.source.held_event_count < RADAR_MINIMUM_EVENTS
         || !valid_nonempty_source(&basis.source)
+        || !basis.effective_achievement_curve().is_valid()
     {
         return Err(RadarError::InvalidBasis);
     }
@@ -258,6 +271,7 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
             return Err(RadarError::InvalidBasis);
         }
         return validate_manual_input(&RadarManualInput {
+            achievement_curve: basis.achievement_curve,
             axes: basis
                 .axes
                 .clone()

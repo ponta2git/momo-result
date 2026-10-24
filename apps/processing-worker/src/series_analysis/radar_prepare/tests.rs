@@ -37,6 +37,7 @@ fn manual_context() -> RadarReadContext {
         .basis
         .unwrap_or_else(|| panic!("valid candidate"));
     let entered = RadarManualInput {
+        achievement_curve: None,
         axes: original.axes.clone().map(|axis| radar::RadarManualAxis {
             axis_id: axis.axis_id,
             thresholds: axis.thresholds,
@@ -85,6 +86,7 @@ fn manual_preparation_binds_entered_values_and_defers_empty_first_basis() {
     let empty = RadarSourceSnapshot {
         game_title_id: input.game_title_id().to_owned(),
         matches: Vec::new(),
+        achievements: None,
     }
     .normalized_for_validation(2)
     .unwrap_or_else(|error| panic!("empty input: {error}"));
@@ -231,5 +233,132 @@ fn preparation_file_is_bounded_and_rejects_a_symlink() {
     assert!(
         read(linked.path(), length).is_err(),
         "child output cannot link an external file"
+    );
+}
+
+fn achievement_input() -> NormalizedAnalysisInput {
+    let input = source()
+        .normalized_for_validation(1)
+        .unwrap_or_else(|error| panic!("input fixture: {error}"));
+    let mut achievements = input.achievements().clone();
+    achievements.definitions = ["achieved", "remaining"]
+        .map(|id| achievements::Definition {
+            achievement_id: id.to_owned(),
+            stars: 1,
+            rule_kind: achievements::RuleKind::Manual,
+            threshold: None,
+            common: true,
+            map_master_ids: Vec::new(),
+            applies_from: None,
+            retired: false,
+            fixed_key: None,
+        })
+        .to_vec();
+    achievements.claims.push(achievements::Claim {
+        claim_id: "claim".to_owned(),
+        achievement_id: "achieved".to_owned(),
+        member_id: achievements
+            .member_ids
+            .first()
+            .cloned()
+            .unwrap_or_else(|| panic!("member")),
+        source_kind: achievements::ClaimKind::Direct,
+        state: achievements::ClaimState::Achieved,
+        generation_id: "generation".to_owned(),
+        achieved_at: None,
+        match_id: None,
+    });
+    input
+        .with_achievements(achievements)
+        .unwrap_or_else(|error| panic!("achievements: {error}"))
+}
+
+#[test]
+fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
+    let input = achievement_input();
+    let mut context = manual_context();
+    let curve = AchievementCurve {
+        thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
+    };
+    context
+        .manual
+        .as_mut()
+        .unwrap_or_else(|| panic!("manual context"))
+        .input
+        .achievement_curve = Some(curve);
+    let prepared = compute(&input, &context).unwrap_or_else(|error| panic!("prepare: {error}"));
+    assert!(validate(&prepared, &context, None).is_ok());
+    for scope in &prepared.scopes {
+        let before = scope
+            .payload
+            .before_achievements
+            .summary
+            .players
+            .first()
+            .unwrap_or_else(|| panic!("before player"));
+        let after = scope
+            .payload
+            .after_achievements
+            .summary
+            .players
+            .first()
+            .unwrap_or_else(|| panic!("after player"));
+        assert_eq!(scope.payload.before_achievements.summary.total_points, 2);
+        assert_eq!(scope.payload.after_achievements.summary.total_points, 2);
+        assert_eq!((before.earned_points, after.earned_points), (1, 1));
+        assert_eq!((before.score, after.score), (Some(7.0), Some(6.0)));
+    }
+    let mut wrong = prepared.clone();
+    wrong
+        .scopes
+        .first_mut()
+        .unwrap_or_else(|| panic!("scope"))
+        .payload
+        .after_achievements
+        .summary
+        .players
+        .first_mut()
+        .unwrap_or_else(|| panic!("player"))
+        .score = Some(7.0);
+    assert!(validate(&wrong, &context, None).is_err());
+    let mut missing = prepared;
+    missing.evaluation_snapshot.achievements = None;
+    assert!(validate(&missing, &context, None).is_err());
+}
+
+#[test]
+fn generated_candidates_keep_the_applied_curve_and_saved_comparisons_keep_their_curve() {
+    let input = achievement_input();
+    let mut context = context();
+    let mut before = radar::generate_candidate(&input)
+        .unwrap_or_else(|error| panic!("generate: {error}"))
+        .basis
+        .unwrap_or_else(|| panic!("basis"));
+    let curve = AchievementCurve {
+        thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
+    };
+    before.achievement_curve = Some(curve);
+    context.before_basis_id = Some("applied".to_owned());
+    context.before_basis = Some(before);
+    let prepared = compute(&input, &context).unwrap_or_else(|error| panic!("prepare: {error}"));
+    assert!(validate(&prepared, &context, context.before_basis.as_ref()).is_ok());
+    let candidate = prepared.candidate.unwrap_or_else(|| panic!("candidate"));
+    assert_eq!(
+        candidate
+            .basis
+            .as_ref()
+            .map(RadarBasis::effective_achievement_curve),
+        Some(curve)
+    );
+    context.operation_kind = Some("restore".to_owned());
+    context.basis = candidate.basis;
+    context.source = Some(candidate.source);
+    let restored = compute(&input, &context).unwrap_or_else(|error| panic!("restore: {error}"));
+    assert!(validate(&restored, &context, context.before_basis.as_ref()).is_ok());
+    assert!(
+        restored
+            .scopes
+            .iter()
+            .all(|scope| scope.payload.after_achievements.achievement_curve == curve)
     );
 }

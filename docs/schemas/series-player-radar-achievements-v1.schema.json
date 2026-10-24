@@ -1,0 +1,243 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-player-radar-achievements-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "achievementCurve": {
+      "additionalProperties": false,
+      "properties": {
+        "thresholds": {
+          "items": false,
+          "maxItems": 5,
+          "minItems": 5,
+          "prefixItems": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number",
+              "x-momo-finiteF64": true
+            },
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number",
+              "x-momo-finiteF64": true
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "thresholds"
+      ],
+      "type": "object"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "mapMasterId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            }
+          ]
+        },
+        "players": {
+          "items": false,
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "earnedPoints": {
+                  "maximum": 102400,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "memberId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "maximum": 10.0,
+                      "minimum": 1.0,
+                      "type": "number",
+                      "x-momo-finiteF64": true
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "earnedPoints",
+                "memberId",
+                "score"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "earnedPoints": {
+                  "maximum": 102400,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "memberId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "maximum": 10.0,
+                      "minimum": 1.0,
+                      "type": "number",
+                      "x-momo-finiteF64": true
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "earnedPoints",
+                "memberId",
+                "score"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "earnedPoints": {
+                  "maximum": 102400,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "memberId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "maximum": 10.0,
+                      "minimum": 1.0,
+                      "type": "number",
+                      "x-momo-finiteF64": true
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "earnedPoints",
+                "memberId",
+                "score"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "earnedPoints": {
+                  "maximum": 102400,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "memberId": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string",
+                  "x-momo-maxUtf8Bytes": 4096
+                },
+                "score": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "maximum": 10.0,
+                      "minimum": 1.0,
+                      "type": "number",
+                      "x-momo-finiteF64": true
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "earnedPoints",
+                "memberId",
+                "score"
+              ],
+              "type": "object"
+            }
+          ],
+          "type": "array"
+        },
+        "totalPoints": {
+          "maximum": 102400,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        }
+      },
+      "required": [
+        "mapMasterId",
+        "players",
+        "totalPoints"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "achievementCurve",
+    "summary"
+  ],
+  "title": "Series Player Radar Achievement Comparison v1",
+  "type": "object"
+}

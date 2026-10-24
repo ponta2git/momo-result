@@ -14,7 +14,7 @@ pub(in crate::series_analysis) fn validate(
     context: &RadarReadContext,
     before_basis: Option<&RadarBasis>,
 ) -> Result<NormalizedAnalysisInput, RadarError> {
-    if prepared.schema_version != 1
+    if prepared.schema_version != 2
         || context.work_kind != "radar_prepare"
         || context.operation_id.as_deref() != Some(prepared.operation_id.as_str())
         || context.candidate_id.as_deref() != Some(prepared.candidate_id.as_str())
@@ -40,9 +40,17 @@ pub(in crate::series_analysis) fn validate(
             .map_err(|_encoding| RadarError::InvalidSource)?;
         payload::radar_candidate_from_payload(&value)
             .map_err(|_invalid| RadarError::InvalidSource)?;
-        if candidate.source != prepared.evaluation_snapshot
+        if candidate.source.game_title_id != prepared.evaluation_snapshot.game_title_id
+            || candidate.source.matches != prepared.evaluation_snapshot.matches
             || candidate.source.summary()? != candidate.source_summary
             || !prepared.candidate_source_valid
+            || candidate.basis.as_ref().is_some_and(|basis| {
+                basis.effective_achievement_curve()
+                    != before_basis.map_or_else(
+                        momo_analysis_core::achievements::AchievementCurve::default,
+                        RadarBasis::effective_achievement_curve,
+                    )
+            })
         {
             return Err(RadarError::InvalidSource);
         }
@@ -76,6 +84,11 @@ pub(in crate::series_analysis) fn validate(
     };
     let before = radar::evaluate_scopes(&input, before_basis)?;
     let after = radar::evaluate_scopes(&input, basis)?;
+    let achievements = prepared
+        .evaluation_snapshot
+        .achievements
+        .as_ref()
+        .ok_or(RadarError::InvalidSource)?;
     if prepared.scopes.len() != before.len()
         || prepared
             .scopes
@@ -86,6 +99,14 @@ pub(in crate::series_analysis) fn validate(
                     || actual.scope != after_scope
                     || actual.payload.before != before
                     || actual.payload.after != after
+                    || super::achievement_preview(achievements, &actual.scope, before_basis)
+                        .as_ref()
+                        .ok()
+                        != Some(&actual.payload.before_achievements)
+                    || super::achievement_preview(achievements, &actual.scope, basis)
+                        .as_ref()
+                        .ok()
+                        != Some(&actual.payload.after_achievements)
             })
     {
         return Err(RadarError::InvalidSource);

@@ -4,18 +4,19 @@ use std::{
 };
 
 use super::{
-    AchievementInput, AchievementItem, AchievementPayload, AchievementStatus, Claim, ClaimKind,
-    ClaimState, DecimalThreshold, Definition, MAXIMUM_PROOFS, PlayerAchievement, PlayerPoints,
-    PointSummary, Proof, ProofKind, ProofState, RuleKind, days_in_month,
+    AchievementCurve, AchievementInput, AchievementItem, AchievementPayload, AchievementStatus,
+    Claim, ClaimKind, ClaimState, DecimalThreshold, Definition, MAXIMUM_PROOFS, PlayerAchievement,
+    PlayerPoints, PointSummary, Proof, ProofKind, ProofState, RuleKind,
 };
 use crate::{contract::ScopeRef, model::PlayerMatchInput};
 
-/// Computes one lifetime title resource, independently of statistical scopes and radar criteria.
+/// Computes lifetime achievement points and scores independently of statistical scope eligibility.
 #[must_use]
 pub fn calculate(
     title: &str,
     input: &AchievementInput,
     rows: &[PlayerMatchInput],
+    achievement_curve: AchievementCurve,
 ) -> AchievementPayload {
     let definitions = input
         .definitions
@@ -92,12 +93,13 @@ pub fn calculate(
         .collect::<Vec<_>>();
     let summaries = std::iter::once(None)
         .chain(input.map_master_ids.iter().cloned().map(Some))
-        .map(|map| summarize(map, &items, &input.member_ids))
+        .map(|map| summarize(map, &items, &input.member_ids, achievement_curve))
         .collect();
     AchievementPayload {
-        schema_version: 1,
+        schema_version: 2,
         scope: ScopeRef::Overall,
         game_title_id: title.into(),
+        achievement_curve,
         items,
         summaries,
     }
@@ -140,14 +142,13 @@ fn implies(source: &Definition, target: &Definition, claim: &Claim) -> bool {
     if manual_pair {
         return source.rule_kind == RuleKind::Manual
             && target.rule_kind == RuleKind::Manual
-            && target.common
-            && target.applies_from.is_none();
+            && target.common;
     }
-    // Migration inference is confined to the original unrestricted catalog. It is never an
+    // Migration inference is confined to the fixed initial catalog. It is never an
     // automatic-match dependency and cannot propagate a retired automatic result to active items.
     if claim.source_kind != ClaimKind::Import
-        || source.applies_from.is_some()
-        || target.applies_from.is_some()
+        || source.fixed_key.is_none()
+        || target.fixed_key.is_none()
         || source.rule_kind != target.rule_kind
         || source.rule_kind == RuleKind::Manual
         || source.common != target.common
@@ -179,15 +180,11 @@ fn threshold(item: &Definition) -> u32 {
 }
 
 fn applicable(item: &Definition, row: &PlayerMatchInput) -> bool {
-    (item.common
+    item.common
         || item
             .map_master_ids
             .binary_search(&row.map_master_id)
-            .is_ok())
-        && item
-            .applies_from
-            .as_ref()
-            .is_none_or(|start| japan_date(&row.played_at).is_some_and(|day| day >= *start))
+            .is_ok()
 }
 
 fn automatic(
@@ -338,6 +335,7 @@ pub(super) fn summarize(
     map: Option<String>,
     items: &[AchievementItem],
     members: &[String],
+    achievement_curve: AchievementCurve,
 ) -> PointSummary {
     let eligible = items
         .iter()
@@ -367,8 +365,7 @@ pub(super) fn summarize(
             PlayerPoints {
                 member_id: member.clone(),
                 earned_points,
-                score: (total_points > 0)
-                    .then(|| 1.0 + 9.0 * f64::from(earned_points) / f64::from(total_points)),
+                score: achievement_curve.score(earned_points, total_points),
             }
         })
         .collect();
@@ -439,31 +436,11 @@ pub fn valid_player(player: &PlayerAchievement) -> bool {
     merge(&player.member_id, player.proofs.clone()) == *player
 }
 
-fn japan_date(timestamp: &str) -> Option<String> {
-    let date = timestamp.get(..10)?;
-    let hour = timestamp.get(11..13)?.parse::<u32>().ok()?;
-    if hour < 15 {
-        return Some(date.into());
-    }
-    let mut parts = date.split('-');
-    let mut year = parts.next()?.parse::<u32>().ok()?;
-    let mut month = parts.next()?.parse::<u32>().ok()?;
-    let mut day = parts.next()?.parse::<u32>().ok()?.checked_add(1)?;
-    if day > days_in_month(year, month) {
-        day = 1;
-        month += 1;
-    }
-    if month > 12 {
-        month = 1;
-        year += 1;
-    }
-    Some(format!("{year:04}-{month:02}-{day:02}"))
-}
-
 /// Checks scores against the saved item set. API readers need only the bounded shape defense.
 #[must_use]
 pub fn valid_payload(payload: &AchievementPayload) -> bool {
-    if payload.schema_version != 1
+    if payload.schema_version != 2
+        || !payload.achievement_curve.is_valid()
         || payload.scope != ScopeRef::Overall
         || !crate::model::valid_input_id(&payload.game_title_id)
         || payload.items.len() > super::MAXIMUM_ITEMS
@@ -546,7 +523,13 @@ pub fn valid_payload(payload: &AchievementPayload) -> bool {
             .iter()
             .all(|id| maps.binary_search(id).is_ok())
     }) && payload.summaries.iter().all(|summary| {
-        *summary == summarize(summary.map_master_id.clone(), &payload.items, &members)
+        *summary
+            == summarize(
+                summary.map_master_id.clone(),
+                &payload.items,
+                &members,
+                payload.achievement_curve,
+            )
     })
 }
 

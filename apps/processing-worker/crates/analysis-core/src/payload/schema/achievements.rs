@@ -1,4 +1,4 @@
-use super::{BOOL, ID, NULLABLE_ID, SCHEMA_V1, Schema, field};
+use super::{BOOL, ID, NULLABLE_ID, Schema, field};
 
 const LIMIT: usize = crate::achievements::MAXIMUM_ITEMS;
 const POINTS: Schema = Schema::Unsigned { maximum: 102_400 };
@@ -7,6 +7,12 @@ const SCORE: Schema = Schema::NumberRange {
     maximum: 10.0,
 };
 const NULLABLE_SCORE: Schema = Schema::Nullable(&SCORE);
+const PERCENTAGE: Schema = Schema::NumberRange {
+    minimum: 0.0,
+    maximum: 100.0,
+};
+pub(super) const CURVE: Schema =
+    Schema::Object(&[field("thresholds", &Schema::Tuple(&[&PERCENTAGE; 5]))]);
 const STARS: Schema = Schema::Integer {
     minimum: 1,
     maximum: 5,
@@ -88,10 +94,16 @@ const SUMMARIES: Schema = Schema::Array {
     item: &SUMMARY,
     maximum: LIMIT + 1,
 };
+#[cfg(test)]
+pub(super) const PREVIEW: Schema = Schema::Object(&[
+    field("achievementCurve", &CURVE),
+    field("summary", &SUMMARY),
+]);
 pub(super) const ACHIEVEMENTS: Schema = Schema::Object(&[
-    field("schemaVersion", &SCHEMA_V1),
+    field("schemaVersion", &Schema::ExactUnsigned(2)),
     field("scope", &SCOPE),
     field("gameTitleId", &ID),
+    field("achievementCurve", &CURVE),
     field("items", &ITEMS),
     field("summaries", &SUMMARIES),
 ]);

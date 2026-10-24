@@ -84,7 +84,7 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
     assert_eq!(input.achievements().map_master_ids, [MAP_ID]);
     transaction
         .execute(
-            "UPDATE achievement_items SET name='Corrected label',notes='Corrected text',version=version+1 WHERE id::text=$1",
+            "UPDATE achievement_items SET name='Corrected label',notes='Corrected text',sort_order=42,applies_from=DATE '2026-10-24',version=version+1 WHERE id::text=$1",
             &[&ITEM_ID],
         )
         .await?;
@@ -93,7 +93,7 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
             .await?;
     assert_eq!(
         input, renamed,
-        "display metadata is outside calculation input"
+        "display metadata and the retained start date are outside calculation input"
     );
     let directory = TempDir::new()?;
     let claim = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;

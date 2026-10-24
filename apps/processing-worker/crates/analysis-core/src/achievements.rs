@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::model::{AnalysisInputError, PlayerMatchInput};
 
 mod calculate;
+mod curve;
+pub use curve::{ACHIEVEMENT_SCORE_POINTS, AchievementCurve};
 #[cfg(test)]
 mod tests;
 
@@ -184,8 +186,30 @@ pub struct AchievementPayload {
     pub schema_version: u32,
     pub scope: crate::contract::ScopeRef,
     pub game_title_id: String,
+    pub achievement_curve: AchievementCurve,
     pub items: Vec<AchievementItem>,
     pub summaries: Vec<PointSummary>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AchievementPreview {
+    pub achievement_curve: AchievementCurve,
+    pub summary: PointSummary,
+}
+
+impl AchievementPreview {
+    #[must_use]
+    pub fn new(summary: &PointSummary, achievement_curve: AchievementCurve) -> Self {
+        let mut summary = summary.clone();
+        for player in &mut summary.players {
+            player.score = achievement_curve.score(player.earned_points, summary.total_points);
+        }
+        Self {
+            achievement_curve,
+            summary,
+        }
+    }
 }
 
 impl AchievementInput {
@@ -249,6 +273,10 @@ impl AchievementInput {
             return Err(invalid);
         }
         for item in &mut self.definitions {
+            // Retained for wire compatibility; every active definition evaluates the full history.
+            if !item.retired {
+                item.applies_from = None;
+            }
             item.map_master_ids.sort();
             if let Some(threshold) = &item.threshold {
                 item.threshold = Some(

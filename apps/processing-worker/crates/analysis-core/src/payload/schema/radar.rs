@@ -80,7 +80,27 @@ const MANUAL_BASIS: Schema = Schema::MergedObject(&[
         field("manual", &MANUAL_PROVENANCE),
     ],
 ]);
-pub(super) const BASIS: Schema = Schema::OneOf(&[&GENERATED_BASIS, &MANUAL_BASIS]);
+const GENERATED_BASIS_WITH_ACHIEVEMENTS: Schema = Schema::MergedObject(&[
+    BASIS_COMMON,
+    &[
+        field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6])),
+        field("achievementCurve", &super::achievements::CURVE),
+    ],
+]);
+const MANUAL_BASIS_WITH_ACHIEVEMENTS: Schema = Schema::MergedObject(&[
+    BASIS_COMMON,
+    &[
+        field("axes", &Schema::Tuple(&[&MANUAL_AXIS; 6])),
+        field("manual", &MANUAL_PROVENANCE),
+        field("achievementCurve", &super::achievements::CURVE),
+    ],
+]);
+pub(super) const BASIS: Schema = Schema::OneOf(&[
+    &GENERATED_BASIS,
+    &MANUAL_BASIS,
+    &GENERATED_BASIS_WITH_ACHIEVEMENTS,
+    &MANUAL_BASIS_WITH_ACHIEVEMENTS,
+]);
 const NULLABLE_BASIS: Schema = Schema::Nullable(&BASIS);
 const PUBLISHED_BASIS: Schema = Schema::Object(&[
     field("basisId", &ID),

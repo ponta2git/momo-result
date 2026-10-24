@@ -20,6 +20,7 @@ pub fn snapshot(input: &NormalizedAnalysisInput) -> Result<RadarSourceSnapshot, 
     Ok(RadarSourceSnapshot {
         game_title_id: input.game_title_id().to_owned(),
         matches: source_matches(&rows)?,
+        achievements: None,
     })
 }
 
@@ -100,7 +101,14 @@ impl RadarSourceSnapshot {
         }
         .try_into_normalized()
         .map_err(|_invalid| RadarError::InvalidSource)?;
-        if snapshot(&input)? != *self {
+        let normalized = snapshot(&input)?;
+        if normalized.game_title_id != self.game_title_id
+            || normalized.matches != self.matches
+            || self.achievements.as_ref().is_some_and(|value| {
+                value.game_title_id != self.game_title_id
+                    || !crate::achievements::valid_payload(value)
+            })
+        {
             return Err(RadarError::InvalidSource);
         }
         Ok(input)

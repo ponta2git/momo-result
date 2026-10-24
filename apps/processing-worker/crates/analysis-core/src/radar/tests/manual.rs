@@ -171,3 +171,47 @@ fn manual_monitoring_starts_at_its_first_comparison_and_allows_small_samples() {
         "recomparison does not change the monitoring start"
     );
 }
+
+#[test]
+fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_curve() {
+    use crate::achievements::AchievementCurve;
+    let legacy: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json"
+    ))
+    .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
+    let mut basis = crate::payload::radar_basis_from_payload(&legacy)
+        .unwrap_or_else(|error| panic!("legacy basis: {error}"));
+    let mut digest = crate::canonical::FramedSha256::new();
+    digest
+        .update_serialized(&legacy, &mut Vec::new())
+        .unwrap_or_else(|error| panic!("legacy checksum: {error}"));
+    assert_eq!(basis.checksum().ok(), Some(digest.finalize()));
+    assert_eq!(basis.achievement_curve, None);
+    assert_eq!(
+        basis.effective_achievement_curve(),
+        AchievementCurve::default()
+    );
+    let saved_checksum = basis.checksum().ok();
+    let six_axes = evaluate(input(40), Some(&basis));
+    let curve = AchievementCurve {
+        thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
+    };
+    basis.achievement_curve = Some(curve);
+    assert_ne!(basis.checksum().ok(), saved_checksum);
+    let edited_six_axes = evaluate(input(40), Some(&basis));
+    assert_eq!(edited_six_axes.players, six_axes.players);
+    assert_eq!(edited_six_axes.sample, six_axes.sample);
+    let mut entered = fixture().input;
+    let inherited = create_manual_basis(&normalized(input(40)), &basis, "source", None, &entered)
+        .unwrap_or_else(|error| panic!("inherit: {error}"))
+        .unwrap_or_else(|| panic!("nonempty comparison"));
+    assert_eq!(inherited.effective_achievement_curve(), curve);
+    entered.achievement_curve = Some(AchievementCurve::default());
+    let reset = create_manual_basis(&normalized(input(40)), &basis, "source", None, &entered)
+        .unwrap_or_else(|error| panic!("replace: {error}"))
+        .unwrap_or_else(|| panic!("nonempty comparison"));
+    assert_eq!(
+        reset.effective_achievement_curve(),
+        AchievementCurve::default()
+    );
+}

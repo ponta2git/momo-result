@@ -6,6 +6,7 @@ use std::{
 };
 
 use momo_analysis_core::{
+    achievements::{self, AchievementCurve, AchievementPayload, AchievementPreview},
     contract::ScopeRef,
     model::NormalizedAnalysisInput,
     radar::{
@@ -273,17 +274,53 @@ pub(super) struct PreparationScope {
 pub(super) struct PreviewPayload {
     pub(super) before: RadarEvaluation,
     pub(super) after: RadarEvaluation,
+    pub(super) before_achievements: AchievementPreview,
+    pub(super) after_achievements: AchievementPreview,
+}
+
+fn achievement_preview(
+    achievements: &AchievementPayload,
+    scope: &ScopeRef,
+    basis: Option<&RadarBasis>,
+) -> Result<AchievementPreview, radar::RadarError> {
+    let map_id = match scope {
+        ScopeRef::Map { map_master_id } | ScopeRef::SeasonMap { map_master_id, .. } => {
+            Some(map_master_id)
+        }
+        ScopeRef::Overall | ScopeRef::Season { .. } => None,
+    };
+    let summary = achievements
+        .summaries
+        .iter()
+        .find(|summary| summary.map_master_id.as_ref() == map_id)
+        .ok_or(radar::RadarError::InvalidSource)?;
+    Ok(AchievementPreview::new(
+        summary,
+        basis.map_or_else(
+            AchievementCurve::default,
+            RadarBasis::effective_achievement_curve,
+        ),
+    ))
 }
 
 pub(super) fn compute(
     input: &NormalizedAnalysisInput,
     context: &RadarReadContext,
 ) -> Result<Preparation, radar::RadarError> {
-    let candidate = if context.operation_kind.as_deref() == Some("candidate") {
+    let mut candidate = if context.operation_kind.as_deref() == Some("candidate") {
         Some(radar::generate_candidate(input)?)
     } else {
         None
     };
+    if let Some(candidate_basis) = candidate
+        .as_mut()
+        .and_then(|candidate| candidate.basis.as_mut())
+    {
+        candidate_basis.achievement_curve = Some(context.before_basis.as_ref().map_or_else(
+            AchievementCurve::default,
+            RadarBasis::effective_achievement_curve,
+        ));
+    }
     let manual_basis = context.new_manual_basis(input)?;
     let basis = candidate
         .as_ref()
@@ -299,16 +336,35 @@ pub(super) fn compute(
     };
     let before = radar::evaluate_scopes(input, context.before_basis.as_ref())?;
     let after = radar::evaluate_scopes(input, basis)?;
+    let achievements = achievements::calculate(
+        input.game_title_id(),
+        input.achievements(),
+        input.player_matches(),
+        AchievementCurve::default(),
+    );
     let scopes = before
         .into_iter()
         .zip(after)
-        .map(|((scope, before), (_, after))| PreparationScope {
-            scope,
-            payload: PreviewPayload { before, after },
+        .map(|((scope, before), (_, after))| {
+            Ok(PreparationScope {
+                payload: PreviewPayload {
+                    before,
+                    after,
+                    before_achievements: achievement_preview(
+                        &achievements,
+                        &scope,
+                        context.before_basis.as_ref(),
+                    )?,
+                    after_achievements: achievement_preview(&achievements, &scope, basis)?,
+                },
+                scope,
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, radar::RadarError>>()?;
+    let mut evaluation_snapshot = radar::snapshot(input)?;
+    evaluation_snapshot.achievements = Some(Box::new(achievements));
     Ok(Preparation {
-        schema_version: 1,
+        schema_version: 2,
         game_title_id: input.game_title_id().to_owned(),
         input_revision: input.input_revision(),
         operation_id: context
@@ -323,7 +379,7 @@ pub(super) fn compute(
         before_basis_id: context.before_basis_id.clone(),
         candidate,
         manual_basis,
-        evaluation_snapshot: radar::snapshot(input)?,
+        evaluation_snapshot,
         candidate_source_valid: source_valid,
         scopes,
     })

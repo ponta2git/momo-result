@@ -1905,12 +1905,17 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 12] {
+    fn generated_schemas() -> [GeneratedSchema; 13] {
         [
             document(
-                "series-analysis-achievements-v1.schema.json",
-                "Series Analysis Achievements Resource v1",
+                "series-analysis-achievements-v2.schema.json",
+                "Series Analysis Achievements Resource v2",
                 &achievements::ACHIEVEMENTS,
+            ),
+            document(
+                "series-player-radar-achievements-v1.schema.json",
+                "Series Player Radar Achievement Comparison v1",
+                &achievements::PREVIEW,
             ),
             document(
                 "series-analysis-aggregate-v6.schema.json",

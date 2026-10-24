@@ -260,6 +260,10 @@ fn achievement_resource(input: &NormalizedAnalysisInput) -> ComputedResource {
         input.game_title_id(),
         input.achievements(),
         input.player_matches(),
+        input.radar_basis().map_or_else(
+            crate::achievements::AchievementCurve::default,
+            |published| published.basis.effective_achievement_curve(),
+        ),
     );
     ComputedResource {
         scope: ScopeRef::Overall,

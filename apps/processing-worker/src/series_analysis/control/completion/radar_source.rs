@@ -40,31 +40,11 @@ pub(super) async fn validate(
     .await
     .map_err(saved_basis_error)?;
     let manual = basis.as_ref().is_some_and(|basis| basis.manual.is_some());
+    let preview = preview_source(transaction, claim, &candidate_id, active.try_get(1)?).await?;
     let source = if manual {
-        let preview_id: Option<String> = active.try_get(1)?;
-        let row = transaction.query_opt(
-            "SELECT evaluation_snapshot,input_checksum FROM series_radar_previews WHERE legacy_id=$1 AND candidate_id=(SELECT id FROM series_radar_candidates WHERE legacy_id=$2) AND game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$3) AND octet_length(evaluation_snapshot::text)<=33554432",
-            &[&preview_id,&candidate_id,&claim.game_title_id],
-        ).await?.ok_or(ControlError::InvalidMetadata)?;
-        let value: serde_json::Value = row.try_get(0)?;
-        let source: radar::RadarSourceSnapshot =
-            serde_json::from_value(value).map_err(|_invalid| ControlError::InvalidMetadata)?;
-        source
-            .normalized_for_validation(0)
-            .map_err(|_invalid| ControlError::InvalidMetadata)?;
-        if source.matches.is_empty()
-            || source.game_title_id != claim.game_title_id
-            || source
-                .summary()
-                .map_err(|_invalid| ControlError::InvalidMetadata)?
-                .source_checksum
-                != row.try_get::<_, String>(1)?
-        {
-            return Err(ControlError::InvalidMetadata);
-        }
-        source
+        &preview
     } else {
-        saved_source.ok_or(ControlError::InvalidMetadata)?
+        saved_source.as_ref().ok_or(ControlError::InvalidMetadata)?
     };
     let current = input_repository::load_in_transaction(
         transaction,
@@ -73,11 +53,22 @@ pub(super) async fn validate(
     )
     .await
     .map_err(current_input_error)?;
-    let valid = radar::source_is_current(&source, &current)
+    let statistics_current = radar::source_is_current(source, &current)
         .map_err(|_invalid| ControlError::AuthoritativeInputContract)?;
+    let achievements = momo_analysis_core::achievements::calculate(
+        current.game_title_id(),
+        current.achievements(),
+        current.player_matches(),
+        momo_analysis_core::achievements::AchievementCurve::default(),
+    );
+    let valid = statistics_current && preview.achievements.as_deref() == Some(&achievements);
     if !valid {
-        let status = if manual { "ready" } else { "invalid" };
-        let reason = if manual {
+        let status = if manual || statistics_current {
+            "ready"
+        } else {
+            "invalid"
+        };
+        let reason = if manual || statistics_current {
             "evaluation_changed"
         } else {
             "source_changed"
@@ -96,6 +87,35 @@ pub(super) async fn validate(
             .await?;
     }
     Ok(valid)
+}
+
+async fn preview_source(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    candidate_id: &str,
+    preview_id: Option<String>,
+) -> Result<radar::RadarSourceSnapshot, ControlError> {
+    let row = transaction.query_opt(
+        "SELECT evaluation_snapshot,input_checksum FROM series_radar_previews WHERE legacy_id=$1 AND candidate_id=(SELECT id FROM series_radar_candidates WHERE legacy_id=$2) AND game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$3) AND octet_length(evaluation_snapshot::text)<=33554432",
+        &[&preview_id,&candidate_id,&claim.game_title_id],
+    ).await?.ok_or(ControlError::InvalidMetadata)?;
+    let value: serde_json::Value = row.try_get(0)?;
+    let source: radar::RadarSourceSnapshot =
+        serde_json::from_value(value).map_err(|_invalid| ControlError::InvalidMetadata)?;
+    source
+        .normalized_for_validation(0)
+        .map_err(|_invalid| ControlError::InvalidMetadata)?;
+    if source.matches.is_empty()
+        || source.game_title_id != claim.game_title_id
+        || source
+            .summary()
+            .map_err(|_invalid| ControlError::InvalidMetadata)?
+            .source_checksum
+            != row.try_get::<_, String>(1)?
+    {
+        return Err(ControlError::InvalidMetadata);
+    }
+    Ok(source)
 }
 
 fn saved_basis_error(error: InputRepositoryError) -> ControlError {

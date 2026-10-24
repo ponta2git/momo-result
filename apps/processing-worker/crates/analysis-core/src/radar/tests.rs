@@ -68,6 +68,7 @@ fn hand_basis() -> RadarBasis {
             .summary()
             .unwrap_or_else(|error| panic!("source summary: {error}")),
         axes,
+        achievement_curve: None,
         manual: None,
     }
 }

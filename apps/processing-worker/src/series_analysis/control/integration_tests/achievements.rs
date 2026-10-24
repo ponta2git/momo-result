@@ -6,6 +6,58 @@ const ITEM_ID: &str = "10000000-0000-4000-8000-000000000001";
 
 #[tokio::test]
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
+async fn real_postgres_authoritative_manifest_consumes_large_match_snapshots() -> SmokeResult {
+    let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
+    cleanup_database(&client).await?;
+    prepare_owned_attempt(&client).await?;
+    let transaction = client.transaction().await?;
+    transaction.batch_execute(&format!(
+        "INSERT INTO matches(id,legacy_id,held_event_id,legacy_held_event_id,match_no_in_event,game_title_id,
+                             layout_family,season_master_id,owner_member_id,map_master_id,played_at,
+                             created_by_account_id,created_by_member_id,analysis_revision)
+         SELECT gen_random_uuid(),'{MATCH_ID}-'||sequence,held_event_id,legacy_held_event_id,sequence,game_title_id,
+                layout_family,season_master_id,owner_member_id,map_master_id,played_at,
+                created_by_account_id,created_by_member_id,analysis_revision
+         FROM matches CROSS JOIN generate_series(2,513) AS sequence WHERE legacy_id='{MATCH_ID}';
+         INSERT INTO match_players(match_id,member_id,play_order,rank,total_assets_man_yen,revenue_man_yen)
+         SELECT m.id,mp.member_id,mp.play_order,mp.rank,mp.total_assets_man_yen,mp.revenue_man_yen
+         FROM matches m CROSS JOIN match_players mp
+         WHERE m.legacy_id LIKE '{MATCH_ID}-%'
+           AND mp.match_id=pg_temp.fixture_uuid('matches','{MATCH_ID}');
+         INSERT INTO achievement_items(id,game_title_id,name,stars,rule_kind,scope_kind)
+         VALUES ('{ITEM_ID}',pg_temp.fixture_uuid('game_titles','{TITLE_ID}'),'Manual',3,'manual','common');"
+    )).await?;
+    let input =
+        crate::series_analysis::input_repository::load_in_transaction(&transaction, TITLE_ID, 1)
+            .await?;
+    assert_eq!(input.player_matches().len(), 513 * 4);
+    let directory = TempDir::new()?;
+    let claim = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;
+    let artifact = build_artifact(
+        &input,
+        &ArtifactBuildRequest {
+            artifact_id: artifact_id_for_attempt(&claim.attempt_id),
+            algorithm_version: claim.algorithm_version.clone(),
+            maximum_chunk_bytes: 16 * 1024 * 1024,
+            maximum_chunk_count: 4_000,
+            maximum_total_bytes: 128 * 1024 * 1024,
+            maximum_file_count: 4_001,
+        },
+        directory.path(),
+    )?;
+    // Several wire buffers of match rows must drain before another query uses this connection.
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        validate_authoritative_manifest(&transaction, TITLE_ID, &artifact.manifest),
+    )
+    .await??;
+    transaction.rollback().await?;
+    cleanup_database(&client).await
+}
+
+#[tokio::test]
+#[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_global_events()
 -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;

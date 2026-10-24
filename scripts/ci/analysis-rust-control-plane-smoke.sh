@@ -35,6 +35,7 @@ tests=(
   "series_analysis::control::integration_tests::claim_wait::real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits"
   "series_analysis::control::integration_tests::real_postgres_keeps_staging_separate_from_fenced_publication"
   "series_analysis::control::integration_tests::achievements::real_postgres_achievement_input_and_publication_cover_zero_matches_and_global_events"
+  "series_analysis::control::integration_tests::achievements::real_postgres_authoritative_manifest_consumes_large_match_snapshots"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
   "series_analysis::control::integration_tests::radar::publication::real_postgres_radar_application_restore_and_failure_keep_artifact_and_basis_atomic"
   "series_analysis::control::integration_tests::radar::manual::real_postgres_manual_radar_recomparison_publication_restore_and_history_are_coherent"

@@ -86,16 +86,6 @@ async fn load_expected_shape(
         return Err(ControlError::AuthoritativeInputContract);
     }
 
-    let query_limit = i64::try_from(MAXIMUM_PLAYER_MATCH_ROWS)
-        .map_err(|_error| ControlError::AuthoritativeInputContract)?
-        .checked_add(1)
-        .ok_or(ControlError::AuthoritativeInputContract)?;
-    let parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
-        [&game_title_id, &query_limit];
-    let rows = transaction
-        .query_raw(MATCH_SNAPSHOT_QUERY, parameters)
-        .await?;
-    tokio::pin!(rows);
     let mut expected = ArtifactShape::empty_input();
     let achievement_count = transaction.query_one(
         "SELECT count(*)::bigint FROM achievement_items WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&game_title_id]
@@ -107,6 +97,17 @@ async fn load_expected_shape(
     {
         return Err(ControlError::AuthoritativeInputContract);
     }
+    // Complete other statements before opening the stream, which shares this connection.
+    let query_limit = i64::try_from(MAXIMUM_PLAYER_MATCH_ROWS)
+        .map_err(|_error| ControlError::AuthoritativeInputContract)?
+        .checked_add(1)
+        .ok_or(ControlError::AuthoritativeInputContract)?;
+    let parameters: [&(dyn tokio_postgres::types::ToSql + Sync); 2] =
+        [&game_title_id, &query_limit];
+    let rows = transaction
+        .query_raw(MATCH_SNAPSHOT_QUERY, parameters)
+        .await?;
+    tokio::pin!(rows);
     let mut observed_matches = 0;
     while let Some(row) = rows.try_next().await? {
         expected.include_match(match_snapshot(&row)?)?;

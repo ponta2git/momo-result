@@ -79,8 +79,23 @@ object PostgresAchievementInitialization:
         PostgresAchievementWriteOps.lockCreationReferences(item.definition)
       )
       existing <- PostgresAchievementReadOps.lockItems(command.items.map(_.id))
+      _ <- PostgresAchievementReadOps.claims(
+        fr"WHERE c.item_id = ANY(${existing.map(_.id).toArray})",
+        lock = true
+      )
+      _ <- command.items.map(_.definition.gameTitleId).distinct.sortBy(_.value).traverse_(title =>
+        PostgresAchievementRetirementOps.state(title, lock = true).void
+      )
+      afterLock <- command.items.map(_.definition.gameTitleId).distinct.traverse(
+        PostgresAchievementReadOps.forTitle
+      )
+      _ <- PostgresAchievementWriteOps.ensure(
+        afterLock.flatten.filter(item => command.items.exists(_.id.equals(item.id)))
+          .map(_.id).toSet.equals(existing.map(_.id).toSet),
+        "The initial catalog changed. Retry the import with the latest saved state."
+      )
       _ <- validate(command, context, identities)
-      inserted <- command.items.sortBy(_.id.toString).traverse { value =>
+      inserted <- command.items.traverse { value =>
         for
           title <- identities.normalize(Entity.GameTitles, value.definition.gameTitleId.value)
           old = existing.find(_.id.equals(value.id))
@@ -94,16 +109,11 @@ object PostgresAchievementInitialization:
             value.id,
             value.definition,
             context,
-            Some(value.fixedKey),
-            initial = true
+            Some(value.fixedKey)
           )
         yield Option.when(added)(value.definition.gameTitleId)
       }
       definitions <- PostgresAchievementReadOps.lockItems(command.items.map(_.id))
-      _ <- PostgresAchievementReadOps.claims(
-        fr"WHERE c.item_id = ANY(${definitions.map(_.id).toArray})",
-        lock = true
-      )
       actor <- identities.requireReference(Entity.Accounts, context.accountId.value)
       roots <- command.claims.sortBy(value =>
         (value.achievementId.toString, value.memberId.value)

@@ -17,6 +17,19 @@ object AchievementsEndpoints:
     .out(header("Cache-Control", "private, no-store"))
     .tag("achievements")
 
+  val reorder: CommonEndpoint.SecuredMutation[
+    (Option[String], ReorderAchievementsRequest),
+    AchievementCatalogResponse
+  ] = endpoint
+    .put
+    .in("api" / "achievements" / "catalog" / "order")
+    .securityIn(CommonEndpoint.accountHeader.and(CommonEndpoint.csrfHeader))
+    .in(CommonEndpoint.idempotencyKeyHeader)
+    .in(jsonBody[ReorderAchievementsRequest])
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[AchievementCatalogResponse])
+    .tag("achievements")
+
   val create: CommonEndpoint.SecuredMutation[
     (Option[String], CreateAchievementRequest),
     AchievementItemResponse

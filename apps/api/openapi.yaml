@@ -2826,6 +2826,90 @@
         }
       }
     },
+    "/api/achievements/catalog/order" : {
+      "put" : {
+        "tags" : [
+          "achievements"
+        ],
+        "operationId" : "putApiAchievementsCatalogOrder",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-CSRF-Token",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "Idempotency-Key",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReorderAchievementsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AchievementCatalogResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/achievements/items" : {
       "post" : {
         "tags" : [
@@ -6639,10 +6723,14 @@
         "title" : "AchievementCatalogResponse",
         "type" : "object",
         "required" : [
-          "gameTitleId"
+          "gameTitleId",
+          "orderRevision"
         ],
         "properties" : {
           "gameTitleId" : {
+            "type" : "string"
+          },
+          "orderRevision" : {
             "type" : "string"
           },
           "items" : {
@@ -6741,6 +6829,7 @@
           "ruleKind",
           "threshold",
           "stars",
+          "sortOrder",
           "appliesFrom",
           "retiredAt",
           "version"
@@ -6777,6 +6866,10 @@
             ]
           },
           "stars" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sortOrder" : {
             "type" : "integer",
             "format" : "int32"
           },
@@ -9081,6 +9174,29 @@
           }
         }
       },
+      "ReorderAchievementsRequest" : {
+        "title" : "ReorderAchievementsRequest",
+        "type" : "object",
+        "required" : [
+          "gameTitleId",
+          "expectedOrderRevision",
+          "achievementIds"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "expectedOrderRevision" : {
+            "type" : "string"
+          },
+          "achievementIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
       "ReplaceMatchNoteRequest" : {
         "title" : "ReplaceMatchNoteRequest",
         "type" : "object",
@@ -9171,6 +9287,53 @@
         "$schema" : "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties" : false,
         "properties" : {
+          "achievementCurve" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "thresholds" : {
+                "items" : false,
+                "maxItems" : 5,
+                "minItems" : 5,
+                "prefixItems" : [
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  }
+                ],
+                "type" : "array"
+              }
+            },
+            "required" : [
+              "thresholds"
+            ],
+            "type" : "object"
+          },
           "gameTitleId" : {
             "maxLength" : 4096,
             "minLength" : 1,
@@ -9960,7 +10123,7 @@
             "type" : "array"
           },
           "schemaVersion" : {
-            "const" : 1,
+            "const" : 2,
             "minimum" : 0,
             "type" : "integer",
             "x-momo-integerToken" : true
@@ -10205,7 +10368,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -10288,6 +10451,7 @@
           }
         },
         "required" : [
+          "achievementCurve",
           "gameTitleId",
           "items",
           "schemaVersion",
@@ -10296,7 +10460,7 @@
           "artifact",
           "maps"
         ],
-        "title" : "Series Analysis Achievements Resource v1",
+        "title" : "Series Analysis Achievements Resource v2",
         "type" : "object",
         "x-momo-series-analysis-resource-kind" : "achievements"
       },
@@ -14327,6 +14491,53 @@
                           {
                             "additionalProperties" : false,
                             "properties" : {
+                              "achievementCurve" : {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "thresholds" : {
+                                    "items" : false,
+                                    "maxItems" : 5,
+                                    "minItems" : 5,
+                                    "prefixItems" : [
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      }
+                                    ],
+                                    "type" : "array"
+                                  }
+                                },
+                                "required" : [
+                                  "thresholds"
+                                ],
+                                "type" : "object"
+                              },
                               "axes" : {
                                 "items" : false,
                                 "maxItems" : 6,
@@ -15167,6 +15378,53 @@
                           {
                             "additionalProperties" : false,
                             "properties" : {
+                              "achievementCurve" : {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "thresholds" : {
+                                    "items" : false,
+                                    "maxItems" : 5,
+                                    "minItems" : 5,
+                                    "prefixItems" : [
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 100.0,
+                                        "minimum" : 0.0,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      }
+                                    ],
+                                    "type" : "array"
+                                  }
+                                },
+                                "required" : [
+                                  "thresholds"
+                                ],
+                                "type" : "object"
+                              },
                               "axes" : {
                                 "items" : false,
                                 "maxItems" : 6,
@@ -19174,7 +19432,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -19813,7 +20071,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -20476,7 +20734,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -20958,7 +21216,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -21400,7 +21658,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -22217,7 +22475,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -22324,7 +22582,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 7,
+                    "const" : 8,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -22790,7 +23048,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -23523,7 +23781,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -23778,7 +24036,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -25054,7 +25312,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 7,
+                "const" : 8,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -25418,6 +25676,26 @@
           }
         }
       },
+      "SeriesPlayerRadarAchievementCurveRequest" : {
+        "title" : "SeriesPlayerRadarAchievementCurveRequest",
+        "type" : "object",
+        "required" : [
+          "thresholds"
+        ],
+        "properties" : {
+          "thresholds" : {
+            "type" : "array",
+            "maxItems" : 5,
+            "minItems" : 5,
+            "items" : {
+              "type" : "number",
+              "format" : "double",
+              "minimum" : 0.0,
+              "maximum" : 100.0
+            }
+          }
+        }
+      },
       "SeriesPlayerRadarManualAxisRequest" : {
         "title" : "SeriesPlayerRadarManualAxisRequest",
         "type" : "object",
@@ -25454,6 +25732,9 @@
             "items" : {
               "$ref" : "#/components/schemas/SeriesPlayerRadarManualAxisRequest"
             }
+          },
+          "achievementCurve" : {
+            "$ref" : "#/components/schemas/SeriesPlayerRadarAchievementCurveRequest"
           }
         }
       },
@@ -27035,6 +27316,500 @@
                 "type" : "null"
               }
             ]
+          },
+          "beforeAchievements" : {
+            "anyOf" : [
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
+                  },
+                  "summary" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "mapMasterId" : {
+                        "anyOf" : [
+                          {
+                            "type" : "null"
+                          },
+                          {
+                            "maxLength" : 4096,
+                            "minLength" : 1,
+                            "type" : "string",
+                            "x-momo-maxUtf8Bytes" : 4096
+                          }
+                        ]
+                      },
+                      "players" : {
+                        "items" : false,
+                        "maxItems" : 4,
+                        "minItems" : 4,
+                        "prefixItems" : [
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          }
+                        ],
+                        "type" : "array"
+                      },
+                      "totalPoints" : {
+                        "maximum" : 102400,
+                        "minimum" : 0,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      }
+                    },
+                    "required" : [
+                      "mapMasterId",
+                      "players",
+                      "totalPoints"
+                    ],
+                    "type" : "object"
+                  }
+                },
+                "required" : [
+                  "achievementCurve",
+                  "summary"
+                ],
+                "title" : "Series Player Radar Achievement Comparison v1",
+                "type" : "object"
+              },
+              {
+                "type" : "null"
+              }
+            ]
+          },
+          "afterAchievements" : {
+            "anyOf" : [
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
+                  },
+                  "summary" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "mapMasterId" : {
+                        "anyOf" : [
+                          {
+                            "type" : "null"
+                          },
+                          {
+                            "maxLength" : 4096,
+                            "minLength" : 1,
+                            "type" : "string",
+                            "x-momo-maxUtf8Bytes" : 4096
+                          }
+                        ]
+                      },
+                      "players" : {
+                        "items" : false,
+                        "maxItems" : 4,
+                        "minItems" : 4,
+                        "prefixItems" : [
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              },
+                              "score" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 10.0,
+                                    "minimum" : 1.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId",
+                              "score"
+                            ],
+                            "type" : "object"
+                          }
+                        ],
+                        "type" : "array"
+                      },
+                      "totalPoints" : {
+                        "maximum" : 102400,
+                        "minimum" : 0,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      }
+                    },
+                    "required" : [
+                      "mapMasterId",
+                      "players",
+                      "totalPoints"
+                    ],
+                    "type" : "object"
+                  }
+                },
+                "required" : [
+                  "achievementCurve",
+                  "summary"
+                ],
+                "title" : "Series Player Radar Achievement Comparison v1",
+                "type" : "object"
+              },
+              {
+                "type" : "null"
+              }
+            ]
           }
         },
         "required" : [
@@ -27050,7 +27825,9 @@
           "createdAt",
           "scope",
           "before",
-          "after"
+          "after",
+          "beforeAchievements",
+          "afterAchievements"
         ]
       },
       "SeriesPlayerRadarRevisionDetailResponse" : {
@@ -27071,6 +27848,53 @@
                   {
                     "additionalProperties" : false,
                     "properties" : {
+                      "achievementCurve" : {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "thresholds" : {
+                            "items" : false,
+                            "maxItems" : 5,
+                            "minItems" : 5,
+                            "prefixItems" : [
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              }
+                            ],
+                            "type" : "array"
+                          }
+                        },
+                        "required" : [
+                          "thresholds"
+                        ],
+                        "type" : "object"
+                      },
                       "axes" : {
                         "items" : false,
                         "maxItems" : 6,
@@ -27899,6 +28723,53 @@
                   {
                     "additionalProperties" : false,
                     "properties" : {
+                      "achievementCurve" : {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "thresholds" : {
+                            "items" : false,
+                            "maxItems" : 5,
+                            "minItems" : 5,
+                            "prefixItems" : [
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              },
+                              {
+                                "maximum" : 100.0,
+                                "minimum" : 0.0,
+                                "type" : "number",
+                                "x-momo-finiteF64" : true
+                              }
+                            ],
+                            "type" : "array"
+                          }
+                        },
+                        "required" : [
+                          "thresholds"
+                        ],
+                        "type" : "object"
+                      },
                       "axes" : {
                         "items" : false,
                         "maxItems" : 6,
@@ -29056,6 +29927,53 @@
               {
                 "additionalProperties" : false,
                 "properties" : {
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
+                  },
                   "axes" : {
                     "items" : false,
                     "maxItems" : 6,
@@ -29884,6 +30802,53 @@
               {
                 "additionalProperties" : false,
                 "properties" : {
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
+                  },
                   "axes" : {
                     "items" : false,
                     "maxItems" : 6,
@@ -31030,13 +31995,116 @@
               }
             ],
             "title" : "Series Player Radar Basis v1"
+          },
+          "beforeAchievementCurve" : {
+            "anyOf" : [
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "thresholds" : {
+                    "items" : false,
+                    "maxItems" : 5,
+                    "minItems" : 5,
+                    "prefixItems" : [
+                      {
+                        "maximum" : 100.0,
+                        "minimum" : 0.0,
+                        "type" : "number",
+                        "x-momo-finiteF64" : true
+                      },
+                      {
+                        "maximum" : 100.0,
+                        "minimum" : 0.0,
+                        "type" : "number",
+                        "x-momo-finiteF64" : true
+                      },
+                      {
+                        "maximum" : 100.0,
+                        "minimum" : 0.0,
+                        "type" : "number",
+                        "x-momo-finiteF64" : true
+                      },
+                      {
+                        "maximum" : 100.0,
+                        "minimum" : 0.0,
+                        "type" : "number",
+                        "x-momo-finiteF64" : true
+                      },
+                      {
+                        "maximum" : 100.0,
+                        "minimum" : 0.0,
+                        "type" : "number",
+                        "x-momo-finiteF64" : true
+                      }
+                    ],
+                    "type" : "array"
+                  }
+                },
+                "required" : [
+                  "thresholds"
+                ],
+                "type" : "object"
+              },
+              {
+                "type" : "null"
+              }
+            ]
+          },
+          "afterAchievementCurve" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "thresholds" : {
+                "items" : false,
+                "maxItems" : 5,
+                "minItems" : 5,
+                "prefixItems" : [
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  },
+                  {
+                    "maximum" : 100.0,
+                    "minimum" : 0.0,
+                    "type" : "number",
+                    "x-momo-finiteF64" : true
+                  }
+                ],
+                "type" : "array"
+              }
+            },
+            "required" : [
+              "thresholds"
+            ],
+            "type" : "object"
           }
         },
         "required" : [
           "schemaVersion",
           "revision",
           "beforeBasis",
-          "afterBasis"
+          "afterBasis",
+          "beforeAchievementCurve",
+          "afterAchievementCurve"
         ]
       },
       "SeriesPlayerRadarRevisionListResponse" : {
@@ -31136,6 +32204,53 @@
                       {
                         "additionalProperties" : false,
                         "properties" : {
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
+                          },
                           "axes" : {
                             "items" : false,
                             "maxItems" : 6,
@@ -31964,6 +33079,53 @@
                       {
                         "additionalProperties" : false,
                         "properties" : {
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
+                          },
                           "axes" : {
                             "items" : false,
                             "maxItems" : 6,
@@ -33110,6 +34272,53 @@
                       }
                     ],
                     "title" : "Series Player Radar Basis v1"
+                  },
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
                   }
                 },
                 "required" : [
@@ -33118,7 +34327,8 @@
                   "createdAt",
                   "appliedAt",
                   "sourceInputRevision",
-                  "basis"
+                  "basis",
+                  "achievementCurve"
                 ]
               },
               {
@@ -33168,6 +34378,53 @@
                       {
                         "additionalProperties" : false,
                         "properties" : {
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
+                          },
                           "axes" : {
                             "items" : false,
                             "maxItems" : 6,
@@ -33996,6 +35253,53 @@
                       {
                         "additionalProperties" : false,
                         "properties" : {
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
+                          },
                           "axes" : {
                             "items" : false,
                             "maxItems" : 6,
@@ -35142,6 +36446,53 @@
                       }
                     ],
                     "title" : "Series Player Radar Basis v1"
+                  },
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
                   }
                 },
                 "required" : [
@@ -35150,7 +36501,8 @@
                   "createdAt",
                   "appliedAt",
                   "sourceInputRevision",
-                  "basis"
+                  "basis",
+                  "achievementCurve"
                 ]
               },
               {
@@ -36119,6 +37471,53 @@
                                   {
                                     "additionalProperties" : false,
                                     "properties" : {
+                                      "achievementCurve" : {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "thresholds" : {
+                                            "items" : false,
+                                            "maxItems" : 5,
+                                            "minItems" : 5,
+                                            "prefixItems" : [
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              }
+                                            ],
+                                            "type" : "array"
+                                          }
+                                        },
+                                        "required" : [
+                                          "thresholds"
+                                        ],
+                                        "type" : "object"
+                                      },
                                       "axes" : {
                                         "items" : false,
                                         "maxItems" : 6,
@@ -36947,6 +38346,53 @@
                                   {
                                     "additionalProperties" : false,
                                     "properties" : {
+                                      "achievementCurve" : {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "thresholds" : {
+                                            "items" : false,
+                                            "maxItems" : 5,
+                                            "minItems" : 5,
+                                            "prefixItems" : [
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              },
+                                              {
+                                                "maximum" : 100.0,
+                                                "minimum" : 0.0,
+                                                "type" : "number",
+                                                "x-momo-finiteF64" : true
+                                              }
+                                            ],
+                                            "type" : "array"
+                                          }
+                                        },
+                                        "required" : [
+                                          "thresholds"
+                                        ],
+                                        "type" : "object"
+                                      },
                                       "axes" : {
                                         "items" : false,
                                         "maxItems" : 6,
@@ -38385,6 +39831,53 @@
                               ]
                             },
                             "maxItems" : 6
+                          },
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
                           }
                         },
                         "required" : [
@@ -38395,6 +39888,53 @@
                         "type" : "null"
                       }
                     ]
+                  },
+                  "achievementCurve" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "thresholds" : {
+                        "items" : false,
+                        "maxItems" : 5,
+                        "minItems" : 5,
+                        "prefixItems" : [
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          },
+                          {
+                            "maximum" : 100.0,
+                            "minimum" : 0.0,
+                            "type" : "number",
+                            "x-momo-finiteF64" : true
+                          }
+                        ],
+                        "type" : "array"
+                      }
+                    },
+                    "required" : [
+                      "thresholds"
+                    ],
+                    "type" : "object"
                   },
                   "sourceBasisId" : {
                     "anyOf" : [
@@ -38462,6 +40002,53 @@
                               {
                                 "additionalProperties" : false,
                                 "properties" : {
+                                  "achievementCurve" : {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "thresholds" : {
+                                        "items" : false,
+                                        "maxItems" : 5,
+                                        "minItems" : 5,
+                                        "prefixItems" : [
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          }
+                                        ],
+                                        "type" : "array"
+                                      }
+                                    },
+                                    "required" : [
+                                      "thresholds"
+                                    ],
+                                    "type" : "object"
+                                  },
                                   "axes" : {
                                     "items" : false,
                                     "maxItems" : 6,
@@ -39290,6 +40877,53 @@
                               {
                                 "additionalProperties" : false,
                                 "properties" : {
+                                  "achievementCurve" : {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "thresholds" : {
+                                        "items" : false,
+                                        "maxItems" : 5,
+                                        "minItems" : 5,
+                                        "prefixItems" : [
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          },
+                                          {
+                                            "maximum" : 100.0,
+                                            "minimum" : 0.0,
+                                            "type" : "number",
+                                            "x-momo-finiteF64" : true
+                                          }
+                                        ],
+                                        "type" : "array"
+                                      }
+                                    },
+                                    "required" : [
+                                      "thresholds"
+                                    ],
+                                    "type" : "object"
+                                  },
                                   "axes" : {
                                     "items" : false,
                                     "maxItems" : 6,
@@ -40436,6 +42070,53 @@
                               }
                             ],
                             "title" : "Series Player Radar Basis v1"
+                          },
+                          "achievementCurve" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "thresholds"
+                            ],
+                            "type" : "object"
                           }
                         },
                         "required" : [
@@ -40444,7 +42125,8 @@
                           "createdAt",
                           "appliedAt",
                           "sourceInputRevision",
-                          "basis"
+                          "basis",
+                          "achievementCurve"
                         ]
                       },
                       {
@@ -40499,6 +42181,7 @@
                   "latestPreview",
                   "originKind",
                   "manualInput",
+                  "achievementCurve",
                   "sourceBasisId",
                   "sourceCandidateId",
                   "sourceBasis",

@@ -27,6 +27,7 @@ private[postgres] object PostgresAchievementReadOps:
       rule: String,
       threshold: Option[BigDecimal],
       stars: Int,
+      sortOrder: Int,
       appliesFrom: Option[LocalDate],
       retiredAt: Option[Instant],
       version: Long,
@@ -35,12 +36,13 @@ private[postgres] object PostgresAchievementReadOps:
 
   private def itemColumns(using ids: PostgresIdentities): Fragment = fr"""
     i.id, ${ids.wireReference(Entity.GameTitles, fr"i.game_title_id")}, i.name, i.notes,
-    i.scope_kind, i.rule_kind, i.threshold, i.stars, i.applies_from, i.retired_at, i.version, i.fixed_key
+    i.scope_kind, i.rule_kind, i.threshold, i.stars, i.sort_order, i.applies_from,
+    i.retired_at, i.version, i.fixed_key
   """
 
   private def decodeItem(row: ItemRow, maps: List[MapMasterId]): ConnectionIO[AchievementItem] =
     AchievementRule.fromWire(row.rule).filter(_ =>
-      row.version >= 1 && Set("common", "maps").contains(row.scopeKind) &&
+      row.version >= 1 && row.sortOrder >= 0 && Set("common", "maps").contains(row.scopeKind) &&
         (if row.scopeKind == "common" then maps.isEmpty else maps.nonEmpty)
     ).toRight(PostgresDataIntegrityException.inconsistentRow(
       "achievement_items",
@@ -57,6 +59,7 @@ private[postgres] object PostgresAchievementReadOps:
         rule,
         row.threshold,
         row.stars,
+        row.sortOrder,
         row.appliesFrom,
         row.retiredAt,
         row.version,
@@ -87,6 +90,7 @@ private[postgres] object PostgresAchievementReadOps:
   def forTitle(title: GameTitleId)(using
       ids: PostgresIdentities): ConnectionIO[List[AchievementItem]] =
     items(fr"WHERE i.game_title_id = ${ids.lookup(Entity.GameTitles, title.value)}", false)
+      .map(_.sortBy(item => (item.sortOrder, item.id.toString)))
 
   def lockItems(selected: List[UUID])(using
       PostgresIdentities): ConnectionIO[List[AchievementItem]] =
@@ -146,4 +150,11 @@ private[postgres] object PostgresAchievementReadOps:
         WHERE m.game_title_id = ${ids.lookup(Entity.GameTitles, normalized.value)}
         ORDER BY m.display_order, ${ids.wireId("m")} COLLATE "C"
       """.query[(MapMasterId, String)].to[List]
-    yield AchievementCatalog(normalized, definitions, roots, members, maps)
+    yield AchievementCatalog(
+      normalized,
+      PostgresAchievementOrderOps.revision(normalized, definitions),
+      definitions,
+      roots,
+      members,
+      maps
+    )

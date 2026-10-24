@@ -1,6 +1,5 @@
 package momo.api.adapters.postgres
 
-import java.time.ZoneId
 import java.util.UUID
 
 import cats.syntax.all.*
@@ -17,8 +16,6 @@ import momo.api.errors.{AppError, AppException}
 
 /** Shared transactional writes used by ordinary saves and the one-time initial import. */
 private[postgres] object PostgresAchievementWriteOps:
-  private val Japan = ZoneId.of("Asia/Tokyo")
-
   def reject[A](message: String): ConnectionIO[A] =
     new AppException(AppError.Conflict(message)).raiseError[ConnectionIO, A]
 
@@ -30,8 +27,7 @@ private[postgres] object PostgresAchievementWriteOps:
 
   def accepts(item: AchievementItem, source: MatchSource): Boolean =
     item.gameTitleId == source.gameTitleId &&
-      (item.common || item.mapMasterIds.contains(source.mapMasterId)) &&
-      item.appliesFrom.forall(start => !source.playedAt.atZone(Japan).toLocalDate.isBefore(start))
+      (item.common || item.mapMasterIds.contains(source.mapMasterId))
 
   /** Acquire live FK targets before the title state; map deletion refreshes that same state. */
   def lockCreationReferences(command: CreateAchievement)(using
@@ -52,14 +48,13 @@ private[postgres] object PostgresAchievementWriteOps:
       id: UUID,
       command: CreateAchievement,
       context: AchievementMutationContext,
-  )(using PostgresIdentities): ConnectionIO[Boolean] = create(id, command, context, None, false)
+  )(using PostgresIdentities): ConnectionIO[Boolean] = create(id, command, context, None)
 
   def create(
       id: UUID,
       command: CreateAchievement,
       context: AchievementMutationContext,
       fixedKey: Option[String],
-      initial: Boolean,
   )(using ids: PostgresIdentities): ConnectionIO[Boolean] =
     for
       title <- ids.requireReference(Entity.GameTitles, command.gameTitleId.value)
@@ -70,13 +65,15 @@ private[postgres] object PostgresAchievementWriteOps:
       """.query[Boolean].unique
       _ <- ensure(validMaps, "Every selected map must belong to this game title.")
       scope = if command.common then "common" else "maps"
-      start = Option.unless(initial)(context.at.atZone(Japan).toLocalDate)
+      order <-
+        sql"SELECT COALESCE(max(sort_order), -1) + 1 FROM achievement_items WHERE game_title_id = $title"
+          .query[Int].unique
       inserted <- sql"""INSERT INTO achievement_items(
         id, game_title_id, fixed_key, name, notes, rule_kind, threshold, stars,
-        scope_kind, applies_from, version, created_at, updated_at
+        scope_kind, applies_from, sort_order, version, created_at, updated_at
       ) VALUES (
         $id, $title, $fixedKey, ${command.name}, ${command.notes}, ${command.rule.wire},
-        ${command.threshold}, ${command.stars}, $scope, $start, 1, ${context.at}, ${context.at}
+        ${command.threshold}, ${command.stars}, $scope, NULL, $order, 1, ${context.at}, ${context.at}
       ) ON CONFLICT (id) DO NOTHING""".update.run
       _ <- if inserted == 0 then ().pure[ConnectionIO]
       else maps.values.toList.sorted.traverse_(map => sql"""
@@ -170,7 +167,7 @@ private[postgres] object PostgresAchievementWriteOps:
             )
             _ <- ensure(
               accepts(item, source),
-              "The match is outside this achievement's maps or start date."
+              "The match is outside this achievement's game title or maps."
             )
             _ <- ensure(
               root.map(_.version) == addition.expectedClaimVersion,

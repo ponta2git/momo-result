@@ -20,8 +20,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v8', artifact_schema_version = 7,
-          validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
+      SET algorithm_version = 'series-analysis-v9', artifact_schema_version = 8,
+          validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
@@ -133,9 +133,9 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         initial,
         (
           0L,
-          "series-analysis-v8",
-          7,
-          Some("series-analysis-artifact-v7-full-validation-v1"),
+          "series-analysis-v9",
+          8,
+          Some("series-analysis-artifact-v8-full-validation-v1"),
           "initial"
         )
       )
@@ -152,8 +152,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       results <- concurrentWithUncommittedFirst(
         sql"""
           UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
-            artifact_schema_version = 7,
-            validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
+            artifact_schema_version = 8,
+            validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
           WHERE singleton_key = 'current'
         """.update.run,
         new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
@@ -168,8 +168,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         state,
         (
           "promoted-analysis",
-          7,
-          Some("series-analysis-artifact-v7-full-validation-v1")
+          8,
+          Some("series-analysis-artifact-v8-full-validation-v1")
         )
       )
 

@@ -14,6 +14,7 @@ final case class AchievementItemResponse(
     ruleKind: String,
     threshold: Option[String],
     stars: Int,
+    sortOrder: Int,
     appliesFrom: Option[String],
     retiredAt: Option[String],
     version: String,
@@ -30,6 +31,7 @@ object AchievementItemResponse:
     value.rule.wire,
     value.threshold.map(_.bigDecimal.stripTrailingZeros.toPlainString),
     value.stars,
+    value.sortOrder,
     value.appliesFrom.map(_.toString),
     value.retiredAt.map(_.toString),
     value.version.toString,
@@ -72,6 +74,7 @@ final case class AchievementMapResponse(mapMasterId: String, displayName: String
 
 final case class AchievementCatalogResponse(
     gameTitleId: String,
+    orderRevision: String,
     items: List[AchievementItemResponse],
     claims: List[AchievementClaimResponse],
     members: List[AchievementMemberResponse],
@@ -81,6 +84,7 @@ final case class AchievementCatalogResponse(
 object AchievementCatalogResponse:
   def from(value: AchievementCatalog): AchievementCatalogResponse = AchievementCatalogResponse(
     value.gameTitleId.value,
+    value.orderRevision,
     value.items.map(AchievementItemResponse.from),
     value.claims.map(AchievementClaimResponse.from),
     value.members.map((id, name) => AchievementMemberResponse(id.value, name)),
@@ -106,6 +110,12 @@ final case class UpdateAchievementRequest(
 ) derives Codec.AsObject
 
 final case class RetireAchievementRequest(expectedVersion: String) derives Codec.AsObject
+
+final case class ReorderAchievementsRequest(
+    gameTitleId: String,
+    expectedOrderRevision: String,
+    achievementIds: List[String],
+) derives Codec.AsObject
 
 final case class AddMatchAchievementRequest(
     achievementId: String,

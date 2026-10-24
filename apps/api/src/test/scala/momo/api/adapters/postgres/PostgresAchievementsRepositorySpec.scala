@@ -131,6 +131,107 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
   private def change(record: MatchRecord): MatchUpdate = MatchFixtures.update(record)
     .copy(expectedVersion = Some(record.analysisRevision), updatedByAccountId = Some(account))
 
+  test("saved order includes retired items, appends additions and rejects concurrent stale orders"):
+    for
+      world <- seed
+      repo <- repository
+      first <- repo.create(definition(world).copy(name = "First"), context).map(right)
+      second <- repo.create(definition(world).copy(name = "Second"), context).map(right)
+      retired <- repo.create(definition(world).copy(name = "Retired"), context).map(right)
+      _ <- repo.retire(retired.id, retired.version, context).map(right)
+      initial <- repo.catalog(world.title).map(right)
+      before <- revision(world)
+      command = ReorderAchievements(
+        world.title,
+        initial.orderRevision,
+        List(second.id, first.id, retired.id)
+      )
+      competing <- (
+        repo.reorder(command),
+        repo.reorder(command.copy(
+          achievementIds = List(first.id, retired.id, second.id)
+        ))
+      ).parTupled
+      ordered <- repo.catalog(world.title).map(right)
+      after <- revision(world)
+      versions = initial.items.map(item => item.id -> item.version).toMap
+      _ <- repo.update(
+        first.id,
+        UpdateAchievement("Renamed", first.notes, first.stars, first.version),
+        context
+      )
+        .map(right)
+      afterRename <- repo.catalog(world.title).map(right)
+      incomplete <- repo.reorder(ReorderAchievements(
+        world.title,
+        ordered.orderRevision,
+        List(first.id, second.id)
+      ))
+      foreign <- repo.reorder(ReorderAchievements(
+        world.title,
+        ordered.orderRevision,
+        List(first.id, second.id, UUID.randomUUID())
+      ))
+      _ <- repo.retire(second.id, second.version, context).map(right)
+      retirementConflict <- repo.reorder(ReorderAchievements(
+        world.title,
+        ordered.orderRevision,
+        ordered.items.map(_.id)
+      ))
+      afterRetirement <- repo.catalog(world.title).map(right)
+      added <- repo.create(definition(world).copy(name = "Added"), context).map(right)
+      stale <- repo.reorder(ReorderAchievements(
+        world.title,
+        afterRetirement.orderRevision,
+        afterRetirement.items.map(_.id)
+      ))
+      current <- repo.catalog(world.title).map(right)
+    yield
+      assertEquals(initial.items.map(_.id), List(first.id, second.id, retired.id))
+      assertEquals(List(competing._1, competing._2).count(_.isRight), 1)
+      assertEquals(List(competing._1, competing._2).count(_.left.exists(isConflict)), 1)
+      assertEquals(ordered.items.map(_.sortOrder), List(0, 1, 2))
+      assertEquals(ordered.items.map(item => item.id -> item.version).toMap, versions)
+      assertEquals(after, before)
+      assertEquals(afterRename.orderRevision, ordered.orderRevision)
+      assert(incomplete.left.exists(isConflict))
+      assert(foreign.left.exists(isConflict))
+      assert(retirementConflict.left.exists(isConflict))
+      assert(stale.left.exists(isConflict))
+      assertEquals(current.items.last.id, added.id)
+      assertEquals(current.items.dropRight(1).map(_.id), ordered.items.map(_.id))
+      assertEquals(added.appliesFrom, None)
+
+  test("new manual definitions accept and keep evidence from matches before their creation"):
+    for
+      world <- seed
+      repo <- repository
+      matched = record(world, 1).copy(playedAt = Instant.parse("2020-01-02T03:04:05Z"))
+      _ <- confirmations.confirm(matched, None, now).map(right)
+      item <- repo.create(definition(world), context).map(right)
+      // The retained compatibility column must not reintroduce eligibility on an older row.
+      _ <- sql"UPDATE achievement_items SET applies_from = DATE '2026-10-24' WHERE id = ${item.id}"
+        .update.run.transact(transactor)
+      _ <- repo.addToMatch(
+        matched.id,
+        AddMatchAchievements(
+          0,
+          List(
+            AddMatchAchievement(item.id, member, item.version, None)
+          )
+        ),
+        context
+      ).map(right)
+      old <- claims(repo, world).map(_.head)
+      earlier = matched.copy(playedAt = Instant.parse("2019-01-02T03:04:05Z"))
+      _ <- matches.update(matched.id, change(earlier), now.plusSeconds(1)).map(right)
+      followed <- claims(repo, world).map(_.head)
+    yield
+      assertEquals(old.matchId, Some(matched.id))
+      assertEquals(old.achievedAt, Some(matched.playedAt))
+      assertEquals(followed.matchId, Some(matched.id))
+      assertEquals(followed.achievedAt, Some(earlier.playedAt))
+
   test(
     "confirmation and result edits roll back their changes when an achievement snapshot is stale"
   ):
@@ -468,6 +569,16 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       snapshot <-
         sql"SELECT snapshot::text FROM achievement_retired_snapshots WHERE item_id = $automaticId"
           .query[String].unique.transact(transactor)
+      catalog <- repo.catalog(world.title).map(right)
+      revisionBeforeOrder <- revision(world)
+      _ <- repo.reorder(ReorderAchievements(
+        world.title,
+        catalog.orderRevision,
+        List(manualId, automaticId)
+      ))
+        .map(right)
+      reordered <- analysis.chunk(request).map(right)
+      revisionAfterOrder <- revision(world)
       imported <- claims(repo, world).map(_.head)
       correction <- repo.correctClaim(
         imported.id,
@@ -495,12 +606,27 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       assertEquals(saved.hcursor.downField("definition").get[String]("name"), Right("廃止時の名前"))
       assertEquals(saved.hcursor.downField("definition").get[String]("notes"), Right("廃止時の注記"))
       assertEquals(saved.hcursor.get[List[Json]]("players").map(_.size), Right(4))
+      def decoded(chunk: SeriesAnalysisChunk): Json =
+        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).toOption.get
       def proofAvailable(chunk: SeriesAnalysisChunk): Either[io.circe.Error, Boolean] =
-        parser.parse(new String(chunk.payload, StandardCharsets.UTF_8)).flatMap(_.hcursor
-          .downField("items").downArray.downField("players").downArray.downField("proofs").downArray
-          .get[Boolean]("matchAvailable"))
+        decoded(chunk).hcursor.get[List[Json]]("items").toOption.get
+          .find(_.hcursor.get[String]("achievementId").contains(automaticId.toString)).get.hcursor
+          .downField(
+            "players"
+          ).downArray.downField("proofs").downArray.get[Boolean]("matchAvailable")
       assertEquals(proofAvailable(hydrated), Right(true))
       assertEquals(proofAvailable(missing), Right(false))
+      assertEquals(
+        decoded(reordered).hcursor.get[List[Json]](
+          "items"
+        ).map(_.map(_.hcursor.get[String]("achievementId").toOption.get)),
+        Right(List(manualId.toString, automaticId.toString))
+      )
+      assertEquals(
+        decoded(reordered).hcursor.downField("summaries").focus,
+        decoded(hydrated).hcursor.downField("summaries").focus
+      )
+      assertEquals(revisionAfterOrder, revisionBeforeOrder)
       assertEquals(durable, snapshot)
 
   private def publishAchievementFixture(
@@ -511,7 +637,7 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
   ): IO[String] =
     val artifact = UUID.randomUUID()
     val source = Files.readString(
-      Paths.get("../../docs/schemas/fixtures/series-analysis/achievements-payload-v1.json")
+      Paths.get("../../docs/schemas/fixtures/series-analysis/achievements-payload-v2.json")
     )
     val replacements = Map(
       "title" -> world.title.value,
@@ -561,7 +687,7 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
         (id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
          source_input_checksum, root_checksum, status, aggregate_chunk_count, review_chunk_count,
          drilldown_chunk_count, match_context_chunk_count, achievement_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v8', 7,
+        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v9', 8,
           $checksum, $checksum, 'staging', 1, 0, 0, 0, 1, $size, $size, ARRAY[]::text[])""".update.run *>
         sql"""INSERT INTO series_analysis_achievement_artifacts
           (artifact_id, scope_key, scope_kind, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
@@ -662,6 +788,67 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
         assertEquals(retired.status, Status.Ok)
         assertEquals(replay, updated)
         assertEquals(actor, "account_akane_mami")
+    }
+
+  test(
+    "HTTP catalog order enforces operator access, validates the full list and replays saved order"
+  ):
+    httpAppResource("achievement-order-contract").use { app =>
+      for
+        world <- seed
+        repo <- repository
+        first <- repo.create(definition(world).copy(name = "First"), context).map(right)
+        second <- repo.create(definition(world).copy(name = "Second"), context).map(right)
+        catalog <- app.run(readGet(Uri.unsafeFromString(
+          s"/api/achievements/catalog?gameTitleId=${world.title.value}"
+        ))).flatMap(_.as[Json])
+        token = catalog.hcursor.get[String]("orderRevision").toOption.get
+        body = Json.obj(
+          "gameTitleId" -> Json.fromString(world.title.value),
+          "expectedOrderRevision" -> Json.fromString(token),
+          "achievementIds" ->
+            Json.arr(Json.fromString(second.id.toString), Json.fromString(first.id.toString))
+        )
+        path = Uri.unsafeFromString("/api/achievements/catalog/order")
+        forbidden <- app.run(writeRequest(
+          Method.PUT,
+          path,
+          "account_akane_mami",
+          Some(fresh)
+        ).withEntity(body))
+        _ <- forbidden.body.compile.drain
+        duplicate <- app.run(writeRequest(Method.PUT, path, Some(fresh)).withEntity(
+          body.mapObject(_.add(
+            "achievementIds",
+            Json.arr(Json.fromString(first.id.toString), Json.fromString(first.id.toString))
+          ))
+        ))
+        _ <- duplicate.body.compile.drain
+        incomplete <- app.run(writeRequest(Method.PUT, path, Some(fresh)).withEntity(
+          body.mapObject(_.add("achievementIds", Json.arr(Json.fromString(first.id.toString))))
+        ))
+        _ <- incomplete.body.compile.drain
+        key = fresh
+        saved <- app.run(writeRequest(Method.PUT, path, Some(key)).withEntity(body))
+          .flatMap(response => response.as[Json].map(json => response.status -> json))
+        stale <- app.run(writeRequest(Method.PUT, path, Some(fresh)).withEntity(body))
+        _ <- stale.body.compile.drain
+        _ <- repo.create(definition(world).copy(name = "Later"), context).map(right)
+        replay <- app.run(writeRequest(Method.PUT, path, Some(key)).withEntity(body))
+          .flatMap(response => response.as[Json].map(json => response.status -> json))
+      yield
+        assertEquals(forbidden.status, Status.Forbidden)
+        assertEquals(duplicate.status, Status.UnprocessableContent)
+        assertEquals(incomplete.status, Status.Conflict)
+        assertEquals(saved._1, Status.Ok)
+        assertEquals(stale.status, Status.Conflict)
+        assertEquals(
+          saved._2.hcursor.get[List[Json]](
+            "items"
+          ).map(_.map(_.hcursor.get[String]("achievementId").toOption.get)),
+          Right(List(second.id.toString, first.id.toString))
+        )
+        assertEquals(replay, saved)
     }
 
   test(

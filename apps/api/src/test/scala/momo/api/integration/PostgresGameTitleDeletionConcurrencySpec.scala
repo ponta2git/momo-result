@@ -37,7 +37,7 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
       id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
       status, trigger, accepted_at
     ) VALUES (
-      'request-delete-contention', $titleId, 0, 'series-analysis-v8', 7,
+      'request-delete-contention', $titleId, 0, 'series-analysis-v9', 8,
       'pending', 'manual', $now
     )
   """.update.run.transact(transactor).void
@@ -202,7 +202,7 @@ final class PostgresGameTitleDeletionConcurrencySpec extends IntegrationSuite:
                     id, game_title_id, input_revision, algorithm_version,
                     artifact_schema_version, status, trigger, requested_at
                   ) VALUES (
-                    'job-before-delete', $titleId, 0, 'series-analysis-v8',
+                    'job-before-delete', $titleId, 0, 'series-analysis-v9',
                     6, 'queued', 'match_mutation', $now
                   )
                 """.update.run)

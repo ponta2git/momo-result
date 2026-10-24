@@ -33,6 +33,9 @@ final class PostgresAchievementsRepository[F[_]: Async](
         PostgresAchievementReadOps.catalog(title)).transact(transactor)
     )
 
+  override def reorder(command: ReorderAchievements): F[Either[AppError, AchievementCatalog]] =
+    write(PostgresAchievementOrderOps.reorder(command))
+
   override def create(command: CreateAchievement, context: AchievementMutationContext)
       : F[Either[AppError, AchievementItem]] = write(
     for

@@ -18,7 +18,8 @@ export function makeAchievementItem(overrides: Partial<AchievementItem> = {}): A
     ruleKind: "manual",
     threshold: null,
     stars: 2,
-    appliesFrom: "2026-01-01",
+    sortOrder: 0,
+    appliesFrom: null,
     retiredAt: null,
     version: "1",
     ...overrides,
@@ -47,6 +48,7 @@ export function makeAchievementCatalog(
 ): AchievementCatalog {
   return {
     gameTitleId: "gt_momotetsu_2",
+    orderRevision: "0".repeat(64),
     items: [],
     claims: [],
     members: canonicalResultMembers.map(({ memberId, displayName }) => ({ memberId, displayName })),
@@ -62,9 +64,10 @@ export function makeAchievementResource(
   overrides: Partial<AchievementResource> = {},
 ): AchievementResource {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scope: { kind: "overall", displayName: "作品通算" },
     gameTitleId: "gt_momotetsu_2",
+    achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     artifact: analysisArtifact,
     items: [],
     summaries: [null, "map_east", "map_empty"].map((mapMasterId) => ({

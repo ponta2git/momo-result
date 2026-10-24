@@ -497,6 +497,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/achievements/catalog/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putApiAchievementsCatalogOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/achievements/items": {
         parameters: {
             query?: never;
@@ -1096,6 +1112,7 @@ export interface components {
         /** AchievementCatalogResponse */
         AchievementCatalogResponse: {
             gameTitleId: string;
+            orderRevision: string;
             items?: components["schemas"]["AchievementItemResponse"][];
             claims?: components["schemas"]["AchievementClaimResponse"][];
             members?: components["schemas"]["AchievementMemberResponse"][];
@@ -1127,6 +1144,8 @@ export interface components {
             threshold: string | null;
             /** Format: int32 */
             stars: number;
+            /** Format: int32 */
+            sortOrder: number;
             appliesFrom: string | null;
             retiredAt: string | null;
             version: string;
@@ -1846,6 +1865,12 @@ export interface components {
             members?: components["schemas"]["OcrSubmissionMemberRequest"][];
             ocrHints?: components["schemas"]["OcrJobHintsRequest"];
         };
+        /** ReorderAchievementsRequest */
+        ReorderAchievementsRequest: {
+            gameTitleId: string;
+            expectedOrderRevision: string;
+            achievementIds: string[];
+        };
         /** ReplaceMatchNoteRequest */
         ReplaceMatchNoteRequest: {
             body?: string;
@@ -1873,8 +1898,17 @@ export interface components {
             displayOrder: number;
             createdAt: string;
         };
-        /** Series Analysis Achievements Resource v1 */
+        /** Series Analysis Achievements Resource v2 */
         SeriesAnalysisAchievementsResponse: {
+            achievementCurve: {
+                thresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
+            };
             gameTitleId: string;
             items: {
                 achievementId: string;
@@ -1980,7 +2014,7 @@ export interface components {
                 notes: string;
             }[];
             /** @constant */
-            schemaVersion: 1;
+            schemaVersion: 2;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -2020,7 +2054,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2553,6 +2587,15 @@ export interface components {
             playerRadar: {
                 basis: null | {
                     basis: {
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -2696,6 +2739,15 @@ export interface components {
                         /** @constant */
                         windowStride: 1;
                     } | {
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -3285,7 +3337,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3382,7 +3434,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3477,7 +3529,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3559,7 +3611,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3633,7 +3685,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3787,7 +3839,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3804,7 +3856,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3895,7 +3947,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4018,7 +4070,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4061,7 +4113,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4282,7 +4334,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 7;
+                artifactSchemaVersion: 8;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4361,6 +4413,10 @@ export interface components {
             maps: components["schemas"]["SeriesAnalysisMapOptionResponse"][];
             seasonMapPairs: components["schemas"]["SeriesAnalysisSeasonMapPairResponse"][];
         };
+        /** SeriesPlayerRadarAchievementCurveRequest */
+        SeriesPlayerRadarAchievementCurveRequest: {
+            thresholds: number[];
+        };
         /** SeriesPlayerRadarManualAxisRequest */
         SeriesPlayerRadarManualAxisRequest: {
             /** @enum {string} */
@@ -4370,6 +4426,7 @@ export interface components {
         /** SeriesPlayerRadarManualInputRequest */
         SeriesPlayerRadarManualInputRequest: {
             axes?: components["schemas"]["SeriesPlayerRadarManualAxisRequest"][];
+            achievementCurve?: components["schemas"]["SeriesPlayerRadarAchievementCurveRequest"];
         };
         /** SeriesPlayerRadarOperationRequest */
         SeriesPlayerRadarOperationRequest: {
@@ -4607,12 +4664,95 @@ export interface components {
                     quality: "no_target" | "insufficient" | "reference" | "standard";
                 };
             } | null;
+            beforeAchievements: {
+                achievementCurve: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
+                summary: {
+                    mapMasterId: null | string;
+                    players: [
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        }
+                    ];
+                    totalPoints: number;
+                };
+            } | null;
+            afterAchievements: {
+                achievementCurve: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
+                summary: {
+                    mapMasterId: null | string;
+                    players: [
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                            score: null | number;
+                        }
+                    ];
+                    totalPoints: number;
+                };
+            } | null;
         };
         SeriesPlayerRadarRevisionDetailResponse: {
             /** @constant */
             schemaVersion: 1;
             revision: components["schemas"]["SeriesPlayerRadarRevisionResponse"];
             beforeBasis: ({
+                achievementCurve?: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
                 axes: [
                     {
                         /** @enum {string} */
@@ -4755,6 +4895,15 @@ export interface components {
                 /** @constant */
                 windowStride: 1;
             } | {
+                achievementCurve?: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
                 axes: [
                     {
                         /** @enum {string} */
@@ -4926,6 +5075,15 @@ export interface components {
             }) | null;
             /** Series Player Radar Basis v1 */
             afterBasis: {
+                achievementCurve?: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
                 axes: [
                     {
                         /** @enum {string} */
@@ -5068,6 +5226,15 @@ export interface components {
                 /** @constant */
                 windowStride: 1;
             } | {
+                achievementCurve?: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
                 axes: [
                     {
                         /** @enum {string} */
@@ -5237,6 +5404,24 @@ export interface components {
                 /** @constant */
                 windowStride: 1;
             };
+            beforeAchievementCurve: {
+                thresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
+            } | null;
+            afterAchievementCurve: {
+                thresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
+            };
         };
         SeriesPlayerRadarRevisionListResponse: {
             /** @constant */
@@ -5258,6 +5443,15 @@ export interface components {
                 sourceInputRevision: string;
                 /** Series Player Radar Basis v1 */
                 basis: {
+                    achievementCurve?: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    };
                     axes: [
                         {
                             /** @enum {string} */
@@ -5400,6 +5594,15 @@ export interface components {
                     /** @constant */
                     windowStride: 1;
                 } | {
+                    achievementCurve?: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    };
                     axes: [
                         {
                             /** @enum {string} */
@@ -5569,6 +5772,15 @@ export interface components {
                     /** @constant */
                     windowStride: 1;
                 };
+                achievementCurve: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
             } | null;
             previousBasis: {
                 basisId: string;
@@ -5578,6 +5790,15 @@ export interface components {
                 sourceInputRevision: string;
                 /** Series Player Radar Basis v1 */
                 basis: {
+                    achievementCurve?: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    };
                     axes: [
                         {
                             /** @enum {string} */
@@ -5720,6 +5941,15 @@ export interface components {
                     /** @constant */
                     windowStride: 1;
                 } | {
+                    achievementCurve?: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    };
                     axes: [
                         {
                             /** @enum {string} */
@@ -5888,6 +6118,15 @@ export interface components {
                     windowSize: 20;
                     /** @constant */
                     windowStride: 1;
+                };
+                achievementCurve: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
                 };
             } | null;
             candidate: {
@@ -6017,6 +6256,15 @@ export interface components {
                         }
                     ];
                     basis: null | ({
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -6159,6 +6407,15 @@ export interface components {
                         /** @constant */
                         windowStride: 1;
                     } | {
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -6370,7 +6627,25 @@ export interface components {
                         axisId: "averageRank" | "revenueP90" | "revenueAverage" | "totalAssetsP10" | "totalAssetsMedian" | "totalAssetsP90";
                         thresholds: number[];
                     }[];
+                    achievementCurve?: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    };
                 } | null;
+                achievementCurve: {
+                    thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                };
                 sourceBasisId: string | null;
                 sourceCandidateId: string | null;
                 sourceBasis: {
@@ -6381,6 +6656,15 @@ export interface components {
                     sourceInputRevision: string;
                     /** Series Player Radar Basis v1 */
                     basis: {
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -6523,6 +6807,15 @@ export interface components {
                         /** @constant */
                         windowStride: 1;
                     } | {
+                        achievementCurve?: {
+                            thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        };
                         axes: [
                             {
                                 /** @enum {string} */
@@ -6691,6 +6984,15 @@ export interface components {
                         windowSize: 20;
                         /** @constant */
                         windowStride: 1;
+                    };
+                    achievementCurve: {
+                        thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
                     };
                 } | null;
                 savedBy: {
@@ -8385,6 +8687,51 @@ export interface operations {
                 };
             };
             /** @description Invalid value for: query parameter gameTitleId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    putApiAchievementsCatalogOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+                "X-CSRF-Token"?: string;
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderAchievementsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementCatalogResponse"];
+                };
+            };
+            /** @description Invalid value for: body */
             400: {
                 headers: {
                     [name: string]: unknown;

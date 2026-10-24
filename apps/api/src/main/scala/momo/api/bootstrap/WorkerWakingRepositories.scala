@@ -41,7 +41,7 @@ private[bootstrap] object WorkerWakingRepositories:
   ): AchievementsRepository[F] =
     val wake = WakeAfterCommit(sink, onSinkClosed)
     new AchievementsRepository[F]:
-      export delegate.catalog
+      export delegate.{catalog, reorder}
       def create(
           command: CreateAchievement,
           context: AchievementMutationContext

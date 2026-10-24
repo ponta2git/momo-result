@@ -40,14 +40,39 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
   /** Stored Worker output is the fixture here; these tests exercise acceptance, never recalculate it. */
   private def seedReady: IO[Unit] =
     val basis = fixture("basis").noSpaces
-    val source = fixture("source").noSpaces
+    val emptyAchievements = parser.parse(Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/achievements-empty-payload-v2.json"
+    ))).toOption.getOrElse(fail("Invalid achievement fixture"))
+    val memberIds =
+      List("a", "b", "c", "d").zip(List("member-1", "member-2", "member-3", "member-4")).toMap
+    val achievementSummaries =
+      emptyAchievements.hcursor.get[List[Json]]("summaries").toOption.get.map { summary =>
+        val players = summary.hcursor.get[List[Json]]("players").toOption.get.map(player =>
+          player.mapObject(_.add(
+            "memberId",
+            Json.fromString(memberIds(player.hcursor.get[String]("memberId").toOption.get))
+          ))
+        )
+        summary.mapObject(_.add("players", Json.fromValues(players)))
+      }
+    val achievements =
+      emptyAchievements.mapObject(_.add("summaries", Json.fromValues(achievementSummaries)))
+    val source = fixture("source").mapObject(_.add("achievements", achievements)).noSpaces
     val result = fixture("candidate").noSpaces
     val after = fixture("evaluation")
     val checksum =
       after.hcursor.get[String]("basisChecksum").getOrElse(fail("missing basis checksum"))
     val sourceChecksum = fixture("basis").hcursor.downField("source").get[String]("sourceChecksum")
       .getOrElse(fail("missing source checksum"))
-    val payload = Json.obj("before" -> Json.Null, "after" -> after).noSpaces
+    val payload = Json.obj(
+      "before" -> Json.Null,
+      "after" -> after,
+      "beforeAchievements" -> Json.Null,
+      "afterAchievements" -> Json.obj(
+        "achievementCurve" -> achievements.hcursor.downField("achievementCurve").focus.get,
+        "summary" -> achievementSummaries.head
+      )
+    ).noSpaces
     (sql"""
       INSERT INTO series_radar_title_states(game_title_id) VALUES ($title)
       ON CONFLICT (game_title_id) DO NOTHING
@@ -261,8 +286,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"""
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
-        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v8', 7,
-          'series-analysis-artifact-v7-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
+        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v9', 8,
+          'series-analysis-artifact-v8-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -299,7 +324,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           artifact_schema_version, source_input_checksum, root_checksum, status,
           aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
           encoded_bytes, decoded_bytes, scope_keys)
-        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v8', 7,
+        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v9', 8,
           'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           'staging', 2, 0, 0, 1, 2, 2, ARRAY['overall', ${scope.key}]
@@ -308,7 +333,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
+        SET validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
@@ -587,6 +612,70 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assert(rows.contains(("pending", "manual", Some(account.value))))
       assert(document.isRight, document.toString)
       assertEquals(unchanged, (None, None, 0L, None))
+
+  test(
+    "changing only achievement percentages persists the curve while legacy bases retain default presentation"
+  ):
+    val custom = SeriesPlayerRadarAchievementCurve(List(0.0, 20.0, 40.0, 60.0, 100.0))
+    val current = manualCommand.copy(
+      expectedCurrentBasisId = Some(basisId),
+      sourceCandidateId = None
+    )
+    def withCurve(curve: SeriesPlayerRadarAchievementCurve) = current.copy(
+      manualInput = current.manualInput.map(_.copy(achievementCurve = Some(curve)))
+    )
+    for
+      _ <- seedTitle *> seedReady
+      _ <- sql"""UPDATE series_radar_title_states SET current_basis_id=$basisId,
+        desired_basis_id=$basisId, current_applied_at=$now WHERE game_title_id=$title""".update.run.transact(
+        transactor
+      )
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      unchanged <-
+        useCase.run(withCurve(SeriesPlayerRadarAchievementCurve.Default), account, "same-curve")
+      saved <- useCase.run(withCurve(custom), account, "custom-curve")
+      replay <- useCase.run(withCurve(custom), account, "custom-curve")
+      differentPayload <-
+        useCase.run(withCurve(SeriesPlayerRadarAchievementCurve.Default), account, "custom-curve")
+      stored <-
+        sql"SELECT manual_input::text FROM series_radar_candidates WHERE origin_kind='manual'"
+          .query[String].unique.transact(transactor)
+      document <- repository.radarState(title)
+    yield
+      assertEquals(unchanged.left.toOption.map(_.code), Some("CONFLICT"))
+      assertEquals(saved.map(_.status), Right("pending"))
+      assertEquals(replay, saved)
+      assertEquals(differentPayload.left.toOption.map(_.code), Some("IDEMPOTENCY_PAYLOAD_MISMATCH"))
+      assertEquals(
+        parser.parse(
+          stored
+        ).toOption.get.hcursor.downField("achievementCurve").get[List[Double]]("thresholds"),
+        Right(custom.thresholds)
+      )
+      assert(document.isRight, document.toString)
+      val state = parser.parse(new String(
+        document.toOption.get.payload,
+        java.nio.charset.StandardCharsets.UTF_8
+      )).toOption.get
+      assertEquals(
+        state.hcursor.downField(
+          "candidate"
+        ).downField("achievementCurve").get[List[Double]]("thresholds"),
+        Right(custom.thresholds)
+      )
+      assertEquals(
+        state.hcursor.downField(
+          "currentBasis"
+        ).downField("achievementCurve").get[List[Double]]("thresholds"),
+        Right(SeriesPlayerRadarAchievementCurve.Default.thresholds)
+      )
+      assertEquals(
+        state.hcursor.downField(
+          "currentBasis"
+        ).downField("basis").downField("achievementCurve").focus,
+        None
+      )
 
   test(
     "editing discard requires its actor and exact manual creation, and replay cannot withdraw a newer candidate"

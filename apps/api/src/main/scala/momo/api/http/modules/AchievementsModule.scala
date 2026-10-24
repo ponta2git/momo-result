@@ -20,6 +20,13 @@ object AchievementsModule:
           useCase.catalog
         )(AchievementCatalogResponse.from)
       },
+      SecuredEndpoint.operatorMutationLogic(security, AchievementsEndpoints.reorder) { actor =>
+        { case (key, request) =>
+          execution.mutation("PUT /api/achievements/catalog/order", key, actor, request)(
+            AchievementCodec.reorder(request)
+          )(useCase.reorder)(AchievementCatalogResponse.from)
+        }
+      },
       SecuredEndpoint.operatorMutationLogic(security, AchievementsEndpoints.create) { actor =>
         { case (key, request) =>
           execution.mutation("POST /api/achievements/items", key, actor, request)(

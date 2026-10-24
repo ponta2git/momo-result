@@ -8,6 +8,7 @@ import momo.api.errors.AppError
 
 trait AchievementsRepository[F[_]]:
   def catalog(gameTitleId: GameTitleId): F[Either[AppError, AchievementCatalog]]
+  def reorder(command: ReorderAchievements): F[Either[AppError, AchievementCatalog]]
   def create(command: CreateAchievement, context: AchievementMutationContext)
       : F[Either[AppError, AchievementItem]]
   def update(id: UUID, command: UpdateAchievement, context: AchievementMutationContext)

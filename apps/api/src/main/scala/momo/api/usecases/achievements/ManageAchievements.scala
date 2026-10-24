@@ -14,6 +14,8 @@ import momo.api.repositories.AchievementsRepository
 final class ManageAchievements[F[_]: Monad](repository: AchievementsRepository[F], now: F[Instant]):
   def catalog(title: GameTitleId): F[Either[AppError, AchievementCatalog]] =
     repository.catalog(title)
+  def reorder(command: ReorderAchievements): F[Either[AppError, AchievementCatalog]] =
+    repository.reorder(command)
   def create(command: CreateAchievement, actor: AccountId): F[Either[AppError, AchievementItem]] =
     now.flatMap(at => repository.create(command, AchievementMutationContext(actor, at)))
   def update(

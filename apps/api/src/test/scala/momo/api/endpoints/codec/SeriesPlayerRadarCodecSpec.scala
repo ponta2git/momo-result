@@ -4,6 +4,7 @@ import io.circe.parser.decode
 import munit.FunSuite
 
 import momo.api.endpoints.{
+  SeriesPlayerRadarAchievementCurveRequest,
   SeriesPlayerRadarManualAxisRequest,
   SeriesPlayerRadarManualInputRequest,
   SeriesPlayerRadarOperationRequest
@@ -66,6 +67,29 @@ final class SeriesPlayerRadarCodecSpec extends FunSuite:
       """{"gameTitleId":"title","kind":"manual","expectedCurrentBasisId":null,"expectedCandidateId":null}"""
     assert(decode[SeriesPlayerRadarOperationRequest](missing).isLeft)
     assert(decode[SeriesPlayerRadarOperationRequest](explicit).isRight)
+
+  test("achievement percentages preserve the five submitted boundaries and reject invalid curves"):
+    val custom = List(0.0, 20.0, 40.0, 60.0, 100.0)
+    def withCurve(values: List[Double]) = request.copy(manualInput =
+      Some(input.copy(
+        achievementCurve = Some(SeriesPlayerRadarAchievementCurveRequest(values))
+      ))
+    )
+    assertEquals(
+      SeriesPlayerRadarCodec.command(withCurve(custom))
+        .toOption.flatMap(_.manualInput).flatMap(_.achievementCurve).map(_.thresholds),
+      Some(custom)
+    )
+    List(
+      custom.tail,
+      custom :+ 100.0,
+      List(-1.0, 20.0, 40.0, 60.0, 100.0),
+      List(0.0, 20.0, 40.0, 60.0, 101.0),
+      List(0.0, 20.0, 20.0, 60.0, 100.0),
+      custom.reverse,
+      List(0.0, 20.0, Double.NaN, 60.0, 100.0),
+      List(0.0, 20.0, 40.0, 60.0, Double.PositiveInfinity),
+    ).foreach(values => assert(SeriesPlayerRadarCodec.command(withCurve(values)).isLeft))
 
   test("withdraw optionally carries a creation operation while still requiring its candidate"):
     val guarded = request.copy(

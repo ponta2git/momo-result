@@ -595,12 +595,38 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
     ).fold(error => fail(error.toString), identity)
     val basis = fixture("basis").noSpaces
     val source = fixture("source").noSpaces
+    val emptyAchievements = parser.parse(Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/achievements-empty-payload-v2.json"
+    ))).fold(error => fail(error.toString), identity)
+    val memberIds =
+      List("a", "b", "c", "d").zip(List("member-1", "member-2", "member-3", "member-4")).toMap
+    val achievementSummaries =
+      jsonField[List[Json]](emptyAchievements, "summaries").map { summary =>
+        val players = jsonField[List[Json]](summary, "players").map(player =>
+          player.mapObject(_.add(
+            "memberId",
+            Json.fromString(memberIds(jsonField[String](player, "memberId")))
+          ))
+        )
+        summary.mapObject(_.add("players", Json.fromValues(players)))
+      }
+    val achievements =
+      emptyAchievements.mapObject(_.add("summaries", Json.fromValues(achievementSummaries)))
+    val previewSource = fixture("source").mapObject(_.add("achievements", achievements)).noSpaces
     val candidate = fixture("candidate").noSpaces
     val evaluation = fixture("evaluation")
     val checksum = jsonField[String](evaluation, "basisChecksum")
     val sourceChecksum =
       jsonField[String](jsonField[Json](fixture("basis"), "source"), "sourceChecksum")
-    val payload = Json.obj("before" -> Json.Null, "after" -> evaluation).noSpaces
+    val payload = Json.obj(
+      "before" -> Json.Null,
+      "after" -> evaluation,
+      "beforeAchievements" -> Json.Null,
+      "afterAchievements" -> Json.obj(
+        "achievementCurve" -> jsonField[Json](achievements, "achievementCurve"),
+        "summary" -> achievementSummaries.head
+      )
+    ).noSpaces
     val seed =
       (sql"""INSERT INTO game_titles(id, legacy_id, name, layout_family, display_order)
       VALUES ($titleId, $radarTitle, 'Old radar title', 'momotetsu_2', 1)""".update.run *>
@@ -615,7 +641,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_radar_candidates(id, legacy_id, game_title_id, legacy_game_title_id, basis_id, status, result, source_input_revision)
         VALUES ($candidateUuid, $candidateId, $titleId, $radarTitle, $basisUuid, 'ready', $candidate::jsonb, 0)""".update.run *>
         sql"""INSERT INTO series_radar_previews(id, legacy_id, game_title_id, candidate_id, before_basis_id, input_revision, status, evaluation_snapshot, scope_keys)
-        VALUES ($previewUuid, $previewId, $titleId, $candidateUuid, NULL, 0, 'ready', $source::jsonb, ARRAY['overall'])""".update.run *>
+        VALUES ($previewUuid, $previewId, $titleId, $candidateUuid, NULL, 0, 'ready', $previewSource::jsonb, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_radar_preview_scopes(preview_id, scope_key, payload)
         VALUES ($previewUuid, 'overall', $payload::jsonb)""".update.run).transact(transactor).void
     for
@@ -886,7 +912,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         validation_contract_id, source_input_checksum, root_checksum, status,
         aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         outlook_summary_chunk_count, outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES ($artifactId, $title, 0, 'series-analysis-v8', 7, NULL,
+        VALUES ($artifactId, $title, 0, 'series-analysis-v9', 8, NULL,
           ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
           1, 0, 0, 0, 1, 4, ${size + 10}, ${size + 10}, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_analysis_scope_aggregate_artifacts
@@ -898,7 +924,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_analysis_outlook_reference_artifacts
           (artifact_id, scope_key, scope_kind, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
           SELECT $artifactId, 'overall', 'overall', legacy_id, $inventoryPayload, 2, 2, 1, 1, $inventoryHash FROM members""".update.run *>
-        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v7-full-validation-v1'
+        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
           WHERE id = $artifactId AND status = 'staging'""".update.run *>
         sql"""UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
           WHERE id = $artifactId AND status = 'staging'""".update.run *>

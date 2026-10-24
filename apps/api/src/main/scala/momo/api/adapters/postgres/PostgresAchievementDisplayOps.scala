@@ -13,7 +13,7 @@ import momo.api.domain.ids.GameTitleId
 import momo.api.errors.{AppError, AppException}
 
 private[postgres] final case class AchievementDisplayMetadata(
-    items: Map[String, (String, String)],
+    items: Map[String, (String, String, Int)],
     maps: List[(String, String)],
     matches: Set[String],
     events: Set[String],
@@ -43,13 +43,14 @@ private[postgres] object PostgresAchievementDisplayOps:
       )
       items <- sql"""SELECT i.id::text,
         CASE WHEN s.item_id IS NULL THEN i.name ELSE s.snapshot->'definition'->>'name' END,
-        CASE WHEN s.item_id IS NULL THEN i.notes ELSE s.snapshot->'definition'->>'notes' END
+        CASE WHEN s.item_id IS NULL THEN i.notes ELSE s.snapshot->'definition'->>'notes' END,
+        i.sort_order
         FROM achievement_items i LEFT JOIN achievement_retired_snapshots s ON s.item_id = i.id
         WHERE i.id = ANY(${parsed.toArray}) AND i.game_title_id = ${ids.lookup(
           Entity.GameTitles,
           title.value
         )}
-      """.query[(String, String, String)].to[List]
+      """.query[(String, String, String, Int)].to[List]
       _ <- if items.size == itemIds.size then ().pure[ConnectionIO]
       else
         new AppException(AppError.Internal("Achievement display metadata is unavailable."))
@@ -69,7 +70,7 @@ private[postgres] object PostgresAchievementDisplayOps:
           .query[String].to[List]
       mapNames = maps.toMap
     yield AchievementDisplayMetadata(
-      items.map((id, name, notes) => id -> (name -> notes)).toMap,
+      items.map((id, name, notes, order) => id -> (name, notes, order)).toMap,
       mapIds.map(id => id -> mapNames.getOrElse(id, "削除済みマップ")),
       matches.toSet,
       events.toSet,
@@ -83,7 +84,7 @@ private[postgres] object PostgresAchievementDisplayOps:
         val nested =
           JsonObject.fromIterable(fields.toIterable.map((key, child) => key -> children(child)))
         val named = fields("achievementId").flatMap(_.asString).flatMap(metadata.items.get) match
-          case Some((name, notes)) =>
+          case Some((name, notes, _)) =>
             nested.add("name", Json.fromString(name)).add("notes", Json.fromString(notes))
           case None => nested
         val linked =
@@ -105,9 +106,16 @@ private[postgres] object PostgresAchievementDisplayOps:
           else named
         Json.fromJsonObject(linked),
     )
-    children(value).mapObject(_.add(
-      "maps",
-      Json.fromValues(metadata.maps.map((id, name) =>
-        Json.obj("mapMasterId" -> Json.fromString(id), "displayName" -> Json.fromString(name))
-      ))
-    ))
+    children(value).mapObject { fields =>
+      val ordered = fields("items").flatMap(_.asArray).map(_.sortBy { item =>
+        val id = item.hcursor.get[String]("achievementId").getOrElse("")
+        (metadata.items.get(id).map(_._3).getOrElse(Int.MaxValue), id)
+      })
+      val sorted = ordered.fold(fields)(items => fields.add("items", Json.fromValues(items)))
+      sorted.add(
+        "maps",
+        Json.fromValues(metadata.maps.map((id, name) =>
+          Json.obj("mapMasterId" -> Json.fromString(id), "displayName" -> Json.fromString(name))
+        ))
+      )
+    }

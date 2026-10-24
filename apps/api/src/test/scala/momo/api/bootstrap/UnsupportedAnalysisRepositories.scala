@@ -17,6 +17,7 @@ import momo.api.repositories.{
 private[bootstrap] object UnsupportedAnalysisRepositories:
   def achievements[F[_]: Sync]: AchievementsRepository[F] = new AchievementsRepository[F]:
     def catalog(title: GameTitleId): F[Either[AppError, AchievementCatalog]] = unsupported
+    def reorder(command: ReorderAchievements): F[Either[AppError, AchievementCatalog]] = unsupported
     def create(
         command: CreateAchievement,
         context: AchievementMutationContext

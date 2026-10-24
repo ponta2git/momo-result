@@ -25,6 +25,7 @@ final case class AchievementItem(
     rule: AchievementRule,
     threshold: Option[BigDecimal],
     stars: Int,
+    sortOrder: Int,
     appliesFrom: Option[LocalDate],
     retiredAt: Option[Instant],
     version: Long,
@@ -47,6 +48,7 @@ final case class AchievementClaim(
 
 final case class AchievementCatalog(
     gameTitleId: GameTitleId,
+    orderRevision: String,
     items: List[AchievementItem],
     claims: List[AchievementClaim],
     members: List[(MemberId, String)],
@@ -65,6 +67,12 @@ final case class CreateAchievement(
 )
 
 final case class UpdateAchievement(name: String, notes: String, stars: Int, expectedVersion: Long)
+
+final case class ReorderAchievements(
+    gameTitleId: GameTitleId,
+    expectedOrderRevision: String,
+    achievementIds: List[UUID],
+)
 
 /** New declarations only. An absent root is represented by no expected version. */
 final case class AddMatchAchievement(

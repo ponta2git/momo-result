@@ -17,6 +17,7 @@ export type AchievementResource = components["schemas"]["SeriesAnalysisAchieveme
 export type CreateAchievementRequest = components["schemas"]["CreateAchievementRequest"];
 export type UpdateAchievementRequest = components["schemas"]["UpdateAchievementRequest"];
 export type RetireAchievementRequest = components["schemas"]["RetireAchievementRequest"];
+export type ReorderAchievementsRequest = components["schemas"]["ReorderAchievementsRequest"];
 export type CorrectAchievementClaimRequest =
   components["schemas"]["CorrectAchievementClaimRequest"];
 export type AddMatchAchievementRequest = components["schemas"]["AddMatchAchievementRequest"];
@@ -31,6 +32,10 @@ export async function getAchievementCatalog(
     `/api/achievements/catalog?gameTitleId=${encodeURIComponent(gameTitleId)}`,
     options,
   );
+  return normalizeCatalog(response);
+}
+
+function normalizeCatalog(response: CatalogResponse): AchievementCatalog {
   return {
     ...response,
     items: (response.items ?? []).map(normalizeItem),
@@ -38,6 +43,17 @@ export async function getAchievementCatalog(
     members: response.members ?? [],
     maps: response.maps ?? [],
   };
+}
+
+export function reorderAchievements(
+  request: ReorderAchievementsRequest,
+  options: IdempotencyRequestOptions,
+): Promise<AchievementCatalog> {
+  return apiRequest<CatalogResponse>("/api/achievements/catalog/order", {
+    method: "PUT",
+    body: request,
+    idempotency: { key: options.idempotencyKey },
+  }).then(normalizeCatalog);
 }
 
 function normalizeItem(item: ItemResponse): AchievementItem {

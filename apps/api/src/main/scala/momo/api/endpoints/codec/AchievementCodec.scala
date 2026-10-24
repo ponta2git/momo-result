@@ -70,6 +70,23 @@ object AchievementCodec:
       expected <- version(request.expectedVersion)
     yield UpdateAchievement(request.name.trim, request.notes, request.stars, expected)
 
+  def reorder(request: ReorderAchievementsRequest): Either[AppError, ReorderAchievements] =
+    for
+      title <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
+      _ <- Either.cond(
+        request.expectedOrderRevision.matches("[0-9a-f]{64}") &&
+          request.achievementIds.size <= 4096,
+        (),
+        invalid("A valid catalog order revision and at most 4096 item IDs are required.")
+      )
+      selected <- request.achievementIds.traverse(id)
+      _ <- Either.cond(
+        selected.distinct.size == selected.size,
+        (),
+        invalid("The achievement order must not contain duplicate IDs.")
+      )
+    yield ReorderAchievements(title, request.expectedOrderRevision, selected)
+
   def additions(values: List[AddMatchAchievementRequest])
       : Either[AppError, List[AddMatchAchievement]] =
     for

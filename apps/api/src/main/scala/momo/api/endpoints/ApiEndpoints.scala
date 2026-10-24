@@ -44,6 +44,7 @@ object ApiEndpoints:
     MatchesEndpoints.replaceNote,
     MatchesEndpoints.delete,
     AchievementsEndpoints.catalog,
+    AchievementsEndpoints.reorder,
     AchievementsEndpoints.create,
     AchievementsEndpoints.update,
     AchievementsEndpoints.retire,

@@ -19,6 +19,8 @@ object AchievementApiSchemas:
     .modify(_.matchId)(requiredNullable)
     .modify(_.achievedAt)(requiredNullable)
   given Schema[AchievementCatalogResponse] = Schema.derived
+  given Schema[ReorderAchievementsRequest] = Schema.derived[ReorderAchievementsRequest]
+    .modify(_.achievementIds)(_.copy(isOptional = false))
   given Schema[CreateAchievementRequest] = Schema.derived[CreateAchievementRequest]
     .modify(_.threshold)(nullable)
   given Schema[AddMatchAchievementRequest] = Schema.derived[AddMatchAchievementRequest]

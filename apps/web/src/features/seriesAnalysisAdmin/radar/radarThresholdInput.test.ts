@@ -12,7 +12,11 @@ import {
   playerRadarBasisDisplay,
   playerRadarEvaluationDisplay,
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  playerRadarAxes,
+  defaultAchievementCurve,
+  achievementRadarScore,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarBasis, makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 
 import manualFixture from "../../../../../../docs/schemas/fixtures/series-analysis/radar-manual-scoring-v1.json";
@@ -30,10 +34,66 @@ function validInput(): RadarManualInput {
 }
 
 describe("radar threshold editing", () => {
+  it("scores achievement percentages through the five points independently of the six-axis eligibility", () => {
+    for (const [earnedPoints, score] of [
+      [0, 1],
+      [5, 2],
+      [10, 3],
+      [25, 5],
+      [50, 7],
+      [65, 8.5],
+      [80, 10],
+      [100, 10],
+    ]) {
+      expect(
+        achievementRadarScore(
+          { earnedPoints: earnedPoints!, totalPoints: 100 },
+          defaultAchievementCurve,
+        ),
+      ).toBe(score);
+    }
+    expect(
+      achievementRadarScore({ earnedPoints: 0, totalPoints: 0 }, defaultAchievementCurve),
+    ).toBeNull();
+    const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
+    const before = playerRadarEvaluationDisplay(makePlayerRadarEvaluation(), basis, []);
+    before.players[0]!.achievement = { earnedPoints: 50, totalPoints: 100, score: 7 };
+    before.players[0]!.axes[0]!.score = null;
+    before.players[0]!.axes[0]!.scoreUnavailableReasons = ["insufficient_matches"];
+    const input = {
+      ...radarBasisInput(basis),
+      achievementCurve: { thresholds: [0, 20, 40, 60, 90] },
+    };
+    const after = previewRadarThresholds(before, basis, input);
+    expect(after.players[0]!.achievement).toEqual({ earnedPoints: 50, totalPoints: 100, score: 6 });
+    expect(after.players[0]!.axes).toEqual(before.players[0]!.axes);
+    expect(before.players[0]!.achievement.score).toBe(7);
+    expect(sameRadarThresholds(input, radarBasisInput(basis))).toBe(false);
+  });
+
+  it.each([
+    ["0", "10", "10", "50", "80"],
+    ["0", "30", "25", "50", "80"],
+    ["-1", "10", "25", "50", "80"],
+    ["0", "10", "25", "50", "101"],
+    ["0", "", "25", "50", "80"],
+    ["0", "Infinity", "25", "50", "80"],
+  ])("rejects invalid achievement points %j without accepting an old curve", (...achievement) => {
+    const parsed = parseRadarThresholdDrafts({
+      ...radarThresholdDrafts(validInput()),
+      achievement,
+    });
+    expect(parsed.input).toBeNull();
+    expect(parsed.errors.some((error) => error.axisId === "achievement")).toBe(true);
+  });
+
   it("matches the Rust shared scoring fixture at equality and adjacent floating-point boundaries", () => {
     const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
     const input = manualFixture.input as RadarManualInput;
-    expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual(input);
+    expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual({
+      ...input,
+      achievementCurve: input.achievementCurve ?? defaultAchievementCurve,
+    });
     for (const entry of manualFixture.cases) {
       const raw = makePlayerRadarEvaluation();
       const cell = raw.players[0]?.axes.find((axis) => axis.axisId === entry.axisId);
@@ -74,7 +134,10 @@ describe("radar threshold editing", () => {
   });
   it("round-trips original precision and accepts small fractions, zero, signs, and exponent notation", () => {
     const input = radarBasisInput(playerRadarBasisDisplay(makePlayerRadarBasis(), []));
-    expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual(input);
+    expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual({
+      ...input,
+      achievementCurve: input.achievementCurve ?? defaultAchievementCurve,
+    });
     const drafts = radarThresholdDrafts(validInput());
     const parsed = parseRadarThresholdDrafts({
       ...drafts,

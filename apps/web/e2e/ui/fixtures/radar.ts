@@ -41,6 +41,8 @@ export async function installRadarResponses(page: Page) {
       sourceBasisId: "radar-history-before",
       sourceCandidateId: null,
     },
+    beforeAchievementCurve: { thresholds: [0, 10, 25, 50, 80] },
+    afterAchievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     beforeBasis: makePlayerRadarBasis().basis,
     afterBasis: makePlayerRadarBasis().basis,
   };
@@ -50,6 +52,7 @@ export async function installRadarResponses(page: Page) {
   const withdrawal = createDeferred();
   const withdrawalStarted = createDeferred();
   const expectedInput = {
+    achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     axes: makePlayerRadarBasis().basis.axes.map(({ axisId, thresholds }) => ({
       axisId,
       thresholds: [...thresholds],
@@ -75,7 +78,15 @@ export async function installRadarResponses(page: Page) {
           !state.currentBasis
         )
           throw new Error("The manual browser fixture requires a current basis and six axes");
+        const curveThresholds = command.manualInput.achievementCurve?.thresholds ?? [
+          0, 10, 25, 50, 80,
+        ];
+        if (curveThresholds.length !== 5)
+          throw new Error("The achievement curve requires five points");
         const manualInput = {
+          achievementCurve: {
+            thresholds: [...curveThresholds] as [number, number, number, number, number],
+          },
           axes: command.manualInput.axes.map((axis) => {
             if (!axis.thresholds || axis.thresholds.length !== 9)
               throw new Error("The manual browser fixture requires all nine thresholds");

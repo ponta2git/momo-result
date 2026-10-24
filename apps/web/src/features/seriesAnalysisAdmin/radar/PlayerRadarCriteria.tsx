@@ -3,6 +3,8 @@ import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLab
 import {
   formatPlayerRadarBoundary,
   playerRadarAxes,
+  achievementScorePoints,
+  defaultAchievementCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
@@ -82,6 +84,44 @@ export function PlayerRadarCriteria({
           rows={Array.from({ length: 9 }, (_, index) => index + 2)}
           stickyRowHeader
           verticalAlign="top"
+        />
+        <p className={contentText.supporting}>
+          実績達成は作品通算の達成率で採点します。次の5点の間を直線で結び、端の外は1点・10点です。
+        </p>
+        <DataTable
+          caption={{ content: "実績達成の採点曲線" }}
+          rows={achievementScorePoints.map((score, index) => ({
+            score,
+            before: (currentBasis?.achievementCurve ?? defaultAchievementCurve).thresholds[index],
+            after: (proposedBasis?.achievementCurve ?? defaultAchievementCurve).thresholds[index],
+          }))}
+          getRowKey={(row) => String(row.score)}
+          columns={[
+            {
+              key: "score",
+              header: "点数",
+              rowHeader: true,
+              tabular: true,
+              renderCell: (row) => `${row.score}点`,
+            },
+            {
+              key: "before",
+              header: currentBasis ? "適用中の達成率" : "初期値の達成率",
+              tabular: true,
+              renderCell: (row) => `${row.before}%`,
+            },
+            ...(proposedBasis
+              ? [
+                  {
+                    key: "after",
+                    header: "変更案の達成率",
+                    tabular: true,
+                    renderCell: (row: { after: number | undefined }) => `${row.after}%`,
+                  },
+                ]
+              : []),
+          ]}
+          density="compact"
         />
       </div>
       <Disclosure summary="作成元の記録" triggerVariant="supporting">

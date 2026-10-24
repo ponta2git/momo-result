@@ -183,6 +183,7 @@ export function buildRadarBasisView({
             createdAt: candidate.createdAt,
             appliedAt: null,
             basis: candidate.result.basis,
+            achievementCurve: candidate.achievementCurve,
           },
           maps,
         )
@@ -214,10 +215,22 @@ export function buildRadarBasisView({
                       : "ready"
                   : "loading",
           before: preview?.before
-            ? playerRadarEvaluationDisplay(preview.before, beforeBasis, maps)
+            ? playerRadarEvaluationDisplay(
+                preview.before,
+                beforeBasis,
+                maps,
+                [],
+                preview.beforeAchievements,
+              )
             : null,
           after: preview?.after
-            ? playerRadarEvaluationDisplay(preview.after, candidateBasis, maps)
+            ? playerRadarEvaluationDisplay(
+                preview.after,
+                candidateBasis,
+                maps,
+                [],
+                preview.afterAchievements,
+              )
             : null,
           beforeBasis,
           candidateBasis,
@@ -264,7 +277,9 @@ export function buildRadarBasisView({
       ? {
           label: candidate.manualInput ? "保存済みの手調整案" : "自動提案の変更案",
           basis: editableBasis,
-          input: candidate.manualInput ?? radarBasisInput(editableBasis),
+          input: candidate.manualInput
+            ? { ...candidate.manualInput, achievementCurve: candidate.achievementCurve }
+            : radarBasisInput(editableBasis),
           sourceBasisId: manualSourceBasisId ?? editableBasis.basisId,
           sourceCandidateId: candidate.manualInput
             ? candidate.sourceCandidateId

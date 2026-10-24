@@ -13,6 +13,7 @@ import evaluationFixture from "../../../../../docs/schemas/fixtures/series-analy
 
 export function makePlayerRadarBasis(): SeriesPlayerRadarBasisRecord {
   return {
+    achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     basisId: "radar-basis-current",
     checksum: "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
     createdAt: "2026-09-01T00:00:00Z",
@@ -51,6 +52,7 @@ export function makeReadyPlayerRadarState(): SeriesPlayerRadarState {
   state.currentBasis = makePlayerRadarBasis();
   state.eligibility = { matchCount: 40, heldEventCount: 8 };
   state.candidate = {
+    achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     originKind: "generated",
     manualInput: null,
     sourceBasisId: null,
@@ -98,6 +100,8 @@ export function makePlayerRadarPreview(): SeriesPlayerRadarPreview {
       displayName: "全期間・全マップ",
       state: "available",
     },
+    beforeAchievements: makePlayerRadarAchievements(),
+    afterAchievements: makePlayerRadarAchievements(),
     before: makePlayerRadarEvaluation(),
     after: makePlayerRadarEvaluation(),
   };
@@ -119,5 +123,22 @@ export function makePlayerRadarOperation(
     safeFailureCode: null,
     requestedAt: "2026-09-02T00:01:00Z",
     finishedAt: null,
+  };
+}
+
+export function makePlayerRadarAchievements(): NonNullable<
+  SeriesPlayerRadarPreview["afterAchievements"]
+> {
+  return {
+    achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
+    summary: {
+      mapMasterId: null,
+      totalPoints: 100,
+      players: canonicalResultMembers.map(({ memberId }, index) => ({
+        memberId,
+        earnedPoints: [50, 25, 10, 0][index] ?? 0,
+        score: [7, 5, 3, 1][index] ?? 1,
+      })) as NonNullable<SeriesPlayerRadarPreview["afterAchievements"]>["summary"]["players"],
+    },
   };
 }

@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { PlayerRadarHistoryDetail } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarHistoryDetail";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import type {
@@ -88,6 +89,27 @@ function renderPage() {
 }
 
 describe("radar revision history", () => {
+  it("compares the first achievement revision against the default curve", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlayerRadarHistoryDetail
+        detail={{
+          schemaVersion: 1,
+          revision: { ...revision(), beforeBasisId: null },
+          beforeBasis: null,
+          afterBasis: makePlayerRadarBasis().basis,
+          beforeAchievementCurve: null,
+          afterAchievementCurve: { thresholds: [0, 15, 30, 60, 90] },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: "実績達成" }));
+    const table = screen.getByRole("table", { name: "実績達成の改訂前後の採点境界" });
+    const seven = within(table).getByRole("row", { name: "7点 50 60 変更あり" });
+    expect(seven).toBeVisible();
+    expect(within(table).queryByText("未適用")).not.toBeInTheDocument();
+  });
+
   it("keeps unfinished input when navigation is canceled and leaves the editor after confirmed discard", async () => {
     const user = userEvent.setup();
     server.use(
@@ -152,6 +174,8 @@ describe("radar revision history", () => {
       revision: revision(),
       beforeBasis,
       afterBasis,
+      beforeAchievementCurve: { thresholds: [0, 10, 25, 50, 80] },
+      afterAchievementCurve: { thresholds: [0, 15, 30, 60, 90] },
     };
     server.use(
       http.get("/api/admin/series-analysis/radar/revisions", ({ request }) => {
@@ -192,6 +216,13 @@ describe("radar revision history", () => {
     expect(within(detailRegion).getByText("案の保存者: 保存時の名前")).toBeVisible();
     expect(within(detailRegion).getByText("4.123456789123")).toBeVisible();
     expect(within(detailRegion).getByText("変更あり")).toBeVisible();
+    await user.click(within(detailRegion).getByRole("tab", { name: "実績達成" }));
+    const achievementTable = within(detailRegion).getByRole("table", {
+      name: "実績達成の改訂前後の採点境界",
+    });
+    expect(within(achievementTable).getAllByRole("row")).toHaveLength(6);
+    expect(within(achievementTable).getByText("50")).toBeVisible();
+    expect(within(achievementTable).getByText("60")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "改訂一覧を表示" }));
     await user.click(await screen.findByRole("button", { name: "次の20件" }));
     await waitFor(() => expect(requests.at(-1)?.get("cursor")).toBe("revision-1"));

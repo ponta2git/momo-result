@@ -5,6 +5,7 @@ import {
   playerRadarAxes,
   playerAchievementAxis,
   playerRadarScoreLabel,
+  playerRadarSettingCell,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
   PlayerAchievementScore,
@@ -34,13 +35,14 @@ export function PlayerRadarChart({
   player,
   referenceScoresGrouped,
   comparison,
-  achievement,
+  achievement: achievementOverride,
 }: {
   player: PlayerRadarPlayer;
   referenceScoresGrouped: boolean;
   comparison?: { before: PlayerRadarPlayer | null } | undefined;
   achievement?: PlayerAchievementScore | undefined;
 }) {
+  const achievement = achievementOverride ?? player.achievement;
   const figureId = useId();
   const figureRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(320);
@@ -87,7 +89,7 @@ export function PlayerRadarChart({
     };
   });
   const beforeVertices = axes.map((axis, index) => {
-    const cell = comparison?.before?.axes.find((value) => value.axisId === axis.id);
+    const cell = playerRadarSettingCell(comparison?.before, axis.id);
     return {
       axis,
       cell,

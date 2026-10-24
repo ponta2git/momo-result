@@ -20,8 +20,9 @@ import type {
   RadarManualInput,
   RadarThresholdDrafts,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import { defaultAchievementCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
   PlayerRadarBasis,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
@@ -56,7 +57,7 @@ export function beginRadarEdit(source: RadarEditingSource): RadarEditSession {
 }
 export function changeRadarThreshold(
   session: RadarEditSession | null,
-  axis: PlayerRadarAxisId,
+  axis: PlayerRadarSettingAxisId,
   index: number,
   value: string,
 ): RadarEditSession | null {
@@ -231,6 +232,11 @@ export function buildRadarThresholdEditorView(
     session &&
     previewRadarThresholds(formal.after, session.source.basis, parsed.input).players.some(
       (player) =>
+        Math.abs(
+          (player.achievement?.score ?? 0) -
+            (formal.after?.players.find((p) => p.memberId === player.memberId)?.achievement
+              ?.score ?? 0),
+        ) > 1e-12 ||
         player.axes.some(
           (cell) =>
             cell.score !==
@@ -266,12 +272,16 @@ export function buildRadarThresholdEditorView(
       inputValid: Boolean(parsed?.input),
       sourceLabel: session?.source.label ?? "",
       referenceThresholds: session
-        ? (Object.fromEntries(
-            session.source.basis.axes.map((axis) => [
+        ? (Object.fromEntries([
+            ...session.source.basis.axes.map((axis) => [
               axis.axisId,
               axis.thresholds.map((threshold) => threshold.rawValue),
             ]),
-          ) as Partial<Record<PlayerRadarAxisId, readonly number[]>>)
+            [
+              "achievement",
+              (session.source.basis.achievementCurve ?? defaultAchievementCurve).thresholds,
+            ],
+          ]) as Partial<Record<PlayerRadarSettingAxisId, readonly number[]>>)
         : null,
       replacesCandidate: Boolean(session?.source.expectedCandidateId),
       preview: session?.confirmed && formal ? formal : localPreview,

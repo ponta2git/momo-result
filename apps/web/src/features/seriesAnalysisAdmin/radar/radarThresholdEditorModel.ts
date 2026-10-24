@@ -4,6 +4,7 @@ import type {
   RadarThresholdDrafts,
   RadarThresholdError,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import type { AchievementResource } from "@/shared/api/achievements";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import type {
   SeriesAnalysisScopeStatus,
@@ -13,7 +14,7 @@ import { playerRadarAggregateDisplay } from "@/shared/seriesAnalysis/playerRadar
 import type {
   PlayerRadarBasis,
   PlayerRadarDisplay,
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
 export type RadarApplyConfirmationView = Readonly<{
@@ -31,10 +32,12 @@ export type RadarThresholdEditorView = Readonly<{
   errors: ReadonlyArray<Readonly<RadarThresholdError>>;
   inputValid: boolean;
   sourceLabel: string;
-  referenceThresholds: Readonly<Partial<Record<PlayerRadarAxisId, readonly number[]>>> | null;
+  referenceThresholds: Readonly<
+    Partial<Record<PlayerRadarSettingAxisId, readonly number[]>>
+  > | null;
   replacesCandidate: boolean;
   preview: PlayerRadarPreviewView | null;
-  axis: PlayerRadarAxisId;
+  axis: PlayerRadarSettingAxisId;
   ready: boolean;
   composing: boolean;
   showErrors: boolean;
@@ -69,9 +72,9 @@ export type RadarThresholdEditor = RadarThresholdEditorView &
   RadarEditingControls &
   Readonly<{
     confirmation: RadarApplyConfirmationView;
-    setAxis: (axis: PlayerRadarAxisId) => void;
+    setAxis: (axis: PlayerRadarSettingAxisId) => void;
     setComposing: (value: boolean) => void;
-    change: (axis: PlayerRadarAxisId, index: number, text: string) => void;
+    change: (axis: PlayerRadarSettingAxisId, index: number, text: string) => void;
     reset: () => void;
     adoptCurrentSource: () => void;
     discard: () => Promise<void>;
@@ -131,6 +134,7 @@ export function resolveRadarEditingEvaluation({
   prepared,
   query,
   aggregate,
+  achievements,
   scopeState,
   fetching,
   failed,
@@ -141,6 +145,7 @@ export function resolveRadarEditingEvaluation({
   prepared: RadarEditingModel["evaluation"];
   query: SeriesAnalysisScopeStatusQuery | undefined;
   aggregate: SeriesComparisonAggregate | undefined;
+  achievements?: AchievementResource | undefined;
   scopeState: SeriesAnalysisScopeStatus["state"] | undefined;
   fetching: boolean;
   failed: boolean;
@@ -154,8 +159,15 @@ export function resolveRadarEditingEvaluation({
     ("seasonMasterId" in aggregate.scope ? aggregate.scope.seasonMasterId : "") ===
       scope.seasonMasterId &&
     ("mapMasterId" in aggregate.scope ? aggregate.scope.mapMasterId : "") === scope.mapMasterId;
-  const valid = usePublished && matchingScope && matchingBasis && scopeState === "available";
-  const display = valid ? playerRadarAggregateDisplay(aggregate) : null;
+  const matchingAchievements =
+    achievements && achievements.artifact.artifactId === query?.artifactId;
+  const valid =
+    usePublished &&
+    matchingScope &&
+    matchingBasis &&
+    matchingAchievements &&
+    scopeState === "available";
+  const display = valid ? playerRadarAggregateDisplay(aggregate, achievements) : null;
   const evaluation: RadarEditingModel["evaluation"] = active
     ? (prepared ??
       (display && aggregate

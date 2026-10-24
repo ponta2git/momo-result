@@ -5,6 +5,28 @@ import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/radar/Pl
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 describe("PlayerRadarScoringCurve", () => {
+  it("shows the default achievement curve before an initial six-axis basis", () => {
+    const model = makePlayerRadarEditorView();
+    const before = structuredClone(model.editing!.evaluation!.raw);
+    before.basis = null;
+    const after = structuredClone(model.editing!.evaluation!.raw);
+    after.basis!.achievementCurve = { thresholds: [0, 20, 40, 60, 90] };
+    after.players[0]!.achievement!.score = 6;
+    const { container } = render(
+      <PlayerRadarScoringCurve axisId="achievement" before={before} after={after} />,
+    );
+    expect(screen.queryByText("適用中（未適用）")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("img", { name: "実績達成の採点境界と選手の位置" }),
+    ).toHaveAccessibleDescription(/適用中 7点、変更案 6点/u);
+    const current = container.querySelector(
+      'path[stroke="var(--color-text-secondary)"][stroke-dasharray="5 4"]',
+    );
+    expect(current).toHaveAttribute("d", expect.stringContaining("L"));
+    expect(current?.getAttribute("d")).not.toContain("V");
+    expect(container.querySelectorAll('circle[r="5"]')).toHaveLength(4);
+  });
+
   it("keeps coincident players distinguishable and leaves ineligible scores unscored", () => {
     const model = makePlayerRadarEditorView();
     const before = structuredClone(model.editing!.evaluation!.raw);

@@ -49,6 +49,12 @@ export const playerAchievementAxis = {
   description: "対象の実績に対する作品通算の獲得ポイント。",
 } as const;
 
+export const playerRadarSettingAxes = [...playerRadarAxes, playerAchievementAxis] as const;
+export type PlayerRadarSettingAxisId = (typeof playerRadarSettingAxes)[number]["id"];
+export const achievementScorePoints = [1, 3, 5, 7, 10] as const;
+export type PlayerAchievementCurve = { thresholds: readonly number[] };
+export const defaultAchievementCurve: PlayerAchievementCurve = { thresholds: [0, 10, 25, 50, 80] };
+
 /** Already calculated by the publication; the chart never recalculates this score. */
 export type PlayerAchievementScore = {
   earnedPoints: number;
@@ -73,6 +79,7 @@ export type PlayerRadarPlayer = {
   memberId: string;
   displayName: string;
   axes: readonly PlayerRadarCell[];
+  achievement?: PlayerAchievementScore;
 };
 
 export type PlayerRadarSample = {
@@ -89,6 +96,7 @@ export type PlayerRadarBasis = {
   appliedAt: string | null;
   methodVersion: string;
   definitionVersion: string;
+  achievementCurve?: PlayerAchievementCurve;
   source: PlayerRadarSample;
   axes: ReadonlyArray<{
     axisId: PlayerRadarAxisId;
@@ -107,9 +115,61 @@ export function playerRadarScoresAreReference(players: readonly PlayerRadarPlaye
   return scores.length > 0 && scores.every((cell) => cell.sampleQuality === "reference");
 }
 
-export function formatPlayerRadarRawValue(axisId: PlayerRadarAxisId, value: number | null) {
+export function formatPlayerRadarRawValue(axisId: PlayerRadarSettingAxisId, value: number | null) {
   if (value === null) return "—";
+  if (axisId === "achievement") return `${formatDecimal(value)}%`;
   return axisId === "averageRank" ? `${formatDecimal(value)}位` : formatManYen(value);
+}
+
+export function playerRadarSettingThresholds(
+  basis: PlayerRadarBasis | null | undefined,
+  axisId: PlayerRadarSettingAxisId,
+) {
+  return axisId === "achievement"
+    ? (basis?.achievementCurve ?? defaultAchievementCurve).thresholds.map((rawValue, index) => ({
+        score: achievementScorePoints[index] ?? 10,
+        rawValue,
+      }))
+    : (basis?.axes.find((axis) => axis.axisId === axisId)?.thresholds ?? []);
+}
+
+export function playerRadarSettingCell(
+  player: PlayerRadarPlayer | null | undefined,
+  axisId: PlayerRadarSettingAxisId,
+): (Omit<PlayerRadarCell, "axisId"> & { axisId: PlayerRadarSettingAxisId }) | undefined {
+  if (axisId !== "achievement") return player?.axes.find((cell) => cell.axisId === axisId);
+  const score = player?.achievement;
+  if (!score) return undefined;
+  return {
+    axisId,
+    rawValue: score.totalPoints > 0 ? (100 * score.earnedPoints) / score.totalPoints : null,
+    score: score.score,
+    sampleQuality: "standard",
+    scoreUnavailableReasons: score.totalPoints > 0 ? [] : ["no_target"],
+  };
+}
+
+/** The editor interpolates saved points only; earned points remain publication-owned. */
+export function achievementRadarScore(
+  points: Pick<PlayerAchievementScore, "earnedPoints" | "totalPoints">,
+  curve: PlayerAchievementCurve,
+): number | null {
+  if (points.totalPoints === 0) return null;
+  const percentage = (100 * points.earnedPoints) / points.totalPoints;
+  const thresholds = curve.thresholds;
+  if (percentage <= (thresholds[0] ?? 0)) return 1;
+  for (let index = 1; index < thresholds.length; index += 1) {
+    const high = thresholds[index] ?? 100;
+    const low = thresholds[index - 1] ?? 0;
+    if (percentage <= high) {
+      const lowScore = achievementScorePoints[index - 1] ?? 1;
+      return (
+        lowScore +
+        ((percentage - low) / (high - low)) * ((achievementScorePoints[index] ?? 10) - lowScore)
+      );
+    }
+  }
+  return 10;
 }
 
 export function formatPlayerRadarBoundary(axisId: PlayerRadarAxisId, value: number) {

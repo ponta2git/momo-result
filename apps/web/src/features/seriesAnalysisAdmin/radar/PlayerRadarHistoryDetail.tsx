@@ -5,7 +5,11 @@ import type {
   PlayerRadarRevisionDetail,
 } from "@/shared/api/seriesPlayerRadarHistory";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  playerRadarSettingAxes,
+  achievementScorePoints,
+  defaultAchievementCurve,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
@@ -42,25 +46,41 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
         </p>
       </div>
       {beforeBasis ? null : (
-        <p className={contentText.body}>初回適用のため、変更前の採点基準はありません。</p>
+        <p className={contentText.body}>
+          成績6軸の初回適用です。実績達成の変更前には初期値を使います。
+        </p>
       )}
       <TabsRoot defaultValue="averageRank" key={revision.revisionId}>
         <TabsList aria-label="改訂詳細の軸" variant="underline">
-          {playerRadarAxes.map((axis) => (
+          {playerRadarSettingAxes.map((axis) => (
             <TabsTab value={axis.id} key={axis.id}>
               {axis.label}
             </TabsTab>
           ))}
         </TabsList>
-        {playerRadarAxes.map((axis) => {
+        {playerRadarSettingAxes.map((axis) => {
           const before = beforeBasis?.axes.find((entry) => entry.axisId === axis.id);
           const after = afterBasis.axes.find((entry) => entry.axisId === axis.id);
-          const unit = axis.id === "averageRank" ? "位以下" : "万円以上";
-          const rows = Array.from({ length: 9 }, (_, index) => ({
-            score: index + 2,
-            before: before?.thresholds[index],
-            after: after?.thresholds[index],
-          }));
+          const unit =
+            axis.id === "achievement" ? "%" : axis.id === "averageRank" ? "位以下" : "万円以上";
+          const rows: Array<{
+            score: number;
+            before: number | undefined;
+            after: number | undefined;
+          }> =
+            axis.id === "achievement"
+              ? achievementScorePoints.map((score, index) => ({
+                  score,
+                  before: (detail.beforeAchievementCurve ?? defaultAchievementCurve).thresholds[
+                    index
+                  ],
+                  after: detail.afterAchievementCurve.thresholds[index],
+                }))
+              : Array.from({ length: 9 }, (_, index) => ({
+                  score: index + 2,
+                  before: before?.thresholds[index],
+                  after: after?.thresholds[index],
+                }));
           return (
             <TabsPanel value={axis.id} key={axis.id}>
               <div className="mt-4 min-w-0">

@@ -33,9 +33,12 @@ export function PlayerRadarCriteria({
   const beforeThresholds = achievementCurveThresholds(currentCurve);
   const afterThresholds = achievementCurveThresholds(proposedCurve);
   const scores = [
-    ...new Set(
-      [...beforeThresholds, ...(proposedBasis ? afterThresholds : [])].map((entry) => entry.score),
-    ),
+    ...new Set([
+      ...Array.from({ length: 9 }, (_, index) => index + 2),
+      ...[...beforeThresholds, ...(proposedBasis ? afterThresholds : [])].map(
+        (entry) => entry.score,
+      ),
+    ]),
   ].toSorted((a, b) => a - b);
 
   return (
@@ -72,7 +75,11 @@ export function PlayerRadarCriteria({
                   <div className="grid gap-1">
                     <p className="whitespace-nowrap">
                       {proposedBasis ? <span className="sr-only">適用中 </span> : null}
-                      {before ? formatPlayerRadarBoundary(axis.id, before.rawValue) : "未適用"}
+                      {before
+                        ? formatPlayerRadarBoundary(axis.id, before.rawValue)
+                        : currentBasis
+                          ? "—"
+                          : "未適用"}
                     </p>
                     {proposedBasis && before?.rawValue !== after?.rawValue ? (
                       <p className="whitespace-nowrap">
@@ -83,7 +90,7 @@ export function PlayerRadarCriteria({
                             before?.rawValue !== after?.rawValue && contentText.compactPrimary,
                           )}
                         >
-                          {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "未作成"}
+                          {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "—"}
                         </span>
                       </p>
                     ) : null}
@@ -91,10 +98,44 @@ export function PlayerRadarCriteria({
                 );
               },
             })),
+            {
+              key: "achievement",
+              header: <PlayerRadarAxisLabel label="実績達成" />,
+              minWidth: "10rem",
+              tabular: true,
+              renderCell: (score: number) => {
+                const before = beforeThresholds.find((entry) => entry.score === score)?.rawValue;
+                const after = afterThresholds.find((entry) => entry.score === score)?.rawValue;
+                const beforeUnit = achievementCurveUnit(currentCurve);
+                const afterUnit = achievementCurveUnit(proposedCurve);
+                const changed = before !== after || beforeUnit !== afterUnit;
+                return (
+                  <div className="grid gap-1 whitespace-nowrap">
+                    <p>
+                      {proposedBasis ? (
+                        <span className="sr-only">{currentBasis ? "適用中 " : "初期値 "}</span>
+                      ) : null}
+                      {before === undefined ? "—" : `${before}${beforeUnit}`}
+                    </p>
+                    {proposedBasis && changed ? (
+                      <p className={contentText.compactPrimary}>
+                        <span aria-hidden="true">→ </span>
+                        <span className="sr-only">変更案 </span>
+                        {after === undefined ? "—" : `${after}${afterUnit}`}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              },
+            },
           ]}
           density="compact"
           getRowKey={String}
-          rows={Array.from({ length: 9 }, (_, index) => index + 2)}
+          rows={scores}
+          scrollArea={{
+            label: proposedBasis ? "採点境界の変更案" : "適用中の採点境界",
+            showHint: false,
+          }}
           stickyRowHeader
           verticalAlign="top"
         />
@@ -104,42 +145,6 @@ export function PlayerRadarCriteria({
             ? "従来の得点率基準は基準点の間を直線で補間します。"
             : ""}
         </p>
-        <DataTable
-          caption={{ content: "実績達成の採点曲線" }}
-          rows={scores.map((score) => ({
-            score,
-            before: beforeThresholds.find((entry) => entry.score === score)?.rawValue,
-            after: afterThresholds.find((entry) => entry.score === score)?.rawValue,
-          }))}
-          getRowKey={(row) => String(row.score)}
-          columns={[
-            {
-              key: "score",
-              header: "点数",
-              rowHeader: true,
-              tabular: true,
-              renderCell: (row) => `${row.score}点`,
-            },
-            {
-              key: "before",
-              header: `${currentBasis ? "適用中" : "初期値"}（${achievementCurveUnit(currentCurve)}）`,
-              tabular: true,
-              renderCell: (row) => (row.before === undefined ? "—" : String(row.before)),
-            },
-            ...(proposedBasis
-              ? [
-                  {
-                    key: "after",
-                    header: `変更案（${achievementCurveUnit(proposedCurve)}）`,
-                    tabular: true,
-                    renderCell: (row: { after: number | undefined }) =>
-                      row.after === undefined ? "—" : String(row.after),
-                  },
-                ]
-              : []),
-          ]}
-          density="compact"
-        />
       </div>
       <Disclosure summary="作成元の記録" triggerVariant="supporting">
         <DataTable

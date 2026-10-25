@@ -7,10 +7,17 @@ import { contentText } from "@/shared/ui/typography";
 type TableScrollAreaProps = {
   children: ReactNode;
   maxHeight?: string | undefined;
+  showHint?: boolean | undefined;
 } & ({ label: string; labelledBy?: never } | { label?: never; labelledBy: string });
 
 /** One scroll boundary for ordinary and specialized native tables, focusable only on overflow. */
-export function TableScrollArea({ children, label, labelledBy, maxHeight }: TableScrollAreaProps) {
+export function TableScrollArea({
+  children,
+  label,
+  labelledBy,
+  maxHeight,
+  showHint = true,
+}: TableScrollAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hintId = useId();
   const [overflow, setOverflow] = useState({ horizontal: false, vertical: false });
@@ -34,9 +41,10 @@ export function TableScrollArea({ children, label, labelledBy, maxHeight }: Tabl
   }, []);
   const scrollable = overflow.horizontal || overflow.vertical;
   const namedScroll = label !== undefined || scrollable;
+  const hintVisible = scrollable && showHint;
   return (
     <div className="min-w-0">
-      {scrollable ? (
+      {hintVisible ? (
         <p className={cn(contentText.supporting, "mb-2")} id={hintId}>
           {overflow.horizontal && overflow.vertical
             ? "表は上下左右にスクロールできます。"
@@ -54,7 +62,7 @@ export function TableScrollArea({ children, label, labelledBy, maxHeight }: Tabl
         role={namedScroll ? "region" : undefined}
         aria-label={label}
         aria-labelledby={namedScroll ? labelledBy : undefined}
-        aria-describedby={scrollable ? hintId : undefined}
+        aria-describedby={hintVisible ? hintId : undefined}
         tabIndex={scrollable ? 0 : undefined}
         style={maxHeight ? { maxHeight } : undefined}
       >

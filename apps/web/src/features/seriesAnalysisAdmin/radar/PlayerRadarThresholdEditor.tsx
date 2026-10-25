@@ -9,7 +9,6 @@ import {
   playerRadarSettingAxes,
   playerRadarSettingThresholds,
   defaultAchievementCurve,
-  defaultAchievementPointCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -64,19 +63,12 @@ export function PlayerRadarThresholdEditor({
   const legacyCurrent =
     editor.axis === "achievement" &&
     Boolean(administration.currentBasis) &&
-    !(
-      "pointThresholds" in
-      (administration.currentBasis?.achievementCurve ?? defaultAchievementCurve)
-    );
-  const currentValues =
-    !administration.currentBasis && editor.axis === "achievement"
-      ? defaultAchievementPointCurve.pointThresholds.map((rawValue, index) => ({
-          rawValue,
-          score: index + 2,
-        }))
-      : administration.currentBasis
-        ? playerRadarSettingThresholds(administration.currentBasis, editor.axis)
-        : undefined;
+    "thresholds" in (administration.currentBasis?.achievementCurve ?? defaultAchievementCurve);
+  const currentValues = administration.currentBasis
+    ? playerRadarSettingThresholds(administration.currentBasis, editor.axis)
+    : undefined;
+  const achievementEditingReason =
+    editor.axis === "achievement" ? editor.achievementEditingReason : null;
   const originalValues = editor.referenceThresholds?.[editor.axis];
   const errors = editor.composing
     ? []
@@ -202,30 +194,38 @@ export function PlayerRadarThresholdEditor({
                   <div className="grid gap-1">
                     <p className={cn(contentText.body, readableTextWidthClass)}>
                       {selectedAxis.description}
-                      {editor.axis === "achievement"
+                      {editor.axis === "achievement" && !achievementEditingReason
                         ? " 2〜10点になる実績ポイントを9か所で指定します。境界と同じ値は高い方の点数になります。シーズンを選んでも作品通算で比較します。"
                         : ""}
                     </p>
-                    {legacyCurrent ? (
+                    {achievementEditingReason ? (
                       <p className={contentText.supporting}>
-                        適用中は従来の得点率による採点です。新しいポイント境界は初期案を表示しています。比較で点数の変化を確認してから適用してください。
+                        {achievementEditingReason}
+                        6軸だけを調整する場合、実績の基準は引き継ぎます。実績の境界も作るには編集を終了し、「最新の記録から作り直す」を選んでください。
                       </p>
                     ) : null}
-                    <p className={contentText.supporting}>
-                      Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
-                    </p>
-                    <div>
-                      <Button
-                        size="sm"
-                        variant="quiet"
-                        aria-pressed={showReference}
-                        onClick={() => setShowReference((current) => !current)}
-                      >
-                        {showReference ? "編集元の値を隠す" : "編集元の値を参照"}
-                      </Button>
-                    </div>
+                    {!achievementEditingReason ? (
+                      <>
+                        <p className={contentText.supporting}>
+                          Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
+                        </p>
+                        <div>
+                          <Button
+                            size="sm"
+                            variant="quiet"
+                            aria-pressed={showReference}
+                            onClick={() => setShowReference((current) => !current)}
+                          >
+                            {showReference ? "編集元の値を隠す" : "編集元の値を参照"}
+                          </Button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
-                  <fieldset disabled={disabled} className="grid min-w-0 gap-4">
+                  <fieldset
+                    disabled={disabled || Boolean(achievementEditingReason)}
+                    className="grid min-w-0 gap-4"
+                  >
                     <legend className="sr-only">{selectedAxis.label}の9境界</legend>
                     {editor.drafts?.[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
@@ -257,7 +257,7 @@ export function PlayerRadarThresholdEditor({
                                 <span className="block">
                                   編集元:{" "}
                                   {originalValues?.[index] === undefined
-                                    ? "従来の得点率基準"
+                                    ? "未生成"
                                     : `${originalValues[index]}${unit}`}
                                 </span>
                               ) : null}

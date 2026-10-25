@@ -125,7 +125,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                       renderCell: (row) =>
                         axis.id === "achievement" &&
                         beforeCurve &&
-                        "pointThresholds" in beforeCurve !== "pointThresholds" in afterCurve
+                        achievementCurveUnit(beforeCurve) !== achievementCurveUnit(afterCurve)
                           ? "採点方式の変更"
                           : row.before === undefined
                             ? "新規"

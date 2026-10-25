@@ -5,6 +5,7 @@ use crate::{
 
 use super::{calculation::thresholds, *};
 
+mod achievement_generation;
 mod manual;
 
 fn input(match_count: i32) -> AnalysisInput {
@@ -60,6 +61,7 @@ fn hand_basis() -> RadarBasis {
         }
     });
     RadarBasis {
+        achievement_generation_source: None,
         definition_version: RADAR_DEFINITION_VERSION.to_owned(),
         method_version: RADAR_METHOD_VERSION.to_owned(),
         window_size: 20,

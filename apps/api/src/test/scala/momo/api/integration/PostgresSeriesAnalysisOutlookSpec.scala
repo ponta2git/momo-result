@@ -142,7 +142,7 @@ final class PostgresSeriesAnalysisOutlookSpec extends IntegrationSuite with Json
         source_input_checksum, root_checksum, status, aggregate_chunk_count, review_chunk_count,
         drilldown_chunk_count, match_context_chunk_count, outlook_summary_chunk_count,
         outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys
-      ) VALUES ($artifactId, $title, 0, 'series-analysis-v12', $version,
+      ) VALUES ($artifactId, $title, 0, 'series-analysis-v13', $version,
         'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         'staging', $aggregateCount, 0, 0, 0, 1, ${referencePayloads.size}, $allBytes, $allBytes, $keys)

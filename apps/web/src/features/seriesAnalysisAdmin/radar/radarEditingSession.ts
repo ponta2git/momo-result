@@ -81,7 +81,17 @@ export function adoptRadarEditingSource(
   session: RadarEditSession | null,
   source: RadarEditingSource,
 ): RadarEditSession | null {
-  return session ? { ...session, source, saved: null, confirmed: false } : null;
+  return session
+    ? {
+        ...session,
+        source,
+        drafts: session.drafts.achievement.length
+          ? session.drafts
+          : { ...session.drafts, achievement: radarThresholdDrafts(source.input).achievement },
+        saved: null,
+        confirmed: false,
+      }
+    : null;
 }
 function sameRadarSaveSource(a: RadarManualSave, b: RadarManualSave | RadarEditingSource) {
   return (
@@ -259,8 +269,24 @@ export function buildRadarThresholdEditorView(
     !matchesSaved &&
     parsed?.input &&
     administration.currentBasis &&
-    sameRadarThresholds(parsed.input, radarBasisInput(administration.currentBasis)),
+    sameRadarThresholds(parsed.input, radarBasisInput(administration.currentBasis)) &&
+    JSON.stringify(
+      parsed.input.achievementCurve ??
+        session?.source.basis.achievementCurve ??
+        defaultAchievementCurve,
+    ) === JSON.stringify(administration.currentBasis.achievementCurve ?? defaultAchievementCurve),
   );
+  const inheritedCurve = session?.source.basis.achievementCurve ?? defaultAchievementCurve;
+  const achievementEditingReason =
+    !session || session.drafts.achievement.length > 0
+      ? null
+      : "unavailableReason" in inheritedCurve
+        ? inheritedCurve.unavailableReason === "no_target"
+          ? "基準の作成時に対象の実績項目がなかったため、ポイント境界はありません。"
+          : inheritedCurve.unavailableReason === "degenerate_distribution"
+            ? "4人の実績ポイントの分布に広がりがないため、ポイント境界を作れません。"
+            : "実績ポイントの採点基準はまだ作成されていません。"
+        : "編集元は従来の得点率基準です。";
   return {
     parsed,
     formalPreviewId: formal?.previewId,
@@ -271,6 +297,7 @@ export function buildRadarThresholdEditorView(
       errors: parsed?.errors ?? [],
       inputValid: Boolean(parsed?.input),
       sourceLabel: session?.source.label ?? "",
+      achievementEditingReason,
       referenceThresholds: session
         ? (Object.fromEntries([
             ...session.source.basis.axes.map((axis) => [

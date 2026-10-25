@@ -36,24 +36,7 @@ pub(in crate::series_analysis) fn validate(
         return Err(RadarError::InvalidSource);
     }
     let basis = if let Some(candidate) = &prepared.candidate {
-        let value = serde_json::to_value(candidate.summary())
-            .map_err(|_encoding| RadarError::InvalidSource)?;
-        payload::radar_candidate_from_payload(&value)
-            .map_err(|_invalid| RadarError::InvalidSource)?;
-        if candidate.source.game_title_id != prepared.evaluation_snapshot.game_title_id
-            || candidate.source.matches != prepared.evaluation_snapshot.matches
-            || candidate.source.summary()? != candidate.source_summary
-            || !prepared.candidate_source_valid
-            || candidate.basis.as_ref().is_some_and(|basis| {
-                basis.effective_achievement_curve()
-                    != before_basis.map_or_else(
-                        momo_analysis_core::achievements::AchievementCurve::default,
-                        RadarBasis::effective_achievement_curve,
-                    )
-            })
-        {
-            return Err(RadarError::InvalidSource);
-        }
+        validate_generated_source(prepared, candidate)?;
         candidate.basis.as_ref()
     } else if context.is_manual() {
         if !prepared.candidate_source_valid {
@@ -77,9 +60,7 @@ pub(in crate::series_analysis) fn validate(
         basis
     } else {
         let source = context.source.as_ref().ok_or(RadarError::InvalidSource)?;
-        if radar::source_is_current(source, &input)? != prepared.candidate_source_valid {
-            return Err(RadarError::InvalidSource);
-        }
+        validate_saved_source(prepared, source, &input)?;
         context.basis.as_ref()
     };
     let before = radar::evaluate_scopes(&input, before_basis)?;
@@ -99,17 +80,92 @@ pub(in crate::series_analysis) fn validate(
                     || actual.scope != after_scope
                     || actual.payload.before != before
                     || actual.payload.after != after
-                    || super::achievement_preview(achievements, &actual.scope, before_basis)
+                    || super::achievement_preview(achievements, &actual.scope, before_basis, None)
                         .as_ref()
                         .ok()
                         != Some(&actual.payload.before_achievements)
-                    || super::achievement_preview(achievements, &actual.scope, basis)
-                        .as_ref()
-                        .ok()
+                    || super::achievement_preview(
+                        achievements,
+                        &actual.scope,
+                        basis,
+                        prepared
+                            .candidate
+                            .as_ref()
+                            .and_then(|c| c.achievement_generation.as_deref())
+                            .map(radar::AchievementGeneration::curve),
+                    )
+                    .as_ref()
+                    .ok()
                         != Some(&actual.payload.after_achievements)
             })
     {
         return Err(RadarError::InvalidSource);
     }
     Ok(input)
+}
+
+fn validate_generated_source(
+    prepared: &Preparation,
+    candidate: &radar::RadarCandidate,
+) -> Result<(), RadarError> {
+    let value =
+        serde_json::to_value(candidate.summary()).map_err(|_encoding| RadarError::InvalidSource)?;
+    payload::radar_candidate_from_payload(&value).map_err(|_invalid| RadarError::InvalidSource)?;
+    candidate
+        .source
+        .normalized_for_validation(prepared.input_revision)?;
+    if candidate.source.game_title_id != prepared.evaluation_snapshot.game_title_id
+        || candidate.source.matches != prepared.evaluation_snapshot.matches
+        || candidate.source.summary()? != candidate.source_summary
+        || !prepared.candidate_source_valid
+        || candidate.source.achievement_generation_source.as_deref()
+            != candidate
+                .achievement_generation
+                .as_ref()
+                .map(|generation| &generation.source)
+        || candidate
+            .achievement_generation
+            .as_ref()
+            .is_none_or(|generation| {
+                prepared
+                    .evaluation_snapshot
+                    .achievements
+                    .as_deref()
+                    .and_then(|payload| {
+                        radar::AchievementGenerationSource::from_payload(payload).ok()
+                    })
+                    .as_ref()
+                    != Some(&generation.source)
+            })
+    {
+        return Err(RadarError::InvalidSource);
+    }
+    Ok(())
+}
+
+fn validate_saved_source(
+    prepared: &Preparation,
+    source: &radar::RadarSourceSnapshot,
+    input: &NormalizedAnalysisInput,
+) -> Result<(), RadarError> {
+    let mut match_source = source.clone();
+    match_source.achievement_generation_source = None;
+    let points_current = source
+        .achievement_generation_source
+        .as_deref()
+        .is_none_or(|saved| {
+            prepared
+                .evaluation_snapshot
+                .achievements
+                .as_deref()
+                .and_then(|payload| radar::AchievementGenerationSource::from_payload(payload).ok())
+                .as_ref()
+                == Some(saved)
+        });
+    if (radar::source_is_current(&match_source, input)? && points_current)
+        != prepared.candidate_source_valid
+    {
+        return Err(RadarError::InvalidSource);
+    }
+    Ok(())
 }

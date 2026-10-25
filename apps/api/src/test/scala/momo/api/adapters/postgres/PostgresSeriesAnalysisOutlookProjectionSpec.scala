@@ -139,7 +139,7 @@ final class PostgresSeriesAnalysisOutlookProjectionSpec extends FunSuite with Js
       "artifact-outlook",
       read.gameTitleId,
       1,
-      "series-analysis-v12",
+      "series-analysis-v13",
       SeriesAnalysisArtifactContract.ArtifactSchemaVersion,
       Some(SeriesAnalysisArtifactContract.ValidationContractId),
       Instant.parse("2026-01-01T00:00:00Z"),

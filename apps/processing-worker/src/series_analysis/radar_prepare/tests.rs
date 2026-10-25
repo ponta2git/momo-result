@@ -84,6 +84,7 @@ fn manual_preparation_binds_entered_values_and_defers_empty_first_basis() {
     );
 
     let empty = RadarSourceSnapshot {
+        achievement_generation_source: None,
         game_title_id: input.game_title_id().to_owned(),
         matches: Vec::new(),
         achievements: None,
@@ -306,7 +307,7 @@ fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
         assert_eq!(scope.payload.before_achievements.summary.total_points, 2);
         assert_eq!(scope.payload.after_achievements.summary.total_points, 2);
         assert_eq!((before.earned_points, after.earned_points), (1, 1));
-        assert_eq!((before.score, after.score), (Some(1.0), Some(2.0)));
+        assert_eq!((before.score, after.score), (None, Some(2.0)));
     }
     let mut wrong = prepared.clone();
     wrong
@@ -327,32 +328,45 @@ fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
 }
 
 #[test]
-fn generated_candidates_keep_the_applied_curve_and_saved_comparisons_keep_their_curve() {
+fn generated_candidates_do_not_inherit_applied_curves_and_restores_keep_saved_curves() {
     let input = achievement_input();
     let mut context = context();
-    let mut before = radar::generate_candidate(&input)
+    let legacy_input = source()
+        .normalized_for_validation(1)
+        .unwrap_or_else(|error| panic!("source: {error}"));
+    let mut before = radar::generate_candidate(&legacy_input)
         .unwrap_or_else(|error| panic!("generate: {error}"))
         .basis
         .unwrap_or_else(|| panic!("basis"));
     let curve = AchievementCurve::LegacyPercentage {
         thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
     };
+    before.achievement_generation_source = None;
+    before.source = source()
+        .summary()
+        .unwrap_or_else(|error| panic!("source: {error}"));
     before.achievement_curve = Some(curve);
     context.before_basis_id = Some("applied".to_owned());
-    context.before_basis = Some(before);
+    context.before_basis = Some(before.clone());
     let prepared = compute(&input, &context).unwrap_or_else(|error| panic!("prepare: {error}"));
     assert!(validate(&prepared, &context, context.before_basis.as_ref()).is_ok());
     let candidate = prepared.candidate.unwrap_or_else(|| panic!("candidate"));
-    assert_eq!(
-        candidate
-            .basis
-            .as_ref()
-            .map(RadarBasis::effective_achievement_curve),
-        Some(curve)
+    assert!(
+        candidate.basis.is_none(),
+        "degenerate points cannot inherit the applied curve"
     );
+    assert!(prepared.scopes.iter().all(|scope| {
+        scope
+            .payload
+            .after_achievements
+            .summary
+            .players
+            .iter()
+            .all(|player| player.score.is_none())
+    }));
     context.operation_kind = Some("restore".to_owned());
-    context.basis = candidate.basis;
-    context.source = Some(candidate.source);
+    context.basis = Some(before);
+    context.source = Some(source());
     let restored = compute(&input, &context).unwrap_or_else(|error| panic!("restore: {error}"));
     assert!(validate(&restored, &context, context.before_basis.as_ref()).is_ok());
     assert!(

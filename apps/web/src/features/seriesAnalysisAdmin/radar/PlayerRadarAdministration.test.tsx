@@ -97,6 +97,83 @@ async function openProposalApply(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("PlayerRadarAdministration", () => {
+  it.each(["no_target", "degenerate_distribution"] as const)(
+    "handles achievement generation %s without inventing a point curve",
+    async (unavailableReason) => {
+      const user = userEvent.setup();
+      const state = makePointReadyState();
+      state.currentBasis = null;
+      const candidate = state.candidate!;
+      const noTarget = unavailableReason === "no_target";
+      candidate.achievementCurve = { unavailableReason };
+      candidate.status = noTarget ? "ready" : "unavailable";
+      candidate.result!.achievementGeneration = {
+        source: {
+          methodVersion: "achievement-points-spread-v1",
+          totalPoints: noTarget ? 0 : 100,
+          players: [
+            { memberId: "member_ponta", earnedPoints: 0 },
+            { memberId: "member_akane_mami", earnedPoints: 0 },
+            { memberId: "member_otaka", earnedPoints: 0 },
+            { memberId: "member_eu", earnedPoints: 0 },
+          ],
+        },
+        q10: noTarget ? null : 0,
+        median: noTarget ? null : 0,
+        q90: noTarget ? null : 0,
+        pointThresholds: null,
+        unavailableReason,
+      };
+      if (noTarget) {
+        candidate.result!.basis!.achievementCurve = { unavailableReason };
+        candidate.latestPreview!.beforeBasisId = null;
+      } else {
+        candidate.result!.basis = null;
+        candidate.basisId = null;
+        candidate.latestPreview = null;
+      }
+      const preview = makePointPreview();
+      preview.beforeBasisId = null;
+      preview.before = null;
+      preview.beforeAchievements = null;
+      preview.afterAchievements!.achievementCurve = { unavailableReason };
+      preview.afterAchievements!.summary.totalPoints = 0;
+      for (const player of preview.afterAchievements!.summary.players) {
+        player.earnedPoints = 0;
+        player.score = null;
+      }
+      const submitted: Array<{ kind: string }> = [];
+      server.use(
+        http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)),
+        http.get("/api/admin/series-analysis/radar/preview", () => HttpResponse.json(preview)),
+        http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
+          submitted.push((await request.json()) as { kind: string });
+          return HttpResponse.json(makePlayerRadarOperation(), { status: 202 });
+        }),
+      );
+      renderAdministration();
+      if (!noTarget) {
+        expect(await screen.findByText("採点基準を作れませんでした")).toBeVisible();
+        expect(
+          screen.getByText(/実績達成: 4人の実績ポイントの分布に広がりがありません/u),
+        ).toBeVisible();
+        expect(screen.queryByRole("button", { name: "変更案を編集" })).not.toBeInTheDocument();
+        return;
+      }
+      await enterProposal(user);
+      await user.click(screen.getByRole("tab", { name: "実績達成" }));
+      expect(screen.getByText(/基準の作成時に対象の実績項目がなかった/u)).toBeVisible();
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "変更を適用" }));
+      const confirm = within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "作品全体に適用する",
+      });
+      await waitFor(() => expect(confirm).toBeEnabled());
+      await user.click(confirm);
+      await waitFor(() => expect(submitted.map(({ kind }) => kind)).toEqual(["apply"]));
+    },
+  );
+
   it("retries a failed operation as an operator with its saved origin identity", async () => {
     const user = userEvent.setup();
     const state = makePointReadyState();

@@ -21,11 +21,6 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       List(0.0, 10.0, 25.0, 50.0, 80.0).map(Json.fromDoubleOrNull)
     )
   )
-  private val DefaultPointCurve: Json = Json.obj(
-    "pointThresholds" -> Json.fromValues(
-      SeriesPlayerRadarAchievementCurve.Default.pointThresholds.map(Json.fromDoubleOrNull)
-    )
-  )
 
   def operationColumns(using identities: PostgresIdentities): Fragment = fr"""
     ${identities.wireId("o")}, ${identities.retainedColumn("o", "game_title_id")}, o.kind, o.status,
@@ -80,8 +75,12 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'updatedAt', c.updated_at, 'result', c.result,
           'originKind', c.origin_kind, 'manualInput', c.manual_input,
           'achievementCurve', COALESCE(c.manual_input->'achievementCurve', effective_basis.payload->'achievementCurve',
-            CASE WHEN effective_basis.payload IS NULL THEN ${DefaultPointCurve.noSpaces}::jsonb
-              ELSE ${LegacyDefaultAchievementCurve.noSpaces}::jsonb END),
+            CASE WHEN effective_basis.payload IS NOT NULL THEN ${LegacyDefaultAchievementCurve.noSpaces}::jsonb
+              WHEN c.result->'achievementGeneration'->>'pointThresholds' IS NOT NULL THEN
+                jsonb_build_object('pointThresholds', c.result->'achievementGeneration'->'pointThresholds')
+              WHEN c.result->'achievementGeneration'->>'unavailableReason' IS NOT NULL THEN
+                jsonb_build_object('unavailableReason', c.result->'achievementGeneration'->'unavailableReason')
+              ELSE NULL END),
           'sourceBasisId', c.source_basis_id, 'sourceCandidateId', c.source_candidate_id,
           'savedBy', CASE WHEN c.saved_by IS NULL THEN NULL ELSE jsonb_build_object(
             'accountId', c.saved_by, 'displayName', c.saved_by_display_name) END,
@@ -128,8 +127,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         fr"c.basis_id"
       )} AND candidate_basis.game_title_id = ${identities.wireId("gt")}
       LEFT JOIN LATERAL (
-        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload,
-          CASE WHEN c.origin_kind = 'generated' THEN cb.payload END) AS payload
+        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload) AS payload
       ) effective_basis ON true
       LEFT JOIN LATERAL (
         SELECT preview.* FROM series_radar_previews preview WHERE candidate_id = c.id AND game_title_id = gt.id

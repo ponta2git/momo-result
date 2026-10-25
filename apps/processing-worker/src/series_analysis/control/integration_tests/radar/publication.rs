@@ -385,3 +385,85 @@ pub(super) async fn current(client: &Client, basis: &str) -> SmokeResult<String>
     // readable; source and current-basis identity remain the publication authority in that state.
     row.try_get(0).map_err(Into::into)
 }
+
+#[tokio::test]
+#[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
+async fn real_postgres_point_source_changes_invalidate_only_unapplied_generated_candidates()
+-> SmokeResult {
+    let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
+    let mut client = crate::identity::fixtures::connect(&database_url).await?;
+    client.execute("DELETE FROM achievement_items WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    seed(&client).await?;
+    let runtime = TempDir::new()?;
+    let config = notifications::config(&database_url, NotificationSink::default(), runtime.path())?;
+    let preview = prepare_candidate(&mut client, &config, "radar-points-applied").await?;
+    reserve_apply(
+        &client,
+        "radar-points-apply",
+        "radar-points-applied",
+        "radar-points-applied",
+        &preview,
+    )
+    .await?;
+    let applied = claim_next(&mut client, &config).await?;
+    publish(&mut client, &applied, &config).await?;
+    let original: serde_json::Value = client
+        .query_one(
+            "SELECT payload FROM series_radar_bases WHERE id='radar-points-applied'",
+            &[],
+        )
+        .await?
+        .try_get(0)?;
+    prepare_candidate(&mut client, &config, "radar-points-candidate").await?;
+    // A catalog addition changes the point denominator without changing a single match statistic.
+    client.execute("INSERT INTO achievement_items(id,game_title_id,name,stars,rule_kind,scope_kind) VALUES (gen_random_uuid(),pg_temp.fixture_uuid('game_titles',$1),'Manual target',1,'manual','common')", &[&TITLE_ID]).await?;
+    client.execute("UPDATE series_analysis_title_states SET input_revision=2 WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    client.execute("INSERT INTO series_analysis_job_requests(id,legacy_id,game_title_id,legacy_game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger,status) SELECT pg_temp.fixture_uuid('series_analysis_job_requests','radar-points-normal'),'radar-points-normal',game_title_id,$1,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual','pending' FROM series_analysis_title_states WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    let normal = claim_next(&mut client, &config).await?;
+    assert!(normal.radar_operation_id.is_none());
+    publish(&mut client, &normal, &config).await?;
+    assert_eq!(
+        candidate_state(&client, "radar-points-candidate").await?,
+        ("invalid".into(), "stale".into())
+    );
+    let saved = client.query_one("SELECT c.status,b.payload FROM series_radar_candidates c JOIN series_radar_bases b ON b.id=c.legacy_id WHERE c.legacy_id='radar-points-applied'", &[]).await?;
+    assert_eq!(saved.try_get::<_, String>(0)?, "applied");
+    assert_eq!(saved.try_get::<_, serde_json::Value>(1)?, original);
+    current(&client, "radar-points-applied").await?;
+    client.execute("DELETE FROM achievement_items WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    let race_preview = prepare_candidate(&mut client, &config, "radar-points-race").await?;
+    reserve_apply(
+        &client,
+        "radar-points-race-apply",
+        "radar-points-race",
+        "radar-points-race",
+        &race_preview,
+    )
+    .await?;
+    client.execute("INSERT INTO achievement_items(id,game_title_id,name,stars,rule_kind,scope_kind) VALUES (gen_random_uuid(),pg_temp.fixture_uuid('game_titles',$1),'New target during apply',1,'manual','common')", &[&TITLE_ID]).await?;
+    client.execute("UPDATE series_analysis_title_states SET input_revision=3 WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    let race = claim_next(&mut client, &config).await?;
+    let (directory, mut metrics) = artifact(&mut client, &race, false).await?;
+    let result = control::publish(
+        &mut client,
+        &race,
+        &config,
+        directory.path(),
+        &mut metrics,
+        tokio::time::Instant::now() + config.execution_limits.finalization_timeout,
+    )
+    .await?;
+    assert_eq!(
+        result.value,
+        PublicationResult::IntegrityFailure(SafeFailureCode::InputContractInvalid)
+    );
+    assert_eq!(
+        candidate_state(&client, "radar-points-race").await?,
+        ("invalid".into(), "stale".into())
+    );
+    current(&client, "radar-points-applied").await?;
+
+    drop(config);
+    client.execute("DELETE FROM achievement_items WHERE game_title_id=pg_temp.fixture_uuid('game_titles',$1)", &[&TITLE_ID]).await?;
+    clean(&client).await
+}

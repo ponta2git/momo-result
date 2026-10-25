@@ -17,6 +17,7 @@ import {
   makePlayerRadarOperation,
   makePlayerRadarPreview,
   makeReadyPlayerRadarState,
+  pointAchievementCurveFixture,
 } from "@/test/msw/playerRadarFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -57,9 +58,17 @@ describe("prepared radar edit disposal", () => {
   it("retains the achievement curve in an accepted edit of an initial generated candidate", async () => {
     const state = makeReadyPlayerRadarState();
     state.currentBasis = null;
+    state.candidate!.achievementCurve = pointAchievementCurveFixture;
+    state.candidate!.result!.basis!.achievementCurve = pointAchievementCurveFixture;
     state.candidate!.latestPreview!.beforeBasisId = null;
     const preview = makePlayerRadarPreview();
     preview.beforeBasisId = null;
+    preview.before = null;
+    preview.beforeAchievements = null;
+    preview.afterAchievements!.achievementCurve = pointAchievementCurveFixture;
+    preview.afterAchievements!.summary.players.forEach((player, index) => {
+      player.score = [6, 4, 3, 1][index]!;
+    });
     const curve = {
       pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 250] as [
         number,

@@ -91,7 +91,9 @@ fn calculated(
         normalized.game_title_id(),
         normalized.achievements(),
         normalized.player_matches(),
-        AchievementCurve::default(),
+        AchievementCurve::Points {
+            point_thresholds: [5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 200.0],
+        },
     ))
 }
 

@@ -1,6 +1,5 @@
 import {
   playerRadarAxes,
-  defaultAchievementPointCurve,
   defaultAchievementCurve,
   achievementRadarScore,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
@@ -14,7 +13,7 @@ import type {
 
 export type RadarManualInput = {
   axes: Array<{ axisId: PlayerRadarAxisId; thresholds: number[] }>;
-  achievementCurve?: PlayerAchievementCurve;
+  achievementCurve?: Extract<PlayerAchievementCurve, { pointThresholds: readonly number[] }>;
 };
 export type RadarThresholdDrafts = Readonly<Record<PlayerRadarSettingAxisId, readonly string[]>>;
 export type RadarThresholdError = {
@@ -26,7 +25,9 @@ export type RadarThresholdError = {
 
 export function radarBasisInput(basis: PlayerRadarBasis): RadarManualInput {
   return {
-    achievementCurve: basis.achievementCurve ?? defaultAchievementCurve,
+    ...(basis.achievementCurve && "pointThresholds" in basis.achievementCurve
+      ? { achievementCurve: basis.achievementCurve }
+      : {}),
     axes: playerRadarAxes.map(({ id }) => ({
       axisId: id,
       thresholds:
@@ -38,13 +39,7 @@ export function radarBasisInput(basis: PlayerRadarBasis): RadarManualInput {
 export function radarThresholdDrafts(input: RadarManualInput): RadarThresholdDrafts {
   return Object.fromEntries([
     ...input.axes.map((axis) => [axis.axisId, axis.thresholds.map(String)]),
-    [
-      "achievement",
-      (input.achievementCurve && "pointThresholds" in input.achievementCurve
-        ? input.achievementCurve.pointThresholds
-        : defaultAchievementPointCurve.pointThresholds
-      ).map(String),
-    ],
+    ["achievement", input.achievementCurve?.pointThresholds.map(String) ?? []],
   ]) as Record<PlayerRadarSettingAxisId, string[]>;
 }
 
@@ -114,6 +109,9 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
     return { axisId: id, thresholds };
   });
   const curveTexts = drafts.achievement;
+  if (curveTexts.length === 0) {
+    return { input: errors.length > 0 ? null : { axes }, errors };
+  }
   const curveThresholds = Array.from({ length: 9 }, (_, index) => {
     const score = index + 2;
     const text = curveTexts?.[index]?.trim() ?? "";
@@ -170,13 +168,8 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
 }
 
 export function sameRadarThresholds(a: RadarManualInput, b: RadarManualInput): boolean {
-  const leftPolicy = a.achievementCurve ?? defaultAchievementCurve;
-  const rightPolicy = b.achievementCurve ?? defaultAchievementCurve;
-  if ("pointThresholds" in leftPolicy !== "pointThresholds" in rightPolicy) return false;
-  const leftCurve =
-    "pointThresholds" in leftPolicy ? leftPolicy.pointThresholds : leftPolicy.thresholds;
-  const rightCurve =
-    "pointThresholds" in rightPolicy ? rightPolicy.pointThresholds : rightPolicy.thresholds;
+  const leftCurve = a.achievementCurve?.pointThresholds ?? [];
+  const rightCurve = b.achievementCurve?.pointThresholds ?? [];
   return (
     leftCurve.length === rightCurve.length &&
     leftCurve.every((value, index) => value === rightCurve[index]) &&
@@ -192,7 +185,7 @@ export function sameRadarThresholds(a: RadarManualInput, b: RadarManualInput): b
 
 export function radarInputBasis(
   basis: PlayerRadarBasis,
-  input: RadarManualInput,
+  input: { axes: RadarManualInput["axes"]; achievementCurve?: PlayerAchievementCurve },
 ): PlayerRadarBasis {
   return {
     ...basis,
@@ -210,20 +203,19 @@ export function previewRadarThresholds(
   basis: PlayerRadarBasis,
   input: RadarManualInput,
 ): PlayerRadarDisplay {
+  const achievementCurve =
+    input.achievementCurve ?? basis.achievementCurve ?? defaultAchievementCurve;
   return {
     ...evaluation,
     basis: radarInputBasis(basis, input),
-    achievementCurve: input.achievementCurve ?? basis.achievementCurve ?? defaultAchievementCurve,
+    achievementCurve,
     players: evaluation.players.map((player) => ({
       ...player,
       ...(player.achievement
         ? {
             achievement: {
               ...player.achievement,
-              score: achievementRadarScore(
-                player.achievement,
-                input.achievementCurve ?? defaultAchievementCurve,
-              ),
+              score: achievementRadarScore(player.achievement, achievementCurve),
             },
           }
         : {}),

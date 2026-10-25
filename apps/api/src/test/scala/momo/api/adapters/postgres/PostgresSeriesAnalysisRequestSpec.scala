@@ -20,8 +20,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v12', artifact_schema_version = 9,
-          validation_contract_id = 'series-analysis-artifact-v9-full-validation-v4'
+      SET algorithm_version = 'series-analysis-v13', artifact_schema_version = 10,
+          validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
@@ -133,9 +133,9 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         initial,
         (
           0L,
-          "series-analysis-v12",
-          9,
-          Some("series-analysis-artifact-v9-full-validation-v4"),
+          "series-analysis-v13",
+          10,
+          Some("series-analysis-artifact-v10-full-validation-v1"),
           "initial"
         )
       )
@@ -152,8 +152,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       results <- concurrentWithUncommittedFirst(
         sql"""
           UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
-            artifact_schema_version = 9,
-            validation_contract_id = 'series-analysis-artifact-v9-full-validation-v4'
+            artifact_schema_version = 10,
+            validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
           WHERE singleton_key = 'current'
         """.update.run,
         new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
@@ -168,8 +168,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         state,
         (
           "promoted-analysis",
-          9,
-          Some("series-analysis-artifact-v9-full-validation-v4")
+          10,
+          Some("series-analysis-artifact-v10-full-validation-v1")
         )
       )
 

@@ -38,6 +38,7 @@ tests=(
   "series_analysis::control::integration_tests::achievements::real_postgres_authoritative_manifest_consumes_large_match_snapshots"
   "series_analysis::control::integration_tests::radar::freshness::real_postgres_radar_preparation_checks_current_source_and_preserves_pending_analysis"
   "series_analysis::control::integration_tests::radar::publication::real_postgres_radar_application_restore_and_failure_keep_artifact_and_basis_atomic"
+  "series_analysis::control::integration_tests::radar::publication::real_postgres_point_source_changes_invalidate_only_unapplied_generated_candidates"
   "series_analysis::control::integration_tests::radar::manual::real_postgres_manual_radar_recomparison_publication_restore_and_history_are_coherent"
   "series_analysis::control::integration_tests::radar::manual::real_postgres_manual_radar_empty_first_comparison_and_withdrawal_never_fix_a_basis"
   "series_analysis::control::integration_tests::notifications::real_postgres_analysis_notifications_follow_committed_publications"

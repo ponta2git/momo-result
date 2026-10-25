@@ -21,7 +21,11 @@ const POINT_CURVE: Schema = Schema::Object(&[field(
     "pointThresholds",
     &Schema::Tuple(&[&POINT_THRESHOLD; 9]),
 )]);
-pub(super) const CURVE: Schema = Schema::OneOf(&[&LEGACY_CURVE, &POINT_CURVE]);
+const UNAVAILABLE_CURVE: Schema = Schema::Object(&[field(
+    "unavailableReason",
+    &Schema::StringEnum(&["basis_unavailable", "no_target", "degenerate_distribution"]),
+)]);
+pub(super) const CURVE: Schema = Schema::OneOf(&[&LEGACY_CURVE, &POINT_CURVE, &UNAVAILABLE_CURVE]);
 const STARS: Schema = Schema::Integer {
     minimum: 1,
     maximum: 5,

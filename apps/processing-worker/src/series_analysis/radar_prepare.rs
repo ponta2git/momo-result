@@ -282,6 +282,7 @@ fn achievement_preview(
     achievements: &AchievementPayload,
     scope: &ScopeRef,
     basis: Option<&RadarBasis>,
+    fallback_curve: Option<AchievementCurve>,
 ) -> Result<AchievementPreview, radar::RadarError> {
     let map_id = match scope {
         ScopeRef::Map { map_master_id } | ScopeRef::SeasonMap { map_master_id, .. } => {
@@ -297,7 +298,7 @@ fn achievement_preview(
     Ok(AchievementPreview::new(
         summary,
         basis.map_or_else(
-            AchievementCurve::default,
+            || fallback_curve.unwrap_or_default(),
             RadarBasis::effective_achievement_curve,
         ),
     ))
@@ -307,20 +308,11 @@ pub(super) fn compute(
     input: &NormalizedAnalysisInput,
     context: &RadarReadContext,
 ) -> Result<Preparation, radar::RadarError> {
-    let mut candidate = if context.operation_kind.as_deref() == Some("candidate") {
+    let candidate = if context.operation_kind.as_deref() == Some("candidate") {
         Some(radar::generate_candidate(input)?)
     } else {
         None
     };
-    if let Some(candidate_basis) = candidate
-        .as_mut()
-        .and_then(|candidate| candidate.basis.as_mut())
-    {
-        candidate_basis.achievement_curve = Some(context.before_basis.as_ref().map_or_else(
-            AchievementCurve::default,
-            RadarBasis::effective_achievement_curve,
-        ));
-    }
     let manual_basis = context.new_manual_basis(input)?;
     let basis = candidate
         .as_ref()
@@ -354,8 +346,17 @@ pub(super) fn compute(
                         &achievements,
                         &scope,
                         context.before_basis.as_ref(),
+                        None,
                     )?,
-                    after_achievements: achievement_preview(&achievements, &scope, basis)?,
+                    after_achievements: achievement_preview(
+                        &achievements,
+                        &scope,
+                        basis,
+                        candidate
+                            .as_ref()
+                            .and_then(|c| c.achievement_generation.as_deref())
+                            .map(radar::AchievementGeneration::curve),
+                    )?,
                 },
                 scope,
             })

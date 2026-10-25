@@ -32,6 +32,7 @@ export type RadarThresholdEditorView = Readonly<{
   errors: ReadonlyArray<Readonly<RadarThresholdError>>;
   inputValid: boolean;
   sourceLabel: string;
+  achievementEditingReason: string | null;
   referenceThresholds: Readonly<
     Partial<Record<PlayerRadarSettingAxisId, readonly number[]>>
   > | null;

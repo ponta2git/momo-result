@@ -42,7 +42,7 @@ export function playerRadarSampleDisplay(
 export function playerRadarBasisDisplay(
   record: Pick<SeriesPlayerRadarBasisRecord, "basisId" | "appliedAt" | "basis"> & {
     createdAt: string | null;
-    achievementCurve?: PlayerAchievementCurve;
+    achievementCurve?: PlayerAchievementCurve | null;
   },
   maps: readonly DisplayMap[],
 ): PlayerRadarBasis {

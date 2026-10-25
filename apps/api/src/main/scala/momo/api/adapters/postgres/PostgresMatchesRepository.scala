@@ -115,7 +115,7 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             achievementItems,
             achievementContext
           )
-          _ <- PostgresAchievementWriteOps.addDeclarations(
+          declarationsChanged <- PostgresAchievementWriteOps.addDeclarations(
             source,
             change.achievements,
             achievementItems,
@@ -125,11 +125,16 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           _ <-
             enqueueMatchMutation(beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId))
           currentRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
-          _ <- if previousRadarInput != currentRadarInput then
+          _ <- if previousRadarInput.map(_.statistics) != currentRadarInput.map(_.statistics) then
             PostgresSeriesPlayerRadarMutationOps.changed(
               List(oldTitle, record.gameTitleId),
               record.id,
               true
+            )
+          else ().pure[ConnectionIO]
+          _ <- if previousRadarInput != currentRadarInput || declarationsChanged then
+            PostgresSeriesPlayerRadarMutationOps.achievementsChanged(
+              beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId)
             )
           else ().pure[ConnectionIO]
           saved <- find(
@@ -182,7 +187,8 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             )
           _ <- previous.filter(_ => deleted).toList.traverse_((wireId, title) =>
             enqueueMatchMutation(beforeTitles :+ title) *>
-              PostgresSeriesPlayerRadarMutationOps.changed(List(title), wireId, true)
+              PostgresSeriesPlayerRadarMutationOps.changed(List(title), wireId, true) *>
+              PostgresSeriesPlayerRadarMutationOps.achievementsChanged(beforeTitles :+ title)
           )
           _ <- PostgresResultNotificationCancellation.afterDeletion(
             deletedDrafts,

@@ -1,4 +1,29 @@
 {
+  "achievementCurve": {
+    "unavailableReason": "no_target"
+  },
+  "achievementGenerationSource": {
+    "methodVersion": "achievement-points-spread-v1",
+    "players": [
+      {
+        "earnedPoints": 0,
+        "memberId": "member-1"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-2"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-3"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-4"
+      }
+    ],
+    "totalPoints": 0
+  },
   "axes": [
     {
       "axisId": "averageRank",
@@ -135,7 +160,7 @@
       "west"
     ],
     "matchCount": 40,
-    "sourceChecksum": "sha256:c5b6266b01c164f2c7811192c63576c437a3d775db15806ecfdd2fdc01796f9d"
+    "sourceChecksum": "sha256:a4d4b9b8e5c5126cbbcf8fe22b3a73545bee8eaa6eccdaab4b41aa4862a39c44"
   },
   "windowSize": 20,
   "windowStride": 1

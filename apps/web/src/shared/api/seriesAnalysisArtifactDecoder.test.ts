@@ -18,9 +18,9 @@ import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/se
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v4.json";
 
 const artifact = {
-  algorithmVersion: "series-analysis-v12",
+  algorithmVersion: "series-analysis-v13",
   artifactId: "artifact-1",
-  artifactSchemaVersion: 9,
+  artifactSchemaVersion: 10,
   gameTitleId: "title-1",
   inputRevision: "1",
   publishedAt: "2026-08-29T00:00:00Z",
@@ -80,7 +80,7 @@ describe("series analysis artifact response decoder", () => {
     async (kind, fixture) => {
       const response = artifactResponse(fixture);
       await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
-      for (const artifactSchemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 99]) {
+      for (const artifactSchemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 9, 99]) {
         await expect(
           decodeSeriesAnalysisArtifact(kind, {
             ...response,

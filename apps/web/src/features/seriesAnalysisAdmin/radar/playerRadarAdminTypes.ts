@@ -7,7 +7,7 @@ import type {
   SeriesPlayerRadarState,
 } from "@/shared/api/seriesPlayerRadar";
 import type {
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
   PlayerRadarBasis,
   PlayerRadarDisplay,
   PlayerRadarSample,
@@ -61,7 +61,7 @@ export type PlayerRadarAdministrationView = {
     source: PlayerRadarSample | null;
     basis: PlayerRadarBasis | null;
     failureMessage: string | null;
-    unavailableAxes: ReadonlyArray<{ axisId: PlayerRadarAxisId; reason: string }>;
+    unavailableAxes: ReadonlyArray<{ axisId: PlayerRadarSettingAxisId; reason: string }>;
   } | null;
   preview: PlayerRadarPreviewView | null;
   previewState: "none" | "pending" | "ready" | "stale" | "invalid" | "failed";

@@ -124,7 +124,7 @@ private[api] object SeriesPlayerRadarResponseSchemas:
     "latestPreview" -> nullable(previewMetadata),
     "originKind" -> values("generated", "manual", "restore"),
     "manualInput" -> nullable(manualInput),
-    "achievementCurve" -> achievementCurve,
+    "achievementCurve" -> nullable(achievementCurve),
     "sourceBasisId" -> nullable(text),
     "sourceCandidateId" -> nullable(text),
     "sourceBasis" -> nullable(basis),

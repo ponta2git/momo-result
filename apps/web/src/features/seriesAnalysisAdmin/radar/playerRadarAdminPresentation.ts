@@ -277,9 +277,7 @@ export function buildRadarBasisView({
       ? {
           label: candidate.manualInput ? "保存済みの手調整案" : "自動提案の変更案",
           basis: editableBasis,
-          input: candidate.manualInput
-            ? { ...candidate.manualInput, achievementCurve: candidate.achievementCurve }
-            : radarBasisInput(editableBasis),
+          input: radarBasisInput(editableBasis),
           sourceBasisId: manualSourceBasisId ?? editableBasis.basisId,
           sourceCandidateId: candidate.manualInput
             ? candidate.sourceCandidateId
@@ -547,15 +545,27 @@ export function buildRadarAdministrationView({
               failureMessage: candidate.safeFailureCode
                 ? radarFailureMessage(candidate.safeFailureCode)
                 : null,
-              unavailableAxes:
-                candidate.result?.axes
+              unavailableAxes: [
+                ...(candidate.result?.axes
                   .filter((axis) => axis.unavailableReasons.length > 0)
                   .map((axis) => ({
                     axisId: axis.axisId,
                     reason: axis.unavailableReasons.includes("degenerate_distribution")
                       ? "分布の広がりが不足しています"
                       : "作成元の試合・開催件数が不足しています",
-                  })) ?? [],
+                  })) ?? []),
+                ...(candidate.result?.achievementGeneration?.unavailableReason
+                  ? [
+                      {
+                        axisId: "achievement" as const,
+                        reason:
+                          candidate.result.achievementGeneration.unavailableReason === "no_target"
+                            ? "対象の実績項目がありません"
+                            : "4人の実績ポイントの分布に広がりがありません",
+                      },
+                    ]
+                  : []),
+              ],
             }
           : null,
         preview: previewDisplay,

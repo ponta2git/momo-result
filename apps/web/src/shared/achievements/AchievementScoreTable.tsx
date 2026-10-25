@@ -1,7 +1,7 @@
 import { orderFixedMembers } from "@/shared/domain/members";
-import { formatDecimal } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import type { PlayerAchievementScore } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { playerAchievementScoreLabel } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { contentText } from "@/shared/ui/typography";
@@ -32,7 +32,7 @@ export function AchievementScoreTable({ players }: { players: readonly Achieveme
           tabular: true,
           renderCell: (player) => (
             <span className={cn(contentText.compactPrimary, "whitespace-nowrap")}>
-              {player.score === null ? "採点対象外" : `${formatDecimal(player.score)}点`}
+              {playerAchievementScoreLabel(player)}
             </span>
           ),
         },

@@ -1920,6 +1920,9 @@ export interface components {
                     number,
                     number
                 ];
+            } | {
+                /** @enum {string} */
+                unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
             };
             gameTitleId: string;
             items: {
@@ -2066,7 +2069,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2619,6 +2622,36 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                        };
+                        achievementGenerationSource?: {
+                            /** @constant */
+                            methodVersion: "achievement-points-spread-v1";
+                            players: [
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                    displayName: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                    displayName: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                    displayName: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                    displayName: string;
+                                }
+                            ];
+                            totalPoints: number;
                         };
                         axes: [
                             {
@@ -2783,6 +2816,9 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                         };
                         axes: [
                             {
@@ -3373,7 +3409,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3470,7 +3506,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3565,7 +3601,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3647,7 +3683,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3721,7 +3757,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3875,7 +3911,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3892,7 +3928,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3983,7 +4019,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4106,7 +4142,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4149,7 +4185,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4370,7 +4406,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 9;
+                artifactSchemaVersion: 10;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4721,6 +4757,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
                 summary: {
                     mapMasterId: null | string;
@@ -4770,6 +4809,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
                 summary: {
                     mapMasterId: null | string;
@@ -4824,6 +4866,32 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                };
+                achievementGenerationSource?: {
+                    /** @constant */
+                    methodVersion: "achievement-points-spread-v1";
+                    players: [
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        }
+                    ];
+                    totalPoints: number;
                 };
                 axes: [
                     {
@@ -4987,6 +5055,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
                 axes: [
                     {
@@ -5179,6 +5250,32 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                };
+                achievementGenerationSource?: {
+                    /** @constant */
+                    methodVersion: "achievement-points-spread-v1";
+                    players: [
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        },
+                        {
+                            earnedPoints: number;
+                            memberId: string;
+                        }
+                    ];
+                    totalPoints: number;
                 };
                 axes: [
                     {
@@ -5342,6 +5439,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
                 axes: [
                     {
@@ -5532,6 +5632,9 @@ export interface components {
                     number,
                     number
                 ];
+            } | {
+                /** @enum {string} */
+                unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
             }) | null;
             afterAchievementCurve: {
                 thresholds: [
@@ -5553,6 +5656,9 @@ export interface components {
                     number,
                     number
                 ];
+            } | {
+                /** @enum {string} */
+                unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
             };
         };
         SeriesPlayerRadarRevisionListResponse: {
@@ -5595,6 +5701,32 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                    };
+                    achievementGenerationSource?: {
+                        /** @constant */
+                        methodVersion: "achievement-points-spread-v1";
+                        players: [
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            }
+                        ];
+                        totalPoints: number;
                     };
                     axes: [
                         {
@@ -5758,6 +5890,9 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                     };
                     axes: [
                         {
@@ -5948,6 +6083,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
             } | null;
             previousBasis: {
@@ -5978,6 +6116,32 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                    };
+                    achievementGenerationSource?: {
+                        /** @constant */
+                        methodVersion: "achievement-points-spread-v1";
+                        players: [
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            },
+                            {
+                                earnedPoints: number;
+                                memberId: string;
+                            }
+                        ];
+                        totalPoints: number;
                     };
                     axes: [
                         {
@@ -6141,6 +6305,9 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                     };
                     axes: [
                         {
@@ -6331,6 +6498,9 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                 };
             } | null;
             candidate: {
@@ -6343,6 +6513,46 @@ export interface components {
                 createdAt: string;
                 updatedAt: string;
                 result: {
+                    achievementGeneration?: {
+                        median: null | number;
+                        pointThresholds: null | [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                        q10: null | number;
+                        q90: null | number;
+                        source: {
+                            /** @constant */
+                            methodVersion: "achievement-points-spread-v1";
+                            players: [
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                }
+                            ];
+                            totalPoints: number;
+                        };
+                        unavailableReason: null | ("no_target" | "degenerate_distribution");
+                    };
                     axes: [
                         {
                             /** @enum {string} */
@@ -6480,6 +6690,32 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                        };
+                        achievementGenerationSource?: {
+                            /** @constant */
+                            methodVersion: "achievement-points-spread-v1";
+                            players: [
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                }
+                            ];
+                            totalPoints: number;
                         };
                         axes: [
                             {
@@ -6643,6 +6879,9 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                         };
                         axes: [
                             {
@@ -6875,9 +7114,12 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                     };
                 } | null;
-                achievementCurve: {
+                achievementCurve: ({
                     thresholds: [
                         number,
                         number,
@@ -6897,7 +7139,10 @@ export interface components {
                         number,
                         number
                     ];
-                };
+                } | {
+                    /** @enum {string} */
+                    unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                }) | null;
                 sourceBasisId: string | null;
                 sourceCandidateId: string | null;
                 sourceBasis: {
@@ -6928,6 +7173,32 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+                        };
+                        achievementGenerationSource?: {
+                            /** @constant */
+                            methodVersion: "achievement-points-spread-v1";
+                            players: [
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                },
+                                {
+                                    earnedPoints: number;
+                                    memberId: string;
+                                }
+                            ];
+                            totalPoints: number;
                         };
                         axes: [
                             {
@@ -7091,6 +7362,9 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            /** @enum {string} */
+                            unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                         };
                         axes: [
                             {
@@ -7281,6 +7555,9 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        /** @enum {string} */
+                        unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
                     };
                 } | null;
                 savedBy: {

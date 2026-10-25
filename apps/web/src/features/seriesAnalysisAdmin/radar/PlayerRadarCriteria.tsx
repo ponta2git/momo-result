@@ -6,9 +6,11 @@ import {
   achievementCurveThresholds,
   achievementCurveUnit,
   defaultAchievementCurve,
-  defaultAchievementPointCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type {
+  PlayerAchievementCurve,
+  PlayerRadarBasis,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -26,9 +28,9 @@ export function PlayerRadarCriteria({
     ...(proposedBasis ? [{ label: "変更案", basis: proposedBasis }] : []),
   ];
   if (sources.length === 0) return null;
-  const currentCurve = currentBasis
+  const currentCurve: PlayerAchievementCurve = currentBasis
     ? (currentBasis.achievementCurve ?? defaultAchievementCurve)
-    : defaultAchievementPointCurve;
+    : { unavailableReason: "basis_unavailable" };
   const proposedCurve = proposedBasis?.achievementCurve ?? defaultAchievementCurve;
   const beforeThresholds = achievementCurveThresholds(currentCurve);
   const afterThresholds = achievementCurveThresholds(proposedCurve);
@@ -112,16 +114,28 @@ export function PlayerRadarCriteria({
                 return (
                   <div className="grid gap-1 whitespace-nowrap">
                     <p>
-                      {proposedBasis ? (
-                        <span className="sr-only">{currentBasis ? "適用中 " : "初期値 "}</span>
-                      ) : null}
-                      {before === undefined ? "—" : `${before}${beforeUnit}`}
+                      {proposedBasis ? <span className="sr-only">適用中 </span> : null}
+                      {!currentBasis
+                        ? "未適用"
+                        : "unavailableReason" in currentCurve
+                          ? currentCurve.unavailableReason === "no_target"
+                            ? "対象なし（基準作成時）"
+                            : "基準未生成"
+                          : before === undefined
+                            ? "—"
+                            : `${before}${beforeUnit}`}
                     </p>
                     {proposedBasis && changed ? (
                       <p className={contentText.compactPrimary}>
                         <span aria-hidden="true">→ </span>
                         <span className="sr-only">変更案 </span>
-                        {after === undefined ? "—" : `${after}${afterUnit}`}
+                        {"unavailableReason" in proposedCurve
+                          ? proposedCurve.unavailableReason === "no_target"
+                            ? "対象なし（基準作成時）"
+                            : "基準未生成"
+                          : after === undefined
+                            ? "—"
+                            : `${after}${afterUnit}`}
                       </p>
                     ) : null}
                   </div>

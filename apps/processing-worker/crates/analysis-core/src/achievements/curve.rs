@@ -12,16 +12,28 @@ pub enum AchievementCurve {
         #[serde(rename = "pointThresholds")]
         point_thresholds: [f64; 9],
     },
+    Unavailable {
+        #[serde(rename = "unavailableReason")]
+        unavailable_reason: AchievementUnavailableReason,
+    },
     LegacyPercentage {
         /// Historical percentage knots for scores 1, 3, 5, 7 and 10.
         thresholds: [f64; 5],
     },
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AchievementUnavailableReason {
+    BasisUnavailable,
+    NoTarget,
+    DegenerateDistribution,
+}
+
 impl Default for AchievementCurve {
     fn default() -> Self {
-        Self::Points {
-            point_thresholds: [5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 200.0],
+        Self::Unavailable {
+            unavailable_reason: AchievementUnavailableReason::BasisUnavailable,
         }
     }
 }
@@ -38,6 +50,7 @@ impl AchievementCurve {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         let (thresholds, maximum): (&[f64], f64) = match self {
+            Self::Unavailable { .. } => return true,
             Self::Points { point_thresholds } => (point_thresholds, MAXIMUM_ACHIEVEMENT_POINTS),
             Self::LegacyPercentage { thresholds } => (thresholds, 100.0),
         };
@@ -58,6 +71,7 @@ impl AchievementCurve {
             return None;
         }
         Some(match self {
+            Self::Unavailable { .. } => return None,
             Self::Points { point_thresholds } => {
                 f64::from(point_thresholds.iter().fold(1_u8, |score, threshold| {
                     score + u8::from(f64::from(earned_points) >= *threshold)
@@ -92,7 +106,9 @@ mod tests {
 
     #[test]
     fn point_scores_use_inclusive_steps_independent_of_available_points() {
-        let curve = AchievementCurve::default();
+        let curve = AchievementCurve::Points {
+            point_thresholds: [5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 200.0],
+        };
         for (earned, expected) in [
             (0, 1.0),
             (4, 1.0),
@@ -147,7 +163,12 @@ mod tests {
         let points = serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 200]});
         for (value, expected) in [
             (legacy, AchievementCurve::legacy_percentage_default()),
-            (points, AchievementCurve::default()),
+            (
+                points,
+                AchievementCurve::Points {
+                    point_thresholds: [5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 200.0],
+                },
+            ),
         ] {
             let decoded = serde_json::from_value::<AchievementCurve>(value);
             assert_eq!(decoded.ok(), Some(expected));

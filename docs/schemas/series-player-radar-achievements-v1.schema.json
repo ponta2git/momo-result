@@ -123,6 +123,23 @@
             "pointThresholds"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "unavailableReason": {
+              "enum": [
+                "basis_unavailable",
+                "no_target",
+                "degenerate_distribution"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "unavailableReason"
+          ],
+          "type": "object"
         }
       ]
     },

@@ -2,18 +2,36 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerRadarCriteria } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarCriteria";
-import {
-  defaultAchievementCurve,
-  defaultAchievementPointCurve,
-} from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { defaultAchievementCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 describe("PlayerRadarCriteria", () => {
+  it("shows an initial achievement proposal without presenting fixed boundaries as applied", () => {
+    const basis = makePlayerRadarEditorView().currentBasis!;
+    render(
+      <PlayerRadarCriteria
+        currentBasis={null}
+        proposedBasis={{
+          ...basis,
+          achievementCurve: { pointThresholds: [0, 2, 4, 6, 8, 12, 16, 20, 24] },
+        }}
+      />,
+    );
+    const table = screen.getByRole("table", { name: "採点境界の変更案" });
+    const row = within(table).getByRole("rowheader", { name: "2点" }).parentElement!;
+    const achievement = within(row).getAllByRole("cell").at(-1)!;
+    expect(achievement).toHaveTextContent("未適用");
+    expect(achievement).toHaveTextContent("変更案 0pt以上");
+    expect(table).not.toHaveTextContent("初期値");
+    expect(table).not.toHaveTextContent("5pt以上");
+  });
+
   it("compares all seven axes in the same score rows", () => {
     const basis = makePlayerRadarEditorView().currentBasis!;
     render(
       <PlayerRadarCriteria
-        currentBasis={{ ...basis, achievementCurve: defaultAchievementPointCurve }}
+        currentBasis={{ ...basis, achievementCurve: pointAchievementCurveFixture }}
         proposedBasis={null}
       />,
     );
@@ -31,7 +49,7 @@ describe("PlayerRadarCriteria", () => {
     render(
       <PlayerRadarCriteria
         currentBasis={{ ...basis, achievementCurve: defaultAchievementCurve }}
-        proposedBasis={{ ...basis, achievementCurve: defaultAchievementPointCurve }}
+        proposedBasis={{ ...basis, achievementCurve: pointAchievementCurveFixture }}
       />,
     );
     const table = screen.getByRole("table", { name: "採点境界の変更案" });

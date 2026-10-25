@@ -54,33 +54,29 @@ export type PlayerRadarSettingAxisId = (typeof playerRadarSettingAxes)[number]["
 export const achievementScorePoints = [1, 3, 5, 7, 10] as const;
 export type PlayerAchievementCurve =
   | { thresholds: readonly number[] }
-  | { pointThresholds: readonly number[] };
+  | { pointThresholds: readonly number[] }
+  | {
+      unavailableReason: "basis_unavailable" | "no_target" | "degenerate_distribution";
+    };
 export const defaultAchievementCurve: PlayerAchievementCurve = { thresholds: [0, 10, 25, 50, 80] };
-export const defaultAchievementPointCurve = {
-  pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200] satisfies [
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-    number,
-  ],
-};
 
 export function achievementCurveThresholds(curve: PlayerAchievementCurve) {
   return "pointThresholds" in curve
     ? curve.pointThresholds.map((rawValue, index) => ({ score: index + 2, rawValue }))
-    : curve.thresholds.map((rawValue, index) => ({
-        score: achievementScorePoints[index] ?? 10,
-        rawValue,
-      }));
+    : "thresholds" in curve
+      ? curve.thresholds.map((rawValue, index) => ({
+          score: achievementScorePoints[index] ?? 10,
+          rawValue,
+        }))
+      : [];
 }
 
 export function achievementCurveUnit(curve: PlayerAchievementCurve) {
-  return "pointThresholds" in curve ? "pt以上" : "%（従来の得点率）";
+  return "pointThresholds" in curve
+    ? "pt以上"
+    : "thresholds" in curve
+      ? "%（従来の得点率）"
+      : "基準未生成";
 }
 
 /** Already calculated by the publication; the chart never recalculates this score. */
@@ -89,6 +85,14 @@ export type PlayerAchievementScore = {
   totalPoints: number;
   score: number | null;
 };
+
+export function playerAchievementScoreLabel(value: PlayerAchievementScore): string {
+  return value.score !== null
+    ? `${formatDecimal(value.score)}点`
+    : value.totalPoints === 0
+      ? "採点対象外"
+      : "基準未適用";
+}
 export type PlayerRadarSampleQuality = "no_target" | "insufficient" | "reference" | "standard";
 export type PlayerRadarUnavailableReason =
   | "no_target"
@@ -139,11 +143,13 @@ export type PlayerRadarDisplay = {
   players: readonly PlayerRadarPlayer[];
 };
 
-export function playerRadarAchievementCurve(display: PlayerRadarDisplay | null) {
+export function playerRadarAchievementCurve(
+  display: PlayerRadarDisplay | null,
+): PlayerAchievementCurve {
   return (
     display?.achievementCurve ??
     display?.basis?.achievementCurve ??
-    (display?.basis ? defaultAchievementCurve : defaultAchievementPointCurve)
+    (display?.basis ? defaultAchievementCurve : { unavailableReason: "basis_unavailable" })
   );
 }
 
@@ -163,7 +169,9 @@ export function playerRadarSettingThresholds(
   axisId: PlayerRadarSettingAxisId,
 ) {
   return axisId === "achievement"
-    ? achievementCurveThresholds(basis?.achievementCurve ?? defaultAchievementCurve)
+    ? basis
+      ? achievementCurveThresholds(basis.achievementCurve ?? defaultAchievementCurve)
+      : []
     : (basis?.axes.find((axis) => axis.axisId === axisId)?.thresholds ?? []);
 }
 
@@ -179,7 +187,8 @@ export function playerRadarSettingCell(
     rawValue: score.totalPoints > 0 ? score.earnedPoints : null,
     score: score.score,
     sampleQuality: "standard",
-    scoreUnavailableReasons: score.totalPoints > 0 ? [] : ["no_target"],
+    scoreUnavailableReasons:
+      score.totalPoints === 0 ? ["no_target"] : score.score === null ? ["basis_unavailable"] : [],
   };
 }
 
@@ -188,7 +197,7 @@ export function achievementRadarScore(
   points: Pick<PlayerAchievementScore, "earnedPoints" | "totalPoints">,
   curve: PlayerAchievementCurve,
 ): number | null {
-  if (points.totalPoints === 0) return null;
+  if (points.totalPoints === 0 || "unavailableReason" in curve) return null;
   if ("pointThresholds" in curve) {
     return 1 + curve.pointThresholds.filter((threshold) => points.earnedPoints >= threshold).length;
   }

@@ -47,6 +47,29 @@ function radarFixture(): PlayerRadarDisplay {
 }
 
 describe("PlayerRadarSection", () => {
+  it.each([0, 100])(
+    "distinguishes no targets from an unapplied achievement basis with %s total points",
+    async (totalPoints) => {
+      const user = userEvent.setup();
+      const radar = radarFixture();
+      // A saved no-target basis can outlive the addition of achievement items.
+      radar.achievementCurve = { unavailableReason: "no_target" };
+      const achievements = radar.players.map((player) => ({
+        memberId: player.memberId,
+        displayName: player.displayName,
+        earnedPoints: 0,
+        totalPoints,
+        score: null,
+      }));
+      render(<PlayerRadarSection radar={radar} achievements={achievements} />);
+      await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
+      const row = screen.getByRole("rowheader", { name: "実績達成" }).parentElement!;
+      expect(within(row).getAllByText(totalPoints ? "基準未適用" : "採点対象外")).toHaveLength(4);
+      expect(within(row).getAllByText(`0／${totalPoints}ポイント`)).toHaveLength(4);
+      expect(within(row).queryByText("1点")).not.toBeInTheDocument();
+    },
+  );
+
   it("groups a common reference warning above the charts and table while retaining unscored axes", async () => {
     const user = userEvent.setup();
     const radar = radarFixture();

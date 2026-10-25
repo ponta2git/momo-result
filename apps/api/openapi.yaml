@@ -9406,6 +9406,23 @@
                   "pointThresholds"
                 ],
                 "type" : "object"
+              },
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "unavailableReason" : {
+                    "enum" : [
+                      "basis_unavailable",
+                      "no_target",
+                      "degenerate_distribution"
+                    ],
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "unavailableReason"
+                ],
+                "type" : "object"
               }
             ]
           },
@@ -10443,7 +10460,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -14685,8 +14702,162 @@
                                       "pointThresholds"
                                     ],
                                     "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "unavailableReason" : {
+                                        "enum" : [
+                                          "basis_unavailable",
+                                          "no_target",
+                                          "degenerate_distribution"
+                                        ],
+                                        "type" : "string"
+                                      }
+                                    },
+                                    "required" : [
+                                      "unavailableReason"
+                                    ],
+                                    "type" : "object"
                                   }
                                 ]
+                              },
+                              "achievementGenerationSource" : {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "methodVersion" : {
+                                    "const" : "achievement-points-spread-v1",
+                                    "type" : "string"
+                                  },
+                                  "players" : {
+                                    "items" : false,
+                                    "maxItems" : 4,
+                                    "minItems" : 4,
+                                    "prefixItems" : [
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          },
+                                          "displayName" : {
+                                            "minLength" : 1,
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId",
+                                          "displayName"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          },
+                                          "displayName" : {
+                                            "minLength" : 1,
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId",
+                                          "displayName"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          },
+                                          "displayName" : {
+                                            "minLength" : 1,
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId",
+                                          "displayName"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          },
+                                          "displayName" : {
+                                            "minLength" : 1,
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId",
+                                          "displayName"
+                                        ],
+                                        "type" : "object"
+                                      }
+                                    ],
+                                    "type" : "array"
+                                  },
+                                  "totalPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  }
+                                },
+                                "required" : [
+                                  "methodVersion",
+                                  "players",
+                                  "totalPoints"
+                                ],
+                                "type" : "object"
                               },
                               "axes" : {
                                 "items" : false,
@@ -15645,6 +15816,23 @@
                                     },
                                     "required" : [
                                       "pointThresholds"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "unavailableReason" : {
+                                        "enum" : [
+                                          "basis_unavailable",
+                                          "no_target",
+                                          "degenerate_distribution"
+                                        ],
+                                        "type" : "string"
+                                      }
+                                    },
+                                    "required" : [
+                                      "unavailableReason"
                                     ],
                                     "type" : "object"
                                   }
@@ -19657,7 +19845,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -20296,7 +20484,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -20959,7 +21147,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -21441,7 +21629,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -21883,7 +22071,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -22700,7 +22888,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -22807,7 +22995,7 @@
                     "x-momo-maxUtf8Bytes" : 4096
                   },
                   "artifactSchemaVersion" : {
-                    "const" : 9,
+                    "const" : 10,
                     "type" : "integer"
                   },
                   "gameTitleId" : {
@@ -23273,7 +23461,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -24006,7 +24194,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -24261,7 +24449,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -25537,7 +25725,7 @@
                 "x-momo-maxUtf8Bytes" : 4096
               },
               "artifactSchemaVersion" : {
-                "const" : 9,
+                "const" : 10,
                 "type" : "integer"
               },
               "gameTitleId" : {
@@ -27666,6 +27854,23 @@
                           "pointThresholds"
                         ],
                         "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
+                        ],
+                        "type" : "object"
                       }
                     ]
                   },
@@ -27986,6 +28191,23 @@
                         },
                         "required" : [
                           "pointThresholds"
+                        ],
+                        "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
                         ],
                         "type" : "object"
                       }
@@ -28342,8 +28564,142 @@
                               "pointThresholds"
                             ],
                             "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "unavailableReason" : {
+                                "enum" : [
+                                  "basis_unavailable",
+                                  "no_target",
+                                  "degenerate_distribution"
+                                ],
+                                "type" : "string"
+                              }
+                            },
+                            "required" : [
+                              "unavailableReason"
+                            ],
+                            "type" : "object"
                           }
                         ]
+                      },
+                      "achievementGenerationSource" : {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "methodVersion" : {
+                            "const" : "achievement-points-spread-v1",
+                            "type" : "string"
+                          },
+                          "players" : {
+                            "items" : false,
+                            "maxItems" : 4,
+                            "minItems" : 4,
+                            "prefixItems" : [
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "earnedPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  },
+                                  "memberId" : {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                },
+                                "required" : [
+                                  "earnedPoints",
+                                  "memberId"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "earnedPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  },
+                                  "memberId" : {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                },
+                                "required" : [
+                                  "earnedPoints",
+                                  "memberId"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "earnedPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  },
+                                  "memberId" : {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                },
+                                "required" : [
+                                  "earnedPoints",
+                                  "memberId"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "earnedPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  },
+                                  "memberId" : {
+                                    "maxLength" : 4096,
+                                    "minLength" : 1,
+                                    "type" : "string",
+                                    "x-momo-maxUtf8Bytes" : 4096
+                                  }
+                                },
+                                "required" : [
+                                  "earnedPoints",
+                                  "memberId"
+                                ],
+                                "type" : "object"
+                              }
+                            ],
+                            "type" : "array"
+                          },
+                          "totalPoints" : {
+                            "maximum" : 102400,
+                            "minimum" : 0,
+                            "type" : "integer",
+                            "x-momo-integerToken" : true
+                          }
+                        },
+                        "required" : [
+                          "methodVersion",
+                          "players",
+                          "totalPoints"
+                        ],
+                        "type" : "object"
                       },
                       "axes" : {
                         "items" : false,
@@ -29290,6 +29646,23 @@
                             },
                             "required" : [
                               "pointThresholds"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "unavailableReason" : {
+                                "enum" : [
+                                  "basis_unavailable",
+                                  "no_target",
+                                  "degenerate_distribution"
+                                ],
+                                "type" : "string"
+                              }
+                            },
+                            "required" : [
+                              "unavailableReason"
                             ],
                             "type" : "object"
                           }
@@ -30571,8 +30944,142 @@
                           "pointThresholds"
                         ],
                         "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
+                        ],
+                        "type" : "object"
                       }
                     ]
+                  },
+                  "achievementGenerationSource" : {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "methodVersion" : {
+                        "const" : "achievement-points-spread-v1",
+                        "type" : "string"
+                      },
+                      "players" : {
+                        "items" : false,
+                        "maxItems" : 4,
+                        "minItems" : 4,
+                        "prefixItems" : [
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "earnedPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              },
+                              "memberId" : {
+                                "maxLength" : 4096,
+                                "minLength" : 1,
+                                "type" : "string",
+                                "x-momo-maxUtf8Bytes" : 4096
+                              }
+                            },
+                            "required" : [
+                              "earnedPoints",
+                              "memberId"
+                            ],
+                            "type" : "object"
+                          }
+                        ],
+                        "type" : "array"
+                      },
+                      "totalPoints" : {
+                        "maximum" : 102400,
+                        "minimum" : 0,
+                        "type" : "integer",
+                        "x-momo-integerToken" : true
+                      }
+                    },
+                    "required" : [
+                      "methodVersion",
+                      "players",
+                      "totalPoints"
+                    ],
+                    "type" : "object"
                   },
                   "axes" : {
                     "items" : false,
@@ -31519,6 +32026,23 @@
                         },
                         "required" : [
                           "pointThresholds"
+                        ],
+                        "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
                         ],
                         "type" : "object"
                       }
@@ -32792,6 +33316,23 @@
                       "pointThresholds"
                     ],
                     "type" : "object"
+                  },
+                  {
+                    "additionalProperties" : false,
+                    "properties" : {
+                      "unavailableReason" : {
+                        "enum" : [
+                          "basis_unavailable",
+                          "no_target",
+                          "degenerate_distribution"
+                        ],
+                        "type" : "string"
+                      }
+                    },
+                    "required" : [
+                      "unavailableReason"
+                    ],
+                    "type" : "object"
                   }
                 ]
               },
@@ -32917,6 +33458,23 @@
                 },
                 "required" : [
                   "pointThresholds"
+                ],
+                "type" : "object"
+              },
+              {
+                "additionalProperties" : false,
+                "properties" : {
+                  "unavailableReason" : {
+                    "enum" : [
+                      "basis_unavailable",
+                      "no_target",
+                      "degenerate_distribution"
+                    ],
+                    "type" : "string"
+                  }
+                },
+                "required" : [
+                  "unavailableReason"
                 ],
                 "type" : "object"
               }
@@ -33148,8 +33706,142 @@
                                   "pointThresholds"
                                 ],
                                 "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
+                                ],
+                                "type" : "object"
                               }
                             ]
+                          },
+                          "achievementGenerationSource" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "methodVersion" : {
+                                "const" : "achievement-points-spread-v1",
+                                "type" : "string"
+                              },
+                              "players" : {
+                                "items" : false,
+                                "maxItems" : 4,
+                                "minItems" : 4,
+                                "prefixItems" : [
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  }
+                                ],
+                                "type" : "array"
+                              },
+                              "totalPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              }
+                            },
+                            "required" : [
+                              "methodVersion",
+                              "players",
+                              "totalPoints"
+                            ],
+                            "type" : "object"
                           },
                           "axes" : {
                             "items" : false,
@@ -34096,6 +34788,23 @@
                                 },
                                 "required" : [
                                   "pointThresholds"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
                                 ],
                                 "type" : "object"
                               }
@@ -35365,6 +36074,23 @@
                         },
                         "required" : [
                           "pointThresholds"
+                        ],
+                        "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
                         ],
                         "type" : "object"
                       }
@@ -35547,8 +36273,142 @@
                                   "pointThresholds"
                                 ],
                                 "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
+                                ],
+                                "type" : "object"
                               }
                             ]
+                          },
+                          "achievementGenerationSource" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "methodVersion" : {
+                                "const" : "achievement-points-spread-v1",
+                                "type" : "string"
+                              },
+                              "players" : {
+                                "items" : false,
+                                "maxItems" : 4,
+                                "minItems" : 4,
+                                "prefixItems" : [
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  },
+                                  {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "earnedPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      },
+                                      "memberId" : {
+                                        "maxLength" : 4096,
+                                        "minLength" : 1,
+                                        "type" : "string",
+                                        "x-momo-maxUtf8Bytes" : 4096
+                                      }
+                                    },
+                                    "required" : [
+                                      "earnedPoints",
+                                      "memberId"
+                                    ],
+                                    "type" : "object"
+                                  }
+                                ],
+                                "type" : "array"
+                              },
+                              "totalPoints" : {
+                                "maximum" : 102400,
+                                "minimum" : 0,
+                                "type" : "integer",
+                                "x-momo-integerToken" : true
+                              }
+                            },
+                            "required" : [
+                              "methodVersion",
+                              "players",
+                              "totalPoints"
+                            ],
+                            "type" : "object"
                           },
                           "axes" : {
                             "items" : false,
@@ -36495,6 +37355,23 @@
                                 },
                                 "required" : [
                                   "pointThresholds"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
                                 ],
                                 "type" : "object"
                               }
@@ -37766,6 +38643,23 @@
                           "pointThresholds"
                         ],
                         "type" : "object"
+                      },
+                      {
+                        "additionalProperties" : false,
+                        "properties" : {
+                          "unavailableReason" : {
+                            "enum" : [
+                              "basis_unavailable",
+                              "no_target",
+                              "degenerate_distribution"
+                            ],
+                            "type" : "string"
+                          }
+                        },
+                        "required" : [
+                          "unavailableReason"
+                        ],
+                        "type" : "object"
                       }
                     ]
                   }
@@ -37858,6 +38752,259 @@
                       {
                         "additionalProperties" : false,
                         "properties" : {
+                          "achievementGeneration" : {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "median" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 1.7976931348623157e+308,
+                                    "minimum" : -1.7976931348623157e+308,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              },
+                              "pointThresholds" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "items" : false,
+                                    "maxItems" : 9,
+                                    "minItems" : 9,
+                                    "prefixItems" : [
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      },
+                                      {
+                                        "maximum" : 1.7976931348623157e+308,
+                                        "minimum" : -1.7976931348623157e+308,
+                                        "type" : "number",
+                                        "x-momo-finiteF64" : true
+                                      }
+                                    ],
+                                    "type" : "array"
+                                  }
+                                ]
+                              },
+                              "q10" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 1.7976931348623157e+308,
+                                    "minimum" : -1.7976931348623157e+308,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              },
+                              "q90" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "maximum" : 1.7976931348623157e+308,
+                                    "minimum" : -1.7976931348623157e+308,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ]
+                              },
+                              "source" : {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "methodVersion" : {
+                                    "const" : "achievement-points-spread-v1",
+                                    "type" : "string"
+                                  },
+                                  "players" : {
+                                    "items" : false,
+                                    "maxItems" : 4,
+                                    "minItems" : 4,
+                                    "prefixItems" : [
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "earnedPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          },
+                                          "memberId" : {
+                                            "maxLength" : 4096,
+                                            "minLength" : 1,
+                                            "type" : "string",
+                                            "x-momo-maxUtf8Bytes" : 4096
+                                          }
+                                        },
+                                        "required" : [
+                                          "earnedPoints",
+                                          "memberId"
+                                        ],
+                                        "type" : "object"
+                                      }
+                                    ],
+                                    "type" : "array"
+                                  },
+                                  "totalPoints" : {
+                                    "maximum" : 102400,
+                                    "minimum" : 0,
+                                    "type" : "integer",
+                                    "x-momo-integerToken" : true
+                                  }
+                                },
+                                "required" : [
+                                  "methodVersion",
+                                  "players",
+                                  "totalPoints"
+                                ],
+                                "type" : "object"
+                              },
+                              "unavailableReason" : {
+                                "anyOf" : [
+                                  {
+                                    "type" : "null"
+                                  },
+                                  {
+                                    "enum" : [
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                ]
+                              }
+                            },
+                            "required" : [
+                              "median",
+                              "pointThresholds",
+                              "q10",
+                              "q90",
+                              "source",
+                              "unavailableReason"
+                            ],
+                            "type" : "object"
+                          },
                           "axes" : {
                             "items" : false,
                             "maxItems" : 6,
@@ -38865,8 +40012,142 @@
                                               "pointThresholds"
                                             ],
                                             "type" : "object"
+                                          },
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "unavailableReason" : {
+                                                "enum" : [
+                                                  "basis_unavailable",
+                                                  "no_target",
+                                                  "degenerate_distribution"
+                                                ],
+                                                "type" : "string"
+                                              }
+                                            },
+                                            "required" : [
+                                              "unavailableReason"
+                                            ],
+                                            "type" : "object"
                                           }
                                         ]
+                                      },
+                                      "achievementGenerationSource" : {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "methodVersion" : {
+                                            "const" : "achievement-points-spread-v1",
+                                            "type" : "string"
+                                          },
+                                          "players" : {
+                                            "items" : false,
+                                            "maxItems" : 4,
+                                            "minItems" : 4,
+                                            "prefixItems" : [
+                                              {
+                                                "additionalProperties" : false,
+                                                "properties" : {
+                                                  "earnedPoints" : {
+                                                    "maximum" : 102400,
+                                                    "minimum" : 0,
+                                                    "type" : "integer",
+                                                    "x-momo-integerToken" : true
+                                                  },
+                                                  "memberId" : {
+                                                    "maxLength" : 4096,
+                                                    "minLength" : 1,
+                                                    "type" : "string",
+                                                    "x-momo-maxUtf8Bytes" : 4096
+                                                  }
+                                                },
+                                                "required" : [
+                                                  "earnedPoints",
+                                                  "memberId"
+                                                ],
+                                                "type" : "object"
+                                              },
+                                              {
+                                                "additionalProperties" : false,
+                                                "properties" : {
+                                                  "earnedPoints" : {
+                                                    "maximum" : 102400,
+                                                    "minimum" : 0,
+                                                    "type" : "integer",
+                                                    "x-momo-integerToken" : true
+                                                  },
+                                                  "memberId" : {
+                                                    "maxLength" : 4096,
+                                                    "minLength" : 1,
+                                                    "type" : "string",
+                                                    "x-momo-maxUtf8Bytes" : 4096
+                                                  }
+                                                },
+                                                "required" : [
+                                                  "earnedPoints",
+                                                  "memberId"
+                                                ],
+                                                "type" : "object"
+                                              },
+                                              {
+                                                "additionalProperties" : false,
+                                                "properties" : {
+                                                  "earnedPoints" : {
+                                                    "maximum" : 102400,
+                                                    "minimum" : 0,
+                                                    "type" : "integer",
+                                                    "x-momo-integerToken" : true
+                                                  },
+                                                  "memberId" : {
+                                                    "maxLength" : 4096,
+                                                    "minLength" : 1,
+                                                    "type" : "string",
+                                                    "x-momo-maxUtf8Bytes" : 4096
+                                                  }
+                                                },
+                                                "required" : [
+                                                  "earnedPoints",
+                                                  "memberId"
+                                                ],
+                                                "type" : "object"
+                                              },
+                                              {
+                                                "additionalProperties" : false,
+                                                "properties" : {
+                                                  "earnedPoints" : {
+                                                    "maximum" : 102400,
+                                                    "minimum" : 0,
+                                                    "type" : "integer",
+                                                    "x-momo-integerToken" : true
+                                                  },
+                                                  "memberId" : {
+                                                    "maxLength" : 4096,
+                                                    "minLength" : 1,
+                                                    "type" : "string",
+                                                    "x-momo-maxUtf8Bytes" : 4096
+                                                  }
+                                                },
+                                                "required" : [
+                                                  "earnedPoints",
+                                                  "memberId"
+                                                ],
+                                                "type" : "object"
+                                              }
+                                            ],
+                                            "type" : "array"
+                                          },
+                                          "totalPoints" : {
+                                            "maximum" : 102400,
+                                            "minimum" : 0,
+                                            "type" : "integer",
+                                            "x-momo-integerToken" : true
+                                          }
+                                        },
+                                        "required" : [
+                                          "methodVersion",
+                                          "players",
+                                          "totalPoints"
+                                        ],
+                                        "type" : "object"
                                       },
                                       "axes" : {
                                         "items" : false,
@@ -39813,6 +41094,23 @@
                                             },
                                             "required" : [
                                               "pointThresholds"
+                                            ],
+                                            "type" : "object"
+                                          },
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "unavailableReason" : {
+                                                "enum" : [
+                                                  "basis_unavailable",
+                                                  "no_target",
+                                                  "degenerate_distribution"
+                                                ],
+                                                "type" : "string"
+                                              }
+                                            },
+                                            "required" : [
+                                              "unavailableReason"
                                             ],
                                             "type" : "object"
                                           }
@@ -41376,6 +42674,23 @@
                                   "pointThresholds"
                                 ],
                                 "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
+                                ],
+                                "type" : "object"
                               }
                             ]
                           }
@@ -41390,124 +42705,148 @@
                     ]
                   },
                   "achievementCurve" : {
-                    "oneOf" : [
+                    "anyOf" : [
                       {
-                        "additionalProperties" : false,
-                        "properties" : {
-                          "thresholds" : {
-                            "items" : false,
-                            "maxItems" : 5,
-                            "minItems" : 5,
-                            "prefixItems" : [
-                              {
-                                "maximum" : 100.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 100.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 100.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 100.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 100.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
+                        "oneOf" : [
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "thresholds" : {
+                                "items" : false,
+                                "maxItems" : 5,
+                                "minItems" : 5,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 100.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
                               }
+                            },
+                            "required" : [
+                              "thresholds"
                             ],
-                            "type" : "array"
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "pointThresholds" : {
+                                "items" : false,
+                                "maxItems" : 9,
+                                "minItems" : 9,
+                                "prefixItems" : [
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  },
+                                  {
+                                    "maximum" : 102400.0,
+                                    "minimum" : 0.0,
+                                    "type" : "number",
+                                    "x-momo-finiteF64" : true
+                                  }
+                                ],
+                                "type" : "array"
+                              }
+                            },
+                            "required" : [
+                              "pointThresholds"
+                            ],
+                            "type" : "object"
+                          },
+                          {
+                            "additionalProperties" : false,
+                            "properties" : {
+                              "unavailableReason" : {
+                                "enum" : [
+                                  "basis_unavailable",
+                                  "no_target",
+                                  "degenerate_distribution"
+                                ],
+                                "type" : "string"
+                              }
+                            },
+                            "required" : [
+                              "unavailableReason"
+                            ],
+                            "type" : "object"
                           }
-                        },
-                        "required" : [
-                          "thresholds"
-                        ],
-                        "type" : "object"
+                        ]
                       },
                       {
-                        "additionalProperties" : false,
-                        "properties" : {
-                          "pointThresholds" : {
-                            "items" : false,
-                            "maxItems" : 9,
-                            "minItems" : 9,
-                            "prefixItems" : [
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              },
-                              {
-                                "maximum" : 102400.0,
-                                "minimum" : 0.0,
-                                "type" : "number",
-                                "x-momo-finiteF64" : true
-                              }
-                            ],
-                            "type" : "array"
-                          }
-                        },
-                        "required" : [
-                          "pointThresholds"
-                        ],
-                        "type" : "object"
+                        "type" : "null"
                       }
                     ]
                   },
@@ -41696,8 +43035,142 @@
                                           "pointThresholds"
                                         ],
                                         "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "unavailableReason" : {
+                                            "enum" : [
+                                              "basis_unavailable",
+                                              "no_target",
+                                              "degenerate_distribution"
+                                            ],
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "unavailableReason"
+                                        ],
+                                        "type" : "object"
                                       }
                                     ]
+                                  },
+                                  "achievementGenerationSource" : {
+                                    "additionalProperties" : false,
+                                    "properties" : {
+                                      "methodVersion" : {
+                                        "const" : "achievement-points-spread-v1",
+                                        "type" : "string"
+                                      },
+                                      "players" : {
+                                        "items" : false,
+                                        "maxItems" : 4,
+                                        "minItems" : 4,
+                                        "prefixItems" : [
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "earnedPoints" : {
+                                                "maximum" : 102400,
+                                                "minimum" : 0,
+                                                "type" : "integer",
+                                                "x-momo-integerToken" : true
+                                              },
+                                              "memberId" : {
+                                                "maxLength" : 4096,
+                                                "minLength" : 1,
+                                                "type" : "string",
+                                                "x-momo-maxUtf8Bytes" : 4096
+                                              }
+                                            },
+                                            "required" : [
+                                              "earnedPoints",
+                                              "memberId"
+                                            ],
+                                            "type" : "object"
+                                          },
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "earnedPoints" : {
+                                                "maximum" : 102400,
+                                                "minimum" : 0,
+                                                "type" : "integer",
+                                                "x-momo-integerToken" : true
+                                              },
+                                              "memberId" : {
+                                                "maxLength" : 4096,
+                                                "minLength" : 1,
+                                                "type" : "string",
+                                                "x-momo-maxUtf8Bytes" : 4096
+                                              }
+                                            },
+                                            "required" : [
+                                              "earnedPoints",
+                                              "memberId"
+                                            ],
+                                            "type" : "object"
+                                          },
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "earnedPoints" : {
+                                                "maximum" : 102400,
+                                                "minimum" : 0,
+                                                "type" : "integer",
+                                                "x-momo-integerToken" : true
+                                              },
+                                              "memberId" : {
+                                                "maxLength" : 4096,
+                                                "minLength" : 1,
+                                                "type" : "string",
+                                                "x-momo-maxUtf8Bytes" : 4096
+                                              }
+                                            },
+                                            "required" : [
+                                              "earnedPoints",
+                                              "memberId"
+                                            ],
+                                            "type" : "object"
+                                          },
+                                          {
+                                            "additionalProperties" : false,
+                                            "properties" : {
+                                              "earnedPoints" : {
+                                                "maximum" : 102400,
+                                                "minimum" : 0,
+                                                "type" : "integer",
+                                                "x-momo-integerToken" : true
+                                              },
+                                              "memberId" : {
+                                                "maxLength" : 4096,
+                                                "minLength" : 1,
+                                                "type" : "string",
+                                                "x-momo-maxUtf8Bytes" : 4096
+                                              }
+                                            },
+                                            "required" : [
+                                              "earnedPoints",
+                                              "memberId"
+                                            ],
+                                            "type" : "object"
+                                          }
+                                        ],
+                                        "type" : "array"
+                                      },
+                                      "totalPoints" : {
+                                        "maximum" : 102400,
+                                        "minimum" : 0,
+                                        "type" : "integer",
+                                        "x-momo-integerToken" : true
+                                      }
+                                    },
+                                    "required" : [
+                                      "methodVersion",
+                                      "players",
+                                      "totalPoints"
+                                    ],
+                                    "type" : "object"
                                   },
                                   "axes" : {
                                     "items" : false,
@@ -42644,6 +44117,23 @@
                                         },
                                         "required" : [
                                           "pointThresholds"
+                                        ],
+                                        "type" : "object"
+                                      },
+                                      {
+                                        "additionalProperties" : false,
+                                        "properties" : {
+                                          "unavailableReason" : {
+                                            "enum" : [
+                                              "basis_unavailable",
+                                              "no_target",
+                                              "degenerate_distribution"
+                                            ],
+                                            "type" : "string"
+                                          }
+                                        },
+                                        "required" : [
+                                          "unavailableReason"
                                         ],
                                         "type" : "object"
                                       }
@@ -43913,6 +45403,23 @@
                                 },
                                 "required" : [
                                   "pointThresholds"
+                                ],
+                                "type" : "object"
+                              },
+                              {
+                                "additionalProperties" : false,
+                                "properties" : {
+                                  "unavailableReason" : {
+                                    "enum" : [
+                                      "basis_unavailable",
+                                      "no_target",
+                                      "degenerate_distribution"
+                                    ],
+                                    "type" : "string"
+                                  }
+                                },
+                                "required" : [
+                                  "unavailableReason"
                                 ],
                                 "type" : "object"
                               }

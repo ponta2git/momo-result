@@ -210,8 +210,6 @@ export function usePlayerRadarOperations(
     save: async (request) => {
       if (operationReason) throw new Error(operationReason);
       const curve = request.manualInput.achievementCurve;
-      if (curve && !("pointThresholds" in curve))
-        throw new Error("実績ポイントの採点境界を確認してください。");
       const response = await submitAsync({
         gameTitleId,
         kind: "manual",

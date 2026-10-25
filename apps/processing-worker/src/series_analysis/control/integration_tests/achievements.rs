@@ -142,7 +142,7 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
             .find(|player| player.member_id == "member_ponta")
             .ok_or("fixed player missing")?;
         assert_eq!(player.earned_points, 3);
-        assert_eq!(player.score, Some(1.0));
+        assert_eq!(player.score, None);
     }
     let player = payload
         .items

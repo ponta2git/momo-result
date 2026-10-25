@@ -195,7 +195,9 @@ fn source_reasons(
     basis_checksum: &str,
 ) -> Result<Vec<RadarReviewReason>, RadarError> {
     let mut reasons = Vec::new();
-    if !source_is_current(source, input)? {
+    let mut match_source = source.clone();
+    match_source.achievement_generation_source = None;
+    if !source_is_current(&match_source, input)? {
         let source_ids = source
             .matches
             .iter()

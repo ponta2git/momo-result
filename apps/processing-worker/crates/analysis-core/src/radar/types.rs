@@ -95,6 +95,8 @@ pub struct RadarSourceSnapshot {
     /// Present only for formal comparisons; the six-axis source identity excludes this resource.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub achievements: Option<Box<crate::achievements::AchievementPayload>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation_source: Option<Box<super::AchievementGenerationSource>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -142,6 +144,8 @@ pub struct RadarBasis {
     /// Omitted legacy values retain their original immutable bytes and checksum.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub achievement_curve: Option<crate::achievements::AchievementCurve>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation_source: Option<Box<super::AchievementGenerationSource>>,
     /// Absent on legacy generated criteria so their canonical bytes and checksum stay unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manual: Option<Box<RadarManualProvenance>>,
@@ -243,6 +247,10 @@ impl RadarBasis {
                 unavailable_reasons: Vec::new(),
             }),
             basis: Some(self.clone()),
+            achievement_generation: self
+                .achievement_generation_source
+                .as_deref()
+                .map(|source| Box::new(source.generate())),
         })
     }
 }
@@ -275,6 +283,8 @@ pub struct RadarCandidate {
     pub values_per_axis: usize,
     pub axes: [RadarCandidateAxis; 6],
     pub basis: Option<RadarBasis>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation: Option<Box<super::AchievementGeneration>>,
 }
 
 /// Admin-visible preparation result, excluding the complete source record snapshot.
@@ -286,6 +296,8 @@ pub struct RadarCandidateSummary {
     pub values_per_axis: usize,
     pub axes: [RadarCandidateAxis; 6],
     pub basis: Option<RadarBasis>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation: Option<Box<super::AchievementGeneration>>,
 }
 
 impl RadarCandidate {
@@ -297,6 +309,7 @@ impl RadarCandidate {
             values_per_axis: self.values_per_axis,
             axes: self.axes.clone(),
             basis: self.basis.clone(),
+            achievement_generation: self.achievement_generation.clone(),
         }
     }
 }

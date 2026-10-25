@@ -49,8 +49,8 @@ export function PlayerRadarScoringCurve({
   const unit = axisId === "achievement" ? "pt" : axisId === "averageRank" ? "位" : "万円";
   const beforeCurve = playerRadarAchievementCurve(before);
   const afterCurve = playerRadarAchievementCurve(after);
-  const legacyCurrent = axisId === "achievement" && !("pointThresholds" in beforeCurve);
-  const legacyEdited = axisId === "achievement" && !("pointThresholds" in afterCurve);
+  const legacyCurrent = axisId === "achievement" && "thresholds" in beforeCurve;
+  const legacyEdited = axisId === "achievement" && "thresholds" in afterCurve;
   const totalPoints =
     after.players.find((player) => player.achievement)?.achievement?.totalPoints ?? 0;
   const pointValues = (
@@ -61,7 +61,9 @@ export function PlayerRadarScoringCurve({
       ? totalPoints > 0
         ? values?.map((value) => ({ ...value, rawValue: (value.rawValue * totalPoints) / 100 }))
         : undefined
-      : values;
+      : values?.length
+        ? values
+        : undefined;
   const current =
     axisId === "achievement"
       ? achievementCurveThresholds(beforeCurve)

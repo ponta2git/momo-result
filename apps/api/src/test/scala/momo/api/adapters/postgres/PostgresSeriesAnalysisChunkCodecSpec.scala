@@ -455,8 +455,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 9,
-      validationContractId = Some("series-analysis-artifact-v9-full-validation-v4"),
+      artifactSchemaVersion = 10,
+      validationContractId = Some("series-analysis-artifact-v10-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -471,8 +471,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v12",
-    9,
+    "series-analysis-v13",
+    10,
     Instant.parse("2026-08-09T00:00:00Z"),
   )
 

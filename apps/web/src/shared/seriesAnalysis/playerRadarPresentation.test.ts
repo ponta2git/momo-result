@@ -1,17 +1,44 @@
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import {
   achievementRadarScore,
+  achievementCurveThresholds,
+  playerRadarAchievementCurve,
   defaultAchievementCurve,
-  defaultAchievementPointCurve,
   formatPlayerRadarBoundary,
   formatPlayerRadarRawValue,
   playerRadarSettingCell,
   playerRadarSettingThresholds,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
+// @vitest-environment node
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 describe("player radar values", () => {
+  it("does not create scores or thresholds when the achievement curve is unavailable", () => {
+    expect(playerRadarAchievementCurve(null)).toEqual({ unavailableReason: "basis_unavailable" });
+    for (const unavailableReason of [
+      "basis_unavailable",
+      "no_target",
+      "degenerate_distribution",
+    ] as const) {
+      const curve = { unavailableReason };
+      expect(achievementCurveThresholds(curve)).toEqual([]);
+      expect(achievementRadarScore({ earnedPoints: 50, totalPoints: 100 }, curve)).toBeNull();
+    }
+    const cell = playerRadarSettingCell(
+      {
+        memberId: "member_ponta",
+        displayName: "ぽんた",
+        axes: [],
+        achievement: { earnedPoints: 0, totalPoints: 100, score: null },
+      },
+      "achievement",
+    );
+    expect(cell?.rawValue).toBe(0);
+    expect(cell?.score).toBeNull();
+    expect(cell?.scoreUnavailableReasons).toEqual(["basis_unavailable"]);
+  });
+
   it("scores point boundaries inclusively in integer steps independently of the total available points", () => {
     for (const [earnedPoints, score] of [
       [0, 1],
@@ -26,14 +53,14 @@ describe("player radar values", () => {
       [1000, 10],
     ] as const) {
       expect(
-        achievementRadarScore({ earnedPoints, totalPoints: 1000 }, defaultAchievementPointCurve),
+        achievementRadarScore({ earnedPoints, totalPoints: 1000 }, pointAchievementCurveFixture),
       ).toBe(score);
       expect(
-        achievementRadarScore({ earnedPoints, totalPoints: 2000 }, defaultAchievementPointCurve),
+        achievementRadarScore({ earnedPoints, totalPoints: 2000 }, pointAchievementCurveFixture),
       ).toBe(score);
     }
     expect(
-      achievementRadarScore({ earnedPoints: 0, totalPoints: 0 }, defaultAchievementPointCurve),
+      achievementRadarScore({ earnedPoints: 0, totalPoints: 0 }, pointAchievementCurveFixture),
     ).toBeNull();
   });
 
@@ -44,13 +71,7 @@ describe("player radar values", () => {
     expect(
       achievementRadarScore({ earnedPoints: 65, totalPoints: 200 }, defaultAchievementCurve),
     ).toBe(5.6);
-    expect(playerRadarSettingThresholds(null, "achievement")).toEqual([
-      { score: 1, rawValue: 0 },
-      { score: 3, rawValue: 10 },
-      { score: 5, rawValue: 25 },
-      { score: 7, rawValue: 50 },
-      { score: 10, rawValue: 80 },
-    ]);
+    expect(playerRadarSettingThresholds(null, "achievement")).toEqual([]);
     const cell = playerRadarSettingCell(
       {
         memberId: "member_ponta",

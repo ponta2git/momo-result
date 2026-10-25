@@ -2,17 +2,17 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarScoringCurve";
-import { defaultAchievementPointCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 describe("PlayerRadarScoringCurve", () => {
-  it("compares the legacy default against point steps in point units before an initial six-axis basis", () => {
+  it("compares a published legacy curve against point steps without changing its saved score", () => {
     const model = makePlayerRadarEditorView();
     const before = structuredClone(model.editing!.evaluation!.raw);
     before.basis = null;
     const after = structuredClone(model.editing!.evaluation!.raw);
-    after.basis!.achievementCurve = defaultAchievementPointCurve;
-    after.achievementCurve = defaultAchievementPointCurve;
+    after.basis!.achievementCurve = pointAchievementCurveFixture;
+    after.achievementCurve = pointAchievementCurveFixture;
     after.players[0]!.achievement!.score = 6;
     const { container } = render(
       <PlayerRadarScoringCurve axisId="achievement" before={before} after={after} />,
@@ -31,6 +31,29 @@ describe("PlayerRadarScoringCurve", () => {
     ).toHaveAttribute("d", expect.stringContaining("V"));
     expect(screen.getByText("適用中（従来の得点率）")).toBeVisible();
     expect(container.querySelectorAll('circle[r="5"]')).toHaveLength(4);
+  });
+
+  it("leaves initial achievement scores and the current curve absent while retaining raw points", () => {
+    const model = makePlayerRadarEditorView();
+    const before = structuredClone(model.editing!.evaluation!.raw);
+    before.basis = null;
+    before.achievementCurve = { unavailableReason: "basis_unavailable" };
+    for (const player of before.players) player.achievement!.score = null;
+    const after = structuredClone(before);
+    after.achievementCurve = pointAchievementCurveFixture;
+    after.players[0]!.achievement!.score = 6;
+    const { container } = render(
+      <PlayerRadarScoringCurve axisId="achievement" before={before} after={after} />,
+    );
+    expect(screen.getByText("適用中（未適用）")).toBeVisible();
+    expect(
+      screen.getByRole("img", { name: "実績達成の採点境界と選手の位置" }),
+    ).toHaveAccessibleDescription(/50pt、適用中 未採点、変更案 6点/u);
+    expect(
+      container.querySelector('path[stroke="var(--color-text-secondary)"][stroke-dasharray="5 4"]'),
+    ).not.toBeInTheDocument();
+    expect(container.querySelectorAll('circle[r="5"]')).toHaveLength(0);
+    expect(container.querySelectorAll('circle[r="9"]')).toHaveLength(4);
   });
 
   it("renders a published point curve as steps without a six-axis basis and keeps the published score", () => {

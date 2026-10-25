@@ -7,9 +7,23 @@ import type {
 } from "@/shared/api/seriesPlayerRadar";
 import { canonicalResultMembers } from "@/shared/domain/members";
 
-import basisFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json" with { type: "json" };
+import basisFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-basis-legacy-v1.json" with { type: "json" };
 import candidateFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-candidate-v1.json" with { type: "json" };
 import evaluationFixture from "../../../../../docs/schemas/fixtures/series-analysis/radar-evaluation-v1.json" with { type: "json" };
+
+export const pointAchievementCurveFixture = {
+  pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200] satisfies [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ],
+};
 
 export function makePlayerRadarBasis(): SeriesPlayerRadarBasisRecord {
   return {
@@ -51,6 +65,16 @@ export function makeReadyPlayerRadarState(): SeriesPlayerRadarState {
   const state = makePlayerRadarState();
   state.currentBasis = makePlayerRadarBasis();
   state.eligibility = { matchCount: 40, heldEventCount: 8 };
+  const result = structuredClone(candidateFixture) as unknown as NonNullable<
+    NonNullable<SeriesPlayerRadarState["candidate"]>["result"]
+  >;
+  // This helper describes a saved legacy proposal, before achievement generation was added.
+  delete result.achievementGeneration;
+  if (result.basis) {
+    delete result.basis.achievementCurve;
+    if ("achievementGenerationSource" in result.basis)
+      delete result.basis.achievementGenerationSource;
+  }
   state.candidate = {
     achievementCurve: { thresholds: [0, 10, 25, 50, 80] },
     originKind: "generated",
@@ -66,9 +90,7 @@ export function makeReadyPlayerRadarState(): SeriesPlayerRadarState {
     safeFailureCode: null,
     createdAt: "2026-09-02T00:00:00Z",
     updatedAt: "2026-09-02T00:00:00Z",
-    result: structuredClone(candidateFixture) as unknown as NonNullable<
-      NonNullable<SeriesPlayerRadarState["candidate"]>["result"]
-    >,
+    result,
     latestPreview: {
       previewId: "radar-preview",
       beforeBasisId: "radar-basis-current",

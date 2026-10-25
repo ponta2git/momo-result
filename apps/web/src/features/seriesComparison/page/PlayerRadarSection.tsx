@@ -5,7 +5,6 @@ import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/Serie
 import type { AchievementScorePlayer } from "@/shared/achievements/AchievementScoreTable";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
-import { formatDecimal } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
 import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
@@ -18,6 +17,7 @@ import {
   playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
   playerRadarAchievementCurve,
+  playerAchievementScoreLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
   PlayerRadarCell,
@@ -72,6 +72,7 @@ export function PlayerRadarSection({
   achievementsHref?: string | undefined;
 }) {
   const players = orderFixedMembers(radar.players);
+  const achievementCurve = playerRadarAchievementCurve(radar);
   const hasScores =
     players.some((player) => player.axes.some((axis) => axis.score !== null)) ||
     Boolean(achievements?.some((player) => player.score !== null));
@@ -183,11 +184,7 @@ export function PlayerRadarSection({
                       return (
                         <div className="grid gap-1">
                           <p className={contentText.compactPrimary}>
-                            {score?.score === null
-                              ? "採点対象外"
-                              : score
-                                ? `${formatDecimal(score.score)}点`
-                                : "未取得"}
+                            {score ? playerAchievementScoreLabel(score) : "未取得"}
                           </p>
                           {score ? (
                             <p>
@@ -236,9 +233,11 @@ export function PlayerRadarSection({
                             id: "achievement",
                             label: "実績達成",
                             value:
-                              "pointThresholds" in playerRadarAchievementCurve(radar)
+                              "pointThresholds" in achievementCurve
                                 ? "獲得ポイントが設定された境界に達するごとに、1〜10点で段階的に採点します。対象項目がない場合は採点対象外です。"
-                                : "従来の得点率基準で1〜10点を表示します。対象項目がない場合は採点対象外です。",
+                                : "thresholds" in achievementCurve
+                                  ? "従来の得点率基準で1〜10点を表示します。対象項目がない場合は採点対象外です。"
+                                  : "実績の採点基準は未適用です。獲得ポイントを表示し、対象項目がない場合は採点対象外とします。",
                           },
                         ]
                       : []),

@@ -21,13 +21,15 @@ pub fn snapshot(input: &NormalizedAnalysisInput) -> Result<RadarSourceSnapshot, 
         game_title_id: input.game_title_id().to_owned(),
         matches: source_matches(&rows)?,
         achievements: None,
+        achievement_generation_source: None,
     })
 }
 
 /// New matches are permitted; every saved source match must still have exactly the saved facts.
 ///
-/// An incident, owner, play-order, display-name, or unrelated match revision change cannot
-/// invalidate a radar candidate. A changed title, scope membership, order, or result does.
+/// Match statistics retain their historical identity. New generated sources additionally bind
+/// lifetime achievement points; proof or catalog edits invalidate them only when those points
+/// change. Legacy sources omit that marker and retain their original match-only semantics.
 ///
 /// # Errors
 ///
@@ -37,6 +39,11 @@ pub fn source_is_current(
     input: &NormalizedAnalysisInput,
 ) -> Result<bool, RadarError> {
     if source.game_title_id != input.game_title_id() {
+        return Ok(false);
+    }
+    if let Some(saved) = source.achievement_generation_source.as_deref()
+        && *saved != super::AchievementGenerationSource::from_input(input)?
+    {
         return Ok(false);
     }
     let current = snapshot(input)?;
@@ -104,6 +111,18 @@ impl RadarSourceSnapshot {
         let normalized = snapshot(&input)?;
         if normalized.game_title_id != self.game_title_id
             || normalized.matches != self.matches
+            || self
+                .achievement_generation_source
+                .as_ref()
+                .is_some_and(|source| {
+                    !source.is_valid()
+                        || self.matches.first().is_some_and(|game| {
+                            game.players
+                                .iter()
+                                .map(|p| &p.member_id)
+                                .ne(source.players.iter().map(|p| &p.member_id))
+                        })
+                })
             || self.achievements.as_ref().is_some_and(|value| {
                 value.game_title_id != self.game_title_id
                     || !crate::achievements::valid_payload(value)
@@ -125,6 +144,9 @@ impl RadarSourceSnapshot {
         digest.update_serialized(&self.game_title_id, &mut buffer)?;
         for item in &self.matches {
             digest.update_serialized(item, &mut buffer)?;
+        }
+        if let Some(source) = &self.achievement_generation_source {
+            digest.update_serialized(source, &mut buffer)?;
         }
         Ok(RadarSourceSummary {
             game_title_id: self.game_title_id.clone(),

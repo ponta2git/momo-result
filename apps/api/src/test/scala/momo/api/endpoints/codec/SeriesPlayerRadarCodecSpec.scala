@@ -102,6 +102,9 @@ final class SeriesPlayerRadarCodecSpec extends FunSuite:
     assert(decode[SeriesPlayerRadarAchievementCurveRequest](
       s"""{"pointThresholds":$points,"thresholds":[0,10,25,50,80]}"""
     ).isLeft)
+    assert(decode[SeriesPlayerRadarAchievementCurveRequest](
+      """{"unavailableReason":"no_target"}"""
+    ).isLeft)
 
   test("withdraw optionally carries a creation operation while still requiring its candidate"):
     val guarded = request.copy(

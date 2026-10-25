@@ -65,8 +65,8 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     ).foreach { case (kind, file, obsoletePayloadVersions) =>
       val current = sharedFixture(file)
       val request = simpleRequest(kind)
-      assert(validate(current, request, None, 9))
-      List(0, 1, 2, 3, 4, 5, 6, 7, 8, 99).foreach(version =>
+      assert(validate(current, request, None, 10))
+      List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
         assert(!validate(current, request, None, version))
       )
       obsoletePayloadVersions.foreach(version =>
@@ -74,13 +74,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           current.mapObject(_.add("schemaVersion", Json.fromInt(version))),
           request,
           None,
-          9
+          10
         ))
       )
     }
     val currentId = SeriesAnalysisArtifactContract.ValidationContractId
-    assert(SeriesAnalysisArtifactContract.supports(9, Some(currentId)))
-    List(0, 1, 2, 3, 4, 5, 6, 7, 8, 99).foreach(version =>
+    assert(SeriesAnalysisArtifactContract.supports(10, Some(currentId)))
+    List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
       assert(!SeriesAnalysisArtifactContract.supports(version, Some(currentId)))
     )
     List(
@@ -90,7 +90,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       Some("series-analysis-artifact-v7-full-validation-v1"),
       Some("unknown")
     ).foreach(id =>
-      assert(!SeriesAnalysisArtifactContract.supports(9, id))
+      assert(!SeriesAnalysisArtifactContract.supports(10, id))
     )
 
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
@@ -210,7 +210,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       request: SeriesAnalysisChunkRequest,
       revision: Option[Long]
   ): Boolean =
-    validate(json, request, revision, 9)
+    validate(json, request, revision, SeriesAnalysisArtifactContract.ArtifactSchemaVersion)
 
   private def validate(
       json: Json,

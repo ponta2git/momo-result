@@ -204,7 +204,7 @@ object IntegrationDb:
       UPDATE discord_notification_settings SET enabled = true, generation = 0
     """.update.run.void *> sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v12',
+      SET algorithm_version = 'series-analysis-v13',
           artifact_schema_version = ${SeriesAnalysisArtifactContract.ArtifactSchemaVersion},
           validation_contract_id = ${SeriesAnalysisArtifactContract.ValidationContractId},
           updated_at = clock_timestamp()

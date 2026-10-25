@@ -176,7 +176,7 @@ fn manual_monitoring_starts_at_its_first_comparison_and_allows_small_samples() {
 fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_curve() {
     use crate::achievements::AchievementCurve;
     let legacy: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json"
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-legacy-v1.json"
     ))
     .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
     let mut basis = crate::payload::radar_basis_from_payload(&legacy)
@@ -228,7 +228,7 @@ fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_cu
 #[test]
 fn optional_achievement_curve_keeps_strict_basis_shape_and_semantic_validation() {
     let generated: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-v1.json"
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-legacy-v1.json"
     ))
     .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
     let manual = serde_json::to_value(manual_basis(40))

@@ -1,4 +1,4 @@
-//! Source facts are rechecked only while publishing an explicitly accepted basis application.
+//! Publication rechecks unapplied generated point sources and explicitly accepted applications.
 
 use momo_analysis_core::radar;
 use tokio_postgres::Transaction;
@@ -15,6 +15,7 @@ pub(super) async fn validate(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
 ) -> Result<bool, ControlError> {
+    Box::pin(invalidate_changed_generation_sources(transaction, claim)).await?;
     let active = transaction
         .query_opt(
             "SELECT c.legacy_id,(SELECT legacy_id FROM series_radar_previews WHERE id=o.preview_id) FROM series_radar_title_states s \
@@ -87,6 +88,36 @@ pub(super) async fn validate(
             .await?;
     }
     Ok(valid)
+}
+
+/// Only newly generated, unapplied candidates bind achievement point facts. Legacy and applied
+/// criteria remain immutable; manual drafts keep their entered thresholds.
+async fn invalidate_changed_generation_sources(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+) -> Result<(), ControlError> {
+    let has_candidates: bool = transaction.query_one(
+        "SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND origin_kind='generated' AND status IN ('ready','unavailable','failed') AND result->'achievementGeneration'->'source' IS NOT NULL)",
+        &[&claim.game_title_id],
+    ).await?.try_get(0)?;
+    if !has_candidates {
+        return Ok(());
+    }
+    let current = input_repository::load_in_transaction(
+        transaction,
+        &claim.game_title_id,
+        claim.input_revision,
+    )
+    .await
+    .map_err(current_input_error)?;
+    let source = radar::AchievementGenerationSource::from_input(&current)
+        .map_err(|_invalid| ControlError::AuthoritativeInputContract)?;
+    let value = serde_json::to_value(source).map_err(|_invalid| ControlError::InvalidMetadata)?;
+    transaction.execute(
+        "WITH changed AS (UPDATE series_radar_candidates SET status='invalid',safe_failure_code='source_changed',updated_at=clock_timestamp() WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND origin_kind='generated' AND status IN ('ready','unavailable','failed') AND result->'achievementGeneration'->'source' IS NOT NULL AND result->'achievementGeneration'->'source' IS DISTINCT FROM $2::jsonb RETURNING id) UPDATE series_radar_previews SET status='stale',updated_at=clock_timestamp() WHERE candidate_id IN (SELECT id FROM changed) AND status IN ('pending','ready')",
+        &[&claim.game_title_id, &value],
+    ).await?;
+    Ok(())
 }
 
 async fn preview_source(

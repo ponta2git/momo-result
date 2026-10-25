@@ -128,7 +128,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         fr"c.basis_id"
       )} AND candidate_basis.game_title_id = ${identities.wireId("gt")}
       LEFT JOIN LATERAL (
-        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload) AS payload
+        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload,
+          CASE WHEN c.origin_kind = 'generated' THEN cb.payload END) AS payload
       ) effective_basis ON true
       LEFT JOIN LATERAL (
         SELECT preview.* FROM series_radar_previews preview WHERE candidate_id = c.id AND game_title_id = gt.id

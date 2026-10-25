@@ -38,8 +38,10 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
     .fold(error => fail(s"Invalid Rust fixture: $error"), identity)
 
   /** Stored Worker output is the fixture here; these tests exercise acceptance, never recalculate it. */
-  private def seedReady: IO[Unit] =
-    val basis = fixture("basis").noSpaces
+  private def seedReady: IO[Unit] = seedReadyWithBasis(fixture("basis"))
+
+  private def seedReadyWithBasis(basisPayload: Json): IO[Unit] =
+    val basis = basisPayload.noSpaces
     val emptyAchievements = parser.parse(Files.readString(repositoryFile(
       "docs/schemas/fixtures/series-analysis/achievements-empty-payload-v2.json"
     ))).toOption.getOrElse(fail("Invalid achievement fixture"))
@@ -135,6 +137,53 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           .get[List[Double]]("pointThresholds"),
         Right(SeriesPlayerRadarAchievementCurve.Default.pointThresholds)
       )
+
+  List(
+    "omitted legacy curve" -> None,
+    "explicit legacy curve" -> Some(Json.obj(
+      "thresholds" -> Json.fromValues(List(0, 15, 30, 60, 90).map(Json.fromInt))
+    )),
+    "point curve" -> Some(Json.obj(
+      "pointThresholds" ->
+        Json.fromValues(List(5, 15, 25, 40, 60, 90, 120, 180, 300).map(Json.fromInt))
+    ))
+  ).foreach { case (label, curve) =>
+    test(s"pending generated candidates inherit the current basis $label"):
+      val basis = fixture("basis").mapObject(fields =>
+        curve.fold(fields.remove("achievementCurve"))(fields.add("achievementCurve", _))
+      )
+      for
+        _ <- seedTitle *> seedReadyWithBasis(basis)
+        _ <-
+        (sql"""UPDATE series_radar_title_states SET current_basis_id=$basisId,
+            desired_basis_id=$basisId, current_applied_at=$now WHERE game_title_id=$title""".update.run *>
+          sql"""UPDATE series_radar_candidates SET status='applied' WHERE id=$candidateId""".update.run)
+          .transact(transactor)
+        repository <- repo
+        useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+        accepted <- useCase.run(
+          command(SeriesPlayerRadarOperationKind.Candidate, None, None),
+          account,
+          "generated-with-current-basis"
+        )
+        document <- repository.radarState(title)
+      yield
+        assertEquals(accepted.map(_.status), Right("pending"))
+        assert(document.isRight, document.toString)
+        val state = parser.parse(new String(
+          document.toOption.get.payload,
+          java.nio.charset.StandardCharsets.UTF_8
+        )).toOption.get
+        val candidate = state.hcursor.downField("candidate")
+        assertEquals(candidate.get[String]("originKind"), Right("generated"))
+        assertEquals(candidate.downField("basisId").focus, Some(Json.Null))
+        assertEquals(candidate.downField("sourceBasisId").focus, Some(Json.Null))
+        assertEquals(candidate.downField("result").focus, Some(Json.Null))
+        assertEquals(
+          candidate.downField("achievementCurve").focus,
+          Some(curve.getOrElse(PostgresSeriesPlayerRadarReadOps.LegacyDefaultAchievementCurve))
+        )
+  }
 
   test(
     "withdrawal before job materialization fences the desired basis and retains a durable normal recovery"

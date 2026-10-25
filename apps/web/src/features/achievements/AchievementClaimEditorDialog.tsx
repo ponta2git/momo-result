@@ -30,7 +30,7 @@ export function AchievementClaimEditorDialog({
     matchIdentity,
     dirty,
     conflict,
-    frozen,
+    automatic,
     confirmationRequired,
     eligibleIdentity,
     mutation,
@@ -62,7 +62,7 @@ export function AchievementClaimEditorDialog({
             else void submit().catch(() => undefined);
           }}
         >
-          {claim.sourceKind === "import" ? (
+          {!automatic && claim.sourceKind === "import" ? (
             <p className={contentText.body}>
               以前の実績リストから引き継いだ記録です。達成の有無を直したり、分かった日時や試合を追加したりできます。
             </p>
@@ -80,12 +80,17 @@ export function AchievementClaimEditorDialog({
               未保存の入力は保持しています。最新の記録を確認して編集し直してください。
             </Notice>
           ) : null}
-          {frozen ? (
-            <Notice tone="info" title="廃止時点の記録です">
-              廃止済みの自動実績は訂正できません。
+          {automatic ? (
+            <Notice
+              tone="info"
+              title={item.retiredAt ? "廃止時点の記録です" : "試合結果から自動で判定する実績です"}
+            >
+              {item.retiredAt
+                ? "廃止済みの自動実績は訂正できません。"
+                : "達成状況を直す場合は、元の試合結果を訂正してください。"}
             </Notice>
           ) : null}
-          <fieldset disabled={mutation.isPending || frozen} className="grid gap-4">
+          <fieldset disabled={mutation.isPending || automatic} className="grid gap-4">
             <SelectField
               label="達成の確認"
               value={form.state}
@@ -188,7 +193,7 @@ export function AchievementClaimEditorDialog({
               disabled={
                 !dirty ||
                 conflict ||
-                frozen ||
+                automatic ||
                 confirmationRequired ||
                 !eligibleIdentity ||
                 Boolean(form.matchId && (!matchIdentity || identity.isFetching))

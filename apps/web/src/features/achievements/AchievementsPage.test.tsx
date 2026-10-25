@@ -81,6 +81,63 @@ async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("AchievementsPage", () => {
+  it("keeps automatic achievements read-only despite retained imported claims and links to the source match", async () => {
+    const user = userEvent.setup();
+    const item = makeAchievementItem({
+      ruleKind: "total_assets",
+      threshold: "200000",
+      name: "総資産20億円以上",
+    });
+    const catalog = makeAchievementCatalog({
+      items: [item],
+      claims: [
+        makeAchievementClaim({ sourceKind: "import" }),
+        makeAchievementClaim({
+          claimId: "claim-unconfirmed",
+          memberId: "member_eu",
+          sourceKind: "import",
+          state: "unconfirmed",
+        }),
+      ],
+    });
+    const resource = makeAchievedResource();
+    const published = resource.items[0]!;
+    published.name = item.name;
+    published.ruleKind = "total_assets";
+    published.threshold = item.threshold;
+    const player = published.players.find((entry) => entry.memberId === "member_ponta")!;
+    player.firstAchievedAt = "2026-04-04T12:34:56.000Z";
+    player.dateUnknown = false;
+    player.proofs = [
+      {
+        ...player.proofs[0]!,
+        kind: "automatic",
+        claimId: null,
+        generationId: null,
+        achievedAt: player.firstAchievedAt,
+        matchId: "match-automatic",
+        matchAvailable: true,
+      },
+    ];
+    server.use(
+      http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+      http.get("/api/achievements", () => HttpResponse.json(resource)),
+    );
+    const { router } = renderPage();
+    await user.click(await screen.findByRole("button", { name: `${item.name}の記録を見る` }));
+    const details = await screen.findByRole("dialog", { name: item.name });
+    expect(within(details).getByText("まだ記録なし")).toBeVisible();
+    expect(
+      within(details).queryByRole("button", { name: "以前の記録：達成を確認する" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(details).getByRole("tab", { name: "ぽんた" }));
+    expect(within(details).getByText("4ポイント獲得")).toBeVisible();
+    expect(within(details).queryByRole("button", { name: "記録を直す" })).not.toBeInTheDocument();
+    expect(within(details).queryByText("以前の実績リストから")).not.toBeInTheDocument();
+    await user.click(within(details).getByRole("link", { name: "試合を振り返る" }));
+    expect(router.state.location.pathname).toBe("/matches/match-automatic");
+  });
+
   it("uses one record action per row, switches players, and honors retired player links", async () => {
     const user = userEvent.setup();
     const resource = makeAchievedResource();

@@ -109,11 +109,11 @@ export function AchievementDetailsDialog({
             </p>
           ) : null}
         </section>
-        {catalogFailed ? (
+        {item.ruleKind === "manual" && catalogFailed ? (
           <Notice tone="warning" title="訂正する記録を読み込めませんでした">
             「表示を更新」で読み直せます。達成状況は取得済みの内容です。
           </Notice>
-        ) : catalogLoading ? (
+        ) : item.ruleKind === "manual" && catalogLoading ? (
           <p role="status" className={contentText.supporting}>
             記録を読み込み中
           </p>
@@ -161,15 +161,14 @@ function AchievementPlayerRecord({
   onEditClaim: (claimId: string) => void;
 }) {
   const claims =
-    catalog?.claims.filter(
-      (claim) => claim.achievementId === item.achievementId && claim.memberId === member.memberId,
-    ) ?? [];
-  const frozen = item.retired && item.ruleKind !== "manual";
+    item.ruleKind === "manual"
+      ? (catalog?.claims.filter(
+          (claim) =>
+            claim.achievementId === item.achievementId && claim.memberId === member.memberId,
+        ) ?? [])
+      : [];
   const unconfirmedClaim =
-    !frozen &&
-    claims.length === 1 &&
-    claims[0]?.sourceKind === "import" &&
-    claims[0]?.state === "unconfirmed"
+    claims.length === 1 && claims[0]?.sourceKind === "import" && claims[0]?.state === "unconfirmed"
       ? claims[0]
       : undefined;
   // The status explanation already identifies an undated, unconfirmed import.
@@ -310,7 +309,7 @@ function AchievementPlayerRecord({
             達成を確認する
           </Button>
         </div>
-      ) : !frozen && claims.length > 0 ? (
+      ) : claims.length > 0 ? (
         <Disclosure summary="記録を直す" panelSpacing="sm" triggerVariant="supporting">
           <ul className="grid gap-4">
             {claims.map((claim) => {

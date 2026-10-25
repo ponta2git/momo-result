@@ -45,7 +45,7 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
   const dirty = JSON.stringify(form) !== JSON.stringify(claimForm(baseline.claim));
   const conflict =
     claim.version !== baseline.claim.version || item.version !== baseline.itemVersion;
-  const frozen = Boolean(item.retiredAt && item.ruleKind !== "manual");
+  const automatic = item.ruleKind !== "manual";
   const confirmationRequired = form.state === "unconfirmed";
   const eligibleIdentity =
     !form.matchId ||
@@ -87,7 +87,7 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
   const submit = async () => {
     if (
       conflict ||
-      frozen ||
+      automatic ||
       confirmationRequired ||
       mutation.isPending ||
       !eligibleIdentity ||
@@ -135,7 +135,7 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
     matchIdentity,
     dirty,
     conflict,
-    frozen,
+    automatic,
     confirmationRequired,
     eligibleIdentity,
     mutation,

@@ -133,7 +133,9 @@ private[api] object InitialAchievementInput:
             case "達成！" => Right(Some(InitialAchievementClaim(item.id, player, "achieved")))
             case "達成？" => Right(Some(InitialAchievementClaim(item.id, player, "unconfirmed")))
             case _ => Left(s"Unknown achievement mark at source row ${(index + 1).toString}.")
-        }.map(_.flatten)
+        }.map(values =>
+          if item.definition.rule == AchievementRule.Manual then values.flatten else Nil
+        )
       }
     yield Prepared(
       AchievementInitialization(items, claims),

@@ -7,7 +7,7 @@ import munit.FunSuite
 
 final class InitialAchievementInputSuite extends FunSuite:
   private val ids = (1 to 31).map(index => UUID(0L, index.toLong)).toList
-  private val manifest = Json.obj(
+  private def manifestWith(automaticRows: Set[Int]): String = Json.obj(
     "formatVersion" -> Json.fromInt(1),
     "items" -> Json.fromValues(ids.zipWithIndex.map { case (id, index) =>
       Json.obj(
@@ -18,11 +18,14 @@ final class InitialAchievementInputSuite extends FunSuite:
         "notes" -> Json.fromString(""),
         "stars" -> Json.fromInt(2),
         "scope" -> Json.fromString("common"),
-        "ruleKind" -> Json.fromString("manual"),
-        "threshold" -> Json.Null,
+        "ruleKind" ->
+          Json.fromString(if automaticRows.contains(index + 1) then "destination" else "manual"),
+        "threshold" ->
+          (if automaticRows.contains(index + 1) then Json.fromString("6") else Json.Null),
       )
     }),
   ).noSpaces
+  private val manifest = manifestWith(Set.empty)
   private val mapping = Json.obj(
     "gameTitleId" -> Json.fromString("title"),
     "eastMapId" -> Json.fromString("east"),
@@ -66,6 +69,25 @@ final class InitialAchievementInputSuite extends FunSuite:
       InitialAchievementInput.prepare(manifest, mapping, reordered).left.toOption,
       Some("TSV player columns do not match the explicit mapping order.")
     )
+  }
+
+  test("automatic marks are validated but only manual marks become initial claims") {
+    List(Set(1), Set(2), Set(1, 2)).foreach { automaticRows =>
+      val selectedManifest = manifestWith(automaticRows)
+      val prepared = InitialAchievementInput.prepare(selectedManifest, mapping, source).toOption.get
+      assertEquals(prepared.command.items.map(_.id), ids)
+      assertEquals(prepared.confirmed, if automaticRows.contains(1) then 0 else 1)
+      assertEquals(prepared.unconfirmed, if automaticRows.contains(2) then 0 else 1)
+      assertEquals(
+        prepared.command.claims.map(_.achievementId),
+        List(1, 2).filterNot(automaticRows.contains).map(row => ids(row - 1))
+      )
+      assert(InitialAchievementInput.prepare(
+        selectedManifest,
+        mapping,
+        source.replace(if automaticRows.contains(1) then "達成！" else "達成？", "不明な印")
+      ).isLeft)
+    }
   }
 
   test("changed definitions and unexpected status marks reject the whole source") {

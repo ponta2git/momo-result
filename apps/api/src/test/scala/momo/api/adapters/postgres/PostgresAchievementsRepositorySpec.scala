@@ -128,6 +128,17 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       world: World
   ): IO[List[AchievementClaim]] =
     repo.catalog(world.title).map(value => right(value).claims)
+  private def legacyAutomaticClaim(item: UUID): IO[Unit] =
+    val id = UUID.randomUUID()
+    val generation = UUID.randomUUID()
+    sql"""INSERT INTO achievement_claims
+      (id, item_id, member_id, source_kind, state, generation_id,
+       version, updated_by_account_id, updated_at)
+      SELECT $id, $item, m.id, 'import', 'unconfirmed', $generation, 1, a.id, $now
+      FROM members m CROSS JOIN momo_login_accounts a
+      WHERE m.id = ${identitySchema.lookup(Entity.Members, member.value)}
+        AND a.id = ${identitySchema.lookup(Entity.Accounts, account.value)}
+    """.update.run.void.transact(transactor)
   private def change(record: MatchRecord): MatchUpdate = MatchFixtures.update(record)
     .copy(expectedVersion = Some(record.analysisRevision), updatedByAccountId = Some(account))
 
@@ -511,6 +522,62 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       assertEquals(catalog.items.size, 1)
       assertEquals(catalog.maps, Nil)
 
+  test("automatic imports and claim corrections are rejected while legacy rows remain intact"):
+    for
+      world <- seed
+      repo <- repository
+      automaticId = UUID.randomUUID()
+      automatic = InitialAchievementItem(
+        automaticId,
+        "fixture-destination",
+        definition(world).copy(rule = AchievementRule.Destination, threshold = Some(BigDecimal(6)))
+      )
+      initial = AchievementInitialization(
+        List(automatic),
+        List(InitialAchievementClaim(automaticId, member, "achieved"))
+      )
+      rejected <- PostgresAchievementInitialization.initialize(initial, context, identitySchema)
+        .transact(transactor).attempt
+      empty <- repo.catalog(world.title).map(right)
+      _ <- PostgresAchievementInitialization.initialize(
+        initial.copy(claims = Nil),
+        context,
+        identitySchema
+      )
+        .transact(transactor)
+      before <- revision(world)
+      spoofed <- PostgresAchievementInitialization.initialize(
+        initial.copy(items = List(automatic.copy(definition = definition(world)))),
+        context,
+        identitySchema
+      ).transact(transactor).attempt
+      noClaims <- claims(repo, world)
+      _ <- legacyAutomaticClaim(automaticId)
+      imported <- claims(repo, world).map(_.head)
+      corrections <- List("achieved", "unconfirmed", "cancelled").traverse(state =>
+        repo.correctClaim(
+          imported.id,
+          CorrectAchievementClaim(imported.version, 1, state, None, None, None),
+          context
+        )
+      )
+      _ <- PostgresAchievementInitialization.initialize(
+        initial.copy(claims = Nil),
+        context,
+        identitySchema
+      )
+        .transact(transactor)
+      preserved <- claims(repo, world)
+      after <- revision(world)
+    yield
+      assert(rejected.isLeft)
+      assertEquals(empty.items, Nil)
+      assert(spoofed.isLeft)
+      assertEquals(noClaims, Nil)
+      assert(corrections.forall(_.left.exists(isConflict)))
+      assertEquals(preserved, List(imported))
+      assertEquals(after, before)
+
   test(
     "automatic retirement uses the current bounded artifact, captures current text and survives artifact cleanup"
   ):
@@ -539,13 +606,14 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
             definition(world).copy(common = true, mapMasterIds = Nil)
           )
         ),
-        List(InitialAchievementClaim(automaticId, member, "unconfirmed"))
+        Nil
       )
       _ <- PostgresAchievementInitialization.initialize(
         initial,
         context,
         identitySchema
       ).transact(transactor)
+      _ <- legacyAutomaticClaim(automaticId)
       unavailable <- repo.retire(automaticId, 1, context)
       artifact <- publishAchievementFixture(world, automaticId, manualId, matched.id)
       analysis <- PostgresSeriesAnalysisRepository.create[IO](
@@ -687,7 +755,7 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
         (id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
          source_input_checksum, root_checksum, status, aggregate_chunk_count, review_chunk_count,
          drilldown_chunk_count, match_context_chunk_count, achievement_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v9', 8,
+        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v10', 8,
           $checksum, $checksum, 'staging', 1, 0, 0, 0, 1, $size, $size, ARRAY[]::text[])""".update.run *>
         sql"""INSERT INTO series_analysis_achievement_artifacts
           (artifact_id, scope_key, scope_kind, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)

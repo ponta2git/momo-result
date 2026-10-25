@@ -34,6 +34,14 @@ object PostgresAchievementInitialization:
           ),
         "Initial achievement identities or claim states are inconsistent.",
       )
+      _ <- PostgresAchievementWriteOps.ensure(
+        command.claims.forall(value =>
+          definitions.exists(item =>
+            item.id.equals(value.achievementId) && item.definition.rule == AchievementRule.Manual
+          )
+        ),
+        "Initial claims are supported only for manual achievements."
+      )
       roster <- sql"SELECT ${identities.wireId("m")} FROM members m".query[MemberId].to[List]
       members <-
         command.claims.traverse(value => identities.normalize(Entity.Members, value.memberId.value))
@@ -114,6 +122,14 @@ object PostgresAchievementInitialization:
         yield Option.when(added)(value.definition.gameTitleId)
       }
       definitions <- PostgresAchievementReadOps.lockItems(command.items.map(_.id))
+      _ <- PostgresAchievementWriteOps.ensure(
+        command.claims.forall(value =>
+          definitions.exists(item =>
+            item.id.equals(value.achievementId) && item.rule == AchievementRule.Manual
+          )
+        ),
+        "Initial claims are supported only for manual achievements."
+      )
       actor <- identities.requireReference(Entity.Accounts, context.accountId.value)
       roots <- command.claims.sortBy(value =>
         (value.achievementId.toString, value.memberId.value)

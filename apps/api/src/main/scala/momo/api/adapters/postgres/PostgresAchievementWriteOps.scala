@@ -260,8 +260,8 @@ private[postgres] object PostgresAchievementWriteOps:
         "The achievement record changed. Refresh before saving."
       )
       _ <- ensure(
-        item.retiredAt.isEmpty || item.rule == AchievementRule.Manual,
-        "A retired automatic achievement is fixed at retirement."
+        item.rule == AchievementRule.Manual,
+        "Automatic achievements are determined only from saved match records."
       )
       source = normalizedMatch.flatMap(matched => sources.find(_.id == matched))
       _ <-

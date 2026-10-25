@@ -18,7 +18,7 @@ import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/se
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v4.json";
 
 const artifact = {
-  algorithmVersion: "series-analysis-v11",
+  algorithmVersion: "series-analysis-v12",
   artifactId: "artifact-1",
   artifactSchemaVersion: 9,
   gameTitleId: "title-1",

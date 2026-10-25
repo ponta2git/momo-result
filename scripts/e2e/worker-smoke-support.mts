@@ -6,7 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 export const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
-export const algorithmVersion = "series-analysis-v11";
+export const algorithmVersion = "series-analysis-v12";
 export const releaseId = "0123456789abcdef0123456789abcdef01234567";
 type Options = {
   input?: string;

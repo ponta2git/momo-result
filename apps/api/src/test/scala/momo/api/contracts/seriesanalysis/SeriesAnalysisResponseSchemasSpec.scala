@@ -83,7 +83,7 @@ final class SeriesAnalysisResponseSchemasSpec extends FunSuite with JsonSchemaAs
       "artifactId" -> Json.fromString("artifact-fixture"),
       "gameTitleId" -> Json.fromString("title-fixture"),
       "inputRevision" -> Json.fromString("1"),
-      "algorithmVersion" -> Json.fromString("series-analysis-v11"),
+      "algorithmVersion" -> Json.fromString("series-analysis-v12"),
       "artifactSchemaVersion" -> Json.fromInt(version),
       "publishedAt" -> Json.fromString("2026-01-01T00:00:00Z"),
       "radarBasisCreatedAt" -> Json.Null,

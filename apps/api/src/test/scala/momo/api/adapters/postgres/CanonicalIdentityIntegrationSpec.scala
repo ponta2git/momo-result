@@ -912,7 +912,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         validation_contract_id, source_input_checksum, root_checksum, status,
         aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         outlook_summary_chunk_count, outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES ($artifactId, $title, 0, 'series-analysis-v11', 9, NULL,
+        VALUES ($artifactId, $title, 0, 'series-analysis-v12', 9, NULL,
           ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
           1, 0, 0, 0, 1, 4, ${size + 10}, ${size + 10}, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_analysis_scope_aggregate_artifacts
@@ -924,7 +924,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_analysis_outlook_reference_artifacts
           (artifact_id, scope_key, scope_kind, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
           SELECT $artifactId, 'overall', 'overall', legacy_id, $inventoryPayload, 2, 2, 1, 1, $inventoryHash FROM members""".update.run *>
-        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v9-full-validation-v3'
+        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v9-full-validation-v4'
           WHERE id = $artifactId AND status = 'staging'""".update.run *>
         sql"""UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
           WHERE id = $artifactId AND status = 'staging'""".update.run *>

@@ -12,7 +12,7 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v11",
+  algorithmVersion: "series-analysis-v12",
   artifactId: "artifact-current",
   artifactSchemaVersion: 9,
   gameTitleId: "gt_momotetsu_2",
@@ -1050,7 +1050,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v11",
+        algorithmVersion: "series-analysis-v12",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,

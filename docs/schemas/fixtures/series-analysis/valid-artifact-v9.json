@@ -3,7 +3,7 @@
   "artifactId": "artifact-contract-1",
   "gameTitleId": "title-contract-1",
   "inputRevision": "7",
-  "algorithmVersion": "series-analysis-v11",
+  "algorithmVersion": "series-analysis-v12",
   "artifactSchemaVersion": 9,
   "sourceInputChecksum": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "rootChecksum": "sha256:4526c5c92e3d8cde8fe909eaed36cea3c2cd6eff8edcf0dfb53691ac15eb9c8c",

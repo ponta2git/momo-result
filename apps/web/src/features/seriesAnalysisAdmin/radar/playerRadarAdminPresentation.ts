@@ -183,6 +183,7 @@ export function buildRadarBasisView({
             createdAt: candidate.createdAt,
             appliedAt: null,
             basis: candidate.result.basis,
+            achievementCurve: candidate.achievementCurve,
           },
           maps,
         )
@@ -214,10 +215,22 @@ export function buildRadarBasisView({
                       : "ready"
                   : "loading",
           before: preview?.before
-            ? playerRadarEvaluationDisplay(preview.before, beforeBasis, maps)
+            ? playerRadarEvaluationDisplay(
+                preview.before,
+                beforeBasis,
+                maps,
+                [],
+                preview.beforeAchievements,
+              )
             : null,
           after: preview?.after
-            ? playerRadarEvaluationDisplay(preview.after, candidateBasis, maps)
+            ? playerRadarEvaluationDisplay(
+                preview.after,
+                candidateBasis,
+                maps,
+                [],
+                preview.afterAchievements,
+              )
             : null,
           beforeBasis,
           candidateBasis,
@@ -264,7 +277,7 @@ export function buildRadarBasisView({
       ? {
           label: candidate.manualInput ? "保存済みの手調整案" : "自動提案の変更案",
           basis: editableBasis,
-          input: candidate.manualInput ?? radarBasisInput(editableBasis),
+          input: radarBasisInput(editableBasis),
           sourceBasisId: manualSourceBasisId ?? editableBasis.basisId,
           sourceCandidateId: candidate.manualInput
             ? candidate.sourceCandidateId
@@ -498,6 +511,9 @@ export function buildRadarAdministrationView({
                         axisId: axis.axisId,
                         thresholds: axis.thresholds ?? [],
                       })),
+                      ...(submittedRequest.manualInput.achievementCurve
+                        ? { achievementCurve: submittedRequest.manualInput.achievementCurve }
+                        : {}),
                     },
                   },
                 }
@@ -529,15 +545,27 @@ export function buildRadarAdministrationView({
               failureMessage: candidate.safeFailureCode
                 ? radarFailureMessage(candidate.safeFailureCode)
                 : null,
-              unavailableAxes:
-                candidate.result?.axes
+              unavailableAxes: [
+                ...(candidate.result?.axes
                   .filter((axis) => axis.unavailableReasons.length > 0)
                   .map((axis) => ({
                     axisId: axis.axisId,
                     reason: axis.unavailableReasons.includes("degenerate_distribution")
                       ? "分布の広がりが不足しています"
                       : "作成元の試合・開催件数が不足しています",
-                  })) ?? [],
+                  })) ?? []),
+                ...(candidate.result?.achievementGeneration?.unavailableReason
+                  ? [
+                      {
+                        axisId: "achievement" as const,
+                        reason:
+                          candidate.result.achievementGeneration.unavailableReason === "no_target"
+                            ? "対象の実績項目がありません"
+                            : "4人の実績ポイントの分布に広がりがありません",
+                      },
+                    ]
+                  : []),
+              ],
             }
           : null,
         preview: previewDisplay,

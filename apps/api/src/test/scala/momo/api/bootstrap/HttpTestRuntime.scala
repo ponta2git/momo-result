@@ -207,6 +207,7 @@ private[api] object HttpTestRuntime:
         matchDraftCancellation = matchDraftCancellation,
         matchList = matchList,
         seriesAnalysis = UnsupportedAnalysisRepositories.analysis[F],
+        achievements = UnsupportedAnalysisRepositories.achievements[F],
         seriesPlayerRadar = UnsupportedAnalysisRepositories.radar[F],
         matchConfirmation = matchConfirmation,
         appSessions = appSessions,

@@ -55,5 +55,5 @@ Deliver the requested record, findings, or verified changes. Lead with findings 
 link the supporting evidence so a later reader can inspect them briefly or in depth. Do not assume
 a future human review will supply missing investigation or verification. Include material
 uncertainty and the next step for unresolved work, with tracking references when used. For changed
-files, apply the [change gates](../../../docs/dev-rule.md#4-change-gates); a read-only review does
+files, apply the [change gates](../../../docs/dev-rule.md#change-gates); a read-only review does
 not require implementation gates or tracker edits.

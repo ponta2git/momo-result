@@ -1,3 +1,4 @@
+import { matchResultFingerprint } from "@/features/matches/workspace/matchFormToRequest";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm, emptyIncidents } from "@/features/matches/workspace/matchFormTypes";
 import type { MatchDetailResponse } from "@/shared/api/matches";
@@ -36,8 +37,9 @@ export function matchDetailToMatchForm(detail: MatchDetailResponse): MatchFormVa
     });
   }
 
-  return {
+  const values: MatchFormValues = {
     ...base,
+    expectedVersion: detail.version,
     draftIds: {
       ...(detail.totalAssetsDraftId ? { totalAssets: detail.totalAssetsDraftId } : {}),
       ...(detail.revenueDraftId ? { revenue: detail.revenueDraftId } : {}),
@@ -52,4 +54,5 @@ export function matchDetailToMatchForm(detail: MatchDetailResponse): MatchFormVa
     players: players as MatchFormValues["players"],
     seasonMasterId: detail.seasonMasterId,
   };
+  return { ...values, initialResultFingerprint: matchResultFingerprint(values) };
 }

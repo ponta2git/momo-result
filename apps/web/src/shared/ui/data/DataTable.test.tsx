@@ -49,6 +49,29 @@ describe("DataTable", () => {
     expect(scrollArea).not.toHaveAttribute("aria-describedby");
   });
 
+  it("keeps an overflowing region keyboard accessible when its scroll hint is disabled", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataTable
+        caption={{ content: "試合結果" }}
+        columns={[{ header: "プレーヤー", key: "name", renderCell: (row) => row.name }]}
+        getRowKey={(row) => row.id}
+        rows={rows}
+        scrollArea={{ label: "4人の比較", showHint: false }}
+      />,
+    );
+    const region = screen.getByRole("region", { name: "4人の比較" });
+    vi.spyOn(region, "scrollWidth", "get").mockReturnValue(800);
+    vi.spyOn(region, "clientWidth", "get").mockReturnValue(400);
+
+    act(() => notifyResize(region));
+
+    expect(screen.queryByText("表は左右にスクロールできます。")).not.toBeInTheDocument();
+    expect(region).not.toHaveAttribute("aria-describedby");
+    await user.tab();
+    expect(region).toHaveFocus();
+  });
+
   it("keeps the explicit scroll name and prevents sorting while the owning operation is pending", async () => {
     const user = userEvent.setup();
     const onSort = vi.fn();

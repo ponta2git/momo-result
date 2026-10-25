@@ -163,7 +163,7 @@ describe("SeriesComparisonPage", () => {
       );
     });
     const heading = await screen.findByRole("heading", { name: "順位と基礎比較" });
-    await user.click(screen.getByRole("button", { name: "表示を更新" }));
+    await user.click(await screen.findByRole("button", { name: "表示を更新" }));
     await waitFor(() => expect(requests).toBe(2));
     await waitFor(() => expect(heading.closest("[inert]")).not.toBeNull());
 

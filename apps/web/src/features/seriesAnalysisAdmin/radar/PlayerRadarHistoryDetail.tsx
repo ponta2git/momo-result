@@ -5,7 +5,11 @@ import type {
   PlayerRadarRevisionDetail,
 } from "@/shared/api/seriesPlayerRadarHistory";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  playerRadarSettingAxes,
+  achievementCurveThresholds,
+  achievementCurveUnit,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
@@ -22,6 +26,13 @@ export function playerRadarRevisionActor(actor: PlayerRadarRevision["appliedBy"]
 
 export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisionDetail }) {
   const { revision, beforeBasis, afterBasis } = detail;
+  const afterCurve = detail.afterAchievementCurve;
+  const beforeCurve = detail.beforeAchievementCurve;
+  const beforeAchievement = beforeCurve ? achievementCurveThresholds(beforeCurve) : [];
+  const afterAchievement = achievementCurveThresholds(afterCurve);
+  const achievementScores = [
+    ...new Set([...beforeAchievement, ...afterAchievement].map((entry) => entry.score)),
+  ].toSorted((a, b) => a - b);
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     // The list action disappears when its detail opens. Preserve any focus the
@@ -42,25 +53,36 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
         </p>
       </div>
       {beforeBasis ? null : (
-        <p className={contentText.body}>初回適用のため、変更前の採点基準はありません。</p>
+        <p className={contentText.body}>初回適用のため、変更前の保存基準はありません。</p>
       )}
       <TabsRoot defaultValue="averageRank" key={revision.revisionId}>
         <TabsList aria-label="改訂詳細の軸" variant="underline">
-          {playerRadarAxes.map((axis) => (
+          {playerRadarSettingAxes.map((axis) => (
             <TabsTab value={axis.id} key={axis.id}>
               {axis.label}
             </TabsTab>
           ))}
         </TabsList>
-        {playerRadarAxes.map((axis) => {
+        {playerRadarSettingAxes.map((axis) => {
           const before = beforeBasis?.axes.find((entry) => entry.axisId === axis.id);
           const after = afterBasis.axes.find((entry) => entry.axisId === axis.id);
           const unit = axis.id === "averageRank" ? "位以下" : "万円以上";
-          const rows = Array.from({ length: 9 }, (_, index) => ({
-            score: index + 2,
-            before: before?.thresholds[index],
-            after: after?.thresholds[index],
-          }));
+          const rows: Array<{
+            score: number;
+            before: number | undefined;
+            after: number | undefined;
+          }> =
+            axis.id === "achievement"
+              ? achievementScores.map((score) => ({
+                  score,
+                  before: beforeAchievement.find((entry) => entry.score === score)?.rawValue,
+                  after: afterAchievement.find((entry) => entry.score === score)?.rawValue,
+                }))
+              : Array.from({ length: 9 }, (_, index) => ({
+                  score: index + 2,
+                  before: before?.thresholds[index],
+                  after: after?.thresholds[index],
+                }));
           return (
             <TabsPanel value={axis.id} key={axis.id}>
               <div className="mt-4 min-w-0">
@@ -80,29 +102,36 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                     {
                       key: "before",
                       minWidth: "10rem",
-                      header: `変更前（${unit}）`,
+                      header: `変更前（${axis.id === "achievement" ? (beforeCurve ? achievementCurveUnit(beforeCurve) : "基準未適用") : unit}）`,
                       tabular: true,
                       renderCell: (row) =>
-                        row.before === undefined ? "未適用" : String(row.before),
+                        row.before === undefined
+                          ? axis.id === "achievement"
+                            ? "—"
+                            : "未適用"
+                          : String(row.before),
                     },
                     {
                       key: "after",
                       minWidth: "10rem",
-                      header: `変更後（${unit}）`,
+                      header: `変更後（${axis.id === "achievement" ? achievementCurveUnit(afterCurve) : unit}）`,
                       tabular: true,
-                      renderCell: (row) =>
-                        row.after === undefined ? "記録なし" : String(row.after),
+                      renderCell: (row) => (row.after === undefined ? "—" : String(row.after)),
                     },
                     {
                       key: "change",
                       minWidth: "6rem",
                       header: "差分",
                       renderCell: (row) =>
-                        row.before === undefined
-                          ? "新規"
-                          : row.before === row.after
-                            ? "変更なし"
-                            : "変更あり",
+                        axis.id === "achievement" &&
+                        beforeCurve &&
+                        achievementCurveUnit(beforeCurve) !== achievementCurveUnit(afterCurve)
+                          ? "採点方式の変更"
+                          : row.before === undefined
+                            ? "新規"
+                            : row.before === row.after
+                              ? "変更なし"
+                              : "変更あり",
                     },
                   ]}
                   density="compact"

@@ -13,7 +13,7 @@ import {
   formatPercent,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
-import { PlayerRadarSection } from "@/features/seriesComparison/page/PlayerRadarSection";
+import { AchievementRadarSection } from "@/features/seriesComparison/page/AchievementRadarSection";
 import {
   AnalysisReadingGuide,
   AnalysisSection,
@@ -171,7 +171,15 @@ export const OverviewView = memo(function OverviewView({
           />
         </div>
       </AnalysisSection>
-      <PlayerRadarSection radar={playerRadarAggregateDisplay(response)} />
+      <AchievementRadarSection
+        radar={playerRadarAggregateDisplay(response)}
+        gameTitleId={response.artifact.gameTitleId}
+        artifactId={response.artifact.artifactId}
+        mapMasterId={"mapMasterId" in response.scope ? response.scope.mapMasterId : undefined}
+        seasonMasterId={
+          "seasonMasterId" in response.scope ? response.scope.seasonMasterId : undefined
+        }
+      />
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
         <CrownShareBars
           players={response.players}

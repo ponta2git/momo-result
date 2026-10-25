@@ -123,6 +123,7 @@ fn resource_manifest(
     common: CommonResource,
 ) -> Result<ResourceManifest, ArtifactError> {
     Ok(match kind {
+        ComputedResourceKind::Achievements => ResourceManifest::Achievements { common },
         ComputedResourceKind::Aggregate => ResourceManifest::Aggregate { common },
         ComputedResourceKind::Review => ResourceManifest::Review { common },
         ComputedResourceKind::OutlookSummary => ResourceManifest::OutlookSummary { common },
@@ -229,6 +230,7 @@ fn source_input_checksum(input: &NormalizedAnalysisInput) -> Result<String, Arti
         },
         &mut buffer,
     )?;
+    digest.update_serialized(input.achievements(), &mut buffer)?;
     for row in input.player_matches() {
         digest.update_serialized(&SourceRow::from(row), &mut buffer)?;
     }
@@ -297,6 +299,7 @@ impl Serialize for Decimal {
 
 fn resource_item_key(kind: &ComputedResourceKind, scope_key: &str) -> String {
     match kind {
+        ComputedResourceKind::Achievements => String::from("achievements"),
         ComputedResourceKind::Aggregate
         | ComputedResourceKind::Review
         | ComputedResourceKind::OutlookSummary => String::from(scope_key),
@@ -310,6 +313,7 @@ fn resource_item_key(kind: &ComputedResourceKind, scope_key: &str) -> String {
 
 fn resource_file_name(kind: &ComputedResourceKind, scope_key: &str, item_key: &str) -> String {
     let prefix = match kind {
+        ComputedResourceKind::Achievements => "achievements",
         ComputedResourceKind::Aggregate => "aggregate",
         ComputedResourceKind::Review => "review",
         ComputedResourceKind::Drilldown { .. } => "drilldown",

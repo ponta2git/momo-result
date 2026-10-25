@@ -1,6 +1,9 @@
 use std::time::Instant;
 
-use momo_analysis_core::radar::{self, RadarCandidate};
+use momo_analysis_core::{
+    achievements::{self, AchievementCurve},
+    radar::{self, RadarCandidate},
+};
 use tokio_postgres::{Client, Transaction};
 
 use super::super::{self as control, ClaimedJob, ControlError};
@@ -21,7 +24,7 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         directory,
         config.execution_limits.temporary_bytes_limit.get(),
     )?;
-    if prepared.schema_version != 1
+    if prepared.schema_version != 2
         || prepared.game_title_id != claim.game_title_id
         || prepared.input_revision != claim.input_revision
         || Some(prepared.operation_id.as_str()) != claim.radar_operation_id.as_deref()
@@ -51,14 +54,27 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         let current = input_repository::load_current_input(client, &claim.game_title_id)
             .await
             .map_err(|_error| ControlError::AuthoritativeInputContract)?;
-        let current_summary = radar::snapshot(&current)
-            .and_then(|value| value.summary())
+        let mut current_snapshot =
+            radar::snapshot(&current).map_err(|_error| ControlError::InvalidMetadata)?;
+        let current_summary = current_snapshot
+            .summary()
             .map_err(|_error| ControlError::InvalidMetadata)?;
-        if current.input_revision() == claim.input_revision && current_summary != source_summary {
+        current_snapshot.achievements = Some(Box::new(achievements::calculate(
+            current.game_title_id(),
+            current.achievements(),
+            current.player_matches(),
+            AchievementCurve::default(),
+        )));
+        let achievements_current =
+            prepared.evaluation_snapshot.achievements == current_snapshot.achievements;
+        if current.input_revision() == claim.input_revision
+            && (current_summary != source_summary || !achievements_current)
+        {
             return Err(ControlError::AuthoritativeInputContract);
         }
         let source_valid = context.is_manual()
-            || radar::source_is_current(candidate_source, &current)
+            || candidate_source
+                .is_current_in(&current_snapshot)
                 .map_err(|_error| ControlError::InvalidMetadata)?;
         let tx = control::transaction::bounded_transaction(
             client,
@@ -83,7 +99,8 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
             &prepared,
             &context,
             source_valid,
-            current_summary.source_checksum == source_summary.source_checksum,
+            current_summary.source_checksum == source_summary.source_checksum
+                && achievements_current,
         )
         .await?;
         control::transaction::finish_attempt(

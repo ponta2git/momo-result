@@ -19,16 +19,16 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
       assertEquals(
         active,
         (
-          "[6]",
-          "[\"series-analysis-artifact-v6-full-validation-v2\"]",
+          "[10]",
+          "[\"series-analysis-artifact-v10-full-validation-v1\"]",
           false
         ),
       )
       assertEquals(
         draining,
         (
-          "[6]",
-          "[\"series-analysis-artifact-v6-full-validation-v2\"]",
+          "[10]",
+          "[\"series-analysis-artifact-v10-full-validation-v1\"]",
           true
         ),
       )

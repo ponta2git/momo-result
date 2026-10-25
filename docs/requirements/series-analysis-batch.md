@@ -8,9 +8,10 @@
 | --- | --- |
 | 利用者体験、scope、指標の意味 | `docs/requirements/series-comparison.md` |
 | 行動仮説の生成・選定・表現 | `docs/requirements/series-review-playbook.md` |
+| 実績の判定・保存・廃止履歴と実績軸 | [実績達成管理](player-achievements.md) |
 | job、artifact、version、公開・復旧 | 本書 |
 | ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
-| runtime / parent-child | `docs/architecture.md` |
+| runtime / parent-child | [Worker規約](../worker-rule.md) |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
 | artifact / 入力 / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
 | UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
@@ -50,7 +51,9 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 初版の試合メモは分析入力に含めない。メモだけの作成、更新、削除は input revision を進めず、再計算 intent を作成しない。境界の詳細は `docs/requirements/match-note.md` を正本とする。
 - 作品 A から B へ移る更新は、変更前後の確定済み集合の和集合を対象とする。
 - 計算入力へ影響する master 変更は revision を進め、計算意味も変わる場合は algorithm version も進める。表示名・localeなど表示専用 metadata はAPIでhydrateし、revisionへ含めない。
-- algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合を持つ作品を永続 snapshot する。
+- 実績機能の追加時は、実績・項目・星などの変更も同じ input revision と再計算 intent の対象にする。開催構成変更の影響作品とマップ追加時の扱いは[実績達成管理の保存と再計算](player-achievements.md#7-保存と再計算)に従う。実績だけの変更で試合結果の版を進めず、試合結果変更の通知対象となる要求も作らない。
+- algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合または実績項目を持つ作品を永続 snapshot する。
+- 実績機能の初回投入では、確定試合がなくても項目・移行実績を持つ作品を計算対象に含める。通常比較の試合由来scopeとは分けて固定4人と実績の対象範囲を入力に持ち、6軸の採点基準がなくても成果物を公開できるようにする。
 - snapshot 展開は再開可能かつ冪等にし、途中停止で対象を失わない。snapshot 後の新規対象は通常 trigger で扱う。
 
 ### Manual Triggers
@@ -106,7 +109,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 大容量 staging と短い fenced publication を分ける。stagingはcurrentから不可視とし、fresh transactionで完全性と実行権を再検証してからcurrent / previousを切り替える。
 - publication失敗やcommit成否不明はcurrentを維持し、fresh connection上の永続状態から再開する。
 
-DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務は `docs/architecture.md` を正本とする。
+DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process責務は [Worker規約](../worker-rule.md) を正本とする。
 
 ### 分析完了通知
 
@@ -208,14 +211,14 @@ OCR同居を有効化する場合は、共通parent-child境界、processごと�
 - idle capabilityの更新間隔はactive jobのlease heartbeatと分離し、freshness期限に失敗・遅延の余裕を残す。世代不一致や期限切れのcapabilityで昇格しない。
 - 自動保守は稼働世代とsingletonのexact tuple差分を昇格対象とし、既知の過去世代への自動復帰を拒否する。previewとapplyの間で対象作品・input revision・世代が変われば適用しない。自動・手動の再実行は同じdurable operationを参照する。
 - release完了は受理snapshotのtargetが公開済みまたは作品削除で終端したことと整合性監査で判定する。failed target、current / previousの不正契約は要対応とする。通常の更新では後続入力によるpending workを別に扱い、非互換切替では公開再開前に対象全作品の現行成果物を確認する。
-- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、実績の意味順を並べ直したりしない。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
+- HTTP wireはOpenAPI・生成型と同時更新する。artifactからwireへのprojectionはrename、enum mapping、metadata hydrate、revision整合を確認した試合属性の付加、用途に対応する保存済み項目の選択に限定する。[見通しreference](series-rank-outlook.md#13-実績データと読取契約)では指定窓長の保存済み1項目を抽出できる。API / Webで欠けた分析値を計算したり、分析で求めた実績例の意味順を並べ直したりしない。実績達成リストの管理者が保存した表示順は、名前・備考と同じmetadataとしてAPIで反映する。保存artifactを変えないHTTP-onlyの非互換変更は、対応API/Webの切替とrollbackを一体で扱い、成果物移行・全件再計算を要求しない。
 - 通常rollbackはDB契約・lease fenceと現行publicationを扱えるreleaseに限定し、current artifact、request、campaign、jobを維持する。未対応jobを旧algorithmで処理せずqueuedに保つ。
 - 非互換切替を切り戻す場合は、公開を停止したままDB snapshotとimmutable releaseを整合する組合せへ戻す。部分的な世代の組合せでは再開せず、再開後のデータを守る修復はforward fixを原則とする。
 - release候補はmigration、runtimeのexact capability、immutable provenance、resource hard limit、timeout、artifact / API上限を確認してから昇格する。本番操作の承認境界は公開運用規約に従う。
 
 ## 9. Acceptance Criteria
 
-本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
 
 | 変更領域 | 受入条件 / production boundary |
 | --- | --- |

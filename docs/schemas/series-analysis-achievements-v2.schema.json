@@ -1,0 +1,1089 @@
+{
+  "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
+  "$id": "https://momo-result.local/schemas/series-analysis-achievements-v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "achievementCurve": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "thresholds": {
+              "items": false,
+              "maxItems": 5,
+              "minItems": 5,
+              "prefixItems": [
+                {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 100.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "thresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "pointThresholds": {
+              "items": false,
+              "maxItems": 9,
+              "minItems": 9,
+              "prefixItems": [
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                },
+                {
+                  "maximum": 102400.0,
+                  "minimum": 0.0,
+                  "type": "number",
+                  "x-momo-finiteF64": true
+                }
+              ],
+              "type": "array"
+            }
+          },
+          "required": [
+            "pointThresholds"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "unavailableReason": {
+              "enum": [
+                "basis_unavailable",
+                "no_target",
+                "degenerate_distribution"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "unavailableReason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "gameTitleId": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string",
+      "x-momo-maxUtf8Bytes": 4096
+    },
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "achievementId": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string",
+            "x-momo-maxUtf8Bytes": 4096
+          },
+          "appliesFrom": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              }
+            ]
+          },
+          "common": {
+            "type": "boolean"
+          },
+          "mapMasterIds": {
+            "items": {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string",
+              "x-momo-maxUtf8Bytes": 4096
+            },
+            "maxItems": 4096,
+            "type": "array"
+          },
+          "players": {
+            "items": false,
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dateUnknown": {
+                    "type": "boolean"
+                  },
+                  "firstAchievedAt": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      }
+                    ]
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "proofs": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "achievedAt": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "claimId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "generationId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "heldEventId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "manual",
+                            "import",
+                            "derived",
+                            "automatic"
+                          ],
+                          "type": "string"
+                        },
+                        "matchId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "sourceAchievementId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "achieved",
+                            "unconfirmed"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "achievedAt",
+                        "claimId",
+                        "generationId",
+                        "heldEventId",
+                        "kind",
+                        "matchId",
+                        "sourceAchievementId",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "achieved",
+                      "unconfirmed",
+                      "not_recorded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "dateUnknown",
+                  "firstAchievedAt",
+                  "memberId",
+                  "proofs",
+                  "status"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dateUnknown": {
+                    "type": "boolean"
+                  },
+                  "firstAchievedAt": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      }
+                    ]
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "proofs": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "achievedAt": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "claimId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "generationId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "heldEventId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "manual",
+                            "import",
+                            "derived",
+                            "automatic"
+                          ],
+                          "type": "string"
+                        },
+                        "matchId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "sourceAchievementId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "achieved",
+                            "unconfirmed"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "achievedAt",
+                        "claimId",
+                        "generationId",
+                        "heldEventId",
+                        "kind",
+                        "matchId",
+                        "sourceAchievementId",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "achieved",
+                      "unconfirmed",
+                      "not_recorded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "dateUnknown",
+                  "firstAchievedAt",
+                  "memberId",
+                  "proofs",
+                  "status"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dateUnknown": {
+                    "type": "boolean"
+                  },
+                  "firstAchievedAt": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      }
+                    ]
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "proofs": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "achievedAt": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "claimId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "generationId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "heldEventId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "manual",
+                            "import",
+                            "derived",
+                            "automatic"
+                          ],
+                          "type": "string"
+                        },
+                        "matchId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "sourceAchievementId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "achieved",
+                            "unconfirmed"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "achievedAt",
+                        "claimId",
+                        "generationId",
+                        "heldEventId",
+                        "kind",
+                        "matchId",
+                        "sourceAchievementId",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "achieved",
+                      "unconfirmed",
+                      "not_recorded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "dateUnknown",
+                  "firstAchievedAt",
+                  "memberId",
+                  "proofs",
+                  "status"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "dateUnknown": {
+                    "type": "boolean"
+                  },
+                  "firstAchievedAt": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      }
+                    ]
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "proofs": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "achievedAt": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "claimId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "generationId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "heldEventId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "manual",
+                            "import",
+                            "derived",
+                            "automatic"
+                          ],
+                          "type": "string"
+                        },
+                        "matchId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "sourceAchievementId": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maxLength": 4096,
+                              "minLength": 1,
+                              "type": "string",
+                              "x-momo-maxUtf8Bytes": 4096
+                            }
+                          ]
+                        },
+                        "state": {
+                          "enum": [
+                            "achieved",
+                            "unconfirmed"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "achievedAt",
+                        "claimId",
+                        "generationId",
+                        "heldEventId",
+                        "kind",
+                        "matchId",
+                        "sourceAchievementId",
+                        "state"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "achieved",
+                      "unconfirmed",
+                      "not_recorded"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "dateUnknown",
+                  "firstAchievedAt",
+                  "memberId",
+                  "proofs",
+                  "status"
+                ],
+                "type": "object"
+              }
+            ],
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "ruleKind": {
+            "enum": [
+              "manual",
+              "total_assets",
+              "destination",
+              "suri_no_ginji",
+              "event_average_rank"
+            ],
+            "type": "string"
+          },
+          "stars": {
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer",
+            "x-momo-integerToken": true
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              }
+            ]
+          }
+        },
+        "required": [
+          "achievementId",
+          "appliesFrom",
+          "common",
+          "mapMasterIds",
+          "players",
+          "retired",
+          "ruleKind",
+          "stars",
+          "threshold"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4096,
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 2,
+      "minimum": 0,
+      "type": "integer",
+      "x-momo-integerToken": true
+    },
+    "scope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "overall",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "summaries": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "mapMasterId": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              }
+            ]
+          },
+          "players": {
+            "items": false,
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "earnedPoints": {
+                    "maximum": 102400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10.0,
+                        "minimum": 1.0,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "earnedPoints",
+                  "memberId",
+                  "score"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "earnedPoints": {
+                    "maximum": 102400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10.0,
+                        "minimum": 1.0,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "earnedPoints",
+                  "memberId",
+                  "score"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "earnedPoints": {
+                    "maximum": 102400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10.0,
+                        "minimum": 1.0,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "earnedPoints",
+                  "memberId",
+                  "score"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "earnedPoints": {
+                    "maximum": 102400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-momo-integerToken": true
+                  },
+                  "memberId": {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  },
+                  "score": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "maximum": 10.0,
+                        "minimum": 1.0,
+                        "type": "number",
+                        "x-momo-finiteF64": true
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "earnedPoints",
+                  "memberId",
+                  "score"
+                ],
+                "type": "object"
+              }
+            ],
+            "type": "array"
+          },
+          "totalPoints": {
+            "maximum": 102400,
+            "minimum": 0,
+            "type": "integer",
+            "x-momo-integerToken": true
+          }
+        },
+        "required": [
+          "mapMasterId",
+          "players",
+          "totalPoints"
+        ],
+        "type": "object"
+      },
+      "maxItems": 4097,
+      "type": "array"
+    }
+  },
+  "required": [
+    "achievementCurve",
+    "gameTitleId",
+    "items",
+    "schemaVersion",
+    "scope",
+    "summaries"
+  ],
+  "title": "Series Analysis Achievements Resource v2",
+  "type": "object"
+}

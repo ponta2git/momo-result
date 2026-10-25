@@ -259,7 +259,7 @@ describe("app routing", () => {
       within(settings)
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["作品・マップ・シーズン", "事件簿"]);
+    ).toEqual(["作品・マップ・シーズン", "実績", "事件簿"]);
     expect(screen.queryByRole("tabpanel", { name: "アカウント" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "設定" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "分析" })).toBeInTheDocument();

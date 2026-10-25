@@ -2,6 +2,7 @@ import { Download, PenSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
+import { MatchAchievements } from "@/features/matches/detail/MatchAchievements";
 import { MatchDetailAdjacentNavigation } from "@/features/matches/detail/MatchDetailAdjacentNavigation";
 import { MatchDetailIdentity } from "@/features/matches/detail/MatchDetailIdentity";
 import {
@@ -159,6 +160,11 @@ function MatchDetailReadyContent({
           </div>
         </section>
 
+        <MatchAchievements
+          matchId={match.matchId}
+          gameTitleId={match.gameTitleId}
+          heldEventId={match.heldEventId}
+        />
         <MatchNotePanel />
 
         <MatchDetailRecordActions view={view} />

@@ -101,6 +101,23 @@ pub fn radar_candidate_from_payload(value: &Value) -> Result<RadarCandidateSumma
     {
         return Err(PayloadError::InvalidSchema);
     }
+    if let Some(generation) = candidate.achievement_generation.as_deref() {
+        if !generation.source.is_valid()
+            || *generation != generation.source.generate()
+            || candidate.basis.as_ref().is_some_and(|basis| {
+                basis.achievement_generation_source.as_deref() != Some(&generation.source)
+                    || basis.achievement_curve != Some(generation.curve())
+            })
+        {
+            return Err(PayloadError::InvalidSchema);
+        }
+    } else if candidate
+        .basis
+        .as_ref()
+        .is_some_and(|basis| basis.achievement_generation_source.is_some())
+    {
+        return Err(PayloadError::InvalidSchema);
+    }
     if let Some(basis) = &candidate.basis {
         validate_basis(basis).map_err(|_invalid_basis| PayloadError::InvalidSchema)?;
         if basis.source != candidate.source_summary
@@ -123,9 +140,13 @@ pub fn radar_candidate_from_payload(value: &Value) -> Result<RadarCandidateSumma
             return Err(PayloadError::InvalidSchema);
         }
     } else if candidate
-        .axes
-        .iter()
-        .all(|axis| axis.unavailable_reasons.is_empty() || axis.thresholds.is_some())
+        .achievement_generation
+        .as_deref()
+        .is_none_or(crate::radar::AchievementGeneration::permits_basis)
+        && candidate
+            .axes
+            .iter()
+            .all(|axis| axis.unavailable_reasons.is_empty() || axis.thresholds.is_some())
     {
         return Err(PayloadError::InvalidSchema);
     }

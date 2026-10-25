@@ -99,7 +99,7 @@ describe("validateMatchForm", () => {
         "作品を選択してください",
         "マップを選択してください",
         "シーズンを選択してください",
-        "開催日時を入力してください",
+        "対戦日時を入力してください",
       ]),
     );
     expect(result.pathSet.has("gameTitleId")).toBe(true);
@@ -139,7 +139,7 @@ describe("validateMatchForm", () => {
 
     expect(result.success).toBe(false);
     expect(result.firstPath).toBe("playedAt");
-    expect(result.firstMessage).toBe("開催日時を正しく入力してください");
+    expect(result.firstMessage).toBe("対戦日時を正しく入力してください");
   });
 
   it.each([

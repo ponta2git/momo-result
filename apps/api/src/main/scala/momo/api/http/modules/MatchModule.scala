@@ -139,7 +139,7 @@ object MatchModule:
                 command <- MatchCodec.toUpdateCommand(request)
               yield (id, command)
             ) { case (id, command) =>
-              updateMatch.run(id, command)
+              updateMatch.run(id, command, Some(member.accountId))
             }(record =>
               UpdateMatchResponse(
                 matchId = record.id.value,
@@ -183,7 +183,7 @@ object MatchModule:
             )(
               BoundaryId.required("matchId", matchId)(MatchId.fromString)
             )(id =>
-              deleteMatch.run(id)
+              deleteMatch.run(id, Some(member.accountId))
             )(_ =>
               DeleteMatchResponse(matchId, deleted = true)
             )

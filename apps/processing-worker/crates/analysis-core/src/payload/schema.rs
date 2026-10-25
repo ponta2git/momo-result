@@ -2,11 +2,16 @@ use serde_json::Value;
 
 use super::PayloadError;
 
+mod achievements;
 mod outlook;
 mod radar;
 
 const MAX_ITEMS: usize = 1_000_000;
 const MAX_TEXT_BYTES: usize = 4_096;
+
+pub(super) fn validate_achievements(value: &Value) -> Result<(), PayloadError> {
+    validate(value, &achievements::ACHIEVEMENTS)
+}
 
 #[derive(Clone, Copy)]
 enum Schema {
@@ -31,10 +36,23 @@ enum Schema {
 struct Field {
     name: &'static str,
     schema: &'static Schema,
+    required: bool,
 }
 
 const fn field(name: &'static str, schema: &'static Schema) -> Field {
-    Field { name, schema }
+    Field {
+        name,
+        schema,
+        required: true,
+    }
+}
+
+const fn optional_field(name: &'static str, schema: &'static Schema) -> Field {
+    Field {
+        name,
+        schema,
+        required: false,
+    }
 }
 
 const BOOL: Schema = Schema::Bool;
@@ -1504,19 +1522,6 @@ pub(super) fn validate_radar_monitoring(value: &Value) -> Result<(), PayloadErro
     validate(value, &radar::MONITORING)
 }
 
-fn validate_selected(
-    object: &serde_json::Map<String, Value>,
-    fields: &[Field],
-) -> Result<(), PayloadError> {
-    for field in fields {
-        validate(
-            object.get(field.name).ok_or(PayloadError::InvalidSchema)?,
-            field.schema,
-        )?;
-    }
-    Ok(())
-}
-
 fn validate(value: &Value, schema: &Schema) -> Result<(), PayloadError> {
     match schema {
         Schema::Bool => value
@@ -1588,27 +1593,25 @@ fn validate(value: &Value, schema: &Schema) -> Result<(), PayloadError> {
 }
 
 fn validate_object(value: &Value, fields: &[Field]) -> Result<(), PayloadError> {
-    let object = value.as_object().ok_or(PayloadError::InvalidSchema)?;
-    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(field.name)) {
-        return Err(PayloadError::InvalidSchema);
-    }
-    validate_selected(object, fields)
+    validate_merged_object(value, &[fields])
 }
 
 fn validate_merged_object(value: &Value, field_sets: &[&[Field]]) -> Result<(), PayloadError> {
     let object = value.as_object().ok_or(PayloadError::InvalidSchema)?;
-    let expected_count = field_sets.iter().map(|fields| fields.len()).sum::<usize>();
-    if object.len() != expected_count
-        || field_sets
-            .iter()
-            .flat_map(|fields| fields.iter())
-            .any(|field| !object.contains_key(field.name))
-    {
-        return Err(PayloadError::InvalidSchema);
+    let mut present = 0;
+    for field in field_sets.iter().flat_map(|fields| fields.iter()) {
+        match object.get(field.name) {
+            Some(field_value) => {
+                validate(field_value, field.schema)?;
+                present += 1;
+            }
+            None if field.required => return Err(PayloadError::InvalidSchema),
+            None => {}
+        }
     }
-    field_sets
-        .iter()
-        .try_for_each(|fields| validate_selected(object, fields))
+    (present == object.len())
+        .then_some(())
+        .ok_or(PayloadError::InvalidSchema)
 }
 
 fn validate_string_map(value: &Value, item: &Schema) -> Result<(), PayloadError> {
@@ -1647,8 +1650,8 @@ mod json_schema_export_tests {
 
     use super::{
         AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, outlook, radar, validate, validate_aggregate,
-        validate_drilldown, validate_match_context, validate_review,
+        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, achievements, outlook, radar, validate,
+        validate_aggregate, validate_drilldown, validate_match_context, validate_review,
     };
 
     const DRAFT_2020_12: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -1692,7 +1695,9 @@ mod json_schema_export_tests {
                 "duplicate object field in schema descriptor: {}",
                 field.name
             );
-            required.push(field.name);
+            if field.required {
+                required.push(field.name);
+            }
         }
         required.sort_unstable();
         json!({
@@ -1900,8 +1905,18 @@ mod json_schema_export_tests {
         }
     }
 
-    fn generated_schemas() -> [GeneratedSchema; 11] {
+    fn generated_schemas() -> [GeneratedSchema; 13] {
         [
+            document(
+                "series-analysis-achievements-v2.schema.json",
+                "Series Analysis Achievements Resource v2",
+                &achievements::ACHIEVEMENTS,
+            ),
+            document(
+                "series-player-radar-achievements-v1.schema.json",
+                "Series Player Radar Achievement Comparison v1",
+                &achievements::PREVIEW,
+            ),
             document(
                 "series-analysis-aggregate-v6.schema.json",
                 "Series Analysis Aggregate Resource v6",

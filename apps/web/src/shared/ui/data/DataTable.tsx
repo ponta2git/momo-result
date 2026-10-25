@@ -60,7 +60,7 @@ export type DataTableProps<Row> = {
   verticalAlign?: DataTableVerticalAlign;
   /** Opt in for wide comparisons; row headers stay visible within the named scroll region. */
   stickyRowHeader?: boolean;
-  scrollArea?: { label: string; maxHeight?: string };
+  scrollArea?: { label: string; maxHeight?: string; showHint?: boolean };
 };
 
 const alignClass = {
@@ -130,6 +130,7 @@ export function DataTable<Row>({
     <TableScrollArea
       {...(scrollArea ? { label: scrollArea.label } : { labelledBy: captionId })}
       maxHeight={scrollArea?.maxHeight}
+      showHint={scrollArea?.showHint}
     >
       <table
         className={cn(

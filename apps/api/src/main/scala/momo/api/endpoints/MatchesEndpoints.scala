@@ -4,6 +4,8 @@ import sttp.tapir.*
 import sttp.tapir.generic.auto.*
 import sttp.tapir.json.circe.*
 
+import momo.api.endpoints.AchievementApiSchemas.given
+
 object MatchesEndpoints:
   type ConfirmInput = (Option[String], ConfirmMatchRequest)
 

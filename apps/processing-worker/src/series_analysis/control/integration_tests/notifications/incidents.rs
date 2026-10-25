@@ -17,7 +17,10 @@ pub(super) async fn prepare(client: &mut Client) -> SmokeResult<Vec<(String, Str
             suri_no_ginji: base + 6,
         };
     }
-    assert_eq!(baseline, expected.try_into_normalized()?);
+    assert_eq!(
+        baseline.player_matches(),
+        expected.try_into_normalized()?.player_matches()
+    );
     transaction
         .execute(
             r"

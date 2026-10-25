@@ -203,6 +203,7 @@ const triggerLabels = {
   initial_backfill: "初回計算",
   manual: "手動",
   match_mutation: "試合更新",
+  achievement_mutation: "実績更新",
 } as const satisfies Record<SeriesAnalysisTrigger, string>;
 
 const failureLabels = {

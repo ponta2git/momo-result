@@ -1,9 +1,11 @@
+import { useIsFetching } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 
 import { seriesAnalysisFocusExclusionNotice } from "@/features/seriesComparison/model/seriesAnalysisDisplayBundle";
 import { useOutlookComparisonLifecycle } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import { useSeriesAnalysisDisplay } from "@/features/seriesComparison/page/useSeriesAnalysisDisplay";
 import { useSeriesComparisonSelection } from "@/features/seriesComparison/page/useSeriesComparisonSelection";
+import { achievementKeys } from "@/shared/api/achievementQueryOptions";
 
 /** Composes selection controls and the accepted comparison into the display-ready page contract. */
 export function useSeriesComparison() {
@@ -29,6 +31,14 @@ export function useSeriesComparison() {
     deferOutlookAdoption,
   });
   const refreshDisplay = display.refresh;
+  const achievementsFetching =
+    useIsFetching({
+      queryKey: achievementKeys.publication(
+        selectionControls.selection.gameTitleId,
+        display.status.data?.currentArtifact?.artifactId,
+      ),
+      exact: true,
+    }) > 0;
 
   const excludedFocusNotice =
     display.resolution.kind === "excluded" &&
@@ -57,6 +67,7 @@ export function useSeriesComparison() {
   }, [refreshDisplay, refreshSelection]);
 
   return {
+    achievementsFetching,
     actions: {
       clearFocusedMatch,
       clearScope,

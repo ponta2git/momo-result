@@ -18,14 +18,15 @@ private[postgres] object SeriesPlayerRadarPayloadValidator:
     .build()
   private val registry = com.networknt.schema.SchemaRegistry.withDialect(dialect)
   private val reader = NodeReader.builder().build()
-  private val schemas: Map[String, Schema] = List("basis", "candidate", "evaluation", "monitoring")
-    .map { kind =>
-      val schema = registry.getSchema(SchemaLocation.of(
-        s"classpath:momo/api/series-analysis-schemas/series-player-radar-$kind-v1.schema.json"
-      ))
-      schema.initializeValidators()
-      kind -> schema
-    }.toMap
+  private val schemas: Map[String, Schema] =
+    List("basis", "candidate", "evaluation", "monitoring", "achievements")
+      .map { kind =>
+        val schema = registry.getSchema(SchemaLocation.of(
+          s"classpath:momo/api/series-analysis-schemas/series-player-radar-$kind-v1.schema.json"
+        ))
+        schema.initializeValidators()
+        kind -> schema
+      }.toMap
 
   def ensureReady(): Unit = schemas.values.foreach(_.initializeValidators())
 
@@ -41,6 +42,8 @@ private[postgres] object SeriesPlayerRadarPayloadValidator:
       "monitoring" -> cursor.downField("monitor").focus,
       "evaluation" -> cursor.downField("before").focus,
       "evaluation" -> cursor.downField("after").focus,
+      "achievements" -> cursor.downField("beforeAchievements").focus,
+      "achievements" -> cursor.downField("afterAchievements").focus,
     )
     fragments.forall { case (kind, fragment) =>
       fragment.filterNot(_.isNull).forall { value =>

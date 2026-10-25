@@ -1,3 +1,4 @@
+import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import {
   createEmptyMatchForm,
   matchSetupValues,
@@ -64,6 +65,7 @@ export type MatchWorkspaceScoreRowView = {
 export type MatchWorkspaceEditorBindings = {
   readonly setup: WorkspaceSubscription<Readonly<MatchSetupValues>>;
   readonly note: WorkspaceSubscription<string>;
+  readonly achievements: WorkspaceSubscription<readonly MatchAchievementSelection[]>;
   readonly scoreRows: ReadonlyArray<WorkspaceSubscription<MatchWorkspaceScoreRowView>>;
   readonly review: WorkspaceSubscription<{
     readonly acknowledgedCellIds: readonly string[];
@@ -77,6 +79,7 @@ export type MatchWorkspaceEditorBindings = {
       value: MatchSetupValues[K],
     ) => void;
     readonly changeNote: (value: string) => void;
+    readonly changeAchievements: (value: MatchAchievementSelection[]) => void;
     readonly changePlayer: <K extends EditablePlayerField>(
       index: number,
       field: K,
@@ -177,6 +180,10 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     sameFields,
   );
   const note = createSubscription((current) => current.values.noteBody);
+  const noAchievements: readonly MatchAchievementSelection[] = [];
+  const achievements = createSubscription(
+    (current) => current.values.achievements ?? noAchievements,
+  );
   const initialized = createSubscription((current) => current.initialized);
   const initialData = createSubscription((current) => current.initialData);
   const review = createSubscription(
@@ -248,6 +255,8 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     return {
       matchNoInEvent: current.values.matchNoInEvent,
       noteBody: current.values.noteBody,
+      achievements: current.values.achievements ?? noAchievements,
+      playedAt: current.values.playedAt,
       players: current.values.players,
       changedCount,
       totalCount: reviewList.length,
@@ -264,6 +273,8 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
       value: MatchSetupValues[K],
     ) => commit({ type: "change-setup", field, value }),
     changeNote: (value: string) => commit({ type: "change-note", value }),
+    changeAchievements: (value: MatchAchievementSelection[]) =>
+      commit({ type: "change-achievements", value }),
     changePlayer: <K extends EditablePlayerField>(
       index: number,
       field: K,
@@ -283,6 +294,7 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     setup,
     resourceSelection,
     note,
+    achievements,
     initialData,
     initialized,
     review,

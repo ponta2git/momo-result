@@ -4,13 +4,23 @@ import {
   playerRadarBasisDisplay,
   playerRadarEvaluationDisplay,
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
-import { makePlayerRadarBasis, makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
+import {
+  makePlayerRadarBasis,
+  makePlayerRadarEvaluation,
+  makePlayerRadarAchievements,
+} from "@/test/msw/playerRadarFixtures";
 
 const action = () => ({ disabledReason: null, pending: false, run: () => {} });
 
 export function makePlayerRadarEditorView(): PlayerRadarAdministrationView {
   const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
-  const display = playerRadarEvaluationDisplay(makePlayerRadarEvaluation(), basis, []);
+  const display = playerRadarEvaluationDisplay(
+    makePlayerRadarEvaluation(),
+    basis,
+    [],
+    [],
+    makePlayerRadarAchievements(),
+  );
   return {
     gameTitleId: "gt_momotetsu_2",
     gameTitleName: "桃太郎電鉄2",

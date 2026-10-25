@@ -6,7 +6,8 @@ pub(super) const MANIFEST_FILE_NAME: &str = "manifest.json";
 
 pub(super) const fn resource_common(resource: &ResourceManifest) -> &CommonResource {
     match resource {
-        ResourceManifest::Aggregate { common }
+        ResourceManifest::Achievements { common }
+        | ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
         | ResourceManifest::OutlookSummary { common }
         | ResourceManifest::OutlookReference { common, .. }

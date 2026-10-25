@@ -23,6 +23,8 @@ pub enum AnalysisInputError {
     InvalidMatch,
     #[error("analysis input scopes have ambiguous wire identities")]
     AmbiguousScope,
+    #[error("achievement input violates its catalog or evidence contract")]
+    InvalidAchievements,
 }
 
 impl AnalysisInputError {
@@ -37,6 +39,9 @@ impl AnalysisInputError {
             Self::InvalidMatch => "match players, ranks, play orders, or metadata are inconsistent",
             Self::AmbiguousScope => {
                 "analysis scope identifiers do not uniquely encode scope membership"
+            }
+            Self::InvalidAchievements => {
+                "achievement input violates its catalog or evidence contract"
             }
         }
     }
@@ -62,6 +67,7 @@ pub struct NormalizedAnalysisInput {
     resource_count: Option<u64>,
     radar_basis: Option<RadarPublishedBasis>,
     radar_monitoring: Option<RadarMonitoring>,
+    achievements: crate::achievements::AchievementInput,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -120,7 +126,11 @@ impl AnalysisInput {
         Ok(NormalizedAnalysisInput {
             radar_basis: None,
             radar_monitoring: None,
-            resource_count: resource_count_for_scopes(&self, &scopes),
+            resource_count: resource_count_for_scopes(&self, &scopes)
+                .and_then(|count| count.checked_add(1)),
+            achievements: crate::achievements::AchievementInput::empty_for_matches(
+                &self.player_matches,
+            ),
             scopes,
             input: self,
         })
@@ -287,7 +297,7 @@ fn valid_match(player_matches: &[&PlayerMatchInput]) -> bool {
             .all(|player_match| player_match.has_same_match_metadata_as(first))
 }
 
-fn valid_input_id(value: &str) -> bool {
+pub(crate) fn valid_input_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= MAXIMUM_INPUT_ID_BYTES
         && value.bytes().enumerate().all(|(index, byte)| {
@@ -295,7 +305,7 @@ fn valid_input_id(value: &str) -> bool {
         })
 }
 
-fn valid_timestamp_shape(value: &str) -> bool {
+pub(crate) fn valid_timestamp_shape(value: &str) -> bool {
     let bytes = value.as_bytes();
     bytes.len() == 27
         && bytes.iter().enumerate().all(|(index, byte)| match index {
@@ -309,6 +319,36 @@ fn valid_timestamp_shape(value: &str) -> bool {
 }
 
 impl NormalizedAnalysisInput {
+    /// Attaches catalog, durable roots and complete event membership from the same database snapshot.
+    ///
+    /// # Errors
+    /// Rejects invalid catalog references, evidence or bounds.
+    pub fn with_achievements(
+        mut self,
+        input: crate::achievements::AchievementInput,
+    ) -> Result<Self, AnalysisInputError> {
+        self.achievements = input.normalize()?;
+        if self.input.player_matches.iter().any(|row| {
+            self.achievements
+                .member_ids
+                .binary_search(&row.member_id)
+                .is_err()
+                || self
+                    .achievements
+                    .map_master_ids
+                    .binary_search(&row.map_master_id)
+                    .is_err()
+        }) {
+            return Err(AnalysisInputError::InvalidAchievements);
+        }
+        Ok(self)
+    }
+
+    #[must_use]
+    pub const fn achievements(&self) -> &crate::achievements::AchievementInput {
+        &self.achievements
+    }
+
     /// Attaches an immutable, title-compatible scoring input without changing match revisions.
     ///
     /// # Errors
@@ -743,7 +783,7 @@ mod tests {
             row_count * 4,
             "a row belongs only to overall, season, map, and season-map indexes"
         );
-        assert_eq!(normalized.resource_count(), Some(59_023));
+        assert_eq!(normalized.resource_count(), Some(59_024));
     }
 
     #[test]

@@ -67,6 +67,13 @@ final class DbContractSpec extends IntegrationSuite:
         VALUES ($titleId, 'Immutable contract title', 'world', 2)
       """.update.run
         _ <- sql"""
+        INSERT INTO series_analysis_title_states (
+          game_title_id, algorithm_version, artifact_schema_version, validation_contract_id
+        ) VALUES (
+          $titleId, 'series-analysis-v1', 2, 'series-analysis-artifact-v2-full-validation-v1'
+        )
+      """.update.run
+        _ <- sql"""
         INSERT INTO series_analysis_jobs (
           id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
           status, trigger, finished_at, attempt_count, result_disposition
@@ -172,17 +179,18 @@ final class DbContractSpec extends IntegrationSuite:
         review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         encoded_bytes, decoded_bytes
       ) VALUES
-        ('artifact-contract-wrong-seal', $titleId, 0, 'series-analysis-v1', 2,
+        ('artifact-contract-combined-seal', $titleId, 0, 'series-analysis-v1', 2,
          ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
          1, 0, 0, 0, 0, 0),
         ('artifact-contract-wrong-schema', $titleId, 0, 'series-analysis-v1', 1,
          ${"sha256:" + "e" * 64}, ${"sha256:" + "f" * 64}, 'staging',
          1, 0, 0, 0, 0, 0)
     """.update.run
-    val sealWrongContract = sql"""
+    val sealWithHeaderMutation = sql"""
       UPDATE series_analysis_artifacts
-      SET validation_contract_id = 'another-valid-validator'
-      WHERE id = 'artifact-contract-wrong-seal'
+      SET validation_contract_id = 'another-valid-validator',
+          root_checksum = ${"sha256:" + "a" * 64}
+      WHERE id = 'artifact-contract-combined-seal'
     """.update.run
     val sealWrongSchema = sql"""
       UPDATE series_analysis_artifacts
@@ -290,7 +298,7 @@ final class DbContractSpec extends IntegrationSuite:
       directPublishedResult <- insertAlreadyPublished.transact(transactor).attempt
       directSealedResult <- insertAlreadySealed.transact(transactor).attempt
       sealProbeCount <- insertSealProbes.transact(transactor)
-      wrongContractResult <- sealWrongContract.transact(transactor).attempt
+      combinedSealResult <- sealWithHeaderMutation.transact(transactor).attempt
       wrongSchemaResult <- sealWrongSchema.transact(transactor).attempt
       sealedHeaderResult <- mutateSealedHeader.transact(transactor).attempt
       unsealResult <- unsealArtifact.transact(transactor).attempt
@@ -315,7 +323,7 @@ final class DbContractSpec extends IntegrationSuite:
         DELETE FROM series_analysis_artifacts
         WHERE id IN (
           $artifactId, $unattestedArtifactId,
-          'artifact-contract-wrong-seal', 'artifact-contract-wrong-schema'
+          'artifact-contract-combined-seal', 'artifact-contract-wrong-schema'
         )
       """.update.run
         .transact(transactor)
@@ -328,8 +336,10 @@ final class DbContractSpec extends IntegrationSuite:
       assertUnattestedStagingInsertRequired(directPublishedResult)
       assertUnattestedStagingInsertRequired(directSealedResult)
       assertEquals(sealProbeCount, 2)
-      assertExactSealRejected(wrongContractResult)
-      assertExactSealRejected(wrongSchemaResult)
+      assertExactSealRejected(combinedSealResult)
+      assert(wrongSchemaResult.left.exists(
+        _.getMessage.contains("series_analysis_artifacts_validation_schema_check")
+      ))
       assertSealedHeaderMutationRejected(sealedHeaderResult)
       assertSealedHeaderMutationRejected(unsealResult)
       assertSealedHeaderMutationRejected(combinedPublishResult)

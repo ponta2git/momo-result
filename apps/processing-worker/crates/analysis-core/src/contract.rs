@@ -6,14 +6,14 @@ use thiserror::Error;
 
 use crate::canonical::{CanonicalError, FramedSha256};
 
-pub const ARTIFACT_SCHEMA_VERSION: u32 = 6;
+pub const ARTIFACT_SCHEMA_VERSION: u32 = 10;
 /// Exact identifier for the complete Rust-owned validation contract applied before publication.
 ///
 /// This is deliberately independent from [`ARTIFACT_SCHEMA_VERSION`]: the latter identifies the
 /// persisted payload shape, while this value proves which semantic, cross-resource, canonical,
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
-pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v6-full-validation-v2";
+pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v10-full-validation-v1";
 pub const MANIFEST_VERSION: u32 = 1;
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
 const MAXIMUM_SCHEMA_CHUNK_COUNT: u64 = 1_000_000;
@@ -96,6 +96,10 @@ impl<'de> Deserialize<'de> for ScopeRef {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum ResourceManifest {
+    Achievements {
+        #[serde(flatten)]
+        common: CommonResource,
+    },
     Aggregate {
         #[serde(flatten)]
         common: CommonResource,
@@ -204,8 +208,12 @@ impl ArtifactManifest {
         let mut paths = HashSet::<&str>::new();
         let mut previous: Option<&ResourceManifest> = None;
         let mut has_overall_aggregate = false;
+        let mut has_achievements = false;
         for resource in &self.resources {
             resource.validate(maximum_chunk_bytes)?;
+            if matches!(resource, ResourceManifest::Achievements { .. }) {
+                has_achievements = true;
+            }
             if !paths.insert(resource.common().path.as_str()) {
                 return Err(ContractError::DuplicateResource);
             }
@@ -222,7 +230,7 @@ impl ArtifactManifest {
             }
             previous = Some(resource);
         }
-        if !has_overall_aggregate {
+        if !has_overall_aggregate || !has_achievements {
             return Err(ContractError::MissingOverallAggregate);
         }
         if self.computed_root_checksum()? != self.root_checksum {
@@ -265,6 +273,11 @@ impl ResourceManifest {
         validate_checksum(&common.checksum)?;
         validate_file_name(&common.path)?;
         match self {
+            Self::Achievements { .. } => {
+                if common.scope != ScopeRef::Overall || common.item_key != "achievements" {
+                    return Err(ContractError::InvalidChunkMetadata);
+                }
+            }
             Self::Drilldown {
                 member_id,
                 metric_id,
@@ -302,7 +315,8 @@ impl ResourceManifest {
     #[must_use]
     pub const fn common(&self) -> &CommonResource {
         match self {
-            Self::Aggregate { common }
+            Self::Achievements { common }
+            | Self::Aggregate { common }
             | Self::Review { common }
             | Self::OutlookSummary { common }
             | Self::OutlookReference { common, .. }
@@ -328,6 +342,7 @@ impl ResourceManifest {
             encoded_bytes: common.encoded_bytes,
             item_key: &common.item_key,
             kind: match self {
+                Self::Achievements { .. } => "achievements",
                 Self::Aggregate { .. } => "aggregate",
                 Self::Review { .. } => "review",
                 Self::Drilldown { .. } => "drilldown",
@@ -398,6 +413,7 @@ impl ScopeRef {
 
 const fn resource_kind_order(resource: &ResourceManifest) -> u8 {
     match resource {
+        ResourceManifest::Achievements { .. } => 6,
         ResourceManifest::Aggregate { .. } => 0,
         ResourceManifest::Review { .. } => 1,
         ResourceManifest::Drilldown { .. } => 2,
@@ -484,6 +500,7 @@ fn validate_checksum(value: &str) -> Result<(), ContractError> {
 
 fn validate_file_name(value: &str) -> Result<(), ContractError> {
     let valid_suffix = [
+        "achievements-",
         "aggregate-",
         "review-",
         "drilldown-",
@@ -514,10 +531,11 @@ fn validate_file_name(value: &str) -> Result<(), ContractError> {
 mod tests {
     use super::*;
 
-    const VALID_ARTIFACT: &str =
-        include_str!("../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v6.json");
+    const VALID_ARTIFACT: &str = include_str!(
+        "../../../../../docs/schemas/fixtures/series-analysis/valid-artifact-v10.json"
+    );
     const INVALID_ARTIFACT: &str = include_str!(
-        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v6.json"
+        "../../../../../docs/schemas/fixtures/series-analysis/invalid-artifact-v10.json"
     );
     #[test]
     fn accepts_the_shared_artifact_fixture() {
@@ -532,7 +550,7 @@ mod tests {
     fn rejects_every_noncurrent_artifact_version() {
         let mut manifest: ArtifactManifest = serde_json::from_str(VALID_ARTIFACT)
             .unwrap_or_else(|error| panic!("valid artifact did not decode: {error}"));
-        for version in [1, 2, 3, 4, 5, 7] {
+        for version in [1, 2, 3, 4, 5, 6, 7, 8, 9, 11] {
             manifest.artifact_schema_version = version;
             assert!(matches!(
                 manifest.validate(16, 16 * 1024 * 1024),

@@ -5,6 +5,43 @@ import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 describe("radar chart comparison labels", () => {
+  it("keeps achievement points available when every performance axis is unscored", () => {
+    const player = structuredClone(
+      makePlayerRadarEditorView().editing!.evaluation!.raw.players[0]!,
+    );
+    player.axes.forEach((cell) => {
+      cell.score = null;
+      cell.scoreUnavailableReasons = ["insufficient_matches"];
+    });
+    const { container } = render(
+      <PlayerRadarChart
+        player={player}
+        referenceScoresGrouped={false}
+        achievement={{ score: 5.555555, earnedPoints: 41, totalPoints: 81 }}
+      />,
+    );
+    expect(screen.getByRole("img")).toHaveAccessibleName(`${player.displayName}の7軸レーダー`);
+    expect(screen.getByRole("img")).toHaveAccessibleDescription(/実績達成：5.56点/u);
+    expect(screen.getAllByText("未採点")).toHaveLength(6);
+    expect(container.querySelector('[data-radar-point="achievement"]')).toHaveAttribute(
+      "data-radar-score",
+      "5.555555",
+    );
+    expect(container.querySelector('[data-radar-point="averageRank"]')).toBeNull();
+  });
+
+  it("distinguishes an empty achievement denominator from an unachieved score", () => {
+    const player = makePlayerRadarEditorView().editing!.evaluation!.raw.players[0]!;
+    render(
+      <PlayerRadarChart
+        player={player}
+        referenceScoresGrouped={false}
+        achievement={{ score: null, earnedPoints: 0, totalPoints: 0 }}
+      />,
+    );
+    expect(screen.getByRole("img")).toHaveAccessibleDescription(/実績達成：対象なし/u);
+  });
+
   it("shows unchanged scored and unscored values once and keeps the changed transition", () => {
     const before = structuredClone(
       makePlayerRadarEditorView().editing!.evaluation!.raw.players[0]!,

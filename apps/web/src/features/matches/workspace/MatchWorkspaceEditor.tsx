@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
+import { MatchAchievementFields } from "@/features/matches/workspace/MatchAchievementFields";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
 import { MatchNoteField } from "@/features/matches/workspace/MatchNoteField";
 import { MatchSetupSection } from "@/features/matches/workspace/MatchSetupSection";
@@ -102,13 +103,30 @@ const WorkspaceNote = memo(function WorkspaceNote({ editing }: { editing: Editor
   const value = useWorkspaceSnapshot(editing.note);
   const interaction = useWorkspaceInteraction();
   return (
-    <fieldset className="mt-4 min-w-0" disabled={interaction.disabled}>
+    <fieldset className="min-w-0" disabled={interaction.disabled}>
       <MatchNoteField
         value={value}
         error={interaction.errorPathSet.has("noteBody")}
         onChange={editing.actions.changeNote}
       />
     </fieldset>
+  );
+});
+const WorkspaceAchievements = memo(function WorkspaceAchievements({
+  editing,
+}: {
+  editing: EditorBindings;
+}) {
+  const setup = useWorkspaceSnapshot(editing.setup);
+  const values = useWorkspaceSnapshot(editing.achievements);
+  const interaction = useWorkspaceInteraction();
+  return (
+    <MatchAchievementFields
+      setup={setup}
+      values={values}
+      disabled={interaction.disabled}
+      onChange={editing.actions.changeAchievements}
+    />
   );
 });
 function WorkspaceRecovery() {
@@ -156,12 +174,13 @@ export function MatchWorkspaceEditor({
           view.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
         )}
       >
-        <div className="order-2 min-w-0 2xl:order-none">
+        <div className="order-2 grid min-w-0 gap-4 2xl:order-none">
           <WorkspaceScore
             editing={editing}
             onPreferImageKindChange={preferImageKind}
             onRequestSubmitFocus={onRequestSubmitFocus}
           />
+          <WorkspaceAchievements editing={editing} />
           {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
         </div>
         <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { matchNoteMaximumCharacters, normalizeMatchNote } from "@/features/matches/matchNoteText";
+import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
 import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMemberIds } from "@/shared/domain/members";
 import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
@@ -27,9 +28,9 @@ const playerSchema = z.object({
 
 const playedAtSchema = z
   .string()
-  .min(1, "開催日時を入力してください")
+  .min(1, "対戦日時を入力してください")
   .refine((value) => !Number.isNaN(new Date(value).getTime()), {
-    message: "開催日時を正しく入力してください",
+    message: "対戦日時を正しく入力してください",
   });
 
 function pruneDraftIds(values: {
@@ -59,6 +60,7 @@ export const confirmMatchSchema = z
     ownerMemberId: z.enum(memberIds),
     mapMasterId: z.string().min(1, "マップを選択してください"),
     playedAt: playedAtSchema,
+    achievements: z.array(matchAchievementSelectionSchema).default([]),
     matchDraftId: z.string().optional(),
     draftIds: z.object({
       totalAssets: z.string().optional(),
@@ -77,6 +79,16 @@ export const confirmMatchSchema = z
       ),
   })
   .superRefine((value, ctx) => {
+    const achievements = new Set(
+      value.achievements.map((entry) => `${entry.achievementId}:${entry.memberId}`),
+    );
+    if (achievements.size !== value.achievements.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["achievements"],
+        message: "同じ人の実績は1件ずつ選択してください",
+      });
+    }
     const memberSet = new Set(value.players.map((player) => player.memberId));
     if (memberSet.size !== 4) {
       ctx.addIssue({
@@ -100,10 +112,11 @@ export const confirmMatchSchema = z
     }
   })
   .transform((values): ConfirmMatchRequest => {
-    const { matchDraftId, noteBody, ...rest } = values;
+    const { matchDraftId, noteBody, achievements, ...rest } = values;
     const normalizedNote = normalizeMatchNote(noteBody);
     return {
       ...rest,
+      achievements: achievements.map(({ achievementName: _name, ...entry }) => entry),
       ...(matchDraftId ? { matchDraftId } : {}),
       ...(normalizedNote.trim().length > 0 ? { noteBody: normalizedNote } : {}),
       draftIds: pruneDraftIds(values.draftIds),

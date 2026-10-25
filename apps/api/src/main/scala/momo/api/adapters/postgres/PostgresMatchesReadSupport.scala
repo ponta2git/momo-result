@@ -44,6 +44,7 @@ private[postgres] trait PostgresMatchesReadSupport:
       noteVersion: Long,
       noteUpdatedByAccountId: Option[AccountId],
       noteUpdatedAt: Option[Instant],
+      analysisRevision: Long,
   )
 
   protected final case class PlayerRow(
@@ -83,7 +84,7 @@ private[postgres] trait PostgresMatchesReadSupport:
            note_body, note_version, ${ids.wireReference(
       Entity.Accounts,
       fr"matches.note_updated_by_account_id"
-    )}, note_updated_at
+    )}, note_updated_at, analysis_revision
          FROM matches"""
 
   protected final def toRecord(
@@ -113,6 +114,7 @@ private[postgres] trait PostgresMatchesReadSupport:
         createdByMemberId = m.createdByMemberId,
         createdAt = m.createdAt,
         note = note,
+        analysisRevision = m.analysisRevision,
       )
     decoded.leftMap(message =>
       PostgresDataIntegrityException

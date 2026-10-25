@@ -196,7 +196,9 @@ private[bootstrap] object PostgresApiRuntime:
             )
             cachedMembers <- CachedReferenceRepositories.members(members)
             cachedGameTitles <- CachedReferenceRepositories.gameTitles(gameTitles)
-            cachedMapMasters <- CachedReferenceRepositories.mapMasters(mapMasters)
+            cachedMapMasters <- CachedReferenceRepositories.mapMasters(
+              WorkerWakingRepositories.mapMasters(mapMasters, workerWakeup, signalBackgroundFailure)
+            )
             cachedSeasonMasters <- CachedReferenceRepositories.seasonMasters(seasonMasters)
             cachedIncidentMasters <- CachedReferenceRepositories.incidentMasters(incidentMasters)
             cachedMemberAliases <- CachedReferenceRepositories.memberAliases(memberAliases)
@@ -227,6 +229,11 @@ private[bootstrap] object PostgresApiRuntime:
                 matchDraftCancellation = matchDraftCancellation,
                 matchList = matchList,
                 seriesAnalysis = wakingSeriesAnalysis,
+                achievements = WorkerWakingRepositories.achievements(
+                  PostgresAchievementsRepository[F](transactor, seriesAnalysis, identities),
+                  workerWakeup,
+                  signalBackgroundFailure
+                ),
                 seriesPlayerRadar = wakingSeriesPlayerRadar,
                 matchConfirmation = matchConfirmation,
                 appSessions = appSessions,

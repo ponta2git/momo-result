@@ -78,7 +78,7 @@ export function PlayerRadarChangeMethod({
                   {
                     value: "generate",
                     label: "最新の記録から作り直す",
-                    description: `作品全体の${administration.eligibility.matchCount}試合・${administration.eligibility.heldEventCount}開催から境界を計算します。`,
+                    description: `成績6軸は作品全体の${administration.eligibility.matchCount}試合・${administration.eligibility.heldEventCount}開催、実績達成は4人の作品通算ポイントから境界を計算します。`,
                   },
                   ...(administration.previousBasis
                     ? [
@@ -93,9 +93,9 @@ export function PlayerRadarChangeMethod({
               />
             ) : (
               <p className={cn(contentText.body, readableTextWidthClass, "tabular-nums")}>
-                作品全体の{administration.eligibility.matchCount}試合・
+                成績6軸は作品全体の{administration.eligibility.matchCount}試合・
                 {administration.eligibility.heldEventCount}
-                開催から境界を計算します。
+                開催、実績達成は4人の作品通算ポイントから境界を計算します。
               </p>
             )}
             <div className="grid justify-items-start gap-1">

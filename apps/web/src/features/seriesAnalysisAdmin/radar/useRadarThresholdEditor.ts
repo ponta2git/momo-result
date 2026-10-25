@@ -34,7 +34,7 @@ import {
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { useRadarApplyConfirmation } from "@/features/seriesAnalysisAdmin/radar/useRadarApplyConfirmation";
 import { useDebouncedCallback } from "@/shared/lib/useDebouncedCallback";
-import type { PlayerRadarAxisId } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type { PlayerRadarSettingAxisId } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
 /** Owns input lifetime and asynchronous receipts; projections and transitions stay pure. */
 export function useRadarThresholdEditor(
@@ -43,7 +43,7 @@ export function useRadarThresholdEditor(
 ): RadarThresholdEditor {
   const editing = administration.editing;
   const [session, setSession] = useState<RadarEditSession | null>(null);
-  const [axis, setAxis] = useState<PlayerRadarAxisId>("averageRank");
+  const [axis, setAxis] = useState<PlayerRadarSettingAxisId>("averageRank");
   const [composing, setComposing] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -224,7 +224,7 @@ export function useRadarThresholdEditor(
       setDiscarding(false);
     }
   }
-  function change(axisId: PlayerRadarAxisId, index: number, value: string) {
+  function change(axisId: PlayerRadarSettingAxisId, index: number, value: string) {
     inputDebounce.cancel();
     setSession((current) => changeRadarThreshold(current, axisId, index, value));
     setApplyError(null);

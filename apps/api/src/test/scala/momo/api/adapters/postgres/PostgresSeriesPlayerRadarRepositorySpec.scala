@@ -37,17 +37,48 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
   )))
     .fold(error => fail(s"Invalid Rust fixture: $error"), identity)
 
+  private def legacyBasis: Json = fixture("basis").mapObject(fields =>
+    fields.remove("achievementCurve").remove("achievementGenerationSource")
+  )
+
   /** Stored Worker output is the fixture here; these tests exercise acceptance, never recalculate it. */
-  private def seedReady: IO[Unit] =
-    val basis = fixture("basis").noSpaces
-    val source = fixture("source").noSpaces
+  private def seedReady: IO[Unit] = seedReadyWithBasis(fixture("basis"))
+
+  private def seedReadyWithBasis(basisPayload: Json): IO[Unit] =
+    val basis = basisPayload.noSpaces
+    val emptyAchievements = parser.parse(Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/achievements-empty-payload-v2.json"
+    ))).toOption.getOrElse(fail("Invalid achievement fixture"))
+    val memberIds =
+      List("a", "b", "c", "d").zip(List("member-1", "member-2", "member-3", "member-4")).toMap
+    val achievementSummaries =
+      emptyAchievements.hcursor.get[List[Json]]("summaries").toOption.get.map { summary =>
+        val players = summary.hcursor.get[List[Json]]("players").toOption.get.map(player =>
+          player.mapObject(_.add(
+            "memberId",
+            Json.fromString(memberIds(player.hcursor.get[String]("memberId").toOption.get))
+          ))
+        )
+        summary.mapObject(_.add("players", Json.fromValues(players)))
+      }
+    val achievements =
+      emptyAchievements.mapObject(_.add("summaries", Json.fromValues(achievementSummaries)))
+    val source = fixture("source").mapObject(_.add("achievements", achievements)).noSpaces
     val result = fixture("candidate").noSpaces
     val after = fixture("evaluation")
     val checksum =
       after.hcursor.get[String]("basisChecksum").getOrElse(fail("missing basis checksum"))
     val sourceChecksum = fixture("basis").hcursor.downField("source").get[String]("sourceChecksum")
       .getOrElse(fail("missing source checksum"))
-    val payload = Json.obj("before" -> Json.Null, "after" -> after).noSpaces
+    val payload = Json.obj(
+      "before" -> Json.Null,
+      "after" -> after,
+      "beforeAchievements" -> Json.Null,
+      "afterAchievements" -> Json.obj(
+        "achievementCurve" -> achievements.hcursor.downField("achievementCurve").focus.get,
+        "summary" -> achievementSummaries.head
+      )
+    ).noSpaces
     (sql"""
       INSERT INTO series_radar_title_states(game_title_id) VALUES ($title)
       ON CONFLICT (game_title_id) DO NOTHING
@@ -100,6 +131,62 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(results._1.map(_.status), Right("pending"))
       assertEquals(counts, (1, 1))
       assert(state.isRight)
+      val pending = parser.parse(new String(
+        state.toOption.get.payload,
+        java.nio.charset.StandardCharsets.UTF_8
+      )).toOption.get
+      assertEquals(pending.hcursor.downField("currentBasis").focus, Some(Json.Null))
+      assertEquals(
+        pending.hcursor.downField("candidate").downField("achievementCurve").focus,
+        Some(Json.Null)
+      )
+
+  List(
+    "omitted legacy curve" -> None,
+    "explicit legacy curve" -> Some(Json.obj(
+      "thresholds" -> Json.fromValues(List(0, 15, 30, 60, 90).map(Json.fromInt))
+    )),
+    "point curve" -> Some(Json.obj(
+      "pointThresholds" ->
+        Json.fromValues(List(5, 15, 25, 40, 60, 90, 120, 180, 300).map(Json.fromInt))
+    ))
+  ).foreach { case (label, curve) =>
+    test(s"pending generated candidates do not assume the current basis $label"):
+      val basis = legacyBasis.mapObject(fields =>
+        curve.fold(fields.remove("achievementCurve"))(fields.add("achievementCurve", _))
+      )
+      for
+        _ <- seedTitle *> seedReadyWithBasis(basis)
+        _ <-
+        (sql"""UPDATE series_radar_title_states SET current_basis_id=$basisId,
+            desired_basis_id=$basisId, current_applied_at=$now WHERE game_title_id=$title""".update.run *>
+          sql"""UPDATE series_radar_candidates SET status='applied' WHERE id=$candidateId""".update.run)
+          .transact(transactor)
+        repository <- repo
+        useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+        accepted <- useCase.run(
+          command(SeriesPlayerRadarOperationKind.Candidate, None, None),
+          account,
+          "generated-with-current-basis"
+        )
+        document <- repository.radarState(title)
+      yield
+        assertEquals(accepted.map(_.status), Right("pending"))
+        assert(document.isRight, document.toString)
+        val state = parser.parse(new String(
+          document.toOption.get.payload,
+          java.nio.charset.StandardCharsets.UTF_8
+        )).toOption.get
+        val candidate = state.hcursor.downField("candidate")
+        assertEquals(candidate.get[String]("originKind"), Right("generated"))
+        assertEquals(candidate.downField("basisId").focus, Some(Json.Null))
+        assertEquals(candidate.downField("sourceBasisId").focus, Some(Json.Null))
+        assertEquals(candidate.downField("result").focus, Some(Json.Null))
+        assertEquals(
+          candidate.downField("achievementCurve").focus,
+          Some(Json.Null)
+        )
+  }
 
   test(
     "withdrawal before job materialization fences the desired basis and retains a durable normal recovery"
@@ -242,9 +329,59 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(retained, ("ready", "ready"))
       assert(accepted.isRight, accepted.toString)
       assertEquals(candidate, "invalid")
-      assertEquals(application.toOption.flatMap(_.toOption).map(_.status), Some("failed"))
+      assertEquals(
+        application.toOption.flatMap(_.toOption).map(value =>
+          value.status -> value.safeFailureCode
+        ),
+        Some("failed" -> Some("source_changed"))
+      )
       assertEquals(restored, (None, None, 2L, None))
       assertEquals(rebound, (None, 2L))
+
+  test("incident-only edits stop an accepted application without invalidating its candidate"):
+    val original = matchRecord
+    val corrected = original.copy(players =
+      FourPlayers.fromTrustedRow(
+        original.players.toList.map(player =>
+          player.copy(incidents = IncidentCounts.unsafeFromInts(1, 0, 0, 0, 0, 0))
+        )
+      ).toOption.get
+    )
+    for
+      _ <- seedTitle *> seedMatchPrerequisites
+      _ <- new PostgresMatchConfirmationRepository[IO](transactor).confirm(original, None, now)
+      _ <- seedReady
+      repository <- repo
+      accepted <- RequestSeriesPlayerRadarOperation[IO](repository).run(
+        command(SeriesPlayerRadarOperationKind.Apply, Some(candidateId), Some(previewId)),
+        account,
+        "incident-change-apply"
+      )
+      changed <- new PostgresMatchesRepository[IO](transactor)
+        .update(corrected.id, MatchFixtures.update(corrected), now.plusSeconds(1))
+      retained <- sql"""
+        SELECT c.status, c.basis_id, p.status FROM series_radar_candidates c
+        JOIN series_radar_previews p ON p.candidate_id = c.id WHERE c.id = $candidateId
+      """.query[(String, Option[String], String)].unique.transact(transactor)
+      operation <- accepted.traverse(value => repository.radarOperation(title, value.operationId))
+      restored <- titleState
+      rebound <- queuedRadar
+      refused <- RequestSeriesPlayerRadarOperation[IO](repository).run(
+        command(SeriesPlayerRadarOperationKind.Apply, Some(candidateId), Some(previewId)),
+        account,
+        "incident-change-stale-apply"
+      )
+    yield
+      assert(accepted.isRight, accepted.toString)
+      assert(changed.isRight, changed.toString)
+      assertEquals(retained, ("ready", Some(basisId), "stale"))
+      assertEquals(
+        operation.toOption.flatMap(_.toOption).map(value => value.status -> value.safeFailureCode),
+        Some("failed" -> Some("evaluation_changed"))
+      )
+      assertEquals(restored, (None, None, 2L, None))
+      assertEquals(rebound, (None, 2L))
+      assertEquals(refused.left.toOption.map(_.code), Some("CONFLICT"))
 
   test("a queued preparation never absorbs a normal manual or match-mutation request"):
     for
@@ -261,8 +398,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"""
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
-        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v7', 6,
-          'series-analysis-artifact-v6-full-validation-v2', 'queued', 'manual', 'radar_prepare', $operationId)
+        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v13', 10,
+          'series-analysis-artifact-v10-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -299,7 +436,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           artifact_schema_version, source_input_checksum, root_checksum, status,
           aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
           encoded_bytes, decoded_bytes, scope_keys)
-        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v7', 6,
+        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v13', 10,
           'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           'staging', 2, 0, 0, 1, 2, 2, ARRAY['overall', ${scope.key}]
@@ -308,7 +445,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v6-full-validation-v2'
+        SET validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
@@ -587,6 +724,103 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assert(rows.contains(("pending", "manual", Some(account.value))))
       assert(document.isRight, document.toString)
       assertEquals(unchanged, (None, None, 0L, None))
+
+  test("achievement changes preserve manual input and preparation while making comparisons stale"):
+    for
+      _ <- seedTitle *> seedReady
+      repository <- repo
+      saved <- RequestSeriesPlayerRadarOperation[IO](repository)
+        .run(manualCommand, account, "manual-before-achievement-change")
+        .map(_.toOption.getOrElse(fail("manual candidate was not accepted")))
+      before <-
+        sql"SELECT manual_input::text FROM series_radar_candidates WHERE id=${saved.candidateId}"
+          .query[String].unique.transact(transactor)
+      _ <-
+        sql"""INSERT INTO series_radar_previews
+        (id,game_title_id,candidate_id,before_basis_id,input_revision,status,evaluation_snapshot,scope_keys)
+        SELECT 'manual-achievement-preview',game_title_id,${saved.candidateId},before_basis_id,
+          input_revision,'ready',evaluation_snapshot,scope_keys
+        FROM series_radar_previews WHERE id=$previewId""".update.run.transact(transactor)
+      _ <-
+      (PostgresSeriesAnalysisMutationOps.enqueueMatchMutation(List(title)) *>
+        PostgresSeriesPlayerRadarMutationOps.changed(List(title), None)).transact(transactor)
+      retained <- sql"""SELECT c.status,c.manual_input::text,p.status,o.status
+        FROM series_radar_candidates c
+        JOIN series_radar_previews p ON p.candidate_id=c.id
+        JOIN series_radar_operations o ON o.candidate_id=c.id
+        WHERE c.id=${saved.candidateId} AND p.id='manual-achievement-preview'
+      """.query[(String, String, String, String)].unique.transact(transactor)
+    yield assertEquals(retained, ("pending", before, "stale", "pending"))
+
+  test(
+    "changing only achievement points persists the curve while legacy bases retain percentage presentation"
+  ):
+    val custom = SeriesPlayerRadarAchievementCurve(List(
+      0.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 300.0
+    ))
+    val current = manualCommand.copy(
+      expectedCurrentBasisId = Some(basisId),
+      sourceCandidateId = None
+    )
+    def withCurve(curve: SeriesPlayerRadarAchievementCurve) = current.copy(
+      manualInput = current.manualInput.map(_.copy(achievementCurve = Some(curve)))
+    )
+    for
+      _ <- seedTitle *> seedReadyWithBasis(legacyBasis)
+      _ <- sql"""UPDATE series_radar_title_states SET current_basis_id=$basisId,
+        desired_basis_id=$basisId, current_applied_at=$now WHERE game_title_id=$title""".update.run.transact(
+        transactor
+      )
+      repository <- repo
+      useCase = RequestSeriesPlayerRadarOperation[IO](repository)
+      unchanged <-
+        useCase.run(current, account, "same-curve")
+      saved <- useCase.run(withCurve(custom), account, "custom-curve")
+      replay <- useCase.run(withCurve(custom), account, "custom-curve")
+      differentPayload <-
+        useCase.run(
+          withCurve(custom.copy(pointThresholds = custom.pointThresholds.init :+ 200.0)),
+          account,
+          "custom-curve"
+        )
+      stored <-
+        sql"SELECT manual_input::text FROM series_radar_candidates WHERE origin_kind='manual'"
+          .query[String].unique.transact(transactor)
+      document <- repository.radarState(title)
+    yield
+      assertEquals(unchanged.left.toOption.map(_.code), Some("CONFLICT"))
+      assertEquals(saved.map(_.status), Right("pending"))
+      assertEquals(replay, saved)
+      assertEquals(differentPayload.left.toOption.map(_.code), Some("IDEMPOTENCY_PAYLOAD_MISMATCH"))
+      assertEquals(
+        parser.parse(
+          stored
+        ).toOption.get.hcursor.downField("achievementCurve").get[List[Double]]("pointThresholds"),
+        Right(custom.pointThresholds)
+      )
+      assert(document.isRight, document.toString)
+      val state = parser.parse(new String(
+        document.toOption.get.payload,
+        java.nio.charset.StandardCharsets.UTF_8
+      )).toOption.get
+      assertEquals(
+        state.hcursor.downField(
+          "candidate"
+        ).downField("achievementCurve").get[List[Double]]("pointThresholds"),
+        Right(custom.pointThresholds)
+      )
+      assertEquals(
+        state.hcursor.downField(
+          "currentBasis"
+        ).downField("achievementCurve").get[List[Double]]("thresholds"),
+        Right(List(0.0, 10.0, 25.0, 50.0, 80.0))
+      )
+      assertEquals(
+        state.hcursor.downField(
+          "currentBasis"
+        ).downField("basis").downField("achievementCurve").focus,
+        None
+      )
 
   test(
     "editing discard requires its actor and exact manual creation, and replay cannot withdraw a newer candidate"

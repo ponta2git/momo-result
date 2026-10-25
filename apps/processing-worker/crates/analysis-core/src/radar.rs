@@ -3,7 +3,11 @@
 //! This module deliberately owns no clock, database identity, or application history. A stored
 //! basis is a calculation input; preparing a candidate never changes the currently applied one.
 
+mod achievement_generation;
 mod calculation;
+pub use achievement_generation::{
+    AchievementGeneration, AchievementGenerationPlayer, AchievementGenerationSource,
+};
 mod monitoring;
 mod snapshot;
 mod types;

@@ -106,14 +106,16 @@ fn builds_and_stream_validates_a_complete_artifact() {
     assert_eq!(manifest.algorithm_version, "series-analysis-v1");
     assert_eq!(
         manifest.root_checksum,
-        "sha256:09e81343305a555258221c18cef3086b1e65f2d6b4c7f9369d036c92087bd8bd"
+        "sha256:f1fd9bb28ca6794b5c3f9fd4dd53f13059930da43e2cfc7fc37297b8b0892b7c"
     );
     let resource_counts = manifest.resources.iter().fold(
         (0_usize, 0_usize, 0_usize, 0_usize),
         |(aggregates, reviews, drilldowns, contexts), resource| match resource {
             ResourceManifest::Aggregate { .. } => (aggregates + 1, reviews, drilldowns, contexts),
             ResourceManifest::Review { .. } => (aggregates, reviews + 1, drilldowns, contexts),
-            ResourceManifest::OutlookSummary { .. } | ResourceManifest::OutlookReference { .. } => {
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => {
                 (aggregates, reviews, drilldowns, contexts)
             }
             ResourceManifest::Drilldown { .. } => (aggregates, reviews, drilldowns + 1, contexts),
@@ -123,6 +125,14 @@ fn builds_and_stream_validates_a_complete_artifact() {
         },
     );
     assert_eq!(resource_counts, (4, 4, 64, 4));
+    assert_eq!(
+        manifest
+            .resources
+            .iter()
+            .filter(|resource| matches!(resource, ResourceManifest::Achievements { .. }))
+            .count(),
+        1
+    );
     assert_eq!(
         manifest
             .resources
@@ -428,7 +438,8 @@ fn rejects_schema_drift_even_when_checksums_are_recomputed() {
         .iter_mut()
         .find_map(|resource| match resource {
             ResourceManifest::Review { common } => Some(common),
-            ResourceManifest::Aggregate { .. }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Aggregate { .. }
             | ResourceManifest::Drilldown { .. }
             | ResourceManifest::MatchContext { .. }
             | ResourceManifest::OutlookSummary { .. }
@@ -470,7 +481,8 @@ fn rejects_a_dangling_context_item_reference_after_parent_reread() {
         .iter_mut()
         .find_map(|resource| match resource {
             ResourceManifest::MatchContext { common, .. } => Some(common),
-            ResourceManifest::Aggregate { .. }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
             | ResourceManifest::OutlookSummary { .. }
             | ResourceManifest::OutlookReference { .. }
@@ -513,7 +525,8 @@ fn rejects_noncanonical_payload_even_when_checksums_are_recomputed() {
         .iter_mut()
         .find_map(|resource| match resource {
             ResourceManifest::Aggregate { common } => Some(common),
-            ResourceManifest::Review { .. }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Review { .. }
             | ResourceManifest::Drilldown { .. }
             | ResourceManifest::MatchContext { .. }
             | ResourceManifest::OutlookSummary { .. }

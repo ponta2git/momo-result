@@ -31,6 +31,16 @@ object SeriesAnalysisEndpoints:
     .out(noStore)
     .tag("analytics")
 
+  val achievements: SecuredRead[(String, String), Array[Byte]] = endpoint
+    .securityIn(CommonEndpoint.accountHeader)
+    .get
+    .in("api" / "achievements")
+    .in(query[String]("gameTitleId").and(query[String]("artifactId")))
+    .errorOut(CommonEndpoint.errorOut)
+    .out(rawJsonBody(SeriesAnalysisResponseSchemas.achievements))
+    .out(noStore)
+    .tag("achievements")
+
   val status: SecuredRead[String, SeriesAnalysisStatusResponse] = endpoint
     .securityIn(CommonEndpoint.accountHeader)
     .get

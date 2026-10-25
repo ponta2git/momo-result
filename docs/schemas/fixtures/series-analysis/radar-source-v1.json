@@ -1,4 +1,26 @@
 {
+  "achievementGenerationSource": {
+    "methodVersion": "achievement-points-spread-v1",
+    "players": [
+      {
+        "earnedPoints": 0,
+        "memberId": "member-1"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-2"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-3"
+      },
+      {
+        "earnedPoints": 0,
+        "memberId": "member-4"
+      }
+    ],
+    "totalPoints": 0
+  },
   "gameTitleId": "title",
   "matches": [
     {

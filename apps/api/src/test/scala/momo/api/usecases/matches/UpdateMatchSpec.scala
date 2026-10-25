@@ -227,7 +227,8 @@ final class UpdateMatchSpec extends MomoCatsEffectSuite:
         change: MatchUpdate,
         updatedAt: Instant,
     ): IO[Either[AppError, MatchRecord]] = IO.pure(Left(AppError.Conflict("repository conflict")))
-    override def delete(id: MatchId): IO[Boolean] = delegate.delete(id)
+    override def delete(id: MatchId, actor: Option[AccountId]): IO[Boolean] =
+      delegate.delete(id, actor)
     override def find(id: MatchId): IO[Option[MatchRecord]] = delegate.find(id)
     override def existsMatchNo(
         heldEventId: HeldEventId,

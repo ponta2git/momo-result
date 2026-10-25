@@ -2,6 +2,7 @@ import type { ManagementPermission } from "@/shared/auth/permissions";
 
 export const masterTabs = [
   { id: "catalog", label: "作品・マップ・シーズン" },
+  { id: "achievements", label: "実績" },
   { id: "aliases", label: "メンバー名寄せ" },
   { id: "incidents", label: "事件簿" },
   { id: "notifications", label: "通知" },
@@ -20,7 +21,9 @@ export function masterTabFromSearch(search: URLSearchParams): MasterTabId {
 }
 
 export function masterTabPermission(tab: MasterTabId): ManagementPermission {
-  return tab === "catalog" || tab === "incidents" ? "operations" : "admin";
+  return tab === "catalog" || tab === "incidents" || tab === "achievements"
+    ? "operations"
+    : "admin";
 }
 
 /** Only permitted, visited panels keep their inputs and resources alive. */

@@ -145,6 +145,7 @@ final case class ConfirmMatchRequest(
     draftIds: ConfirmMatchDraftIds,
     players: List[PlayerResultRequest],
     noteBody: Option[String] = None,
+    achievements: Option[List[AddMatchAchievementRequest]] = None,
 ) derives Codec.AsObject
 
 final case class ConfirmMatchResponse(
@@ -164,6 +165,8 @@ final case class UpdateMatchRequest(
     playedAt: String,
     draftIds: ConfirmMatchDraftIds,
     players: List[PlayerResultRequest],
+    expectedVersion: Option[String] = None,
+    achievements: Option[List[AddMatchAchievementRequest]] = None,
 ) derives Codec.AsObject
 
 final case class MatchSummaryResponse(
@@ -257,6 +260,7 @@ final case class MatchDetailResponse(
     mapName: Option[String] = None,
     publicId: Option[String] = None,
     heldEventPublicId: Option[String] = None,
+    version: String = "0",
 ) derives Codec.AsObject
 
 final case class AdjacentMatchResponse(
@@ -374,6 +378,7 @@ object MatchDetailResponse:
       gameTitleName = detail.labels.gameTitleName,
       seasonName = detail.labels.seasonName,
       mapName = detail.labels.mapName,
+      version = r.analysisRevision.toString,
       publicId = detail.publicId.map(_.decimalString),
       heldEventPublicId = detail.heldEventPublicId.map(_.decimalString),
       note = MatchNoteResponse(
@@ -395,6 +400,9 @@ final case class MatchIdentityResponse(
     gameTitleName: Option[String],
     seasonName: Option[String],
     publicId: Option[String] = None,
+    gameTitleId: String,
+    mapMasterId: String,
+    version: String,
 ) derives Codec.AsObject
 
 object MatchIdentityResponse:
@@ -405,4 +413,7 @@ object MatchIdentityResponse:
     identity.gameTitleName,
     identity.seasonName,
     identity.publicId.map(_.decimalString),
+    identity.gameTitleId.value,
+    identity.mapMasterId.value,
+    identity.analysisRevision.toString,
   )

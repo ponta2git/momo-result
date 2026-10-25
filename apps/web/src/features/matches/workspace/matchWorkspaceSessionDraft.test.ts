@@ -19,6 +19,36 @@ const scope = {
 };
 
 describe("matchWorkspaceSessionDraft", () => {
+  it("restores pending achievement selections with their concurrency versions and result baseline", () => {
+    const editing = {
+      ...values,
+      expectedVersion: "12",
+      initialResultFingerprint: "saved-result",
+      achievements: [
+        {
+          achievementId: "achievement-1",
+          achievementName: "手入力の実績",
+          memberId: "member_ponta" as const,
+          expectedItemVersion: "4",
+          expectedClaimVersion: "2",
+        },
+      ],
+    };
+    const draft = {
+      accountId: scope.accountId,
+      acknowledgedCellIds: [],
+      baselineFingerprint: "base",
+      savedAt: new Date().toISOString(),
+      values: editing,
+      version: 2 as const,
+    };
+    expect(saveMatchWorkspaceSessionDraft(scope, draft)).toBe(true);
+    expect(loadMatchWorkspaceSessionDraft(scope)?.values).toEqual(editing);
+    expect(matchWorkspaceValuesFingerprint(editing, "edit")).not.toBe(
+      matchWorkspaceValuesFingerprint({ ...editing, expectedVersion: "13" }, "edit"),
+    );
+  });
+
   it("round-trips a valid draft through session storage", () => {
     const key = matchWorkspaceSessionDraftKey(scope);
     const draft = {

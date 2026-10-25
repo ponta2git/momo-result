@@ -413,6 +413,7 @@ pub(super) async fn finish_success(
 
 #[derive(Default)]
 struct ArtifactCounts {
+    achievements: i32,
     aggregates: i32,
     reviews: i32,
     drilldowns: i32,
@@ -424,6 +425,7 @@ struct ArtifactCounts {
 impl ArtifactCounts {
     fn increment(&mut self, resource: &ResourceManifest) -> Result<(), ControlError> {
         let count = match resource {
+            ResourceManifest::Achievements { .. } => &mut self.achievements,
             ResourceManifest::Aggregate { .. } => &mut self.aggregates,
             ResourceManifest::Review { .. } => &mut self.reviews,
             ResourceManifest::Drilldown { .. } => &mut self.drilldowns,
@@ -464,6 +466,25 @@ fn artifact_totals(manifest: &ArtifactManifest) -> Result<ArtifactTotals, Contro
         })
 }
 
+fn manifest_scope_keys(manifest: &ArtifactManifest) -> Vec<String> {
+    manifest
+        .resources
+        .iter()
+        .filter_map(|r| match r {
+            ResourceManifest::Aggregate { common } if common.item_count > 0 => {
+                Some(common.scope.key())
+            }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Aggregate { .. }
+            | ResourceManifest::Review { .. }
+            | ResourceManifest::Drilldown { .. }
+            | ResourceManifest::MatchContext { .. }
+            | ResourceManifest::OutlookSummary { .. }
+            | ResourceManifest::OutlookReference { .. } => None,
+        })
+        .collect()
+}
+
 async fn insert_artifact_header(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
@@ -472,21 +493,7 @@ async fn insert_artifact_header(
 ) -> Result<u64, ControlError> {
     let manifest = artifact.manifest();
     let validation_contract_id: Option<&str> = None;
-    let scope_keys: Vec<String> = manifest
-        .resources
-        .iter()
-        .filter_map(|r| match r {
-            ResourceManifest::Aggregate { common } if common.item_count > 0 => {
-                Some(common.scope.key())
-            }
-            ResourceManifest::Aggregate { .. }
-            | ResourceManifest::Review { .. }
-            | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. }
-            | ResourceManifest::OutlookSummary { .. }
-            | ResourceManifest::OutlookReference { .. } => None,
-        })
-        .collect();
+    let scope_keys = manifest_scope_keys(manifest);
     let inserted = transaction
         .execute(
             "INSERT INTO series_analysis_artifacts (\x20\
@@ -494,9 +501,9 @@ async fn insert_artifact_header(
                artifact_schema_version, validation_contract_id, source_input_checksum,\x20\
                root_checksum, status,\x20\
                aggregate_chunk_count, review_chunk_count, drilldown_chunk_count,\x20\
-               match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys, outlook_summary_chunk_count, outlook_reference_chunk_count\x20\
+               match_context_chunk_count, encoded_bytes, decoded_bytes, radar_basis_id, radar_generation, radar_applied_at, scope_keys, outlook_summary_chunk_count, outlook_reference_chunk_count, achievement_chunk_count\x20\
              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'staging',$10,$11,$12,$13,$14,$15,$16,$17,\x20\
-               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) AND current_basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$16)),$18,$19,$20)\x20\
+               (SELECT current_applied_at FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) AND current_basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$16)),$18,$19,$20,$21)\x20\
              ON CONFLICT (id) DO NOTHING",
             &[
                 &manifest.artifact_id,
@@ -519,6 +526,7 @@ async fn insert_artifact_header(
                 &scope_keys,
                 &totals.counts.outlook_summaries,
                 &totals.counts.outlook_references,
+                &totals.counts.achievements,
             ],
         )
         .await?;
@@ -570,21 +578,7 @@ async fn validate_staged_artifact_shape(
     expected_validation_contract_id: Option<&str>,
 ) -> Result<(), ControlError> {
     let manifest = artifact.manifest();
-    let scope_keys: Vec<String> = manifest
-        .resources
-        .iter()
-        .filter_map(|r| match r {
-            ResourceManifest::Aggregate { common } if common.item_count > 0 => {
-                Some(common.scope.key())
-            }
-            ResourceManifest::Aggregate { .. }
-            | ResourceManifest::Review { .. }
-            | ResourceManifest::Drilldown { .. }
-            | ResourceManifest::MatchContext { .. }
-            | ResourceManifest::OutlookSummary { .. }
-            | ResourceManifest::OutlookReference { .. } => None,
-        })
-        .collect();
+    let scope_keys = manifest_scope_keys(manifest);
     let row = transaction
         .query_opt(
             "WITH child_shape AS (\x20\
@@ -611,6 +605,9 @@ async fn validate_staged_artifact_shape(
                UNION ALL\x20\
                SELECT 'outlook_reference', COUNT(*)::integer, COALESCE(SUM(encoded_bytes), 0)::bigint, COALESCE(SUM(decoded_bytes), 0)::bigint\x20\
                FROM series_analysis_outlook_reference_artifacts WHERE artifact_id = $1\x20\
+               UNION ALL\x20\
+               SELECT 'achievements', COUNT(*)::integer, COALESCE(SUM(encoded_bytes), 0)::bigint, COALESCE(SUM(decoded_bytes), 0)::bigint\x20\
+               FROM series_analysis_achievement_artifacts WHERE artifact_id = $1\x20\
              )\x20\
              SELECT a.game_title_id = $2 AND a.attempt_id = $3\x20\
                     AND a.input_revision = $4 AND a.algorithm_version = $5\x20\
@@ -624,6 +621,8 @@ async fn validate_staged_artifact_shape(
                     AND a.radar_basis_id IS NOT DISTINCT FROM $16 AND a.radar_generation=$17\x20\
                     AND a.scope_keys = $18\x20\
                     AND a.outlook_summary_chunk_count = $19 AND a.outlook_reference_chunk_count = $20\x20\
+                    AND a.achievement_chunk_count = $21 AND $21 = 1\x20\
+                    AND (SELECT chunk_count FROM child_shape WHERE kind = 'achievements') = $21\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'outlook_summary') = $19\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'outlook_reference') = $20\x20\
                     AND (SELECT chunk_count FROM child_shape WHERE kind = 'aggregate') = $10\x20\
@@ -654,6 +653,7 @@ async fn validate_staged_artifact_shape(
                 &scope_keys,
                 &totals.counts.outlook_summaries,
                 &totals.counts.outlook_references,
+                &totals.counts.achievements,
             ],
         )
         .await?;

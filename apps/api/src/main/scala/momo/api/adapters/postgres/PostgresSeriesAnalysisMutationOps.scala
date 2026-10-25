@@ -27,13 +27,21 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
   private final case class ActiveJob(id: String, status: String, workKind: String)
 
   def enqueueMatchMutation(gameTitleIds: List[GameTitleId])(using
+      identities: PostgresIdentities): ConnectionIO[Unit] = enqueue(gameTitleIds, "match_mutation")
+
+  def enqueueAchievementMutation(gameTitleIds: List[GameTitleId])(using
+      identities: PostgresIdentities): ConnectionIO[Unit] =
+    enqueue(gameTitleIds, "achievement_mutation") *>
+      PostgresSeriesPlayerRadarMutationOps.changed(gameTitleIds, None)
+
+  private def enqueue(gameTitleIds: List[GameTitleId], trigger: String)(using
       identities: PostgresIdentities): ConnectionIO[Unit] = gameTitleIds
     .traverse(id =>
       identities.normalize(Entity.GameTitles, id.value).map(GameTitleId.unsafeFromString)
     )
-    .flatMap(_.distinct.sortBy(_.value).traverse_(enqueueTitle))
+    .flatMap(_.distinct.sortBy(_.value).traverse_(enqueueTitle(_, trigger)))
 
-  private def enqueueTitle(gameTitleId: GameTitleId)(using
+  private def enqueueTitle(gameTitleId: GameTitleId, trigger: String)(using
       identities: PostgresIdentities): ConnectionIO[Unit] =
     for
       desired <- sql"""
@@ -111,7 +119,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
               ${desired.artifactSchemaVersion},
               ${desired.validationContractId},
               'queued',
-              'match_mutation'
+              $trigger
             )
           """.update.run.void
         case Some(job) if job.status == "queued" && job.workKind == "analysis" =>
@@ -146,7 +154,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           ${desired.algorithmVersion},
           ${desired.artifactSchemaVersion},
           ${desired.validationContractId},
-          'match_mutation',
+          $trigger,
           false,
           'pending',
           ${identities.lookup(Entity.AnalysisJobs, jobId)}

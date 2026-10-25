@@ -8,6 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
 import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
+import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
@@ -30,9 +31,34 @@ import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 // The timed assertions exercise operation lifecycle after the real wire validators load.
-beforeAll(
-  () => import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+beforeAll(() =>
+  Promise.all([
+    import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
+    decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
+  ]),
 );
+
+const pointCurve: NonNullable<
+  ReturnType<typeof makePlayerRadarPreview>["afterAchievements"]
+>["achievementCurve"] = {
+  pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200],
+};
+
+function makePointReadyState() {
+  const state = makeReadyPlayerRadarState();
+  state.candidate!.achievementCurve = pointCurve;
+  state.candidate!.result!.basis!.achievementCurve = pointCurve;
+  return state;
+}
+
+function makePointPreview() {
+  const preview = makePlayerRadarPreview();
+  preview.afterAchievements!.achievementCurve = pointCurve;
+  preview.afterAchievements!.summary.players.forEach((player, index) => {
+    player.score = [6, 4, 3, 1][index]!;
+  });
+  return preview;
+}
 
 function renderPage(guarded = false) {
   setDevUser();
@@ -121,11 +147,9 @@ describe("SeriesAnalysisAdminPage", () => {
     const user = userEvent.setup();
     const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
     server.use(
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
     );
     const client = renderPage(true);
@@ -275,11 +299,9 @@ describe("SeriesAnalysisAdminPage", () => {
     const submitted: unknown[] = [];
     const operation = { ...makePlayerRadarOperation(), operationId: "accepted-while-checking" };
     server.use(
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
         submitted.push(await request.json());
@@ -430,11 +452,9 @@ describe("SeriesAnalysisAdminPage", () => {
             : overview,
         );
       }),
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", () => {
         accepted = true;
@@ -475,11 +495,9 @@ describe("SeriesAnalysisAdminPage", () => {
     const applyGate = createDeferred();
     const submitted: Array<{ kind: string }> = [];
     server.use(
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
         submitted.push((await request.json()) as { kind: string });
@@ -552,11 +570,9 @@ describe("SeriesAnalysisAdminPage", () => {
     setDevUser();
     const keys: Array<string | null> = [];
     server.use(
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", ({ request }) => {
         keys.push(request.headers.get("Idempotency-Key"));
@@ -597,7 +613,7 @@ describe("SeriesAnalysisAdminPage", () => {
 
   it("closes the accepted manual editor and refreshes the applied basis before returning from recalculation", async () => {
     const user = userEvent.setup();
-    const state = makeReadyPlayerRadarState();
+    const state = makePointReadyState();
     const current = state.currentBasis;
     const candidate = state.candidate;
     if (!current || !candidate?.result?.basis) throw new Error("Expected complete radar fixtures");
@@ -617,6 +633,7 @@ describe("SeriesAnalysisAdminPage", () => {
     };
     candidate.originKind = "manual";
     candidate.manualInput = {
+      achievementCurve: pointCurve,
       axes: basis.axes.map(({ axisId, thresholds }) => ({ axisId, thresholds })),
     };
     candidate.sourceBasisId = current.basisId;
@@ -632,7 +649,7 @@ describe("SeriesAnalysisAdminPage", () => {
       windowCount: 0,
       valuesPerAxis: 0,
     };
-    const preview = makePlayerRadarPreview();
+    const preview = makePointPreview();
     // Raising the first rank boundary from 4.9 to 5.25 changes no fixture scores:
     // every real average rank is already below both boundaries. All 54 values remain present.
     const operation = makePlayerRadarOperation();
@@ -795,11 +812,9 @@ describe("SeriesAnalysisAdminPage", () => {
           }),
         );
       }),
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", ({ request }) => {
-        const preview = makePlayerRadarPreview();
+        const preview = makePointPreview();
         return HttpResponse.json(
           new URL(request.url).searchParams.has("mapMasterId")
             ? {

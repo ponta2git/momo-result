@@ -3,8 +3,14 @@ import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLab
 import {
   formatPlayerRadarBoundary,
   playerRadarAxes,
+  achievementCurveThresholds,
+  achievementCurveUnit,
+  defaultAchievementCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type {
+  PlayerAchievementCurve,
+  PlayerRadarBasis,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { DataTable } from "@/shared/ui/data/DataTable";
@@ -22,6 +28,20 @@ export function PlayerRadarCriteria({
     ...(proposedBasis ? [{ label: "変更案", basis: proposedBasis }] : []),
   ];
   if (sources.length === 0) return null;
+  const currentCurve: PlayerAchievementCurve = currentBasis
+    ? (currentBasis.achievementCurve ?? defaultAchievementCurve)
+    : { unavailableReason: "basis_unavailable" };
+  const proposedCurve = proposedBasis?.achievementCurve ?? defaultAchievementCurve;
+  const beforeThresholds = achievementCurveThresholds(currentCurve);
+  const afterThresholds = achievementCurveThresholds(proposedCurve);
+  const scores = [
+    ...new Set([
+      ...Array.from({ length: 9 }, (_, index) => index + 2),
+      ...[...beforeThresholds, ...(proposedBasis ? afterThresholds : [])].map(
+        (entry) => entry.score,
+      ),
+    ]),
+  ].toSorted((a, b) => a - b);
 
   return (
     <div className="grid min-w-0">
@@ -57,7 +77,11 @@ export function PlayerRadarCriteria({
                   <div className="grid gap-1">
                     <p className="whitespace-nowrap">
                       {proposedBasis ? <span className="sr-only">適用中 </span> : null}
-                      {before ? formatPlayerRadarBoundary(axis.id, before.rawValue) : "未適用"}
+                      {before
+                        ? formatPlayerRadarBoundary(axis.id, before.rawValue)
+                        : currentBasis
+                          ? "—"
+                          : "未適用"}
                     </p>
                     {proposedBasis && before?.rawValue !== after?.rawValue ? (
                       <p className="whitespace-nowrap">
@@ -68,7 +92,7 @@ export function PlayerRadarCriteria({
                             before?.rawValue !== after?.rawValue && contentText.compactPrimary,
                           )}
                         >
-                          {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "未作成"}
+                          {after ? formatPlayerRadarBoundary(axis.id, after.rawValue) : "—"}
                         </span>
                       </p>
                     ) : null}
@@ -76,13 +100,65 @@ export function PlayerRadarCriteria({
                 );
               },
             })),
+            {
+              key: "achievement",
+              header: <PlayerRadarAxisLabel label="実績達成" />,
+              minWidth: "10rem",
+              tabular: true,
+              renderCell: (score: number) => {
+                const before = beforeThresholds.find((entry) => entry.score === score)?.rawValue;
+                const after = afterThresholds.find((entry) => entry.score === score)?.rawValue;
+                const beforeUnit = achievementCurveUnit(currentCurve);
+                const afterUnit = achievementCurveUnit(proposedCurve);
+                const changed = before !== after || beforeUnit !== afterUnit;
+                return (
+                  <div className="grid gap-1 whitespace-nowrap">
+                    <p>
+                      {proposedBasis ? <span className="sr-only">適用中 </span> : null}
+                      {!currentBasis
+                        ? "未適用"
+                        : "unavailableReason" in currentCurve
+                          ? currentCurve.unavailableReason === "no_target"
+                            ? "対象なし（基準作成時）"
+                            : "基準未生成"
+                          : before === undefined
+                            ? "—"
+                            : `${before}${beforeUnit}`}
+                    </p>
+                    {proposedBasis && changed ? (
+                      <p className={contentText.compactPrimary}>
+                        <span aria-hidden="true">→ </span>
+                        <span className="sr-only">変更案 </span>
+                        {"unavailableReason" in proposedCurve
+                          ? proposedCurve.unavailableReason === "no_target"
+                            ? "対象なし（基準作成時）"
+                            : "基準未生成"
+                          : after === undefined
+                            ? "—"
+                            : `${after}${afterUnit}`}
+                      </p>
+                    ) : null}
+                  </div>
+                );
+              },
+            },
           ]}
           density="compact"
           getRowKey={String}
-          rows={Array.from({ length: 9 }, (_, index) => index + 2)}
+          rows={scores}
+          scrollArea={{
+            label: proposedBasis ? "採点境界の変更案" : "適用中の採点境界",
+            showHint: false,
+          }}
           stickyRowHeader
           verticalAlign="top"
         />
+        <p className={contentText.supporting}>
+          実績達成は作品通算で採点します。ポイント基準は境界以上で点数が上がります。
+          {"thresholds" in currentCurve || (proposedBasis && "thresholds" in proposedCurve)
+            ? "従来の得点率基準は基準点の間を直線で補間します。"
+            : ""}
+        </p>
       </div>
       <Disclosure summary="作成元の記録" triggerVariant="supporting">
         <DataTable

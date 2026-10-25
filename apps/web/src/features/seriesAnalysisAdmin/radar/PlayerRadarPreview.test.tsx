@@ -91,8 +91,9 @@ describe("radar comparison table", () => {
     renderPreview(model);
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     const cells = within(table).getAllByRole("cell");
-    expect(cells).toHaveLength(24);
-    for (const cell of cells) expect(cell).toHaveTextContent("適用中 未採点 → 変更案 7点");
+    expect(cells).toHaveLength(28);
+    for (const cell of cells.slice(0, 24))
+      expect(cell).toHaveTextContent("適用中 未採点 → 変更案 7点");
     expect(within(table).queryByText("0点")).not.toBeInTheDocument();
   });
   it("keeps empty filters explicit with a recovery action instead of presenting previous scores", async () => {
@@ -168,7 +169,9 @@ describe("radar comparison table", () => {
       expect(screen.getByText(`参考値（${reason}）`)).toBeInTheDocument();
       const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
       expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();
-      expect(within(table).getAllByText("7点")).toHaveLength(24);
+      expect(within(table).getAllByText("7点")).toHaveLength(25);
+      const achievements = within(table).getByRole("row", { name: /^実績達成/u });
+      expect(within(achievements).queryByText(/参考値|未採点/u)).not.toBeInTheDocument();
     },
   );
   it("keeps partial reference warnings with the affected current and candidate scores", () => {
@@ -213,7 +216,9 @@ describe("radar comparison table", () => {
     expect(screen.getByText("参考値（40試合未満・8開催未満）")).toBeVisible();
     const table = screen.getByRole("table", { name: "採点基準変更前後の比較" });
     expect(within(table).queryByText(/参考値/u)).not.toBeInTheDocument();
-    expect(within(table).getAllByText("7点")).toHaveLength(24);
+    expect(within(table).getAllByText("7点")).toHaveLength(25);
+    const achievements = within(table).getByRole("row", { name: /^実績達成/u });
+    expect(within(achievements).queryByText(/参考値|未採点/u)).not.toBeInTheDocument();
     expect(within(table).getAllByText(/未採点/u)).toHaveLength(24);
   });
 });

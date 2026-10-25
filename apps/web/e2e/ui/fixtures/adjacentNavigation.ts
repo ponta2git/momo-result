@@ -55,6 +55,7 @@ export async function installAdjacentNavigationResponses(page: Page) {
   const matchDetails = matches.map(
     (match, index): components["schemas"]["MatchDetailResponse"] => ({
       matchId: match.matchId,
+      version: "0",
       heldEventId: match.heldEventId,
       heldAt: match.heldAt,
       playedAt: match.playedAt,

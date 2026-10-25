@@ -44,6 +44,7 @@ pub struct ComputedResource {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ComputedResourceKind {
+    Achievements,
     Aggregate,
     Review,
     OutlookSummary,
@@ -159,6 +160,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
     input: &NormalizedAnalysisInput,
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
+    consume(achievement_resource(input))?;
     let title_facts = TitleFacts::new(input);
     let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
     for (scope, player_matches) in input.scopes() {
@@ -251,6 +253,25 @@ pub fn try_for_each_resource<E: From<RadarError>>(
         previous_analysis = Some(analysis);
     }
     Ok(())
+}
+
+fn achievement_resource(input: &NormalizedAnalysisInput) -> ComputedResource {
+    let achievements = crate::achievements::calculate(
+        input.game_title_id(),
+        input.achievements(),
+        input.player_matches(),
+        input.radar_basis().map_or_else(
+            crate::achievements::AchievementCurve::default,
+            |published| published.basis.effective_achievement_curve(),
+        ),
+    );
+    ComputedResource {
+        scope: ScopeRef::Overall,
+        kind: ComputedResourceKind::Achievements,
+        item_count: achievements.items.len(),
+        payload: serde_json::json!(achievements),
+        source_match_revision: None,
+    }
 }
 
 fn player_radar(

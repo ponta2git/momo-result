@@ -6,6 +6,8 @@ import type {
   RadarAdminResource,
   RadarPreviewScope,
 } from "@/features/seriesAnalysisAdmin/radar/playerRadarAdminTypes";
+import { achievementResourceQueryOptions } from "@/shared/api/achievementQueryOptions";
+import type { AchievementResource } from "@/shared/api/achievements";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { isInitialQueryLoading, shouldShowQueryError } from "@/shared/api/queryErrorState";
 import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
@@ -296,6 +298,7 @@ export function useRadarEvaluationRead({
 }): {
   target: RadarEvaluationTarget | undefined;
   aggregate: SeriesComparisonAggregate | undefined;
+  achievements: AchievementResource | undefined;
   scopeState: SeriesAnalysisScopeStatus["state"] | undefined;
   fetching: boolean;
   failed: boolean;
@@ -316,6 +319,10 @@ export function useRadarEvaluationRead({
         }
       : undefined;
   const scopeQuery = useQuery(seriesAnalysisScopeStatusQueryOptions(target));
+  const achievementQuery = useQuery({
+    ...achievementResourceQueryOptions(target?.gameTitleId, target?.artifactId),
+    placeholderData: () => undefined,
+  });
   const aggregateQuery = useQuery({
     ...seriesAnalysisAggregateQueryOptions(
       scopeQuery.data?.state === "available" ? target : undefined,
@@ -326,9 +333,18 @@ export function useRadarEvaluationRead({
   return {
     target,
     aggregate: aggregateQuery.data,
+    achievements: achievementQuery.data,
     scopeState: scopeQuery.data?.state,
-    fetching: statusQuery.isFetching || scopeQuery.isFetching || aggregateQuery.isFetching,
-    failed: statusQuery.isError || scopeQuery.isError || aggregateQuery.isError,
+    fetching:
+      statusQuery.isFetching ||
+      scopeQuery.isFetching ||
+      aggregateQuery.isFetching ||
+      achievementQuery.isFetching,
+    failed:
+      statusQuery.isError ||
+      scopeQuery.isError ||
+      aggregateQuery.isError ||
+      achievementQuery.isError,
     refreshPublication: async () => {
       const status = await statusQuery.refetch({ cancelRefetch: false });
       return status.isSuccess ? status.data.currentArtifact?.artifactId : undefined;
@@ -341,14 +357,27 @@ export function useRadarEvaluationRead({
       return status.state;
     },
     refreshEvaluation: async (capturedTarget) => {
-      await queryClient.refetchQueries(
-        {
-          queryKey: seriesAnalysisAggregateQueryOptions(capturedTarget).queryKey,
-          exact: true,
-          type: "active",
-        },
-        { cancelRefetch: false },
-      );
+      await Promise.all([
+        queryClient.refetchQueries(
+          {
+            queryKey: seriesAnalysisAggregateQueryOptions(capturedTarget).queryKey,
+            exact: true,
+            type: "active",
+          },
+          { cancelRefetch: false },
+        ),
+        queryClient.refetchQueries(
+          {
+            queryKey: achievementResourceQueryOptions(
+              capturedTarget.gameTitleId,
+              capturedTarget.artifactId,
+            ).queryKey,
+            exact: true,
+            type: "active",
+          },
+          { cancelRefetch: false },
+        ),
+      ]);
     },
   };
 }

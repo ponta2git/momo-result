@@ -44,7 +44,7 @@ to satisfy this reference.
 
 Carry authorized changes through the affected boundary's verification. Choose evidence through
 [docs/test-rule.md](../../../../docs/test-rule.md) and required gates through
-[docs/dev-rule.md](../../../../docs/dev-rule.md#4-change-gates), including their stop and rerun
+[docs/dev-rule.md](../../../../docs/dev-rule.md#change-gates), including their stop and rerun
 conditions. Use `docs/test-architecture.md` only when changing test execution design.
 
 - Distinguish `Open` (work or verification remains), `Deferred` (a stated decision/condition

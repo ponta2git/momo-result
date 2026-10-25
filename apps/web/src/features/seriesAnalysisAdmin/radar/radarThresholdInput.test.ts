@@ -12,13 +12,22 @@ import {
   playerRadarBasisDisplay,
   playerRadarEvaluationDisplay,
 } from "@/shared/seriesAnalysis/playerRadarDisplay";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import { makePlayerRadarBasis, makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
+import {
+  playerRadarAxes,
+  defaultAchievementCurve,
+  achievementRadarScore,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  makePlayerRadarBasis,
+  makePlayerRadarEvaluation,
+  pointAchievementCurveFixture,
+} from "@/test/msw/playerRadarFixtures";
 
 import manualFixture from "../../../../../../docs/schemas/fixtures/series-analysis/radar-manual-scoring-v1.json";
 
 function validInput(): RadarManualInput {
   return {
+    achievementCurve: pointAchievementCurveFixture,
     axes: playerRadarAxes.map(({ id }) => ({
       axisId: id,
       thresholds:
@@ -30,6 +39,109 @@ function validInput(): RadarManualInput {
 }
 
 describe("radar threshold editing", () => {
+  it("preserves historical percentage scores and previews point boundaries independently of six-axis eligibility", () => {
+    for (const [earnedPoints, score] of [
+      [0, 1],
+      [5, 2],
+      [10, 3],
+      [25, 5],
+      [50, 7],
+      [65, 8.5],
+      [80, 10],
+      [100, 10],
+    ]) {
+      expect(
+        achievementRadarScore(
+          { earnedPoints: earnedPoints!, totalPoints: 100 },
+          defaultAchievementCurve,
+        ),
+      ).toBe(score);
+    }
+    expect(
+      achievementRadarScore({ earnedPoints: 0, totalPoints: 0 }, defaultAchievementCurve),
+    ).toBeNull();
+    const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
+    const before = playerRadarEvaluationDisplay(makePlayerRadarEvaluation(), basis, []);
+    before.players[0]!.achievement = { earnedPoints: 50, totalPoints: 100, score: 7 };
+    before.players[0]!.axes[0]!.score = null;
+    before.players[0]!.axes[0]!.scoreUnavailableReasons = ["insufficient_matches"];
+    const input = {
+      ...radarBasisInput(basis),
+      achievementCurve: pointAchievementCurveFixture,
+    };
+    const after = previewRadarThresholds(before, basis, input);
+    expect(after.achievementCurve).toEqual(pointAchievementCurveFixture);
+    expect(after.players[0]!.achievement).toEqual({ earnedPoints: 50, totalPoints: 100, score: 6 });
+    expect(after.players[0]!.axes).toEqual(before.players[0]!.axes);
+    expect(before.players[0]!.achievement.score).toBe(7);
+    expect(sameRadarThresholds(input, radarBasisInput(basis))).toBe(false);
+  });
+
+  it.each([
+    ["5", "10", "10", "30", "50", "75", "100", "150", "200"],
+    ["5", "30", "20", "40", "50", "75", "100", "150", "200"],
+    ["-1", "10", "20", "30", "50", "75", "100", "150", "200"],
+    ["5", "10", "20", "30", "50", "75", "100", "150", "102401"],
+    ["5", "Infinity", "20", "30", "50", "75", "100", "150", "200"],
+    ["0", "10", "25", "50", "80"],
+  ])(
+    "rejects invalid point boundaries %j without accepting a legacy five-point draft",
+    (...achievement) => {
+      const parsed = parseRadarThresholdDrafts({
+        ...radarThresholdDrafts(validInput()),
+        achievement,
+      });
+      expect(parsed.input).toBeNull();
+      expect(parsed.errors.some((error) => error.axisId === "achievement")).toBe(true);
+    },
+  );
+
+  it("does not treat an incomplete achievement boundary as zero or flag neighboring inputs", () => {
+    const parsed = parseRadarThresholdDrafts({
+      ...radarThresholdDrafts(validInput()),
+      achievement: ["5", "", "20", "30", "50", "75", "100", "150", "200"],
+    });
+    expect(parsed.input).toBeNull();
+    expect(parsed.errors).toEqual([
+      {
+        axisId: "achievement",
+        index: 1,
+        kind: "numeric",
+        message: "実績ポイントを最後まで入力してください。",
+      },
+    ]);
+  });
+
+  it("inherits legacy and unavailable curves without inventing point boundaries or changing the saved basis", () => {
+    const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
+    for (const achievementCurve of [
+      undefined,
+      { thresholds: [0, 20, 40, 60, 90] },
+      { unavailableReason: "no_target" as const },
+    ]) {
+      const saved = { ...basis, ...(achievementCurve ? { achievementCurve } : {}) };
+      if (!achievementCurve) delete saved.achievementCurve;
+      const snapshot = structuredClone(saved);
+      const input = radarBasisInput(saved);
+      const drafts = radarThresholdDrafts(input);
+      expect(drafts.achievement).toEqual([]);
+      expect(parseRadarThresholdDrafts(drafts)).toEqual({ input, errors: [] });
+      expect(saved).toEqual(snapshot);
+      expect(input.achievementCurve).toBeUndefined();
+      const before = playerRadarEvaluationDisplay(makePlayerRadarEvaluation(), saved, []);
+      before.players[0]!.achievement = { earnedPoints: 50, totalPoints: 100, score: null };
+      const after = previewRadarThresholds(before, saved, input);
+      expect(after.achievementCurve).toEqual(achievementCurve ?? defaultAchievementCurve);
+      expect(after.players[0]!.achievement!.score).toBe(
+        achievementCurve && "unavailableReason" in achievementCurve
+          ? null
+          : achievementCurve
+            ? 6
+            : 7,
+      );
+    }
+  });
+
   it("matches the Rust shared scoring fixture at equality and adjacent floating-point boundaries", () => {
     const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
     const input = manualFixture.input as RadarManualInput;

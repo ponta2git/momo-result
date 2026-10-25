@@ -159,6 +159,7 @@ final class PostgresPublicIdentifiersSpec extends PostgresHttpAppTestFixtures:
         assertEquals(jsonField[String](nextEvent, "publicId"), "2")
       update =
         HttpRequestBodies.Matches.confirmMatchWithNo(jsonField[String](first, "heldEventId"), 9)
+          .mapObject(_.add("expectedVersion", Json.fromString(jsonField[String](first, "version"))))
       target = Uri.unsafeFromString(s"/api/matches/${jsonField[String](first, "matchId")}")
       saved <- app.run(writePost(target, update, Some("public-route-edit")).withMethod(Method.PUT))
       savedBody <- saved.as[Json]

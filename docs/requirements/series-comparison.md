@@ -9,6 +9,7 @@
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
 | プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定・未実装） | `docs/requirements/series-player-radar.md` |
+| 追加する実績軸の作品通算・対象マップ・0試合時の表示（未実装） | [実績達成管理](player-achievements.md) |
 | 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
@@ -38,6 +39,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 
 - 作品を必須scope、seasonとmapを独立した任意filterとする。両方未指定は総合、両方指定は実在する組合せだけを有効とする。
 - scope候補は現在の確定試合から作る。古いartifactだけに存在する候補を残さず、新規候補がartifactに未収録なら別scopeへfallbackしない。
+- 追加する実績軸は作品通算と項目の対象マップで計算する。実績だけのために比較scope候補を増やさず、0試合の作品・マップでも専用ページから実績と軸の数値を確認できるようにする。比較条件に試合がない場合も、採点可能な実績軸を既存6軸と一括して隠さない。
 - 対戦順は `played_at`、開催ID、開催内試合番号、試合IDの昇順とする。日時は保存精度を保持し、IDはUTF-8 byte順で比較する。試合詳細の全試合を対象にした前後移動もこの比較規則を使うが、本ページの集計対象は選択scope内に限定する。
 - 順位は保存済み値を正とし、総資産から再計算しない。金額はDB保存値から途中丸めなしで計算する。
 - 指標の分母は各プレーヤーの選択scope内参加試合数とする。平均は算術平均、中央値は偶数件なら中央2値の平均、順位ブレは母標準偏差とする。
@@ -187,7 +189,7 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 
 ## 8. Acceptance Criteria
 
-本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
 
 | 領域 | 受入条件 |
 | --- | --- |

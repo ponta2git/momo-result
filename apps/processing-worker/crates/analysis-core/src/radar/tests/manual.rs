@@ -171,3 +171,119 @@ fn manual_monitoring_starts_at_its_first_comparison_and_allows_small_samples() {
         "recomparison does not change the monitoring start"
     );
 }
+
+#[test]
+fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_curve() {
+    use crate::achievements::AchievementCurve;
+    let legacy: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-legacy-v1.json"
+    ))
+    .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
+    let mut basis = crate::payload::radar_basis_from_payload(&legacy)
+        .unwrap_or_else(|error| panic!("legacy basis: {error}"));
+    let mut digest = crate::canonical::FramedSha256::new();
+    digest
+        .update_serialized(&legacy, &mut Vec::new())
+        .unwrap_or_else(|error| panic!("legacy checksum: {error}"));
+    assert_eq!(basis.checksum().ok(), Some(digest.finalize()));
+    assert_eq!(basis.achievement_curve, None);
+    assert_eq!(
+        basis.effective_achievement_curve(),
+        AchievementCurve::legacy_percentage_default()
+    );
+    let saved_checksum = basis.checksum().ok();
+    let six_axes = evaluate(input(40), Some(&basis));
+    let curve = AchievementCurve::LegacyPercentage {
+        thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
+    };
+    basis.achievement_curve = Some(curve);
+    assert_ne!(basis.checksum().ok(), saved_checksum);
+    let legacy_curve_payload =
+        serde_json::to_value(&basis).unwrap_or_else(|error| panic!("legacy curve: {error}"));
+    let decoded = crate::payload::radar_basis_from_payload(&legacy_curve_payload)
+        .unwrap_or_else(|error| panic!("legacy curve round trip: {error}"));
+    assert_eq!(decoded.checksum().ok(), basis.checksum().ok());
+    assert_eq!(
+        decoded.effective_achievement_curve().score(50, 100),
+        Some(6.0)
+    );
+    let edited_six_axes = evaluate(input(40), Some(&basis));
+    assert_eq!(edited_six_axes.players, six_axes.players);
+    assert_eq!(edited_six_axes.sample, six_axes.sample);
+    let mut entered = fixture().input;
+    let inherited = create_manual_basis(&normalized(input(40)), &basis, "source", None, &entered)
+        .unwrap_or_else(|error| panic!("inherit: {error}"))
+        .unwrap_or_else(|| panic!("nonempty comparison"));
+    assert_eq!(inherited.effective_achievement_curve(), curve);
+    entered.achievement_curve = Some(AchievementCurve::default());
+    let reset = create_manual_basis(&normalized(input(40)), &basis, "source", None, &entered)
+        .unwrap_or_else(|error| panic!("replace: {error}"))
+        .unwrap_or_else(|| panic!("nonempty comparison"));
+    assert_eq!(
+        reset.effective_achievement_curve(),
+        AchievementCurve::default()
+    );
+}
+
+#[test]
+fn optional_achievement_curve_keeps_strict_basis_shape_and_semantic_validation() {
+    let generated: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../../docs/schemas/fixtures/series-analysis/radar-basis-legacy-v1.json"
+    ))
+    .unwrap_or_else(|error| panic!("legacy fixture: {error}"));
+    let manual = serde_json::to_value(manual_basis(40))
+        .unwrap_or_else(|error| panic!("manual fixture: {error}"));
+    for mut value in [generated, manual] {
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .remove("achievementCurve");
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        let mut unknown = value.clone();
+        unknown
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert("unrecognized".to_owned(), serde_json::json!(true));
+        assert!(crate::payload::radar_basis_from_payload(&unknown).is_err());
+        let mut missing = value.clone();
+        missing
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .remove("source");
+        assert!(crate::payload::radar_basis_from_payload(&missing).is_err());
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert(
+                "achievementCurve".to_owned(),
+                serde_json::json!({"thresholds": [0, 10, 25, 50, 80]}),
+            );
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert(
+                "achievementCurve".to_owned(),
+                serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 200]}),
+            );
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        for invalid in [
+            serde_json::Value::Null,
+            serde_json::json!({"thresholds": [0, 10, 25, 50]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 101]}),
+            serde_json::json!({"thresholds": [0, 25, 25, 50, 80]}),
+            serde_json::json!({"thresholds": [0, 30, 25, 50, 80]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 80], "unrecognized": true}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150]}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 102_401]}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 100, 200]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 80], "pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 200]}),
+        ] {
+            value
+                .as_object_mut()
+                .unwrap_or_else(|| panic!("basis object"))
+                .insert("achievementCurve".to_owned(), invalid);
+            assert!(crate::payload::radar_basis_from_payload(&value).is_err());
+        }
+    }
+}

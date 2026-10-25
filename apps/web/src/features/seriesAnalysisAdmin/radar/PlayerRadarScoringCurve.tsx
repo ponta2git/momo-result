@@ -6,11 +6,15 @@ import {
 } from "@/features/seriesAnalysisAdmin/radar/radarScoringCurve";
 import { orderFixedMembers } from "@/shared/domain/members";
 import {
-  playerRadarAxes,
+  playerRadarSettingAxes,
+  playerRadarAchievementCurve,
+  achievementCurveThresholds,
+  playerRadarSettingCell,
+  playerRadarSettingThresholds,
   playerRadarScoreLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
   PlayerRadarDisplay,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
@@ -36,31 +40,71 @@ export function PlayerRadarScoringCurve({
   before,
   after,
 }: {
-  axisId: PlayerRadarAxisId;
+  axisId: PlayerRadarSettingAxisId;
   before: PlayerRadarDisplay | null;
   after: PlayerRadarDisplay;
 }) {
   const id = useId();
-  const axis = playerRadarAxes.find((entry) => entry.id === axisId);
-  const unit = axisId === "averageRank" ? "位" : "万円";
-  const current = before?.basis?.axes.find((entry) => entry.axisId === axisId)?.thresholds;
-  const edited = after.basis?.axes.find((entry) => entry.axisId === axisId)?.thresholds;
+  const axis = playerRadarSettingAxes.find((entry) => entry.id === axisId);
+  const unit = axisId === "achievement" ? "pt" : axisId === "averageRank" ? "位" : "万円";
+  const beforeCurve = playerRadarAchievementCurve(before);
+  const afterCurve = playerRadarAchievementCurve(after);
+  const legacyCurrent = axisId === "achievement" && "thresholds" in beforeCurve;
+  const legacyEdited = axisId === "achievement" && "thresholds" in afterCurve;
+  const totalPoints =
+    after.players.find((player) => player.achievement)?.achievement?.totalPoints ?? 0;
+  const pointValues = (
+    values: ReturnType<typeof playerRadarSettingThresholds> | undefined,
+    legacy: boolean,
+  ) =>
+    legacy
+      ? totalPoints > 0
+        ? values?.map((value) => ({ ...value, rawValue: (value.rawValue * totalPoints) / 100 }))
+        : undefined
+      : values?.length
+        ? values
+        : undefined;
+  const current =
+    axisId === "achievement"
+      ? achievementCurveThresholds(beforeCurve)
+      : before?.basis
+        ? playerRadarSettingThresholds(before.basis, axisId)
+        : undefined;
+  const edited =
+    axisId === "achievement"
+      ? achievementCurveThresholds(afterCurve)
+      : after.basis
+        ? playerRadarSettingThresholds(after.basis, axisId)
+        : undefined;
   const players = orderFixedMembers(after.players).map((player, index) => ({
     memberId: player.memberId,
     displayName: player.displayName,
     number: index + 1,
-    before: before?.players
-      .find((entry) => entry.memberId === player.memberId)
-      ?.axes.find((cell) => cell.axisId === axisId),
-    after: player.axes.find((cell) => cell.axisId === axisId),
+    before: playerRadarSettingCell(
+      before?.players.find((entry) => entry.memberId === player.memberId),
+      axisId,
+    ),
+    after: playerRadarSettingCell(player, axisId),
   }));
   const series = [
-    { name: "適用中", values: current, color: currentColor, dashed: true },
-    { name: "変更案", values: edited, color: editedColor, dashed: false },
+    {
+      name: legacyCurrent ? "適用中（従来の得点率）" : "適用中",
+      values: pointValues(current, legacyCurrent),
+      color: currentColor,
+      dashed: true,
+      legacy: legacyCurrent,
+    },
+    {
+      name: legacyEdited ? "変更案（従来の得点率）" : "変更案",
+      values: pointValues(edited, legacyEdited),
+      color: editedColor,
+      dashed: false,
+      legacy: legacyEdited,
+    },
   ];
   const scale = radarCurveScale([
-    ...(current?.map((value) => value.rawValue) ?? []),
-    ...(edited?.map((value) => value.rawValue) ?? []),
+    ...(axisId === "achievement" ? [0] : []),
+    ...series.flatMap((entry) => entry.values?.map((value) => value.rawValue) ?? []),
     ...players.flatMap((player) =>
       [player.before?.rawValue, player.after?.rawValue].filter(
         (value): value is number => value != null,
@@ -76,8 +120,9 @@ export function PlayerRadarScoringCurve({
       </figcaption>
       <p className={cn(contentText.supporting, readableTextWidthClass)}>
         横軸は{axis?.label}（{unit}）、縦軸は点数です。
-        {axisId === "averageRank" ? "順位が小さいほど高得点。" : "金額が大きいほど高得点。"}
-        境界と同じ値は高い方の点数になります。
+        {axisId === "achievement"
+          ? "実績ポイントが大きいほど高得点。境界と同じ値は高い方の点数になります。"
+          : `${axisId === "averageRank" ? "順位が小さいほど高得点。" : "金額が大きいほど高得点。"}境界と同じ値は高い方の点数になります。`}
       </p>
       <div className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}>
         {series.map((entry) => (
@@ -138,12 +183,15 @@ export function PlayerRadarScoringCurve({
           ))}
           {series.map((entry) => {
             if (!entry.values?.length) return null;
-            const steps = radarScoringSteps(
-              axisId,
-              entry.values.map((value) => value.rawValue),
-            );
             const initialScore = axisId === "averageRank" ? 10 : 1;
-            const path = `M${plot.left} ${scoreY(initialScore)}${steps.map((step) => `H${rawX(step.rawValue)}V${scoreY(step.to)}`).join("")}H${plot.right}`;
+            const path = entry.legacy
+              ? `M${plot.left} ${scoreY(1)}${entry.values.map((point) => `L${rawX(point.rawValue)} ${scoreY(point.score)}`).join("")}H${plot.right}`
+              : `M${plot.left} ${scoreY(initialScore)}${radarScoringSteps(
+                  axisId,
+                  entry.values.map((value) => value.rawValue),
+                )
+                  .map((step) => `H${rawX(step.rawValue)}V${scoreY(step.to)}`)
+                  .join("")}H${plot.right}`;
             return (
               <path
                 key={entry.name}

@@ -7,18 +7,20 @@ import type {
 import { PlayerRadarScoringCurve } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarScoringCurve";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { formatDecimal } from "@/shared/lib/formatters";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLabel";
 import { PlayerRadarChart } from "@/shared/seriesAnalysis/PlayerRadarChart";
 import {
   formatPlayerRadarRawValue,
-  playerRadarAxes,
+  playerRadarSettingAxes,
+  playerRadarSettingCell,
   playerRadarScoreLabel,
   playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
   PlayerRadarCell,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { Button } from "@/shared/ui/actions/Button";
@@ -34,7 +36,9 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-function isReferenceScore(cell: PlayerRadarCell | undefined): boolean {
+function isReferenceScore(
+  cell: Pick<PlayerRadarCell, "sampleQuality" | "score"> | undefined,
+): boolean {
   return cell?.sampleQuality === "reference" && cell.score !== null;
 }
 
@@ -50,7 +54,7 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
   preview: PlayerRadarPreviewView;
   filter: PlayerRadarPreviewFilter;
   updating: boolean;
-  axisId?: PlayerRadarAxisId;
+  axisId?: PlayerRadarSettingAxisId;
   onSeasonChange: (value: string) => void;
   onMapChange: (value: string) => void;
   onResetFilter: () => void;
@@ -126,6 +130,11 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
               ) : null}
               <div className="grid min-w-0 gap-1">
                 <p className={contentText.supporting}>適用中 → 変更案</p>
+                {axisId === "achievement" ? (
+                  <p className={contentText.supporting}>
+                    実績達成は選択マップの作品通算です。シーズンや成績6軸の試合数による未採点の影響を受けません。
+                  </p>
+                ) : null}
                 <DataTable
                   caption={{ content: "採点基準変更前後の比較" }}
                   density="compact"
@@ -146,11 +155,14 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
                       key: player.memberId,
                       minWidth: "8.5rem",
                       tabular: true,
-                      renderCell: (axis: (typeof playerRadarAxes)[number]) => {
-                        const before = preview.before?.players
-                          .find((entry) => entry.memberId === player.memberId)
-                          ?.axes.find((cell) => cell.axisId === axis.id);
-                        const after = player.axes.find((cell) => cell.axisId === axis.id);
+                      renderCell: (axis: (typeof playerRadarSettingAxes)[number]) => {
+                        const before = playerRadarSettingCell(
+                          preview.before?.players.find(
+                            (entry) => entry.memberId === player.memberId,
+                          ),
+                          axis.id,
+                        );
+                        const after = playerRadarSettingCell(player, axis.id);
                         const beforeLabel = playerRadarScoreLabel(before);
                         const afterLabel = playerRadarScoreLabel(after);
                         const unchanged = beforeLabel === afterLabel;
@@ -177,7 +189,7 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
                             {delta !== null && delta !== 0 ? (
                               <p className={contentText.supporting}>
                                 増減 {delta > 0 ? "+" : ""}
-                                {delta}点
+                                {formatDecimal(delta)}点
                               </p>
                             ) : null}
                             <p className="whitespace-nowrap">
@@ -195,9 +207,11 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
                             ) : null}
                             {after?.scoreUnavailableReasons.length ? (
                               <p className={contentText.supporting}>
-                                {after.scoreUnavailableReasons
-                                  .map(playerRadarUnavailableLabel)
-                                  .join("・")}
+                                {axis.id === "achievement"
+                                  ? "対象の実績なし"
+                                  : after.scoreUnavailableReasons
+                                      .map(playerRadarUnavailableLabel)
+                                      .join("・")}
                               </p>
                             ) : null}
                           </div>
@@ -206,7 +220,7 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
                     })),
                   ]}
                   getRowKey={(axis) => axis.id}
-                  rows={playerRadarAxes.filter((axis) => !axisId || axis.id === axisId)}
+                  rows={playerRadarSettingAxes.filter((axis) => !axisId || axis.id === axisId)}
                   stickyRowHeader
                   verticalAlign="top"
                 />

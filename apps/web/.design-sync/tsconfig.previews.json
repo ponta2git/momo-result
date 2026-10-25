@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "noUnusedLocals": false,
+    "paths": {
+      "@/*": ["../src/*"],
+      "momo-result-ui": ["./entry.ts"]
+    }
+  },
+  "include": ["previews/*.tsx", "../src/vite-env.d.ts"]
+}

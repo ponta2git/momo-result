@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import {
   achievementDateLabel,
   achievementPageHref,
-  achievementProofLabel,
   achievementStatusLabel,
 } from "@/shared/achievements/achievementPresentation";
 import type {
@@ -56,6 +55,7 @@ export function AchievementDetailsDialog({
   onRefresh,
   onClose,
   onEditClaim,
+  onRecord,
 }: {
   item: AchievementDefinition;
   players: readonly PublishedAchievementPlayer[];
@@ -70,6 +70,7 @@ export function AchievementDetailsDialog({
   onRefresh: () => void;
   onClose: () => void;
   onEditClaim: (claimId: string) => void;
+  onRecord: () => void;
 }) {
   const condition = achievementCondition(item);
   return (
@@ -137,6 +138,7 @@ export function AchievementDetailsDialog({
                   player={players.find((player) => player.memberId === member.memberId)}
                   catalog={catalog}
                   onEditClaim={onEditClaim}
+                  onRecord={onRecord}
                 />
               </TabsPanel>
             ))}
@@ -153,12 +155,14 @@ function AchievementPlayerRecord({
   member,
   catalog,
   onEditClaim,
+  onRecord,
 }: {
   item: AchievementDefinition;
   player: PublishedAchievementPlayer | undefined;
   member: Pick<PublishedAchievementPlayer, "memberId" | "displayName">;
   catalog: AchievementCatalog | undefined;
   onEditClaim: (claimId: string) => void;
+  onRecord: () => void;
 }) {
   const claims =
     item.ruleKind === "manual"
@@ -171,17 +175,51 @@ function AchievementPlayerRecord({
     claims.length === 1 && claims[0]?.sourceKind === "import" && claims[0]?.state === "unconfirmed"
       ? claims[0]
       : undefined;
-  // The status explanation already identifies an undated, unconfirmed import.
-  const proofs = (player?.proofs ?? []).filter(
+  const matchLinks = (player?.proofs ?? [])
+    .flatMap((proof) => {
+      if (proof.matchId && proof.matchAvailable)
+        return [
+          {
+            href: `/matches/${encodeURIComponent(proof.matchId)}`,
+            label: "試合を振り返る",
+            date: proof.achievedAt,
+          },
+        ];
+      if (!proof.matchId && proof.heldEventId && proof.heldEventAvailable)
+        return [
+          {
+            href: `/held-events/${encodeURIComponent(proof.heldEventId)}`,
+            label: "4試合を振り返る",
+            date: proof.achievedAt,
+          },
+        ];
+      return [];
+    })
+    .filter((link, index, links) => links.findIndex((value) => value.href === link.href) === index);
+  const missingMatch = player?.proofs.some(
     (proof) =>
-      !(
-        player?.status === "unconfirmed" &&
-        proof.kind === "import" &&
-        !proof.achievedAt &&
-        !proof.matchId &&
-        !proof.heldEventId
-      ),
+      (proof.matchId && !proof.matchAvailable) ||
+      (!proof.matchId && proof.heldEventId && !proof.heldEventAvailable),
   );
+  const unknownMatch =
+    player?.status === "achieved" &&
+    player.proofs.some((proof) => !proof.matchId && !proof.heldEventId);
+  const derivedSources = (player?.proofs ?? [])
+    .flatMap((proof) => {
+      const source = catalog?.items.find(
+        (value) => value.achievementId === proof.sourceAchievementId,
+      );
+      return source ? [source] : [];
+    })
+    .filter(
+      (source, index, sources) =>
+        sources.findIndex((value) => value.achievementId === source.achievementId) === index,
+    );
+  const canRecord =
+    item.ruleKind === "manual" &&
+    !item.retired &&
+    claims.length === 0 &&
+    catalog?.items.some((value) => value.achievementId === item.achievementId && !value.retiredAt);
   const achieved = player?.status === "achieved";
   const points = item.stars ** 2;
   const StateIcon = achieved ? Award : player?.status === "unconfirmed" ? CircleHelp : Flag;
@@ -210,6 +248,29 @@ function AchievementPlayerRecord({
           {player?.dateUnknown && player.firstAchievedAt ? (
             <p className={contentText.supporting}>日付の分からない達成もあります。</p>
           ) : null}
+          {missingMatch ? (
+            <p className={contentText.supporting}>
+              {matchLinks.length > 0
+                ? "削除済みの試合による達成もあります。"
+                : "達成した試合は削除されています。"}
+            </p>
+          ) : unknownMatch ? (
+            <p className={contentText.supporting}>
+              {matchLinks.length > 0
+                ? "試合が分からない達成もあります。"
+                : "達成した試合は登録されていません。"}
+            </p>
+          ) : null}
+          {matchLinks.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {matchLinks.map((link) => (
+                <LinkButton key={link.href} to={link.href} size="sm" variant="secondary">
+                  {matchLinks.length > 1 && link.date ? `${formatDateTimeLong(link.date)}・` : ""}
+                  {link.label}
+                </LinkButton>
+              ))}
+            </div>
+          ) : null}
           {player?.status === "unconfirmed" ? (
             <p className={contentText.body}>
               以前の実績リストでは、達成したかどうかが未確認でした。
@@ -217,87 +278,34 @@ function AchievementPlayerRecord({
           ) : null}
         </div>
       </div>
-      {player && proofs.length > 0 ? (
-        <section aria-label="達成の記録" className="grid gap-3">
-          <h2 className={contentText.heading}>達成の記録</h2>
-          <ul className="grid gap-4">
-            {proofs.map((proof, index) => {
-              const source = catalog?.items.find(
-                (value) => value.achievementId === proof.sourceAchievementId,
-              );
-              return (
-                <li
-                  key={`${proof.kind}:${proof.claimId ?? proof.matchId ?? proof.heldEventId ?? index}`}
-                >
-                  <ContentWithActions
-                    actions={
-                      proof.matchId && proof.matchAvailable ? (
-                        <LinkButton
-                          to={`/matches/${encodeURIComponent(proof.matchId)}`}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          試合を振り返る
-                        </LinkButton>
-                      ) : !proof.matchId && proof.heldEventId && proof.heldEventAvailable ? (
-                        <LinkButton
-                          to={`/held-events/${encodeURIComponent(proof.heldEventId)}`}
-                          size="sm"
-                          variant="secondary"
-                        >
-                          4試合を振り返る
-                        </LinkButton>
-                      ) : null
-                    }
-                  >
-                    <div className="grid justify-items-start gap-2">
-                      <p className={contentText.body}>
-                        {proof.sourceAchievementId
-                          ? proof.state === "achieved"
-                            ? `「${source?.name ?? "上位の実績"}」の達成で、この実績も達成！`
-                            : `「${source?.name ?? "上位の実績"}」の達成を確認すると、この実績も達成になります。`
-                          : achievementProofLabel(proof.kind)}
-                        {proof.state === "unconfirmed" ? "（確認待ち）" : ""}
-                      </p>
-                      {proof.achievedAt && proof.achievedAt !== player.firstAchievedAt ? (
-                        <p className={cn(contentText.supporting, "tabular-nums")}>
-                          {formatDateTimeLong(proof.achievedAt)}
-                        </p>
-                      ) : null}
-                      {proof.matchId && !proof.matchAvailable ? (
-                        <p className={contentText.supporting}>この試合は削除されています。</p>
-                      ) : proof.heldEventId && !proof.heldEventAvailable ? (
-                        <p className={contentText.supporting}>この開催は削除されています。</p>
-                      ) : !proof.matchId && !proof.heldEventId ? (
-                        <p className={contentText.supporting}>達成した試合は登録されていません。</p>
-                      ) : null}
-                      {source && catalog ? (
-                        <LinkButton
-                          variant="quiet"
-                          size="sm"
-                          to={achievementPageHref(
-                            catalog.gameTitleId,
-                            source.achievementId,
-                            member.memberId,
-                          )}
-                        >
-                          元の実績を見る
-                        </LinkButton>
-                      ) : null}
-                    </div>
-                  </ContentWithActions>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
       {player?.status === "not_recorded" && !item.retired ? (
         <p className={contentText.body}>
           {item.ruleKind === "manual"
-            ? "達成したら、その試合の編集画面で実績を記録できます。"
+            ? "達成した試合を選んで記録できます。"
             : "試合結果がこの条件を満たすと、自動で達成になります。"}
         </p>
+      ) : null}
+      {canRecord ? (
+        <div>
+          <Button variant="secondary" onClick={onRecord}>
+            達成を記録する
+          </Button>
+        </div>
+      ) : null}
+      {item.ruleKind === "manual" && derivedSources.length > 0 ? (
+        <div className="grid justify-items-start gap-2">
+          <p className={contentText.supporting}>この達成には、次の実績の記録も含まれています。</p>
+          {derivedSources.map((source) => (
+            <LinkButton
+              key={source.achievementId}
+              variant="quiet"
+              size="sm"
+              to={achievementPageHref(source.gameTitleId, source.achievementId, member.memberId)}
+            >
+              「{source.name}」の記録を直す
+            </LinkButton>
+          ))}
+        </div>
       ) : null}
       {unconfirmedClaim ? (
         <div>

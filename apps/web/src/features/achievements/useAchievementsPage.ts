@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { useAchievementPublication } from "@/shared/achievements/useAchievementPublication";
 import { achievementCatalogQueryOptions } from "@/shared/api/achievementQueryOptions";
+import type { AchievementItem } from "@/shared/api/achievements";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { usePermissionFacts } from "@/shared/auth/useAuthorization";
 import { canonicalResultMembers } from "@/shared/domain/members";
@@ -11,6 +12,7 @@ import { canonicalResultMembers } from "@/shared/domain/members";
 export function useAchievementsPage() {
   const [search, setSearch] = useSearchParams();
   const [editingClaimId, setEditingClaimId] = useState<string>();
+  const [newRecord, setNewRecord] = useState<{ item: AchievementItem; memberId: string }>();
   const operations = usePermissionFacts("operations");
   const titles = useQuery(gameTitlesQueryOptions());
   const gameTitleId = search.get("gameTitleId") ?? titles.data?.items?.[0]?.id;
@@ -75,6 +77,13 @@ export function useAchievementsPage() {
   const editClaim = (claimId: string) => {
     setEditingClaimId(claimId);
   };
+  const recordAchievement = () => {
+    const item = catalog.data?.items.find(
+      (value) => value.achievementId === selectedItem?.achievementId,
+    );
+    if (item && item.ruleKind === "manual" && !item.retiredAt && selectedMember)
+      setNewRecord({ item, memberId: selectedMember.memberId });
+  };
   const refresh = () => {
     void Promise.all([titles.refetch(), catalog.refetch(), publication.refresh()]).catch(
       () => undefined,
@@ -85,6 +94,9 @@ export function useAchievementsPage() {
     setSearch,
     editingClaimId,
     setEditingClaimId,
+    newRecord,
+    setNewRecord,
+    recordAchievement,
     operations,
     titles,
     gameTitleId,

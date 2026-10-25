@@ -32,6 +32,7 @@ export function AchievementClaimEditorDialog({
     conflict,
     automatic,
     confirmationRequired,
+    cancelling,
     eligibleIdentity,
     mutation,
     submit,
@@ -196,7 +197,7 @@ export function AchievementClaimEditorDialog({
                 automatic ||
                 confirmationRequired ||
                 !eligibleIdentity ||
-                Boolean(form.matchId && (!matchIdentity || identity.isFetching))
+                Boolean(!cancelling && form.matchId && (!matchIdentity || identity.isFetching))
               }
             >
               記録を保存

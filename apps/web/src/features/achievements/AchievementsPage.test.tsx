@@ -6,7 +6,10 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { AchievementsPage } from "@/features/achievements/AchievementsPage";
-import type { CorrectAchievementClaimRequest } from "@/shared/api/achievements";
+import type {
+  AddMatchAchievementsRequest,
+  CorrectAchievementClaimRequest,
+} from "@/shared/api/achievements";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { decodeSeriesAnalysisStatus } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { setDevUser } from "@/test/auth";
@@ -61,6 +64,39 @@ function installRecords() {
   return catalog;
 }
 
+function installUnrecordedManualItem() {
+  const item = makeAchievementItem({ version: "5" });
+  const catalog = makeAchievementCatalog({ items: [item] });
+  const resource = makeAchievedResource();
+  resource.items[0]!.players.forEach((player) => {
+    player.status = "not_recorded";
+    player.dateUnknown = false;
+    player.proofs = [];
+  });
+  resource.summaries.forEach((summary) => {
+    summary.players.forEach((player) => {
+      player.earnedPoints = 0;
+      player.score = 1;
+    });
+  });
+  const identity = {
+    matchId: "match-1",
+    gameTitleId: item.gameTitleId,
+    mapMasterId: "map_east",
+    version: "7",
+    matchNoInEvent: 1,
+    playedAt: "2026-04-04T12:34:56.000Z",
+    gameTitleName: "桃太郎電鉄2",
+    seasonName: "今シーズン",
+  };
+  server.use(
+    http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+    http.get("/api/achievements", () => HttpResponse.json(resource)),
+    http.get("/api/matches/match-1/identity", () => HttpResponse.json(identity)),
+  );
+  return { item, catalog, identity };
+}
+
 async function openPlayerRecord(
   user: ReturnType<typeof userEvent.setup>,
   itemName = "手入力のテスト実績",
@@ -81,6 +117,142 @@ async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("AchievementsPage", () => {
+  it("records an unrecorded manual achievement against the selected match with exact versions and returns to the same player", async () => {
+    const user = userEvent.setup();
+    const { item, catalog, identity } = installUnrecordedManualItem();
+    const submitted: AddMatchAchievementsRequest[] = [];
+    server.use(
+      http.post("/api/matches/match-1/achievements", async ({ request }) => {
+        submitted.push((await request.json()) as AddMatchAchievementsRequest);
+        catalog.claims.push(
+          makeAchievementClaim({ matchId: identity.matchId, achievedAt: identity.playedAt }),
+        );
+        return HttpResponse.json({ saved: true });
+      }),
+    );
+    const { router } = renderPage();
+    const details = await openPlayerRecord(user);
+    await user.click(within(details).getByRole("button", { name: "達成を記録する" }));
+    const editor = await screen.findByRole("dialog", {
+      name: `${item.name}・ぽんたの達成を記録`,
+    });
+    expect(within(editor).getByRole("button", { name: "達成を保存" })).toBeDisabled();
+    await user.click(await within(editor).findByRole("button", { name: "この試合を選ぶ" }));
+    await waitFor(() =>
+      expect(within(editor).getByRole("button", { name: "達成を保存" })).toBeEnabled(),
+    );
+    await user.click(within(editor).getByRole("button", { name: "達成を保存" }));
+    await waitFor(() =>
+      expect(submitted).toEqual([
+        {
+          expectedMatchVersion: "7",
+          achievements: [
+            {
+              achievementId: item.achievementId,
+              memberId: "member_ponta",
+              expectedItemVersion: "5",
+              expectedClaimVersion: null,
+            },
+          ],
+        },
+      ]),
+    );
+    const returnedDetails = await screen.findByRole("dialog", { name: item.name });
+    expect(within(returnedDetails).getByRole("tab", { name: "ぽんた" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(new URLSearchParams(router.state.location.search).get("achievementId")).toBe(
+      item.achievementId,
+    );
+    expect(new URLSearchParams(router.state.location.search).get("memberId")).toBe("member_ponta");
+    expect(
+      await within(returnedDetails).findByRole("button", { name: "記録を直す" }),
+    ).toBeVisible();
+    expect(
+      within(returnedDetails).queryByRole("button", { name: "達成を記録する" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the selected match after a registration conflict and requires an explicit refresh before saving updated versions", async () => {
+    const user = userEvent.setup();
+    const { item, catalog, identity } = installUnrecordedManualItem();
+    const submitted: AddMatchAchievementsRequest[] = [];
+    server.use(
+      http.post("/api/matches/match-1/achievements", async ({ request }) => {
+        submitted.push((await request.json()) as AddMatchAchievementsRequest);
+        if (submitted.length === 1) {
+          catalog.items[0] = { ...item, version: "6" };
+          identity.version = "8";
+          return HttpResponse.json(
+            {
+              type: "about:blank",
+              title: "Conflict",
+              status: 409,
+              code: "CONFLICT",
+              detail: "実績または試合が更新されました。",
+            },
+            { status: 409 },
+          );
+        }
+        catalog.claims.push(
+          makeAchievementClaim({ matchId: identity.matchId, achievedAt: identity.playedAt }),
+        );
+        return HttpResponse.json({ saved: true });
+      }),
+    );
+    renderPage();
+    const details = await openPlayerRecord(user);
+    await user.click(within(details).getByRole("button", { name: "達成を記録する" }));
+    const editor = await screen.findByRole("dialog", {
+      name: `${item.name}・ぽんたの達成を記録`,
+    });
+    await user.click(await within(editor).findByRole("button", { name: "この試合を選ぶ" }));
+    await waitFor(() =>
+      expect(within(editor).getByRole("button", { name: "達成を保存" })).toBeEnabled(),
+    );
+    const selectedMatch = within(editor).getByLabelText("選択した試合").textContent;
+    await user.click(within(editor).getByRole("button", { name: "達成を保存" }));
+    expect(await within(editor).findByText("実績または試合が更新されています")).toBeVisible();
+    expect(within(editor).getByLabelText("選択した試合").textContent).toBe(selectedMatch);
+    expect(within(editor).getByRole("button", { name: "達成を保存" })).toBeDisabled();
+    expect(submitted).toHaveLength(1);
+    await user.click(within(editor).getByRole("button", { name: "最新内容を読み込む" }));
+    await waitFor(() =>
+      expect(within(editor).getByRole("button", { name: "達成を保存" })).toBeEnabled(),
+    );
+    expect(within(editor).getByLabelText("選択した試合").textContent).toBe(selectedMatch);
+    expect(submitted).toHaveLength(1);
+    await user.click(within(editor).getByRole("button", { name: "達成を保存" }));
+    await waitFor(() =>
+      expect(submitted).toEqual([
+        {
+          expectedMatchVersion: "7",
+          achievements: [
+            {
+              achievementId: item.achievementId,
+              memberId: "member_ponta",
+              expectedItemVersion: "5",
+              expectedClaimVersion: null,
+            },
+          ],
+        },
+        {
+          expectedMatchVersion: "8",
+          achievements: [
+            {
+              achievementId: item.achievementId,
+              memberId: "member_ponta",
+              expectedItemVersion: "6",
+              expectedClaimVersion: null,
+            },
+          ],
+        },
+      ]),
+    );
+    expect(await screen.findByRole("dialog", { name: item.name })).toBeVisible();
+  });
+
   it("keeps automatic achievements read-only despite retained imported claims and links to the source match", async () => {
     const user = userEvent.setup();
     const item = makeAchievementItem({
@@ -128,11 +300,17 @@ describe("AchievementsPage", () => {
     const details = await screen.findByRole("dialog", { name: item.name });
     expect(within(details).getByText("まだ記録なし")).toBeVisible();
     expect(
+      within(details).queryByRole("button", { name: "達成を記録する" }),
+    ).not.toBeInTheDocument();
+    expect(
       within(details).queryByRole("button", { name: "以前の記録：達成を確認する" }),
     ).not.toBeInTheDocument();
     await user.click(within(details).getByRole("tab", { name: "ぽんた" }));
     expect(within(details).getByText("4ポイント獲得")).toBeVisible();
     expect(within(details).queryByRole("button", { name: "記録を直す" })).not.toBeInTheDocument();
+    expect(
+      within(details).queryByRole("button", { name: "達成を記録する" }),
+    ).not.toBeInTheDocument();
     expect(within(details).queryByText("以前の実績リストから")).not.toBeInTheDocument();
     await user.click(within(details).getByRole("link", { name: "試合を振り返る" }));
     expect(router.state.location.pathname).toBe("/matches/match-automatic");
@@ -409,6 +587,9 @@ describe("AchievementsPage", () => {
     );
     const { router } = renderPage();
     const details = await openPlayerRecord(user);
+    expect(
+      within(details).queryByRole("button", { name: "達成を記録する" }),
+    ).not.toBeInTheDocument();
     await user.click(within(details).getByRole("button", { name: "記録を直す" }));
     await user.click(
       within(details).getByRole("button", { name: "試合で入力した記録：記録を戻す" }),
@@ -475,12 +656,24 @@ describe("AchievementsPage", () => {
     expect(within(details).getByText("4ポイント獲得")).toBeVisible();
   });
 
-  it("cancels only the chosen source with its versions and preserves an unchanged exact timestamp", async () => {
+  it("cancels a linked source even when its match is unavailable and preserves its exact timestamp", async () => {
     const user = userEvent.setup();
     const catalog = installRecords();
     catalog.claims[0]!.matchId = "match-1";
     const submitted: CorrectAchievementClaimRequest[] = [];
     server.use(
+      http.get("/api/matches/match-1/identity", () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            status: 404,
+            code: "NOT_FOUND",
+            detail: "試合が見つかりません。",
+          },
+          { status: 404 },
+        ),
+      ),
       http.put("/api/achievements/claims/claim-direct", async ({ request }) => {
         const body = (await request.json()) as CorrectAchievementClaimRequest;
         submitted.push(body);
@@ -490,9 +683,7 @@ describe("AchievementsPage", () => {
     );
     renderPage();
     const editor = await openCorrection(user);
-    await user.click(within(editor).getByRole("button", { name: "試合の指定を外す" }));
-    expect(within(editor).getByLabelText("達成日時（日本時間）")).toHaveValue("2026-04-04T21:34");
-    expect(within(editor).getByLabelText("達成日時（日本時間）")).toHaveAttribute("readonly");
+    expect(await within(editor).findByText("達成した試合が見つかりません")).toBeVisible();
     await selectOption(
       user,
       within(editor).getByRole("combobox", { name: "達成の確認" }),

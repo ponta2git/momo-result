@@ -47,7 +47,9 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
     claim.version !== baseline.claim.version || item.version !== baseline.itemVersion;
   const automatic = item.ruleKind !== "manual";
   const confirmationRequired = form.state === "unconfirmed";
+  const cancelling = form.state === "cancelled";
   const eligibleIdentity =
+    cancelling ||
     !form.matchId ||
     Boolean(
       matchIdentity &&
@@ -91,16 +93,18 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
       confirmationRequired ||
       mutation.isPending ||
       !eligibleIdentity ||
-      (form.matchId && !matchIdentity)
+      (!cancelling && form.matchId && !matchIdentity)
     )
       return;
     const originalDate = achievementDateTimeInput(baseline.claim.achievedAt);
-    const achievedAt = form.matchId
-      ? (matchIdentity?.playedAt ?? null)
-      : form.date === originalDate
-        ? (baseline.claim.achievedAt ?? null)
-        : achievementDateTimeFromInput(form.date);
-    if (form.date && !form.matchId && !achievedAt) {
+    const achievedAt = cancelling
+      ? (baseline.claim.achievedAt ?? null)
+      : form.matchId
+        ? (matchIdentity?.playedAt ?? null)
+        : form.date === originalDate
+          ? (baseline.claim.achievedAt ?? null)
+          : achievementDateTimeFromInput(form.date);
+    if (!cancelling && form.date && !form.matchId && !achievedAt) {
       setValidation("達成日時を正しく入力してください。");
       return;
     }
@@ -109,9 +113,9 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
       expectedVersion: baseline.claim.version,
       expectedItemVersion: baseline.itemVersion,
       state: form.state,
-      matchId: form.matchId || null,
+      matchId: cancelling ? null : form.matchId || null,
       achievedAt,
-      expectedMatchVersion: form.matchId ? (matchIdentity?.version ?? null) : null,
+      expectedMatchVersion: !cancelling && form.matchId ? (matchIdentity?.version ?? null) : null,
     });
   };
   const requestClose = () => {
@@ -137,6 +141,7 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
     conflict,
     automatic,
     confirmationRequired,
+    cancelling,
     eligibleIdentity,
     mutation,
     submit,

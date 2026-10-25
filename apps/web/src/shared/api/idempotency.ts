@@ -9,6 +9,7 @@ export const idempotencyOperations = [
   "achievements.retire",
   "achievements.order",
   "achievements.correctClaim",
+  "achievements.addMatch",
   "matchWorkspace.addAchievements",
   "adminAccounts.createLoginAccount",
   "adminAccounts.updateLoginAccount",

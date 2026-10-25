@@ -35,19 +35,6 @@ export function achievementDateLabel(player: PublishedAchievementPlayer): string
   return "日付の記録なし";
 }
 
-export function achievementProofLabel(kind: PublishedAchievementProof["kind"]): string {
-  switch (kind) {
-    case "manual":
-      return "試合で記録した達成";
-    case "import":
-      return "以前の実績リストから";
-    case "derived":
-      return "ほかの実績と一緒に達成";
-    case "automatic":
-      return "試合結果から達成";
-  }
-}
-
 export function achievementPageHref(
   gameTitleId: string,
   achievementId?: string,

@@ -3,6 +3,7 @@ import { Award, BookOpen } from "lucide-react";
 import { AchievementClaimEditorDialog } from "@/features/achievements/AchievementClaimEditorDialog";
 import { AchievementDetailsDialog } from "@/features/achievements/AchievementDetailsDialog";
 import { AchievementPointsSummary } from "@/features/achievements/AchievementPointsSummary";
+import { AchievementRecordDialog } from "@/features/achievements/AchievementRecordDialog";
 import { useAchievementsPage } from "@/features/achievements/useAchievementsPage";
 import { achievementStatusLabel } from "@/shared/achievements/achievementPresentation";
 import { AchievementPublicationFeedback } from "@/shared/achievements/AchievementPublicationFeedback";
@@ -26,6 +27,9 @@ export function AchievementsPage() {
     setSearch,
     editingClaimId,
     setEditingClaimId,
+    newRecord,
+    setNewRecord,
+    recordAchievement,
     operations,
     titles,
     gameTitleId,
@@ -216,7 +220,7 @@ export function AchievementsPage() {
           </StaleShield>
         ) : null}
       </PageContentSurface>
-      {selectedItem && selectedMember && !editingClaimId ? (
+      {selectedItem && selectedMember && !editingClaimId && !newRecord ? (
         <AchievementDetailsDialog
           item={selectedItem}
           players={selectedItem.players}
@@ -238,6 +242,25 @@ export function AchievementsPage() {
           onRefresh={refresh}
           onClose={closeDetails}
           onEditClaim={editClaim}
+          onRecord={recordAchievement}
+        />
+      ) : null}
+      {newRecord ? (
+        <AchievementRecordDialog
+          item={
+            catalog.data?.items.find(
+              (item) => item.achievementId === newRecord.item.achievementId,
+            ) ?? newRecord.item
+          }
+          memberId={newRecord.memberId}
+          existingClaim={Boolean(
+            catalog.data?.claims.some(
+              (claim) =>
+                claim.achievementId === newRecord.item.achievementId &&
+                claim.memberId === newRecord.memberId,
+            ),
+          )}
+          onClose={() => setNewRecord(undefined)}
         />
       ) : null}
       {editingClaim && editingItem && gameTitleId ? (

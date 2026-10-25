@@ -124,7 +124,7 @@ fn zero_matches_still_scores_the_fixed_roster_and_future_maps() -> TestResult {
         assert_eq!(summary.total_points, 4);
         assert_eq!(
             summary.players.first().ok_or("missing points")?.score,
-            Some(10.0)
+            Some(1.0)
         );
         assert_eq!(
             summary.players.get(1).ok_or("missing points")?.score,
@@ -144,6 +144,34 @@ fn zero_matches_still_scores_the_fixed_roster_and_future_maps() -> TestResult {
             .score,
         None
     );
+    Ok(())
+}
+
+#[test]
+fn point_scoring_is_shared_across_maps_with_different_available_points() -> TestResult {
+    let mut common = definition("common", RuleKind::Manual, None);
+    common.stars = 3;
+    let mut east_only = definition("east-only", RuleKind::Manual, None);
+    east_only.stars = 5;
+    east_only.common = false;
+    east_only.map_master_ids = vec!["east".into()];
+    let mut source = input(vec![common, east_only]);
+    source.claims.push(claim("common", ClaimKind::Import));
+    let payload = calculated(source, vec![])?;
+    assert!(valid_payload(&payload));
+    assert_eq!(
+        payload
+            .summaries
+            .iter()
+            .map(|summary| summary.total_points)
+            .collect::<Vec<_>>(),
+        vec![34, 34, 9]
+    );
+    for summary in &payload.summaries {
+        let player = summary.players.first().ok_or("missing player")?;
+        assert_eq!(player.earned_points, 9);
+        assert_eq!(player.score, Some(2.0));
+    }
     Ok(())
 }
 
@@ -639,7 +667,7 @@ fn manual_inference_preserves_independent_imports_and_rescores_after_cancellatio
             .first()
             .ok_or("points missing")?
             .score,
-        Some(7.0)
+        Some(1.0)
     );
     Ok(())
 }

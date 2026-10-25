@@ -8,7 +8,7 @@ use crate::model::{AnalysisInputError, PlayerMatchInput};
 
 mod calculate;
 mod curve;
-pub use curve::{ACHIEVEMENT_SCORE_POINTS, AchievementCurve};
+pub use curve::AchievementCurve;
 #[cfg(test)]
 mod tests;
 

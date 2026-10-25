@@ -277,8 +277,8 @@ fn achievement_input() -> NormalizedAnalysisInput {
 fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
     let input = achievement_input();
     let mut context = manual_context();
-    let curve = AchievementCurve {
-        thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
+    let curve = AchievementCurve::Points {
+        point_thresholds: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
     };
     context
         .manual
@@ -306,7 +306,7 @@ fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
         assert_eq!(scope.payload.before_achievements.summary.total_points, 2);
         assert_eq!(scope.payload.after_achievements.summary.total_points, 2);
         assert_eq!((before.earned_points, after.earned_points), (1, 1));
-        assert_eq!((before.score, after.score), (Some(7.0), Some(6.0)));
+        assert_eq!((before.score, after.score), (Some(1.0), Some(2.0)));
     }
     let mut wrong = prepared.clone();
     wrong
@@ -319,7 +319,7 @@ fn formal_comparison_rescores_the_same_lifetime_points_and_rejects_tampering() {
         .players
         .first_mut()
         .unwrap_or_else(|| panic!("player"))
-        .score = Some(7.0);
+        .score = Some(1.0);
     assert!(validate(&wrong, &context, None).is_err());
     let mut missing = prepared;
     missing.evaluation_snapshot.achievements = None;
@@ -334,7 +334,7 @@ fn generated_candidates_keep_the_applied_curve_and_saved_comparisons_keep_their_
         .unwrap_or_else(|error| panic!("generate: {error}"))
         .basis
         .unwrap_or_else(|| panic!("basis"));
-    let curve = AchievementCurve {
+    let curve = AchievementCurve::LegacyPercentage {
         thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
     };
     before.achievement_curve = Some(curve);

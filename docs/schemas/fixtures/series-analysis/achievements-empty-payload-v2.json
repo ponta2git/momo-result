@@ -5,12 +5,16 @@
   },
   "gameTitleId": "title",
   "achievementCurve": {
-    "thresholds": [
-      0.0,
+    "pointThresholds": [
+      5.0,
       10.0,
-      25.0,
+      20.0,
+      30.0,
       50.0,
-      80.0
+      75.0,
+      100.0,
+      150.0,
+      200.0
     ]
   },
   "items": [],

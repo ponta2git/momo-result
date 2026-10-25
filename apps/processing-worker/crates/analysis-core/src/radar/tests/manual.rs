@@ -189,15 +189,24 @@ fn legacy_basis_identity_is_preserved_and_manual_edits_inherit_or_replace_the_cu
     assert_eq!(basis.achievement_curve, None);
     assert_eq!(
         basis.effective_achievement_curve(),
-        AchievementCurve::default()
+        AchievementCurve::legacy_percentage_default()
     );
     let saved_checksum = basis.checksum().ok();
     let six_axes = evaluate(input(40), Some(&basis));
-    let curve = AchievementCurve {
+    let curve = AchievementCurve::LegacyPercentage {
         thresholds: [0.0, 20.0, 40.0, 60.0, 90.0],
     };
     basis.achievement_curve = Some(curve);
     assert_ne!(basis.checksum().ok(), saved_checksum);
+    let legacy_curve_payload =
+        serde_json::to_value(&basis).unwrap_or_else(|error| panic!("legacy curve: {error}"));
+    let decoded = crate::payload::radar_basis_from_payload(&legacy_curve_payload)
+        .unwrap_or_else(|error| panic!("legacy curve round trip: {error}"));
+    assert_eq!(decoded.checksum().ok(), basis.checksum().ok());
+    assert_eq!(
+        decoded.effective_achievement_curve().score(50, 100),
+        Some(6.0)
+    );
     let edited_six_axes = evaluate(input(40), Some(&basis));
     assert_eq!(edited_six_axes.players, six_axes.players);
     assert_eq!(edited_six_axes.sample, six_axes.sample);
@@ -250,6 +259,14 @@ fn optional_achievement_curve_keeps_strict_basis_shape_and_semantic_validation()
                 serde_json::json!({"thresholds": [0, 10, 25, 50, 80]}),
             );
         assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("basis object"))
+            .insert(
+                "achievementCurve".to_owned(),
+                serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 200]}),
+            );
+        assert!(crate::payload::radar_basis_from_payload(&value).is_ok());
         for invalid in [
             serde_json::Value::Null,
             serde_json::json!({"thresholds": [0, 10, 25, 50]}),
@@ -257,6 +274,10 @@ fn optional_achievement_curve_keeps_strict_basis_shape_and_semantic_validation()
             serde_json::json!({"thresholds": [0, 25, 25, 50, 80]}),
             serde_json::json!({"thresholds": [0, 30, 25, 50, 80]}),
             serde_json::json!({"thresholds": [0, 10, 25, 50, 80], "unrecognized": true}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150]}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 102_401]}),
+            serde_json::json!({"pointThresholds": [5, 10, 20, 30, 50, 75, 100, 100, 200]}),
+            serde_json::json!({"thresholds": [0, 10, 25, 50, 80], "pointThresholds": [5, 10, 20, 30, 50, 75, 100, 150, 200]}),
         ] {
             value
                 .as_object_mut()

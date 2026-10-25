@@ -190,7 +190,8 @@ pub struct RadarAggregate {
 impl RadarBasis {
     #[must_use]
     pub fn effective_achievement_curve(&self) -> crate::achievements::AchievementCurve {
-        self.achievement_curve.unwrap_or_default()
+        self.achievement_curve
+            .unwrap_or_else(crate::achievements::AchievementCurve::legacy_percentage_default)
     }
 
     /// Selects the immutable snapshot used for review monitoring, never the latest preview.

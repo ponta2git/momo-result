@@ -3868,51 +3868,126 @@
                       "additionalProperties": false,
                       "properties": {
                         "achievementCurve": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "thresholds": {
-                              "items": false,
-                              "maxItems": 5,
-                              "minItems": 5,
-                              "prefixItems": [
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
+                          "oneOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "thresholds": {
+                                  "items": false,
+                                  "maxItems": 5,
+                                  "minItems": 5,
+                                  "prefixItems": [
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    }
+                                  ],
+                                  "type": "array"
                                 }
+                              },
+                              "required": [
+                                "thresholds"
                               ],
-                              "type": "array"
+                              "type": "object"
+                            },
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "pointThresholds": {
+                                  "items": false,
+                                  "maxItems": 9,
+                                  "minItems": 9,
+                                  "prefixItems": [
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    }
+                                  ],
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "pointThresholds"
+                              ],
+                              "type": "object"
                             }
-                          },
-                          "required": [
-                            "thresholds"
-                          ],
-                          "type": "object"
+                          ]
                         },
                         "axes": {
                           "items": false,
@@ -4743,51 +4818,126 @@
                       "additionalProperties": false,
                       "properties": {
                         "achievementCurve": {
-                          "additionalProperties": false,
-                          "properties": {
-                            "thresholds": {
-                              "items": false,
-                              "maxItems": 5,
-                              "minItems": 5,
-                              "prefixItems": [
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
-                                },
-                                {
-                                  "maximum": 100.0,
-                                  "minimum": 0.0,
-                                  "type": "number",
-                                  "x-momo-finiteF64": true
+                          "oneOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "thresholds": {
+                                  "items": false,
+                                  "maxItems": 5,
+                                  "minItems": 5,
+                                  "prefixItems": [
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 100.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    }
+                                  ],
+                                  "type": "array"
                                 }
+                              },
+                              "required": [
+                                "thresholds"
                               ],
-                              "type": "array"
+                              "type": "object"
+                            },
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "pointThresholds": {
+                                  "items": false,
+                                  "maxItems": 9,
+                                  "minItems": 9,
+                                  "prefixItems": [
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    },
+                                    {
+                                      "maximum": 102400.0,
+                                      "minimum": 0.0,
+                                      "type": "number",
+                                      "x-momo-finiteF64": true
+                                    }
+                                  ],
+                                  "type": "array"
+                                }
+                              },
+                              "required": [
+                                "pointThresholds"
+                              ],
+                              "type": "object"
                             }
-                          },
-                          "required": [
-                            "thresholds"
-                          ],
-                          "type": "object"
+                          ]
                         },
                         "axes": {
                           "items": false,

@@ -11,8 +11,17 @@ const PERCENTAGE: Schema = Schema::NumberRange {
     minimum: 0.0,
     maximum: 100.0,
 };
-pub(super) const CURVE: Schema =
+const LEGACY_CURVE: Schema =
     Schema::Object(&[field("thresholds", &Schema::Tuple(&[&PERCENTAGE; 5]))]);
+const POINT_THRESHOLD: Schema = Schema::NumberRange {
+    minimum: 0.0,
+    maximum: 102_400.0,
+};
+const POINT_CURVE: Schema = Schema::Object(&[field(
+    "pointThresholds",
+    &Schema::Tuple(&[&POINT_THRESHOLD; 9]),
+)]);
+pub(super) const CURVE: Schema = Schema::OneOf(&[&LEGACY_CURVE, &POINT_CURVE]);
 const STARS: Schema = Schema::Integer {
     minimum: 1,
     maximum: 5,

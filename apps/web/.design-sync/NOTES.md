@@ -19,7 +19,6 @@
 - Static-only states: Tooltip/TooltipProvider and IconButton/IconLink `tooltip` need hover (trigger-only cards); Select popups and ChoicePickerDialogField's dialog need interaction (closed state shown).
 - ToastHost renders statically when the preview seeds toasts via `showToast({ ..., timeout: 0 })` in a `useEffect` with stable ids.
 - Component quirks: ActionLink is unstyled (compose `className={buttonClassName(...)}`, pass `disabled` to the recipe too); PendingActionContent is a button's inner label; Tabs parts throw outside TabsRoot and reject `className`; Field needs `htmlFor` + unique control `id` per cell; IconButton/IconLink `sm` and `md` are both 44px; AdjacentNavigation destination without `href` = non-link end; StaleShield pill overlays the top (pad children); TableScrollArea needs a native `<table>` wide enough to overflow; don't name an export `Error`.
-- src observation (not fixed here): TextareaControl `minHeight="sm"|"md"` has no effect on fine pointers because `pointer-fine:min-h-10` from controlClassName wins.
 
 ## Known render warns
 

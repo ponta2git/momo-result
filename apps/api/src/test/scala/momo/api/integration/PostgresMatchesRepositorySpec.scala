@@ -259,9 +259,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- seedSecondTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v9',
+        SET algorithm_version = 'series-analysis-v10',
             artifact_schema_version = 8,
-            validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
+            validation_contract_id = 'series-analysis-artifact-v8-full-validation-v2'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
@@ -282,8 +282,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now()),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1') FROM series_analysis_jobs),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1') FROM series_analysis_job_requests)
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v8-full-validation-v2') FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v8-full-validation-v2') FROM series_analysis_job_requests)
       """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)

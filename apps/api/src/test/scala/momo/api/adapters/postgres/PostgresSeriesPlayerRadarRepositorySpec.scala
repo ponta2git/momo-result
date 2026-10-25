@@ -286,8 +286,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"""
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
-        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v9', 8,
-          'series-analysis-artifact-v8-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
+        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v10', 8,
+          'series-analysis-artifact-v8-full-validation-v2', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -324,7 +324,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           artifact_schema_version, source_input_checksum, root_checksum, status,
           aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
           encoded_bytes, decoded_bytes, scope_keys)
-        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v9', 8,
+        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v10', 8,
           'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           'staging', 2, 0, 0, 1, 2, 2, ARRAY['overall', ${scope.key}]
@@ -333,7 +333,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v8-full-validation-v1'
+        SET validation_contract_id = 'series-analysis-artifact-v8-full-validation-v2'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()

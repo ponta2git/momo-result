@@ -13,7 +13,7 @@ pub const ARTIFACT_SCHEMA_VERSION: u32 = 8;
 /// persisted payload shape, while this value proves which semantic, cross-resource, canonical,
 /// and bounded-file checks accepted a concrete artifact. Existing rows without this exact value
 /// must not be treated as having passed the current validator.
-pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v8-full-validation-v1";
+pub const ARTIFACT_VALIDATION_CONTRACT_ID: &str = "series-analysis-artifact-v8-full-validation-v2";
 pub const MANIFEST_VERSION: u32 = 1;
 const MAXIMUM_SCHEMA_CHUNK_BYTES: u64 = 16 * 1024 * 1024;
 const MAXIMUM_SCHEMA_CHUNK_COUNT: u64 = 1_000_000;

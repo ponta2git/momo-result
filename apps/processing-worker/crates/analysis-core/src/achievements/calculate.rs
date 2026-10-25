@@ -323,7 +323,7 @@ pub(super) fn summarize(
         .collect::<Vec<_>>();
     let total_points = eligible
         .iter()
-        .map(|item| u32::from(item.stars).pow(2))
+        .map(|item| points_for_stars(item.stars))
         .sum();
     let players = members
         .iter()
@@ -335,7 +335,7 @@ pub(super) fn summarize(
                         player.member_id == *member && player.status == AchievementStatus::Achieved
                     })
                 })
-                .map(|item| u32::from(item.stars).pow(2))
+                .map(|item| points_for_stars(item.stars))
                 .sum();
             PlayerPoints {
                 member_id: member.clone(),
@@ -348,6 +348,15 @@ pub(super) fn summarize(
         map_master_id: map,
         total_points,
         players,
+    }
+}
+
+fn points_for_stars(stars: u8) -> u32 {
+    match stars {
+        1..=3 => u32::from(stars),
+        4 => 5,
+        5 => 8,
+        _ => 0,
     }
 }
 

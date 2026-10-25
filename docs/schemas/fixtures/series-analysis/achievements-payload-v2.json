@@ -157,78 +157,78 @@
   "summaries": [
     {
       "mapMasterId": null,
-      "totalPoints": 8,
+      "totalPoints": 4,
       "players": [
         {
           "memberId": "a",
-          "earnedPoints": 8,
-          "score": 2.0
+          "earnedPoints": 4,
+          "score": 1.0
         },
         {
           "memberId": "b",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "c",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "d",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         }
       ]
     },
     {
       "mapMasterId": "east",
-      "totalPoints": 8,
+      "totalPoints": 4,
       "players": [
         {
           "memberId": "a",
-          "earnedPoints": 8,
-          "score": 2.0
+          "earnedPoints": 4,
+          "score": 1.0
         },
         {
           "memberId": "b",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "c",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "d",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         }
       ]
     },
     {
       "mapMasterId": "west",
-      "totalPoints": 8,
+      "totalPoints": 4,
       "players": [
         {
           "memberId": "a",
-          "earnedPoints": 8,
-          "score": 2.0
+          "earnedPoints": 4,
+          "score": 1.0
         },
         {
           "memberId": "b",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "c",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         },
         {
           "memberId": "d",
-          "earnedPoints": 4,
+          "earnedPoints": 2,
           "score": 1.0
         }
       ]

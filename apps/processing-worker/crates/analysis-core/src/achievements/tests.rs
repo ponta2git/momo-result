@@ -121,7 +121,7 @@ fn zero_matches_still_scores_the_fixed_roster_and_future_maps() -> TestResult {
     assert!(valid_payload(&payload));
     assert_eq!(payload.summaries.len(), 3);
     for summary in &payload.summaries {
-        assert_eq!(summary.total_points, 4);
+        assert_eq!(summary.total_points, 2);
         assert_eq!(
             summary.players.first().ok_or("missing points")?.score,
             Some(1.0)
@@ -148,9 +148,53 @@ fn zero_matches_still_scores_the_fixed_roster_and_future_maps() -> TestResult {
 }
 
 #[test]
+fn fixed_star_weights_drive_totals_and_earned_points_and_reject_legacy_totals() -> TestResult {
+    for (stars, points) in [(1, 1), (2, 2), (3, 3), (4, 5), (5, 8)] {
+        let mut item = definition("manual", RuleKind::Manual, None);
+        item.stars = stars;
+        let mut source = input(vec![item]);
+        source.claims.push(claim("manual", ClaimKind::Import));
+        let mut payload = calculated(source, vec![])?;
+        assert!(valid_payload(&payload));
+        for summary in &payload.summaries {
+            assert_eq!(summary.total_points, points);
+            assert_eq!(
+                summary
+                    .players
+                    .first()
+                    .ok_or("missing player")?
+                    .earned_points,
+                points
+            );
+            assert_eq!(
+                summary
+                    .players
+                    .get(1)
+                    .ok_or("missing player")?
+                    .earned_points,
+                0
+            );
+        }
+        if stars > 1 {
+            let legacy_points = u32::from(stars).pow(2);
+            for summary in &mut payload.summaries {
+                summary.total_points = legacy_points;
+                let player = summary.players.first_mut().ok_or("missing player")?;
+                player.earned_points = legacy_points;
+                player.score = payload
+                    .achievement_curve
+                    .score(legacy_points, legacy_points);
+            }
+            assert!(!valid_payload(&payload));
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn point_scoring_is_shared_across_maps_with_different_available_points() -> TestResult {
     let mut common = definition("common", RuleKind::Manual, None);
-    common.stars = 3;
+    common.stars = 4;
     let mut east_only = definition("east-only", RuleKind::Manual, None);
     east_only.stars = 5;
     east_only.common = false;
@@ -165,11 +209,11 @@ fn point_scoring_is_shared_across_maps_with_different_available_points() -> Test
             .iter()
             .map(|summary| summary.total_points)
             .collect::<Vec<_>>(),
-        vec![34, 34, 9]
+        vec![13, 13, 5]
     );
     for summary in &payload.summaries {
         let player = summary.players.first().ok_or("missing player")?;
-        assert_eq!(player.earned_points, 9);
+        assert_eq!(player.earned_points, 5);
         assert_eq!(player.score, Some(2.0));
     }
     Ok(())
@@ -355,7 +399,7 @@ fn automatic_records_ignore_legacy_claims_and_follow_match_corrections() -> Test
             .first()
             .ok_or("points missing")?
             .earned_points,
-        8
+        4
     );
 
     for row in &mut matches {
@@ -627,7 +671,7 @@ fn retired_automatic_history_does_not_supply_an_active_lower_condition() -> Test
             .first()
             .ok_or("summary missing")?
             .total_points,
-        4
+        2
     );
     assert!(valid_payload(&payload));
     Ok(())

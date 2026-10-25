@@ -134,15 +134,15 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
     let payload: AchievementPayload = serde_json::from_slice(&stored.try_get::<_, Vec<u8>>(3)?)?;
     assert_eq!(payload.summaries.len(), 2);
     for summary in &payload.summaries {
-        assert_eq!(summary.total_points, 9);
+        assert_eq!(summary.total_points, 3);
         assert_eq!(summary.players.len(), 4);
         let player = summary
             .players
             .iter()
             .find(|player| player.member_id == "member_ponta")
             .ok_or("fixed player missing")?;
-        assert_eq!(player.earned_points, 9);
-        assert_eq!(player.score, Some(2.0));
+        assert_eq!(player.earned_points, 3);
+        assert_eq!(player.score, Some(1.0));
     }
     let player = payload
         .items

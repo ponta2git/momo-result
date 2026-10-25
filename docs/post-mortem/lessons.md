@@ -289,12 +289,12 @@
 
 **該当条件**
 
-- `../momo-db` のschema、migration、Drizzle設定・script、またはmigration stateを変更する。
+- `momo-db` のschema、migration、Drizzle設定・script、またはmigration stateを変更する。
 - `momo-result`や`summit`から共有DBの変更を依頼・実装する。
 
 **確認**
 
-- file編集やDB操作より先に`../momo-db/docs/development.md`を全文確認したか。
+- 対象 checkout の `docs/development.md` を全文確認してから変更を始めたか。
 - schema宣言から生成するmigrationと、function、trigger、precondition、backfill用のcustom migrationを
   正規commandで分け、journal / snapshotの採番を手で操作していないか。
 - 対象migrationの適用状態を確認し、保存対象DBをfresh検証へ流用せず、existing DBのdata保持を別に
@@ -303,10 +303,8 @@
 
 **参照先**
 
-- `AGENTS.md`
-- `docs/db-rule.md`
-- `../momo-db/AGENTS.md`
-- `../momo-db/docs/development.md`
+- [変更前の手順](../../AGENTS.md#作業境界)
+- [DB 所有規約](../db-rule.md#1-ownership)
 
 ## 更新ルール
 

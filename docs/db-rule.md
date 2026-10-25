@@ -1,10 +1,11 @@
 # DB利用規約
 
-目的: 共有 PostgreSQL の所有権、consumer contract、migration 順序を判断する。DDL の現在値は `../momo-db`、query の現在値は各 consumer、検証コマンドは `docs/dev-rule.md` を正本とする。
+目的: 共有 PostgreSQL の所有権、consumer contract、migration 順序を判断する。DDL の現在値は `momo-db`、query の現在値は各 consumer、検証コマンドは `docs/dev-rule.md` を正本とする。
 
 ## 1. Ownership
 
-- schema、migration、seed は `../momo-db` が所有する。この repository に migration SQL を複製しない。
+- schema、migration、seed は別 repository の `momo-db` が所有する。この repository に migration SQL を複製しない。
+- 変更・DB 操作に用いる `momo-db` checkout は、依頼の指定や既知の配置から特定する。`../momo-db` は通常の配置例であり、worktree では元の作業ツリーなどの配置を確認する。隔離 test 用の pinned checkout・migration source を変更対象と決めつけない。変更前の手順は [AGENTS.md](../AGENTS.md#作業境界) に従う。
 - この repository は API / worker の query と、選択した DB contract evidence を所有する。
 - migration の存在と接続先への適用済み状態は別々に確認する。
 - Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。
@@ -54,7 +55,7 @@
 - 通知の業務判断と更新単位はアプリが所有し、通知用stored function・triggerへ委ねない。`PostgresResultNotificationCancellation`を全source writeの末尾で合成し、別transactionで後追い取消しない。確定・取消・試合削除に加え、マスター・開催削除時の古い下書き清掃も対象とする。
 - 通知設定はAPIから共有DBへ直接保存し、SummitへのHTTPに依存しない。`PostgresNotificationSettings`は共通gate取得後の最新2行を`NotificationSettings.change`へ渡し、両方の期待世代の一致を確認してから変更対象だけを書き込む。ON/OFFが変わる種類だけ世代を進め、OFFへの変更と対象通知の未開始部分取消を一つのtransactionへ合成する。競合時は両方とも変更しない。
 - 通知gateはsource rowの更新後に取得する。通知側はgate取得後にsource row lockを取らず、READ COMMITTEDでcommit済み状態を読む。この順序で受付先行・対象変更先行の双方を収束させる。gate取得後に追加の業務write・外部I/Oを行わない。
-- 取消は送達済み部分と開始済み部分の証跡を保ち、未開始部分だけを取消状態へ進める。開始済み送信が後から完了しても親を復帰させない。物理schema・consumer間の排他契約は`../momo-db/docs/discord-notifications.md`を参照する。
+- 取消は送達済み部分と開始済み部分の証跡を保ち、未開始部分だけを取消状態へ進める。開始済み送信が後から完了しても親を復帰させない。物理schema・consumer間の排他契約は対象 `momo-db` checkout の `docs/discord-notifications.md` を参照する。
 - 分析通知のimmutable成果物は公開lock前のread-only / repeatable-read snapshotで必要resourceだけを上限付きで読む。最終transactionで比較準備時の通知用入力基準・公開revision・完了した要求元を確認し、業務write完了後のSAVEPOINT内でgateを取得する。gate取得と、設定・表示metadataの一括SELECTは別statementとする。通常の準備エラーはSAVEPOINTを復旧して業務commitを継続する。
 - 通知用入力基準は初回・成果物参照・不明を区別し、APIの新規作品作成だけが初回を明示する。公開制御は成功と同じtransactionで基準を更新し、通知設定や送信結果に依存させない。releaseは画面用pointerを外してもこの基準を残し、履歴cleanupは参照中の成果物を削除しない。
 

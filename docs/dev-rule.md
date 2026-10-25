@@ -9,7 +9,7 @@
 - local secret は追跡外の env file、production / CI secret は各 secret store で管理する。必要な名前だけを `.env.example` に置く。
 - API / worker が root env を自動で読むと仮定しない。起動する process に必要最小限の変数だけを渡す。
 - worker container へ OAuth など無関係な secret を渡さず、接続値を docs、tracked file、shell history へ書かない。
-- DB を使う前に sibling `momo-db` の migration が接続先へ適用済みであることを確認する。
+- DB を使う前に、使用する migration が接続先へ適用済みであることを確認する。
 - 隔離testの既定migration選択は共通resolverで `.momo-db-ref` の内容と照合し、異なるcheckoutや未追跡SQLを拒否する。固定revisionのarchiveや意図したschema実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を区別する。
 - integration / E2E は普段使いの DB、bucket と分離する。外部依存 gate の未実行は、その wire 動作を未検証として報告する。
 - Web / runtime E2Eのfresh DB bootstrapは `web-e2e` profileで現行の分析公開契約を初期化する。migrationだけのbaselineと区別し、既存DBの正式なpromotionや本番切替を代用しない。
@@ -18,7 +18,7 @@
 
 ## 2. Local Run
 
-通常の API + Web は root の `pnpm dev` を使う。起動 tool は `apps/web/scripts/dev-local.mts` を Node で直接実行する。Node の version は `mise.toml` を正とする。依存 DB の起動と migration は `../momo-db` の scripts を使い、利用可能な command は各 `package.json` を正とする。
+通常の API + Web は root の `pnpm dev` を使う。起動 tool は `apps/web/scripts/dev-local.mts` を Node で直接実行する。Node の version は `mise.toml` を正とする。依存 DB の起動と migration は対象 `momo-db` checkout の scripts を使い、利用可能な command は各 `package.json` を正とする。checkout の特定は [DB 所有規約](db-rule.md#1-ownership) に従う。
 
 `pnpm dev` は Processing Worker を起動しない。worker の process isolation は Linux runtime が前提なので、macOS で host binary を直接実行せず、`apps/processing-worker/Dockerfile` から build した専用 container を使う。
 
@@ -101,7 +101,7 @@ OpenAPI / Web 型の生成関係は `docs/architecture.md` の Wire Boundary、c
 ## 5. Developer Wait / Parallel Execution
 
 - 次の判断に必要な前提を確かめたら、独立した検索・読み取り・job はまとめて並列実行する。同じ test 集合の通常実行と coverage 実行、重複 setup、不要な build を重ねない。test 内の並列性と隔離は `docs/test-architecture.md` に従う。
-- subagent は独立した調査、領域別の変更、別視点のレビューに使い、目的・対象・成果物を絞る。主担当は結果待ちの間に独立した作業を進め、統合時に差分と必要な検証を確認する。依存先の未確定な判断や同じ編集を複数 agent に重ねず、委任数や並列率を達成目標にしない。
+- subagent には目的・担当範囲・必要な制約・成果物を渡し、親の指示の継承を前提にしない。未確定の判断に依存する作業や同じ編集を重ねず、主担当が差分と必要な検証を確認して統合する。委任数や並列率を達成目標にしない。
 - shared service、生成先、DB、CPU / memory などの競合と、結果の統合負担を含めて並列度を決める。並列化で実行が遅くなる、検証が不安定になる場合は減らす。workflow の直列化に固有の理由がある場合は設定の近くに残す。
 - 待ち時間の測定は、遅い工程や改善の効果を判断する必要がある場合だけ加える。timestamp や最初の failed step は一側面の観測であり、作業効率全体を表さない。数値予算・常設 telemetry を導入する前に、不要な実行や依存関係を整理する。予算が必要なら代表条件と変動幅を示し、local の個人 telemetry は収集しない。
 

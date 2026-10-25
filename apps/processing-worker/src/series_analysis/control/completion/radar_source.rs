@@ -1,6 +1,9 @@
 //! Publication rechecks unapplied generated point sources and explicitly accepted applications.
 
-use momo_analysis_core::radar;
+use momo_analysis_core::{
+    achievements::{self, AchievementCurve, AchievementPayload},
+    radar,
+};
 use tokio_postgres::Transaction;
 
 use crate::series_analysis::{
@@ -15,7 +18,6 @@ pub(super) async fn validate(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
 ) -> Result<bool, ControlError> {
-    Box::pin(invalidate_changed_generation_sources(transaction, claim)).await?;
     let active = transaction
         .query_opt(
             "SELECT c.legacy_id,(SELECT legacy_id FROM series_radar_previews WHERE id=o.preview_id) FROM series_radar_title_states s \
@@ -28,6 +30,30 @@ pub(super) async fn validate(
             &[&claim.game_title_id, &claim.radar_generation, &claim.radar_basis_id],
         )
         .await?;
+    let has_candidates: bool = transaction.query_one(
+        "SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND origin_kind='generated' AND status IN ('ready','unavailable','failed') AND result->'achievementGeneration'->'source' IS NOT NULL)",
+        &[&claim.game_title_id],
+    ).await?.try_get(0)?;
+    if active.is_none() && !has_candidates {
+        return Ok(true);
+    }
+    // Both freshness decisions use one locked input and one achievement calculation.
+    let current = input_repository::load_in_transaction(
+        transaction,
+        &claim.game_title_id,
+        claim.input_revision,
+    )
+    .await
+    .map_err(current_input_error)?;
+    let achievements = achievements::calculate(
+        current.game_title_id(),
+        current.achievements(),
+        current.player_matches(),
+        AchievementCurve::default(),
+    );
+    if has_candidates {
+        invalidate_changed_generation_sources(transaction, claim, &achievements).await?;
+    }
     let Some(active) = active else {
         // Already applied criteria stay frozen even if one of their historic records is corrected.
         return Ok(true);
@@ -47,22 +73,13 @@ pub(super) async fn validate(
     } else {
         saved_source.as_ref().ok_or(ControlError::InvalidMetadata)?
     };
-    let current = input_repository::load_in_transaction(
-        transaction,
-        &claim.game_title_id,
-        claim.input_revision,
-    )
-    .await
-    .map_err(current_input_error)?;
-    let statistics_current = radar::source_is_current(source, &current)
+    let mut current_snapshot =
+        radar::snapshot(&current).map_err(|_invalid| ControlError::AuthoritativeInputContract)?;
+    current_snapshot.achievements = Some(Box::new(achievements));
+    let statistics_current = source
+        .is_current_in(&current_snapshot)
         .map_err(|_invalid| ControlError::AuthoritativeInputContract)?;
-    let achievements = momo_analysis_core::achievements::calculate(
-        current.game_title_id(),
-        current.achievements(),
-        current.player_matches(),
-        momo_analysis_core::achievements::AchievementCurve::default(),
-    );
-    let valid = statistics_current && preview.achievements.as_deref() == Some(&achievements);
+    let valid = statistics_current && preview.achievements == current_snapshot.achievements;
     if !valid {
         let status = if manual || statistics_current {
             "ready"
@@ -95,22 +112,9 @@ pub(super) async fn validate(
 async fn invalidate_changed_generation_sources(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
+    achievements: &AchievementPayload,
 ) -> Result<(), ControlError> {
-    let has_candidates: bool = transaction.query_one(
-        "SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND origin_kind='generated' AND status IN ('ready','unavailable','failed') AND result->'achievementGeneration'->'source' IS NOT NULL)",
-        &[&claim.game_title_id],
-    ).await?.try_get(0)?;
-    if !has_candidates {
-        return Ok(());
-    }
-    let current = input_repository::load_in_transaction(
-        transaction,
-        &claim.game_title_id,
-        claim.input_revision,
-    )
-    .await
-    .map_err(current_input_error)?;
-    let source = radar::AchievementGenerationSource::from_input(&current)
+    let source = radar::AchievementGenerationSource::from_payload(achievements)
         .map_err(|_invalid| ControlError::AuthoritativeInputContract)?;
     let value = serde_json::to_value(source).map_err(|_invalid| ControlError::InvalidMetadata)?;
     transaction.execute(

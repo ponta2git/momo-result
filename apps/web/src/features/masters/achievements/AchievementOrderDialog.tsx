@@ -18,12 +18,13 @@ export function AchievementOrderDialog({
   const {
     items,
     permission,
-    mutation,
-    dirty,
+    saving,
+    canSave,
+    save,
     discarding,
     setDiscarding,
     announcement,
-    problem,
+    saveError,
     close,
     move,
   } = useAchievementOrderEditor({ catalog, onClose });
@@ -53,7 +54,7 @@ export function AchievementOrderDialog({
       <Dialog
         open
         title="実績の表示順"
-        busy={mutation.isPending}
+        busy={saving}
         footer={
           <div className="grid gap-4">
             {!permission.allowed ? (
@@ -61,23 +62,16 @@ export function AchievementOrderDialog({
                 表示順を変更する権限を確認できません。変更は保持しています。
               </Notice>
             ) : null}
-            {problem ? (
+            {saveError ? (
               <Notice tone="danger" title="表示順を保存できませんでした">
-                {problem.status === 409
-                  ? "項目または表示順が更新されています。いったん閉じて表示を更新し、並べ替え直してください。"
-                  : `${problem.detail}並べ替えた順序は保持しています。`}
+                {saveError}
               </Notice>
             ) : null}
             <DialogFooter>
-              <Button variant="secondary" disabled={mutation.isPending} onClick={close}>
+              <Button variant="secondary" disabled={saving} onClick={close}>
                 キャンセル
               </Button>
-              <Button
-                disabled={!permission.allowed || !dirty || problem?.status === 409}
-                pending={mutation.isPending}
-                pendingLabel="保存中"
-                onClick={() => mutation.mutate()}
-              >
+              <Button disabled={!canSave} pending={saving} pendingLabel="保存中" onClick={save}>
                 表示順を保存
               </Button>
             </DialogFooter>
@@ -110,7 +104,7 @@ export function AchievementOrderDialog({
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={!permission.allowed || mutation.isPending || index === 0}
+                          disabled={!permission.allowed || saving || index === 0}
                           aria-label={`${label}を上へ`}
                           ref={buttonRef(`${item.achievementId}:up`)}
                           onClick={() => moveAndFocus(index, -1)}
@@ -120,9 +114,7 @@ export function AchievementOrderDialog({
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={
-                            !permission.allowed || mutation.isPending || index === items.length - 1
-                          }
+                          disabled={!permission.allowed || saving || index === items.length - 1}
                           aria-label={`${label}を下へ`}
                           ref={buttonRef(`${item.achievementId}:down`)}
                           onClick={() => moveAndFocus(index, 1)}

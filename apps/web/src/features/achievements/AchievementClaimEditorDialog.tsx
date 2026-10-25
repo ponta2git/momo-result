@@ -1,7 +1,6 @@
 import { AchievementMatchPicker } from "@/features/achievements/AchievementMatchPicker";
 import { useAchievementClaimEditor } from "@/features/achievements/useAchievementClaimEditor";
 import type { AchievementClaimEditorProps } from "@/features/achievements/useAchievementClaimEditor";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
@@ -20,35 +19,43 @@ export function AchievementClaimEditorDialog({
   onClose,
 }: AchievementClaimEditorProps) {
   const {
-    baseline,
     form,
-    setForm,
+    changeState,
+    selectMatch,
+    changeDate,
+    canLeaveUnconfirmed,
+    dateLocked,
     confirmation,
-    setConfirmation,
+    dismissConfirmation,
+    confirmAction,
+    requestReload,
     validation,
-    identity,
     matchIdentity,
+    matchMissing,
+    matchLoading,
+    matchFailed,
+    retryMatch,
     dirty,
     conflict,
     automatic,
     confirmationRequired,
-    cancelling,
     eligibleIdentity,
-    mutation,
-    submit,
+    saving,
+    saveError,
+    canSave,
+    requestSave,
     requestClose,
-    reload,
   } = useAchievementClaimEditor({ claim, item, onClose });
   return (
     <>
       <UnsavedChangesGuard
         model={{ dirty, isNavigationAllowed: () => false, onDiscard: onClose }}
-        pending={mutation.isPending}
+        pending={saving}
         description="実績の訂正はまだ保存されていません。"
       />
       <Dialog
         open
-        busy={mutation.isPending}
+        busy={saving}
         title={`${item.name}・${memberDisplayName(claim.memberId)}の記録を訂正`}
         onOpenChange={(open) => {
           if (!open) requestClose();
@@ -58,9 +65,7 @@ export function AchievementClaimEditorDialog({
           className="grid gap-6"
           onSubmit={(event) => {
             event.preventDefault();
-            if (form.state === "cancelled" && baseline.claim.state !== "cancelled")
-              setConfirmation("cancel");
-            else void submit().catch(() => undefined);
+            void requestSave().catch(() => undefined);
           }}
         >
           {!automatic && claim.sourceKind === "import" ? (
@@ -73,7 +78,7 @@ export function AchievementClaimEditorDialog({
               tone="warning"
               title="保存済みの記録が更新されています"
               action={
-                <Button variant="secondary" size="sm" onClick={() => setConfirmation("reload")}>
+                <Button variant="secondary" size="sm" onClick={requestReload}>
                   最新内容を読み込む
                 </Button>
               }
@@ -91,18 +96,16 @@ export function AchievementClaimEditorDialog({
                 : "達成状況を直す場合は、元の試合結果を訂正してください。"}
             </Notice>
           ) : null}
-          <fieldset disabled={mutation.isPending || automatic} className="grid gap-4">
+          <fieldset disabled={saving || automatic} className="grid gap-4">
             <SelectField
               label="達成の確認"
               value={form.state}
               options={[
                 { value: "achieved", label: "達成した" },
-                ...(baseline.claim.state === "unconfirmed"
-                  ? [{ value: "unconfirmed", label: "確認待ち" }]
-                  : []),
+                ...(canLeaveUnconfirmed ? [{ value: "unconfirmed", label: "確認待ち" }] : []),
                 { value: "cancelled", label: "この記録の達成を取り消す" },
               ]}
-              onValueChange={(value) => setForm((current) => ({ ...current, state: value }))}
+              onValueChange={changeState}
             />
             {confirmationRequired ? (
               <Notice tone="info">
@@ -114,23 +117,19 @@ export function AchievementClaimEditorDialog({
                 <p className={contentText.body}>
                   {matchIdentity
                     ? `${formatDateTimeLong(matchIdentity.playedAt)}・第${matchIdentity.matchNoInEvent}試合`
-                    : identity.data?.kind === "notFound"
+                    : matchMissing
                       ? "達成した試合が見つかりません"
                       : "達成した試合を読み込み中"}
                 </p>
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  onClick={() => setForm((current) => ({ ...current, matchId: "" }))}
-                >
+                <Button variant="quiet" size="sm" onClick={() => selectMatch("")}>
                   試合の指定を外す
                 </Button>
-                {identity.isError ? (
+                {matchFailed ? (
                   <Notice
                     tone="danger"
                     title="達成した試合を読み込めません"
                     action={
-                      <Button variant="secondary" size="sm" onClick={() => void identity.refetch()}>
+                      <Button variant="secondary" size="sm" onClick={retryMatch}>
                         再読み込み
                       </Button>
                     }
@@ -138,7 +137,7 @@ export function AchievementClaimEditorDialog({
                     再読み込みするか、試合の指定を外してください。
                   </Notice>
                 ) : null}
-                {!identity.isLoading && !eligibleIdentity ? (
+                {!matchLoading && !eligibleIdentity ? (
                   <p className="text-sm text-[var(--color-danger)]">
                     この試合は現在の実績の対象外です。
                   </p>
@@ -148,13 +147,11 @@ export function AchievementClaimEditorDialog({
               <TextField
                 label="達成日時（日本時間）"
                 type="datetime-local"
-                readOnly={Boolean(baseline.claim.matchId)}
+                readOnly={dateLocked}
                 value={form.date}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, date: event.target.value }))
-                }
+                onChange={(event) => changeDate(event.currentTarget.value)}
                 description={
-                  baseline.claim.matchId
+                  dateLocked
                     ? "日時は今のまま残ります。試合の指定を外して保存すると、日時も変更できます。"
                     : "分かる日時を入力してください。分からない場合は空欄のまま保存できます。"
                 }
@@ -169,8 +166,8 @@ export function AchievementClaimEditorDialog({
               <AchievementMatchPicker
                 item={item}
                 selectedId={form.matchId}
-                disabled={mutation.isPending}
-                onSelect={(matchId) => setForm((current) => ({ ...current, matchId }))}
+                disabled={saving}
+                onSelect={selectMatch}
               />
             </Disclosure>
           </fieldset>
@@ -178,28 +175,16 @@ export function AchievementClaimEditorDialog({
             最終変更：{claim.updatedByDisplayName}・{formatDateTimeLong(claim.updatedAt)}
           </p>
           {validation ? <Notice tone="danger">{validation}</Notice> : null}
-          {mutation.isError ? (
+          {saveError ? (
             <Notice tone="danger" title="記録を保存できませんでした">
-              {normalizeUnknownApiError(mutation.error).detail}入力は保持しています。
+              {saveError}入力は保持しています。
             </Notice>
           ) : null}
           <DialogFooter>
-            <Button variant="secondary" disabled={mutation.isPending} onClick={requestClose}>
+            <Button variant="secondary" disabled={saving} onClick={requestClose}>
               キャンセル
             </Button>
-            <Button
-              type="submit"
-              pending={mutation.isPending}
-              pendingLabel="保存中"
-              disabled={
-                !dirty ||
-                conflict ||
-                automatic ||
-                confirmationRequired ||
-                !eligibleIdentity ||
-                Boolean(!cancelling && form.matchId && (!matchIdentity || identity.isFetching))
-              }
-            >
+            <Button type="submit" pending={saving} pendingLabel="保存中" disabled={!canSave}>
               記録を保存
             </Button>
           </DialogFooter>
@@ -227,15 +212,9 @@ export function AchievementClaimEditorDialog({
               : "破棄して閉じる"
         }
         onOpenChange={(open) => {
-          if (!open) setConfirmation(null);
+          if (!open) dismissConfirmation();
         }}
-        onConfirm={async () => {
-          if (confirmation === "cancel") await submit();
-          else if (confirmation === "reload") {
-            reload();
-          } else onClose();
-          setConfirmation(null);
-        }}
+        onConfirm={confirmAction}
       />
     </>
   );

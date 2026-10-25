@@ -319,13 +319,6 @@ pub(super) fn compute(
         .and_then(|c| c.basis.as_ref())
         .or(manual_basis.as_ref())
         .or(context.basis.as_ref());
-    let source_valid = if context.is_manual() {
-        true
-    } else if let Some(source) = context.source.as_ref() {
-        radar::source_is_current(source, input)?
-    } else {
-        candidate.is_some()
-    };
     let before = radar::evaluate_scopes(input, context.before_basis.as_ref())?;
     let after = radar::evaluate_scopes(input, basis)?;
     let achievements = achievements::calculate(
@@ -364,6 +357,13 @@ pub(super) fn compute(
         .collect::<Result<Vec<_>, radar::RadarError>>()?;
     let mut evaluation_snapshot = radar::snapshot(input)?;
     evaluation_snapshot.achievements = Some(Box::new(achievements));
+    let source_valid = if context.is_manual() {
+        true
+    } else if let Some(source) = context.source.as_ref() {
+        source.is_current_in(&evaluation_snapshot)?
+    } else {
+        candidate.is_some()
+    };
     Ok(Preparation {
         schema_version: 2,
         game_title_id: input.game_title_id().to_owned(),

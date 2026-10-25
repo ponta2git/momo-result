@@ -55,13 +55,9 @@ export function useAchievementRecord({
   const conflict =
     item.version !== itemVersion ||
     (mutation.isError && normalizeUnknownApiError(mutation.error).status === 409);
+  const busy = mutation.isPending || refreshing;
   const canSave =
-    eligible &&
-    !unavailable &&
-    !conflict &&
-    !identity.isFetching &&
-    !mutation.isPending &&
-    !refreshing;
+    eligible && !unavailable && !conflict && !identity.isFetching && !identity.isError && !busy;
   const submit = async () => {
     if (!canSave || !matchIdentity) return;
     await mutation.mutateAsync({
@@ -110,16 +106,23 @@ export function useAchievementRecord({
   };
   return {
     matchId,
-    setMatchId,
+    selectMatch: (value: string) => {
+      if (!busy) setMatchId(value);
+    },
     confirmClose,
-    setConfirmClose,
+    dismissCloseConfirmation: () => setConfirmClose(false),
     refreshing,
     reloadFailed,
-    identity,
     matchIdentity,
+    matchMissing: identity.data?.kind === "notFound",
+    matchLoading: identity.isFetching,
+    matchFailed: identity.isError,
+    retryMatch: () => void identity.refetch(),
     eligible,
     unavailable,
-    mutation,
+    busy,
+    saving: mutation.isPending,
+    saveError: mutation.isError ? normalizeUnknownApiError(mutation.error).detail : undefined,
     conflict,
     canSave,
     submit,

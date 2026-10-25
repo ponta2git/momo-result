@@ -19,8 +19,21 @@ export function MatchAchievementFields({
   disabled,
   onChange,
 }: MatchAchievementFieldsProps) {
-  const { open, setOpen, catalog, applicable, items, directClaim, outdated, remove, add } =
-    useMatchAchievementFields({ setup, values, disabled, onChange });
+  const {
+    open,
+    setOpen,
+    loading,
+    refreshing,
+    failed,
+    hasCatalog,
+    refresh,
+    items,
+    directClaim,
+    isSelected,
+    outdated,
+    remove,
+    add,
+  } = useMatchAchievementFields({ setup, values, disabled, onChange });
   return (
     <section aria-label="今回記録する実績" className="min-w-0">
       <Disclosure
@@ -37,18 +50,13 @@ export function MatchAchievementFields({
           {!setup.gameTitleId || !setup.mapMasterId ? (
             <p className={contentText.body}>作品とマップを選ぶと対象の実績を表示します。</p>
           ) : null}
-          {catalog.isLoading ? <Skeleton className="h-28" /> : null}
-          {catalog.isError ? (
+          {loading ? <Skeleton className="h-28" /> : null}
+          {failed ? (
             <Notice
               tone="warning"
               title="実績の入力候補を取得できません"
               action={
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  pending={catalog.isFetching}
-                  onClick={() => void catalog.refetch()}
-                >
+                <Button size="sm" variant="secondary" pending={refreshing} onClick={refresh}>
                   候補を再読み込み
                 </Button>
               }
@@ -62,44 +70,38 @@ export function MatchAchievementFields({
                 作品・マップ、または保存済みの実績が変わりました。入力を外すか、最新内容で選び直してください。
               </p>
               <ul className="mt-2 grid gap-2">
-                {outdated.map((entry) => {
-                  const item = catalog.data?.items.find(
-                    (value) => value.achievementId === entry.achievementId,
-                  );
-                  const claim = directClaim(entry.achievementId, entry.memberId);
-                  return (
-                    <li
-                      key={`${entry.achievementId}:${entry.memberId}`}
-                      className="flex flex-wrap items-center gap-2"
+                {outdated.map(({ selection: entry, currentItem }) => (
+                  <li
+                    key={`${entry.achievementId}:${entry.memberId}`}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <span>
+                      {entry.achievementName}・{memberDisplayName(entry.memberId)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={disabled}
+                      onClick={() => remove(entry.achievementId, entry.memberId)}
                     >
-                      <span>
-                        {entry.achievementName}・{memberDisplayName(entry.memberId)}
-                      </span>
+                      入力を外す
+                    </Button>
+                    {currentItem ? (
                       <Button
                         size="sm"
                         variant="secondary"
                         disabled={disabled}
-                        onClick={() => remove(entry.achievementId, entry.memberId)}
+                        onClick={() => add(currentItem, entry.memberId)}
                       >
-                        入力を外す
+                        最新内容で選び直す
                       </Button>
-                      {item && applicable(item) && claim?.state !== "achieved" ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={disabled}
-                          onClick={() => add(item, entry.memberId)}
-                        >
-                          最新内容で選び直す
-                        </Button>
-                      ) : null}
-                    </li>
-                  );
-                })}
+                    ) : null}
+                  </li>
+                ))}
               </ul>
             </Notice>
           ) : null}
-          {catalog.data && setup.mapMasterId ? (
+          {hasCatalog && setup.mapMasterId ? (
             <DataTable
               caption={{ content: "手入力で記録する実績" }}
               columns={[
@@ -122,11 +124,7 @@ export function MatchAchievementFields({
                   header: member.displayName,
                   minWidth: "5rem",
                   renderCell: (item: AchievementItem) => {
-                    const selected = values.some(
-                      (entry) =>
-                        entry.achievementId === item.achievementId &&
-                        entry.memberId === member.memberId,
-                    );
+                    const selected = isSelected(item.achievementId, member.memberId);
                     const saved = directClaim(item.achievementId, member.memberId);
                     return saved?.state === "achieved" && !selected ? (
                       <LinkButton

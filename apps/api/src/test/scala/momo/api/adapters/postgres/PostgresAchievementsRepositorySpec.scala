@@ -243,6 +243,91 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       assertEquals(followed.matchId, Some(matched.id))
       assertEquals(followed.achievedAt, Some(earlier.playedAt))
 
+  test("concurrent additions cannot exceed the catalog limit"):
+    for
+      world <- seed
+      repo <- repository
+      title = UUID.fromString(world.title.value)
+      _ <- sql"""INSERT INTO achievement_items
+        (id, game_title_id, name, notes, rule_kind, stars, scope_kind, sort_order)
+        SELECT gen_random_uuid(), $title, '既存の実績', '', 'manual', 1, 'common', position
+        FROM generate_series(0, 4094) AS position
+      """.update.run.transact(transactor)
+      results <- (
+        repo.create(definition(world).copy(name = "Last A"), context),
+        repo.create(definition(world).copy(name = "Last B"), context),
+      ).parTupled
+      count <- sql"SELECT count(*) FROM achievement_items WHERE game_title_id = $title"
+        .query[Long].unique.transact(transactor)
+    yield
+      assertEquals(List(results._1, results._2).count(_.isRight), 1)
+      assertEquals(List(results._1, results._2).count(_.left.exists(isConflict)), 1)
+      assertEquals(count, 4096L)
+
+  test("unchanged claim corrections preserve history and comparison but still reject stale inputs"):
+    for
+      world <- seed
+      repo <- repository
+      item <- repo.create(definition(world), context).map(right)
+      matched = record(world, 1)
+      _ <- confirmations.confirm(
+        matched,
+        None,
+        now,
+        List(AddMatchAchievement(item.id, member, item.version, None))
+      ).map(right)
+      previous <- claims(repo, world).map(_.head)
+      before <- revision(world)
+      title = UUID.fromString(world.title.value)
+      candidate = UUID.randomUUID()
+      preview = UUID.randomUUID()
+      _ <-
+      (sql"""INSERT INTO series_radar_candidates
+        (id, legacy_id, game_title_id, legacy_game_title_id, status)
+        VALUES ($candidate, ${candidate.toString}, $title, ${world.title.value}, 'ready')
+      """.update.run *>
+        sql"""INSERT INTO series_radar_previews
+          (id, legacy_id, game_title_id, candidate_id, input_revision, status)
+          VALUES ($preview, ${preview.toString}, $title, $candidate, $before, 'ready')
+        """.update.run).transact(transactor)
+      command = CorrectAchievementClaim(
+        previous.version,
+        item.version,
+        "achieved",
+        Some(matched.id),
+        None,
+        Some(matched.analysisRevision)
+      )
+      unchanged <- repo.correctClaim(previous.id, command, context.copy(at = now.plusSeconds(1)))
+        .map(right)
+      stale <- List(
+        command.copy(expectedVersion = previous.version + 1),
+        command.copy(expectedItemVersion = item.version + 1),
+        command.copy(expectedMatchVersion = Some(matched.analysisRevision + 1)),
+      ).traverse(repo.correctClaim(previous.id, _, context))
+      afterNoChange <- revision(world)
+      previewBefore <- sql"SELECT status FROM series_radar_previews WHERE id = $preview"
+        .query[String].unique.transact(transactor)
+      corrected <- repo.correctClaim(
+        previous.id,
+        command.copy(matchId = None, expectedMatchVersion = None),
+        context.copy(at = now.plusSeconds(2))
+      ).map(right)
+      afterChange <- revision(world)
+      previewAfter <- sql"SELECT status FROM series_radar_previews WHERE id = $preview"
+        .query[String].unique.transact(transactor)
+    yield
+      assertEquals(unchanged, previous)
+      assert(stale.forall(_.left.exists(isConflict)))
+      assertEquals(afterNoChange, before)
+      assertEquals(previewBefore, "ready")
+      assertEquals(corrected.version, previous.version + 1)
+      assertEquals(corrected.generationId, previous.generationId)
+      assertEquals(corrected.matchId, None)
+      assertEquals(corrected.achievedAt, previous.achievedAt)
+      assertEquals(afterChange, before + 1)
+      assertEquals(previewAfter, "stale")
+
   test(
     "confirmation and result edits roll back their changes when an achievement snapshot is stale"
   ):

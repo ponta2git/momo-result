@@ -22,7 +22,7 @@ export function AchievementRadarSection({
   seasonMasterId?: string | undefined;
   radar?: PlayerRadarDisplay | undefined;
 }) {
-  const { query, summary, players, href, radar, retained } = useAchievementRadar(
+  const { failed, loading, summary, players, href, radar, retained } = useAchievementRadar(
     gameTitleId,
     artifactId,
     mapMasterId,
@@ -33,7 +33,7 @@ export function AchievementRadarSection({
     return (
       <div className="grid gap-3">
         <PlayerRadarSection radar={radar} achievements={players} achievementsHref={href} />
-        {query.isError ? (
+        {failed ? (
           <Notice tone="warning" title="実績達成の数値を取得できません">
             {retained ? "直前に取得したレーダーを表示しています。" : "成績6軸は表示しています。"}
             「表示を更新」で実績を読み込み直してください。
@@ -41,7 +41,7 @@ export function AchievementRadarSection({
         ) : !summary ? (
           <p className={contentText.supporting}>
             {retained ? "直前に取得したレーダーを表示しています。" : ""}
-            {query.isFetching ? "実績達成を読み込み中です。" : "実績達成は集計待ちです。"}
+            {loading ? "実績達成を読み込み中です。" : "実績達成は集計待ちです。"}
           </p>
         ) : null}
       </div>
@@ -54,19 +54,19 @@ export function AchievementRadarSection({
         </p>
         {players ? (
           <AchievementScoreTable players={players} />
-        ) : query.isFetching ? (
+        ) : loading ? (
           <Skeleton className="h-36" />
         ) : (
           <p className={contentText.body}>
-            {query.isError
+            {failed
               ? "実績の数値を取得できません。「表示を更新」で再取得してください。"
               : "実績達成は集計待ちです。"}
           </p>
         )}
         {retained ? (
-          <Notice tone={query.isError ? "warning" : "info"}>
+          <Notice tone={failed ? "warning" : "info"}>
             直前に取得した実績を表示しています。
-            {query.isError
+            {failed
               ? "取得に失敗しました。「表示を更新」で再取得してください。"
               : "最新の実績を読み込み中です。"}
           </Notice>

@@ -41,5 +41,13 @@ export function useAchievementPublication(gameTitleId: string | undefined) {
       });
     }
   }, [gameTitleId, queryClient, refreshPublication]);
-  return { status, resource, data, artifactId, refresh };
+  return {
+    data,
+    status: status.data,
+    statusFailed: status.isError,
+    resourceFailed: resource.isError,
+    loading: status.isLoading || resource.isLoading,
+    refreshing: status.isFetching || resource.isFetching,
+    refresh,
+  };
 }

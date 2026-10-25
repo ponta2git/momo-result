@@ -17,5 +17,15 @@ export function useAchievementMatchPicker(item: AchievementItem) {
     }),
   );
   const pagination = matches.data?.pagination;
-  return { setCursor, matches, pagination };
+  return {
+    items: matches.data?.items ?? [],
+    empty: matches.data?.items?.length === 0,
+    loading: matches.isLoading,
+    refreshing: matches.isFetching,
+    failed: matches.isError,
+    showingPreviousPage: matches.isPlaceholderData,
+    pagination,
+    setCursor,
+    refresh: () => void matches.refetch(),
+  };
 }

@@ -89,15 +89,24 @@ export function useAchievementOrderEditor({
       mutation.reset();
   };
   const problem = mutation.isError ? normalizeUnknownApiError(mutation.error) : undefined;
+  const canSave = permission.allowed && dirty && !mutation.isPending && problem?.status !== 409;
+  const save = () => {
+    if (canSave) mutation.mutate();
+  };
   return {
     items,
     permission,
-    mutation,
-    dirty,
+    saving: mutation.isPending,
+    canSave,
+    save,
     discarding,
     setDiscarding,
     announcement,
-    problem,
+    saveError: problem
+      ? problem.status === 409
+        ? "項目または表示順が更新されています。いったん閉じて表示を更新し、並べ替え直してください。"
+        : `${problem.detail}並べ替えた順序は保持しています。`
+      : null,
     close,
     move,
   };

@@ -72,7 +72,8 @@ export function useAchievementRadar(
   }));
   const href = `${achievementPageHref(gameTitleId)}${mapMasterId ? `&mapMasterId=${encodeURIComponent(mapMasterId)}` : ""}`;
   return {
-    query,
+    failed: query.isError,
+    loading: query.isFetching,
     summary,
     players,
     href,

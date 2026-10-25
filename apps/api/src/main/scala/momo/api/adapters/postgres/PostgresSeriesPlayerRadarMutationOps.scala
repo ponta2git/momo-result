@@ -13,6 +13,8 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
   final case class MatchInputIdentity(statistics: String, achievementIncidents: String)
       derives CanEqual
 
+  final case class ChangedSourceMatch(id: MatchId, titles: List[GameTitleId])
+
   /** Keeps six-axis source changes separate from facts that can change achievement points. */
   def inputIdentity(matchId: MatchId)(using
       identities: PostgresIdentities): ConnectionIO[Option[MatchInputIdentity]] = sql"""
@@ -43,47 +45,29 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
     FROM matches m WHERE m.id = ${identities.lookup(Entity.Matches, matchId.value)}
   """.query[MatchInputIdentity].option
 
-  /** Rust compares generated point sources; mutations only invalidate the reviewed evaluation. */
-  def achievementsChanged(titles: List[GameTitleId])(using
-      identities: PostgresIdentities): ConnectionIO[Unit] = titles.traverse(title =>
-    identities.normalize(Entity.GameTitles, title.value).map(GameTitleId.unsafeFromString)
-  ).flatMap(_.distinct.sortBy(_.value).traverse_(title =>
-    for
-      _ <- sql"""
-        SELECT ${identities.wireReference(Entity.GameTitles, fr"r.game_title_id")}
-        FROM series_radar_title_states r
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)} FOR UPDATE
-      """.query[GameTitleId].option
-      _ <- sql"""
-        UPDATE series_radar_previews SET status = 'stale', updated_at = now()
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
-          AND status = 'ready'
-      """.update.run
-      stopped <- sql"""
-        UPDATE series_radar_operations o
-        SET status = 'failed', safe_failure_code = 'evaluation_changed',
-            finished_at = now(), updated_at = now()
-        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, title.value)}
-          AND kind = 'apply' AND status IN ('pending', 'running')
-        RETURNING ${identities.wireId("o")}
-      """.query[String].to[List]
-      _ <- resetApplications(title, stopped)
-    yield ()
-  ))
-
-  def changed(titles: List[GameTitleId], matchId: MatchId, sourceMayHaveChanged: Boolean)(using
-      identities: PostgresIdentities)
-      : ConnectionIO[Unit] = titles.traverse(title =>
-    identities.normalize(Entity.GameTitles, title.value).map(GameTitleId.unsafeFromString)
-  )
-    .flatMap(_.distinct.sortBy(_.value).traverse_(title =>
-      changedTitle(title, matchId, sourceMayHaveChanged)
-    ))
+  /**
+   * Invalidate each affected evaluation once. Only edits/deletions of an existing six-axis source
+   * invalidate its generated candidate here; Rust owns comparison of generated achievement points.
+   */
+  def changed(
+      titles: List[GameTitleId],
+      sourceMatch: Option[ChangedSourceMatch],
+  )(using identities: PostgresIdentities): ConnectionIO[Unit] =
+    val affected = (titles ++ sourceMatch.toList.flatMap(_.titles)).distinct
+    affected.traverse(title =>
+      identities.normalize(Entity.GameTitles, title.value)
+        .map(value => title -> GameTitleId.unsafeFromString(value))
+    ).flatMap { normalized =>
+      val byInput = normalized.toMap
+      val sourceTitles = sourceMatch.toList.flatMap(_.titles).map(byInput).toSet
+      normalized.map(_._2).distinct.sortBy(_.value).traverse_(title =>
+        changedTitle(title, sourceMatch.filter(_ => sourceTitles.contains(title)).map(_.id))
+      )
+    }
 
   private def changedTitle(
       title: GameTitleId,
-      matchId: MatchId,
-      sourceMayHaveChanged: Boolean
+      sourceMatch: Option[MatchId],
   )(using identities: PostgresIdentities): ConnectionIO[Unit] =
     for
       _ <- sql"""
@@ -100,7 +84,7 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
           title.value
         )} AND status = 'ready'
       """.update.run
-      invalidCandidates <- if sourceMayHaveChanged then
+      invalidCandidates <- sourceMatch.traverse(matchId =>
         sql"""
         UPDATE series_radar_candidates c
         SET status = 'invalid', safe_failure_code = 'source_changed', updated_at = now()
@@ -118,62 +102,50 @@ private[postgres] object PostgresSeriesPlayerRadarMutationOps:
             WHERE m->'order'->>'matchId' = ${matchId.value})
         RETURNING ${identities.wireId("c")}
       """.query[String].to[List]
-      else List.empty[String].pure[ConnectionIO]
+      ).map(_.toList.flatten)
       invalidIds = identities.lookupArray(Entity.RadarCandidates, invalidCandidates)
-      stopped <- sql"""
+      stopped <- if invalidCandidates.isEmpty then List.empty[String].pure[ConnectionIO]
+      else
+        sql"""
         UPDATE series_radar_operations o
         SET status = 'failed', safe_failure_code = 'source_changed',
             finished_at = now(), updated_at = now()
         WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )} AND candidate_id = ANY($invalidIds)
+            Entity.GameTitles,
+            title.value
+          )} AND candidate_id = ANY($invalidIds)
           AND status IN ('pending', 'running')
         RETURNING ${identities.wireId("o")}
       """.query[String].to[List]
-      stoppedManual <- if sourceMayHaveChanged then
+      stoppedApplications <-
         sql"""
         UPDATE series_radar_operations o
         SET status = 'failed', safe_failure_code = 'evaluation_changed', finished_at = now(), updated_at = now()
-        FROM series_radar_candidates c, series_radar_previews p, series_radar_bases b
         WHERE o.game_title_id = ${identities.lookup(
             Entity.GameTitles,
             title.value
           )} AND o.kind = 'apply' AND o.status IN ('pending', 'running')
-          AND c.id = o.candidate_id AND c.game_title_id = ${identities.lookup(
-            Entity.GameTitles,
-            title.value
-          )}
-          AND b.id = ${identities.wireReference(
-            Entity.RadarBases,
-            fr"c.basis_id"
-          )} AND b.game_title_id = ${title.value} AND b.payload->'manual' IS NOT NULL
-          AND p.id = o.preview_id AND p.game_title_id = ${identities.lookup(
-            Entity.GameTitles,
-            title.value
-          )}
-          AND EXISTS(SELECT 1 FROM jsonb_array_elements(p.evaluation_snapshot->'matches') m
-            WHERE m->'order'->>'matchId' = ${matchId.value})
         RETURNING ${identities.wireId("o")}
       """.query[String].to[List]
-      else List.empty[String].pure[ConnectionIO]
-      _ <- resetApplications(title, stopped ++ stoppedManual)
+      _ <- resetApplications(title, stopped ++ stoppedApplications)
     yield ()
 
   private def resetApplications(title: GameTitleId, stopped: List[String])(using
       identities: PostgresIdentities): ConnectionIO[Unit] =
-    val stoppedIds = identities.lookupArray(Entity.RadarOperations, stopped)
-    for
-      reset <- sql"""
+    if stopped.isEmpty then ().pure[ConnectionIO]
+    else
+      val stoppedIds = identities.lookupArray(Entity.RadarOperations, stopped)
+      for
+        reset <- sql"""
         UPDATE series_radar_title_states
         SET desired_basis_id = current_basis_id, generation = generation + 1,
             active_operation_id = NULL, updated_at = now()
         WHERE game_title_id = ${identities.lookup(
-          Entity.GameTitles,
-          title.value
-        )} AND active_operation_id = ANY($stoppedIds)
+            Entity.GameTitles,
+            title.value
+          )} AND active_operation_id = ANY($stoppedIds)
       """.update.run
-      _ <- if reset > 0 then
-        PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title)
-      else ().pure[ConnectionIO]
-    yield ()
+        _ <- if reset > 0 then
+          PostgresSeriesAnalysisJobTransitions.bindQueuedRadar(title)
+        else ().pure[ConnectionIO]
+      yield ()

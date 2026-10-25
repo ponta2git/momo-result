@@ -19,20 +19,25 @@ export function AchievementMatchPicker({
   disabled: boolean;
   onSelect: (matchId: string) => void;
 }) {
-  const { setCursor, matches, pagination } = useAchievementMatchPicker(item);
+  const {
+    items,
+    empty,
+    loading,
+    refreshing,
+    failed,
+    showingPreviousPage,
+    pagination,
+    setCursor,
+    refresh,
+  } = useAchievementMatchPicker(item);
   return (
     <div className="grid gap-4">
-      {matches.isError ? (
+      {failed ? (
         <Notice
           tone="danger"
           title="試合を取得できません"
           action={
-            <Button
-              size="sm"
-              variant="secondary"
-              pending={matches.isFetching}
-              onClick={() => void matches.refetch()}
-            >
+            <Button size="sm" variant="secondary" pending={refreshing} onClick={refresh}>
               再読み込み
             </Button>
           }
@@ -40,9 +45,9 @@ export function AchievementMatchPicker({
           通信状態を確認して再試行してください。
         </Notice>
       ) : null}
-      {matches.isLoading ? <Skeleton className="h-32" /> : null}
+      {loading ? <Skeleton className="h-32" /> : null}
       <ul className="grid gap-4">
-        {(matches.data?.items ?? []).map((match) => {
+        {items.map((match) => {
           const id = match.matchId;
           const eligible = Boolean(
             id &&
@@ -55,7 +60,7 @@ export function AchievementMatchPicker({
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={disabled || !eligible || !id || matches.isPlaceholderData}
+                    disabled={disabled || !eligible || !id || showingPreviousPage}
                     onClick={() => {
                       if (id) onSelect(id);
                     }}
@@ -78,15 +83,13 @@ export function AchievementMatchPicker({
           );
         })}
       </ul>
-      {matches.data?.items?.length === 0 ? (
-        <p className={contentText.body}>確定済みの試合はありません。</p>
-      ) : null}
+      {empty ? <p className={contentText.body}>確定済みの試合はありません。</p> : null}
       {pagination ? (
         <div className="flex items-center justify-between gap-2">
           <Button
             size="sm"
             variant="secondary"
-            disabled={!pagination.hasPreviousPage || matches.isFetching}
+            disabled={!pagination.hasPreviousPage || refreshing}
             onClick={() => setCursor(pagination.previousCursor)}
           >
             前へ
@@ -97,7 +100,7 @@ export function AchievementMatchPicker({
           <Button
             size="sm"
             variant="secondary"
-            disabled={!pagination.hasNextPage || matches.isFetching}
+            disabled={!pagination.hasNextPage || refreshing}
             onClick={() => setCursor(pagination.nextCursor)}
           >
             次へ

@@ -125,16 +125,16 @@ object PostgresMatches extends PostgresMatchesReadSupport:
           _ <-
             enqueueMatchMutation(beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId))
           currentRadarInput <- PostgresSeriesPlayerRadarMutationOps.inputIdentity(record.id)
-          _ <- if previousRadarInput.map(_.statistics) != currentRadarInput.map(_.statistics) then
-            PostgresSeriesPlayerRadarMutationOps.changed(
-              List(oldTitle, record.gameTitleId),
-              record.id,
-              true
-            )
-          else ().pure[ConnectionIO]
           _ <- if previousRadarInput != currentRadarInput || declarationsChanged then
-            PostgresSeriesPlayerRadarMutationOps.achievementsChanged(
-              beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId)
+            PostgresSeriesPlayerRadarMutationOps.changed(
+              beforeTitles ++ afterTitles ++ List(oldTitle, record.gameTitleId),
+              Option.when(previousRadarInput.map(_.statistics) !=
+                currentRadarInput.map(_.statistics))(
+                PostgresSeriesPlayerRadarMutationOps.ChangedSourceMatch(
+                  record.id,
+                  List(oldTitle, record.gameTitleId)
+                )
+              )
             )
           else ().pure[ConnectionIO]
           saved <- find(
@@ -187,8 +187,10 @@ object PostgresMatches extends PostgresMatchesReadSupport:
             )
           _ <- previous.filter(_ => deleted).toList.traverse_((wireId, title) =>
             enqueueMatchMutation(beforeTitles :+ title) *>
-              PostgresSeriesPlayerRadarMutationOps.changed(List(title), wireId, true) *>
-              PostgresSeriesPlayerRadarMutationOps.achievementsChanged(beforeTitles :+ title)
+              PostgresSeriesPlayerRadarMutationOps.changed(
+                beforeTitles :+ title,
+                Some(PostgresSeriesPlayerRadarMutationOps.ChangedSourceMatch(wireId, List(title)))
+              )
           )
           _ <- PostgresResultNotificationCancellation.afterDeletion(
             deletedDrafts,

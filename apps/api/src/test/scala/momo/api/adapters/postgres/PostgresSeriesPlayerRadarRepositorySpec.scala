@@ -329,7 +329,12 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(retained, ("ready", "ready"))
       assert(accepted.isRight, accepted.toString)
       assertEquals(candidate, "invalid")
-      assertEquals(application.toOption.flatMap(_.toOption).map(_.status), Some("failed"))
+      assertEquals(
+        application.toOption.flatMap(_.toOption).map(value =>
+          value.status -> value.safeFailureCode
+        ),
+        Some("failed" -> Some("source_changed"))
+      )
       assertEquals(restored, (None, None, 2L, None))
       assertEquals(rebound, (None, 2L))
 
@@ -738,7 +743,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         FROM series_radar_previews WHERE id=$previewId""".update.run.transact(transactor)
       _ <-
       (PostgresSeriesAnalysisMutationOps.enqueueMatchMutation(List(title)) *>
-        PostgresSeriesPlayerRadarMutationOps.achievementsChanged(List(title))).transact(transactor)
+        PostgresSeriesPlayerRadarMutationOps.changed(List(title), None)).transact(transactor)
       retained <- sql"""SELECT c.status,c.manual_input::text,p.status,o.status
         FROM series_radar_candidates c
         JOIN series_radar_previews p ON p.candidate_id=c.id

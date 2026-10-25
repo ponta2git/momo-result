@@ -1,7 +1,6 @@
 import { AchievementMatchPicker } from "@/features/achievements/AchievementMatchPicker";
 import { useAchievementRecord } from "@/features/achievements/useAchievementRecord";
 import type { AchievementRecordProps } from "@/features/achievements/useAchievementRecord";
-import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
@@ -15,29 +14,33 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
   const { item, memberId, onClose } = props;
   const {
     matchId,
-    setMatchId,
+    selectMatch,
     confirmClose,
-    setConfirmClose,
+    dismissCloseConfirmation,
     refreshing,
     reloadFailed,
-    identity,
     matchIdentity,
+    matchMissing,
+    matchLoading,
+    matchFailed,
+    retryMatch,
     eligible,
     unavailable,
-    mutation,
+    busy,
+    saving,
+    saveError,
     conflict,
     canSave,
     submit,
     reload,
     requestClose,
   } = useAchievementRecord(props);
-  const busy = mutation.isPending || refreshing;
   const picker = (
     <AchievementMatchPicker
       item={item}
       selectedId={matchId}
       disabled={busy || unavailable}
-      onSelect={setMatchId}
+      onSelect={selectMatch}
     />
   );
   return (
@@ -102,23 +105,23 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
               <p className={contentText.primary}>
                 {matchIdentity
                   ? `${formatDateTimeLong(matchIdentity.playedAt)}・第${matchIdentity.matchNoInEvent}試合`
-                  : identity.data?.kind === "notFound"
+                  : matchMissing
                     ? "選んだ試合が見つかりません"
                     : "選んだ試合を確認中"}
               </p>
-              {identity.isError ? (
+              {matchFailed ? (
                 <Notice
                   tone="danger"
                   title="試合を確認できません"
                   action={
-                    <Button variant="secondary" size="sm" onClick={() => void identity.refetch()}>
+                    <Button variant="secondary" size="sm" onClick={retryMatch}>
                       再読み込み
                     </Button>
                   }
                 >
                   通信状態を確認して再試行してください。
                 </Notice>
-              ) : !identity.isFetching && !eligible ? (
+              ) : !matchLoading && !eligible ? (
                 <Notice tone="warning">
                   この試合は実績の対象外です。別の試合を選んでください。
                 </Notice>
@@ -136,21 +139,16 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
           ) : (
             picker
           )}
-          {mutation.isError && !conflict ? (
+          {saveError && !conflict ? (
             <Notice tone="danger" title="達成を保存できませんでした">
-              {normalizeUnknownApiError(mutation.error).detail}試合の選択は保持しています。
+              {saveError}試合の選択は保持しています。
             </Notice>
           ) : null}
           <DialogFooter>
             <Button variant="secondary" disabled={busy} onClick={requestClose}>
               キャンセル
             </Button>
-            <Button
-              type="submit"
-              pending={mutation.isPending}
-              pendingLabel="保存中"
-              disabled={!canSave}
-            >
+            <Button type="submit" pending={saving} pendingLabel="保存中" disabled={!canSave}>
               達成を保存
             </Button>
           </DialogFooter>
@@ -160,7 +158,9 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
         open={confirmClose}
         title="未保存の達成を破棄しますか？"
         confirmLabel="破棄して閉じる"
-        onOpenChange={setConfirmClose}
+        onOpenChange={(open) => {
+          if (!open) dismissCloseConfirmation();
+        }}
         onConfirm={onClose}
       />
     </>

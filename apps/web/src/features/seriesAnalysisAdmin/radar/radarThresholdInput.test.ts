@@ -82,7 +82,6 @@ describe("radar threshold editing", () => {
     ["5", "30", "20", "40", "50", "75", "100", "150", "200"],
     ["-1", "10", "20", "30", "50", "75", "100", "150", "200"],
     ["5", "10", "20", "30", "50", "75", "100", "150", "102401"],
-    ["5", "", "20", "30", "50", "75", "100", "150", "200"],
     ["5", "Infinity", "20", "30", "50", "75", "100", "150", "200"],
     ["0", "10", "25", "50", "80"],
   ])(
@@ -96,6 +95,22 @@ describe("radar threshold editing", () => {
       expect(parsed.errors.some((error) => error.axisId === "achievement")).toBe(true);
     },
   );
+
+  it("does not treat an incomplete achievement boundary as zero or flag neighboring inputs", () => {
+    const parsed = parseRadarThresholdDrafts({
+      ...radarThresholdDrafts(validInput()),
+      achievement: ["5", "", "20", "30", "50", "75", "100", "150", "200"],
+    });
+    expect(parsed.input).toBeNull();
+    expect(parsed.errors).toEqual([
+      {
+        axisId: "achievement",
+        index: 1,
+        kind: "numeric",
+        message: "実績ポイントを最後まで入力してください。",
+      },
+    ]);
+  });
 
   it("inherits legacy and unavailable curves without inventing point boundaries or changing the saved basis", () => {
     const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);

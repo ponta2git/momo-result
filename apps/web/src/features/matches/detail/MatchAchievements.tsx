@@ -42,15 +42,13 @@ export function MatchAchievements({
         この試合・開催の実績
       </h2>
       <AchievementPublicationFeedback
-        status={publication.status.data}
-        statusFailed={publication.status.isError}
-        resourceFailed={publication.resource.isError}
+        status={publication.status}
+        statusFailed={publication.statusFailed}
+        resourceFailed={publication.resourceFailed}
         hasPublishedData={Boolean(data)}
         refreshMode="page"
       />
-      {!data && (publication.status.isLoading || publication.resource.isLoading) ? (
-        <Skeleton className="h-16" />
-      ) : null}
+      {!data && publication.loading ? <Skeleton className="h-16" /> : null}
       {data && entries.length === 0 ? (
         <p className={contentText.body}>この試合・開催を根拠とする実績はありません。</p>
       ) : null}

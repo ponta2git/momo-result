@@ -32,7 +32,7 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
   def enqueueAchievementMutation(gameTitleIds: List[GameTitleId])(using
       identities: PostgresIdentities): ConnectionIO[Unit] =
     enqueue(gameTitleIds, "achievement_mutation") *>
-      PostgresSeriesPlayerRadarMutationOps.achievementsChanged(gameTitleIds)
+      PostgresSeriesPlayerRadarMutationOps.changed(gameTitleIds, None)
 
   private def enqueue(gameTitleIds: List[GameTitleId], trigger: String)(using
       identities: PostgresIdentities): ConnectionIO[Unit] = gameTitleIds

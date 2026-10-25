@@ -25,17 +25,20 @@ import { contentText } from "@/shared/ui/typography";
 
 export function AchievementsPage() {
   const {
-    setSearch,
     editingClaimId,
-    setEditingClaimId,
+    closeCorrection,
     newRecord,
-    setNewRecord,
+    closeNewRecord,
     recordAchievement,
     operations,
     titles,
+    titlesLoading,
+    titlesFailed,
     gameTitleId,
     publication,
     catalog,
+    catalogLoading,
+    catalogFailed,
     data,
     titleChanged,
     summary,
@@ -49,6 +52,7 @@ export function AchievementsPage() {
     refreshing,
     changeTitle,
     closeDetails,
+    openDetails,
     editClaim,
     refresh,
   } = useAchievementsPage();
@@ -61,7 +65,7 @@ export function AchievementsPage() {
             value={gameTitleId ?? ""}
             options={[
               { value: "", label: "作品を選択" },
-              ...(titles.data?.items ?? []).map((title) => ({
+              ...titles.map((title) => ({
                 value: title.id,
                 label: title.name,
               })),
@@ -77,26 +81,24 @@ export function AchievementsPage() {
             </LinkButton>
           ) : null}
         </div>
-        {titles.isError ? (
+        {titlesFailed ? (
           <Notice tone="danger" title="作品を取得できません">
             通信状態を確認して「表示を更新」を押してください。
           </Notice>
         ) : null}
         <AchievementPublicationFeedback
-          status={publication.status.data}
-          statusFailed={publication.status.isError}
-          resourceFailed={publication.resource.isError}
+          status={publication.status}
+          statusFailed={publication.statusFailed}
+          resourceFailed={publication.resourceFailed}
           hasPublishedData={Boolean(data)}
         />
-        {!data &&
-        !catalog.data &&
-        (publication.status.isLoading || publication.resource.isLoading || titles.isLoading) ? (
+        {!data && !catalog && (publication.loading || titlesLoading) ? (
           <div aria-label="実績を読み込み中" className="grid gap-4">
             <Skeleton className="h-20" />
             <Skeleton className="h-64" />
           </div>
         ) : null}
-        {!gameTitleId && !titles.isLoading && !titles.isError ? (
+        {!gameTitleId && !titlesLoading && !titlesFailed ? (
           <EmptyState
             icon={<Award />}
             title="作品が登録されていません"
@@ -111,7 +113,7 @@ export function AchievementsPage() {
             }
           />
         ) : null}
-        {data || catalog.data ? (
+        {data || catalog ? (
           <StaleShield active={titleChanged} strategy="preserve-inert" fallback={null}>
             <div className="grid min-w-0 gap-6">
               <section aria-label="集めたポイント" className="grid min-w-0 gap-4">
@@ -198,15 +200,7 @@ export function AchievementsPage() {
                           size="sm"
                           icon={<BookOpen />}
                           aria-label={`${item.name}の記録を見る`}
-                          onClick={() =>
-                            setSearch((previous) => {
-                              const next = new URLSearchParams(previous);
-                              if (gameTitleId) next.set("gameTitleId", gameTitleId);
-                              next.set("achievementId", item.achievementId);
-                              next.delete("memberId");
-                              return next;
-                            })
-                          }
+                          onClick={() => openDetails(item.achievementId)}
                         >
                           記録を見る
                         </Button>
@@ -229,15 +223,15 @@ export function AchievementsPage() {
           players={selectedItem.players}
           memberId={selectedMember.memberId}
           onMemberChange={changeMember}
-          catalog={catalog.data}
-          catalogLoading={catalog.isLoading}
-          catalogFailed={catalog.isError}
+          catalog={catalog}
+          catalogLoading={catalogLoading}
+          catalogFailed={catalogFailed}
           maps={maps}
           publicationFeedback={
             <AchievementPublicationFeedback
-              status={publication.status.data}
-              statusFailed={publication.status.isError}
-              resourceFailed={publication.resource.isError}
+              status={publication.status}
+              statusFailed={publication.statusFailed}
+              resourceFailed={publication.resourceFailed}
               hasPublishedData={Boolean(data)}
             />
           }
@@ -251,19 +245,18 @@ export function AchievementsPage() {
       {newRecord ? (
         <AchievementRecordDialog
           item={
-            catalog.data?.items.find(
-              (item) => item.achievementId === newRecord.item.achievementId,
-            ) ?? newRecord.item
+            catalog?.items.find((item) => item.achievementId === newRecord.item.achievementId) ??
+            newRecord.item
           }
           memberId={newRecord.memberId}
           existingClaim={Boolean(
-            catalog.data?.claims.some(
+            catalog?.claims.some(
               (claim) =>
                 claim.achievementId === newRecord.item.achievementId &&
                 claim.memberId === newRecord.memberId,
             ),
           )}
-          onClose={() => setNewRecord(undefined)}
+          onClose={closeNewRecord}
         />
       ) : null}
       {editingClaim && editingItem && gameTitleId ? (
@@ -271,7 +264,7 @@ export function AchievementsPage() {
           key={editingClaim.claimId}
           claim={editingClaim}
           item={editingItem}
-          onClose={() => setEditingClaimId(undefined)}
+          onClose={closeCorrection}
         />
       ) : null}
     </PageFrame>

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchSetupValues } from "@/features/matches/workspace/matchFormTypes";
@@ -13,6 +13,9 @@ export type MatchAchievementFieldsProps = {
   onChange: (values: MatchAchievementSelection[]) => void;
 };
 
+const recordKey = (achievementId: string, memberId: string) =>
+  JSON.stringify([achievementId, memberId]);
+
 export function useMatchAchievementFields({
   setup,
   values,
@@ -20,30 +23,49 @@ export function useMatchAchievementFields({
 }: MatchAchievementFieldsProps) {
   const [open, setOpen] = useState(values.length > 0);
   const catalog = useQuery(achievementCatalogQueryOptions(setup.gameTitleId || undefined));
+  const catalogItems = useMemo(
+    () => new Map(catalog.data?.items.map((item) => [item.achievementId, item])),
+    [catalog.data?.items],
+  );
+  const directClaims = useMemo(
+    () =>
+      new Map(
+        catalog.data?.claims
+          .filter((claim) => claim.sourceKind === "direct")
+          .map((claim) => [recordKey(claim.achievementId, claim.memberId), claim]),
+      ),
+    [catalog.data?.claims],
+  );
+  const selectedKeys = useMemo(
+    () => new Set(values.map((entry) => recordKey(entry.achievementId, entry.memberId))),
+    [values],
+  );
   const applicable = (item: AchievementItem) =>
     !item.retiredAt &&
     item.ruleKind === "manual" &&
     (item.common || item.mapMasterIds.includes(setup.mapMasterId));
   const items = catalog.data?.items.filter(applicable) ?? [];
   const directClaim = (achievementId: string, memberId: string) =>
-    catalog.data?.claims.find(
-      (claim) =>
-        claim.achievementId === achievementId &&
-        claim.memberId === memberId &&
-        claim.sourceKind === "direct",
-    );
-  const outdated = values.filter((selection) => {
-    const item = catalog.data?.items.find(
-      (value) => value.achievementId === selection.achievementId,
-    );
+    directClaims.get(recordKey(achievementId, memberId));
+  const isSelected = (achievementId: string, memberId: string) =>
+    selectedKeys.has(recordKey(achievementId, memberId));
+  const outdated = values.flatMap((selection) => {
+    if (!catalog.data) return [];
+    const item = catalogItems.get(selection.achievementId);
     const claim = directClaim(selection.achievementId, selection.memberId);
-    return Boolean(
-      catalog.data &&
-      (!item ||
-        !applicable(item) ||
-        item.version !== selection.expectedItemVersion ||
-        (claim?.version ?? null) !== selection.expectedClaimVersion),
-    );
+    if (
+      item &&
+      applicable(item) &&
+      item.version === selection.expectedItemVersion &&
+      (claim?.version ?? null) === selection.expectedClaimVersion
+    )
+      return [];
+    return [
+      {
+        selection,
+        currentItem: item && applicable(item) && claim?.state !== "achieved" ? item : undefined,
+      },
+    ];
   });
   const remove = (achievementId: string, memberId: string) =>
     onChange(
@@ -64,5 +86,19 @@ export function useMatchAchievementFields({
         expectedClaimVersion: directClaim(item.achievementId, memberId)?.version ?? null,
       },
     ]);
-  return { open, setOpen, catalog, applicable, items, directClaim, outdated, remove, add };
+  return {
+    open,
+    setOpen,
+    loading: catalog.isLoading,
+    refreshing: catalog.isFetching,
+    failed: catalog.isError,
+    hasCatalog: Boolean(catalog.data),
+    refresh: () => void catalog.refetch(),
+    items,
+    directClaim,
+    isSelected,
+    outdated,
+    remove,
+    add,
+  };
 }

@@ -133,10 +133,11 @@ private[postgres] object PostgresAchievementWriteOps:
     if additions.isEmpty then false.pure[ConnectionIO]
     else
       for
-        normalized <- additions.traverse(value =>
-          ids.normalize(Entity.Members, value.memberId.value)
-            .map(member => value.copy(memberId = MemberId.unsafeFromString(member)))
-        )
+        membersByInput <- additions.map(_.memberId).distinct.traverse(member =>
+          ids.normalize(Entity.Members, member.value)
+            .map(normalized => member -> MemberId.unsafeFromString(normalized))
+        ).map(_.toMap)
+        normalized = additions.map(value => value.copy(memberId = membersByInput(value.memberId)))
         _ <- ensure(
           normalized.map(v => v.achievementId -> v.memberId).distinct.size == normalized.size,
           "Duplicate achievement declarations."
@@ -151,6 +152,9 @@ private[postgres] object PostgresAchievementWriteOps:
           PostgresAchievementReadOps.claims(fr"WHERE c.item_id = ANY($selected)", lock = true)
         actor <- ids.requireReference(Entity.Accounts, context.accountId.value)
         matched <- ids.requireReference(Entity.Matches, source.id.value)
+        memberReferences <- normalized.map(_.memberId).distinct.traverse(member =>
+          ids.requireReference(Entity.Members, member.value).map(member -> _)
+        ).map(_.toMap)
         changed <- normalized.sortBy(value =>
           (value.achievementId.toString, value.memberId.value)
         ).traverse { addition =>
@@ -182,17 +186,16 @@ private[postgres] object PostgresAchievementWriteOps:
                   updated_by_account_id = $actor, updated_at = ${context.at} WHERE id = ${value.id}
                 """.update.run.as(true)
               case None =>
-                for
-                  member <- ids.requireReference(Entity.Members, addition.memberId.value)
-                  claimId = UUID.randomUUID()
-                  generation = UUID.randomUUID()
-                  _ <- sql"""INSERT INTO achievement_claims
+                val claimId = UUID.randomUUID()
+                val generation = UUID.randomUUID()
+                sql"""INSERT INTO achievement_claims
                     (id, item_id, member_id, source_kind, state, match_id, achieved_at,
                      generation_id, version, updated_by_account_id, updated_at)
-                    VALUES ($claimId, ${item.id}, $member, 'direct', 'achieved', $matched,
+                    VALUES ($claimId, ${item.id}, ${memberReferences(
+                    addition.memberId
+                  )}, 'direct', 'achieved', $matched,
                       ${source.playedAt}, $generation, 1, $actor, ${context.at})
-                  """.update.run
-                yield true
+                  """.update.run.as(true)
           yield result
         }
       yield changed.contains(true)
@@ -286,12 +289,18 @@ private[postgres] object PostgresAchievementWriteOps:
         source.map(_.playedAt).orElse(if previous.matchId.nonEmpty then previous.achievedAt
         else command.achievedAt)
       link = if command.state == "cancelled" then None else normalizedMatch
-      actor <- ids.requireReference(Entity.Accounts, context.accountId.value)
-      _ <- sql"""UPDATE achievement_claims SET state = ${command.state},
-        match_id = ${ids.lookup(Entity.Matches, link.map(_.value))}, achieved_at = $date,
-        version = version + 1, updated_by_account_id = $actor, updated_at = ${context.at}
-        WHERE id = $id
-      """.update.run
-      _ <- PostgresSeriesAnalysisMutationOps.enqueueAchievementMutation(List(item.gameTitleId))
-      result <- PostgresAchievementReadOps.claim(id)
+      unchanged = previous.state == command.state && previous.matchId == link &&
+        previous.achievedAt.equals(date)
+      result <- if unchanged then previous.pure[ConnectionIO]
+      else
+        for
+          actor <- ids.requireReference(Entity.Accounts, context.accountId.value)
+          _ <- sql"""UPDATE achievement_claims SET state = ${command.state},
+            match_id = ${ids.lookup(Entity.Matches, link.map(_.value))}, achieved_at = $date,
+            version = version + 1, updated_by_account_id = $actor, updated_at = ${context.at}
+            WHERE id = $id
+          """.update.run
+          _ <- PostgresSeriesAnalysisMutationOps.enqueueAchievementMutation(List(item.gameTitleId))
+          saved <- PostgresAchievementReadOps.claim(id)
+        yield saved
     yield result

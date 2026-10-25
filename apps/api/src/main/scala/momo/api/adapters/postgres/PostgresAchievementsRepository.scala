@@ -7,6 +7,7 @@ import cats.syntax.all.*
 import doobie.*
 import doobie.implicits.*
 
+import momo.api.adapters.postgres.CanonicalIdentity.Entity
 import momo.api.domain.*
 import momo.api.domain.ids.{GameTitleId, MatchId}
 import momo.api.errors.{AppError, AppException}
@@ -42,9 +43,11 @@ final class PostgresAchievementsRepository[F[_]: Async](
       _ <- PostgresAchievementWriteOps.lockCreationReferences(command)
       // No existing item/root is acquired after this lock: new IDs cannot be targeted before commit.
       _ <- PostgresAchievementRetirementOps.state(command.gameTitleId, lock = true)
-      catalog <- PostgresAchievementReadOps.forTitle(command.gameTitleId)
+      catalogSize <- sql"""SELECT count(*) FROM achievement_items
+        WHERE game_title_id = ${identities.lookup(Entity.GameTitles, command.gameTitleId.value)}
+      """.query[Long].unique
       _ <- PostgresAchievementWriteOps.ensure(
-        catalog.size < PostgresAchievementReadOps.MaximumItems,
+        catalogSize < PostgresAchievementReadOps.MaximumItems,
         "The achievement catalog has reached its supported size."
       )
       id = UUID.randomUUID()

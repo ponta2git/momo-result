@@ -126,8 +126,7 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](
         AchievementMutationContext(record.createdByAccountId, updatedAt)
       )
       _ <- enqueueMatchMutation(before :+ record.gameTitleId)
-      _ <- PostgresSeriesPlayerRadarMutationOps.changed(List(record.gameTitleId), record.id, false)
-      _ <- PostgresSeriesPlayerRadarMutationOps.achievementsChanged(before :+ record.gameTitleId)
+      _ <- PostgresSeriesPlayerRadarMutationOps.changed(before :+ record.gameTitleId, None)
     yield ())
       .exceptSomeSqlState {
         case state if isUniqueViolation(state) =>

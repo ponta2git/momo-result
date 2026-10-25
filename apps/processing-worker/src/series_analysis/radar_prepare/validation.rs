@@ -60,7 +60,7 @@ pub(in crate::series_analysis) fn validate(
         basis
     } else {
         let source = context.source.as_ref().ok_or(RadarError::InvalidSource)?;
-        validate_saved_source(prepared, source, &input)?;
+        validate_saved_source(prepared, source)?;
         context.basis.as_ref()
     };
     let before = radar::evaluate_scopes(&input, before_basis)?;
@@ -146,25 +146,8 @@ fn validate_generated_source(
 fn validate_saved_source(
     prepared: &Preparation,
     source: &radar::RadarSourceSnapshot,
-    input: &NormalizedAnalysisInput,
 ) -> Result<(), RadarError> {
-    let mut match_source = source.clone();
-    match_source.achievement_generation_source = None;
-    let points_current = source
-        .achievement_generation_source
-        .as_deref()
-        .is_none_or(|saved| {
-            prepared
-                .evaluation_snapshot
-                .achievements
-                .as_deref()
-                .and_then(|payload| radar::AchievementGenerationSource::from_payload(payload).ok())
-                .as_ref()
-                == Some(saved)
-        });
-    if (radar::source_is_current(&match_source, input)? && points_current)
-        != prepared.candidate_source_valid
-    {
+    if source.is_current_in(&prepared.evaluation_snapshot)? != prepared.candidate_source_valid {
         return Err(RadarError::InvalidSource);
     }
     Ok(())

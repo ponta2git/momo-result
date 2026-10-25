@@ -133,10 +133,15 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   const dirty = Boolean(
     editor && JSON.stringify(editor.form) !== JSON.stringify(itemForm(editor.item)),
   );
+  const discardEditor = () => {
+    if (mutation.isPending) return;
+    setEditor(undefined);
+    setDiscarding(false);
+  };
   useReportMasterEditStatus("achievements", {
     dirty,
     pending: mutation.isPending,
-    discard: () => setEditor(undefined),
+    discard: discardEditor,
   });
   const currentItem =
     editor?.item &&
@@ -145,14 +150,16 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   const closeEditor = () => {
     if (mutation.isPending) return;
     if (dirty) setDiscarding(true);
-    else setEditor(undefined);
+    else discardEditor();
   };
   const updateForm = (change: Partial<ItemForm>) =>
     setEditor((current) =>
       current ? { ...current, form: { ...current.form, ...change } } : current,
     );
-  const startEditor = (item?: AchievementItem) => {
-    if (!gameTitleId) return;
+  const startEditor = (achievementId?: string) => {
+    if (!gameTitleId || mutation.isPending || !permission.allowed) return;
+    const item = catalog.data?.items.find((value) => value.achievementId === achievementId);
+    if (achievementId && !item) return;
     mutation.reset();
     setValidation("");
     setEditor({ ...(item ? { item } : {}), gameTitleId, form: itemForm(item) });
@@ -219,20 +226,52 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   };
   const items = catalog.data?.items.filter((item) => !item.retiredAt) ?? [];
   const retiredItems = catalog.data?.items.filter((item) => item.retiredAt) ?? [];
+  const startRetirement = (achievementId: string) => {
+    if (mutation.isPending || !permission.allowed) return;
+    const item = catalog.data?.items.find((value) => value.achievementId === achievementId);
+    if (!item) return;
+    mutation.reset();
+    setRetiring(item);
+  };
+  const retire = async () => {
+    if (!retiring || mutation.isPending || !permission.allowed) return;
+    const result = await mutation.mutateAsync({
+      kind: "retire",
+      gameTitleId: retiring.gameTitleId,
+      achievementId: retiring.achievementId,
+      expectedVersion: retiring.version,
+    });
+    if (result.canCommit) {
+      setRetiring(undefined);
+      showToast({ title: "実績項目を廃止しました", tone: "success" });
+    }
+  };
+  const refresh = () => {
+    if (!permission.allowed) return;
+    void Promise.all([titles.refetch(), catalog.refetch()]).catch(() => undefined);
+  };
 
   return {
     gameTitleId,
-    setSelection,
+    changeTitle: (value: string) => setSelection(value),
     editor,
-    setEditor,
+    discardEditor,
     retiring,
-    setRetiring,
+    closeRetirement: () => {
+      if (!mutation.isPending) setRetiring(undefined);
+    },
     discarding,
     setDiscarding,
     validation,
-    titles,
-    catalog,
-    mutation,
+    titles: titles.data?.items ?? [],
+    catalog: catalog.data,
+    loading: titles.isLoading || catalog.isLoading,
+    refreshing: titles.isFetching || catalog.isFetching,
+    canReorder:
+      permission.allowed && Boolean(catalog.data) && !catalog.isFetching && items.length > 1,
+    readFailed: titles.isError || catalog.isError,
+    saving: mutation.isPending,
+    saveError: mutation.isError ? normalizeUnknownApiError(mutation.error).detail : null,
     permission,
     conflict,
     dirty,
@@ -242,5 +281,8 @@ export function useAchievementCatalogPanel({ enabled }: { enabled: boolean }) {
     closeEditor,
     updateForm,
     startEditor,
+    startRetirement,
+    retire,
+    refresh,
   };
 }

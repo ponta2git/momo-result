@@ -49,8 +49,12 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
   errors: RadarThresholdError[];
 } {
   const errors: RadarThresholdError[] = [];
-  const axes = playerRadarAxes.map(({ id }) => {
-    const texts = drafts[id];
+  function parseAxis(
+    axisId: PlayerRadarSettingAxisId,
+    texts: readonly string[] | undefined,
+  ): number[] {
+    const descending = axisId === "averageRank";
+    const unit = descending ? "位" : axisId === "achievement" ? "pt" : "万円";
     const thresholds = Array.from({ length: 9 }, (_, index) => {
       const text = texts?.[index]?.trim() ?? "";
       const value = Number(text);
@@ -59,18 +63,29 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
         !Number.isFinite(value)
       ) {
         errors.push({
-          axisId: id,
+          axisId,
           index,
           kind: "numeric",
-          message: "数値を最後まで入力してください。",
+          message:
+            axisId === "achievement"
+              ? "実績ポイントを最後まで入力してください。"
+              : "数値を最後まで入力してください。",
         });
         return NaN;
+      }
+      if (axisId === "achievement" && (value < 0 || value > 102400)) {
+        errors.push({
+          axisId,
+          index,
+          kind: "range",
+          message: `${index + 2}点の境界は0〜102400ptで入力してください。`,
+        });
       }
       return value;
     });
     if (texts?.length !== 9) {
       errors.push({
-        axisId: id,
+        axisId,
         index: 0,
         kind: "numeric",
         message: "2〜10点の9境界を入力してください。",
@@ -80,89 +95,44 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
       const previous = thresholds[index - 1] ?? NaN;
       const current = thresholds[index] ?? NaN;
       if (!Number.isFinite(previous) || !Number.isFinite(current)) continue;
-      if (id === "averageRank" ? current >= previous : current <= previous) {
-        const unit = id === "averageRank" ? "位" : "万円";
+      if (descending ? current >= previous : current <= previous) {
         errors.push(
           {
-            axisId: id,
+            axisId,
             index: index - 1,
             kind: "order",
-            message: `${index + 2}点の境界（${current}${unit}）より${id === "averageRank" ? "大きい" : "小さい"}値にしてください。`,
+            message: `${index + 2}点の境界（${current}${unit}）より${descending ? "大きい" : "小さい"}値にしてください。`,
           },
           {
-            axisId: id,
+            axisId,
             index,
             kind: "order",
-            message: `${index + 1}点の境界（${previous}${unit}）より${id === "averageRank" ? "小さい" : "大きい"}値にしてください。`,
+            message: `${index + 1}点の境界（${previous}${unit}）より${descending ? "小さい" : "大きい"}値にしてください。`,
           },
         );
       }
     }
-    if (id === "averageRank" && (thresholds[8] ?? NaN) < 1) {
+    if (descending && (thresholds[8] ?? NaN) < 1) {
       errors.push({
-        axisId: id,
+        axisId,
         index: 8,
         kind: "range",
         message: "10点の境界は1位以上にしてください。",
       });
     }
-    return { axisId: id, thresholds };
-  });
-  const curveTexts = drafts.achievement;
-  if (curveTexts.length === 0) {
-    return { input: errors.length > 0 ? null : { axes }, errors };
+    return thresholds;
   }
-  const curveThresholds = Array.from({ length: 9 }, (_, index) => {
-    const score = index + 2;
-    const text = curveTexts?.[index]?.trim() ?? "";
-    const value = Number(text);
-    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(text) || !Number.isFinite(value)) {
-      errors.push({
-        axisId: "achievement",
-        index,
-        kind: "numeric",
-        message: "実績ポイントを最後まで入力してください。",
-      });
-    } else if (value < 0 || value > 102400) {
-      errors.push({
-        axisId: "achievement",
-        index,
-        kind: "range",
-        message: `${score}点の境界は0〜102400ptで入力してください。`,
-      });
-    }
-    return value;
-  });
-  if (curveTexts?.length !== 9)
-    errors.push({
-      axisId: "achievement",
-      index: 0,
-      kind: "numeric",
-      message: "2〜10点の9境界を入力してください。",
-    });
-  for (let index = 1; index < curveThresholds.length; index += 1) {
-    const previous = curveThresholds[index - 1] ?? NaN;
-    const current = curveThresholds[index] ?? NaN;
-    if (Number.isFinite(previous) && Number.isFinite(current) && current <= previous) {
-      errors.push(
-        {
-          axisId: "achievement",
-          index: index - 1,
-          kind: "order",
-          message: `${index + 2}点の境界（${current}pt）より小さい値にしてください。`,
-        },
-        {
-          axisId: "achievement",
-          index,
-          kind: "order",
-          message: `${index + 1}点の境界（${previous}pt）より大きい値にしてください。`,
-        },
-      );
-    }
-  }
+  const axes = playerRadarAxes.map(({ id }) => ({
+    axisId: id,
+    thresholds: parseAxis(id, drafts[id]),
+  }));
+  // Empty point drafts deliberately inherit an unavailable or historical percentage curve.
+  const achievementCurve =
+    drafts.achievement.length === 0
+      ? undefined
+      : { pointThresholds: parseAxis("achievement", drafts.achievement) };
   return {
-    input:
-      errors.length > 0 ? null : { axes, achievementCurve: { pointThresholds: curveThresholds } },
+    input: errors.length > 0 ? null : { axes, ...(achievementCurve ? { achievementCurve } : {}) },
     errors,
   };
 }

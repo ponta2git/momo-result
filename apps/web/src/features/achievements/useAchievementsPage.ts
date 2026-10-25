@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useAchievementPublication } from "@/shared/achievements/useAchievementPublication";
@@ -23,14 +23,15 @@ export function useAchievementsPage() {
   const summary = data?.summaries.find((entry) => entry.mapMasterId === null);
   // Published definitions keep their points and stars in sync. Catalog-only items
   // remain reachable for corrections without inventing an unpublished result.
-  const allItems = [
-    ...(data?.items ?? []),
-    ...(catalog.data?.items ?? [])
-      .filter(
-        (item) => !data?.items.some((published) => published.achievementId === item.achievementId),
-      )
-      .map((item) => ({ ...item, retired: Boolean(item.retiredAt), players: [] })),
-  ];
+  const allItems = useMemo(() => {
+    const publishedIds = new Set(data?.items.map((item) => item.achievementId));
+    return [
+      ...(data?.items ?? []),
+      ...(catalog.data?.items ?? [])
+        .filter((item) => !publishedIds.has(item.achievementId))
+        .map((item) => ({ ...item, retired: Boolean(item.retiredAt), players: [] })),
+    ];
+  }, [data?.items, catalog.data?.items]);
   const items = allItems.filter((item) => !item.retired);
   const maps = data?.maps ?? catalog.data?.maps ?? [];
   const selectedItem = allItems.find((item) => item.achievementId === search.get("achievementId"));
@@ -41,11 +42,7 @@ export function useAchievementsPage() {
   const editingItem = catalog.data?.items.find(
     (item) => item.achievementId === editingClaim?.achievementId,
   );
-  const refreshing =
-    publication.status.isFetching ||
-    publication.resource.isFetching ||
-    catalog.isFetching ||
-    titles.isFetching;
+  const refreshing = publication.refreshing || catalog.isFetching || titles.isFetching;
 
   const changeTitle = (value: string) => {
     setSearch((previous) => {
@@ -74,6 +71,14 @@ export function useAchievementsPage() {
       },
       { replace: true },
     );
+  const openDetails = (achievementId: string) =>
+    setSearch((previous) => {
+      const next = new URLSearchParams(previous);
+      if (gameTitleId) next.set("gameTitleId", gameTitleId);
+      next.set("achievementId", achievementId);
+      next.delete("memberId");
+      return next;
+    });
   const editClaim = (claimId: string) => {
     setEditingClaimId(claimId);
   };
@@ -91,17 +96,20 @@ export function useAchievementsPage() {
   };
 
   return {
-    setSearch,
     editingClaimId,
-    setEditingClaimId,
+    closeCorrection: () => setEditingClaimId(undefined),
     newRecord,
-    setNewRecord,
+    closeNewRecord: () => setNewRecord(undefined),
     recordAchievement,
     operations,
-    titles,
+    titles: titles.data?.items ?? [],
+    titlesLoading: titles.isLoading,
+    titlesFailed: titles.isError,
     gameTitleId,
     publication,
-    catalog,
+    catalog: catalog.data,
+    catalogLoading: catalog.isLoading,
+    catalogFailed: catalog.isError,
     data,
     titleChanged,
     summary,
@@ -115,6 +123,7 @@ export function useAchievementsPage() {
     refreshing,
     changeTitle,
     closeDetails,
+    openDetails,
     editClaim,
     refresh,
   };

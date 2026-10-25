@@ -1,6 +1,9 @@
 use std::time::Instant;
 
-use momo_analysis_core::radar::{self, RadarCandidate};
+use momo_analysis_core::{
+    achievements::{self, AchievementCurve},
+    radar::{self, RadarCandidate},
+};
 use tokio_postgres::{Client, Transaction};
 
 use super::super::{self as control, ClaimedJob, ControlError};
@@ -51,24 +54,27 @@ pub(in crate::series_analysis::control) async fn complete_preparation(
         let current = input_repository::load_current_input(client, &claim.game_title_id)
             .await
             .map_err(|_error| ControlError::AuthoritativeInputContract)?;
-        let current_summary = radar::snapshot(&current)
-            .and_then(|value| value.summary())
+        let mut current_snapshot =
+            radar::snapshot(&current).map_err(|_error| ControlError::InvalidMetadata)?;
+        let current_summary = current_snapshot
+            .summary()
             .map_err(|_error| ControlError::InvalidMetadata)?;
-        let current_achievements = momo_analysis_core::achievements::calculate(
+        current_snapshot.achievements = Some(Box::new(achievements::calculate(
             current.game_title_id(),
             current.achievements(),
             current.player_matches(),
-            momo_analysis_core::achievements::AchievementCurve::default(),
-        );
+            AchievementCurve::default(),
+        )));
         let achievements_current =
-            prepared.evaluation_snapshot.achievements.as_deref() == Some(&current_achievements);
+            prepared.evaluation_snapshot.achievements == current_snapshot.achievements;
         if current.input_revision() == claim.input_revision
             && (current_summary != source_summary || !achievements_current)
         {
             return Err(ControlError::AuthoritativeInputContract);
         }
         let source_valid = context.is_manual()
-            || radar::source_is_current(candidate_source, &current)
+            || candidate_source
+                .is_current_in(&current_snapshot)
                 .map_err(|_error| ControlError::InvalidMetadata)?;
         let tx = control::transaction::bounded_transaction(
             client,

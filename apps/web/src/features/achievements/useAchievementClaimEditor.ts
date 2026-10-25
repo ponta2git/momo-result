@@ -86,16 +86,18 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
         void queryClient.invalidateQueries({ queryKey: achievementKeys.catalog(item.gameTitleId) });
     },
   });
+  const canSave =
+    dirty &&
+    !conflict &&
+    !automatic &&
+    !confirmationRequired &&
+    !mutation.isPending &&
+    eligibleIdentity &&
+    (cancelling ||
+      !form.matchId ||
+      Boolean(matchIdentity && !identity.isFetching && !identity.isError));
   const submit = async () => {
-    if (
-      conflict ||
-      automatic ||
-      confirmationRequired ||
-      mutation.isPending ||
-      !eligibleIdentity ||
-      (!cancelling && form.matchId && !matchIdentity)
-    )
-      return;
+    if (!canSave) return;
     const originalDate = achievementDateTimeInput(baseline.claim.achievedAt);
     const achievedAt = cancelling
       ? (baseline.claim.achievedAt ?? null)
@@ -128,24 +130,43 @@ export function useAchievementClaimEditor({ claim, item, onClose }: AchievementC
     setForm(claimForm(claim));
     mutation.reset();
   };
+  const requestSave = async () => {
+    if (!canSave) return;
+    if (cancelling && baseline.claim.state !== "cancelled") setConfirmation("cancel");
+    else await submit();
+  };
+  const confirmAction = async () => {
+    if (confirmation === "cancel") await submit();
+    else if (confirmation === "reload") reload();
+    else if (confirmation === "close") onClose();
+    setConfirmation(null);
+  };
   return {
-    baseline,
     form,
-    setForm,
+    changeState: (state: string) => setForm((current) => ({ ...current, state })),
+    selectMatch: (matchId: string) => setForm((current) => ({ ...current, matchId })),
+    changeDate: (date: string) => setForm((current) => ({ ...current, date })),
+    canLeaveUnconfirmed: baseline.claim.state === "unconfirmed",
+    dateLocked: Boolean(baseline.claim.matchId),
     confirmation,
-    setConfirmation,
+    dismissConfirmation: () => setConfirmation(null),
+    confirmAction,
+    requestReload: () => setConfirmation("reload"),
     validation,
-    identity,
     matchIdentity,
+    matchMissing: identity.data?.kind === "notFound",
+    matchLoading: identity.isLoading,
+    matchFailed: identity.isError,
+    retryMatch: () => void identity.refetch(),
     dirty,
     conflict,
     automatic,
     confirmationRequired,
-    cancelling,
     eligibleIdentity,
-    mutation,
-    submit,
+    saving: mutation.isPending,
+    saveError: mutation.isError ? normalizeUnknownApiError(mutation.error).detail : undefined,
+    canSave,
+    requestSave,
     requestClose,
-    reload,
   };
 }

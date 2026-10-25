@@ -10,7 +10,6 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { showToast } from "@/shared/ui/feedback/Toast";
 import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
 import { TextareaControl } from "@/shared/ui/forms/Control";
 import { Field } from "@/shared/ui/forms/Field";
@@ -21,17 +20,22 @@ import { contentText } from "@/shared/ui/typography";
 export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   const {
     gameTitleId,
-    setSelection,
+    changeTitle,
     editor,
-    setEditor,
+    discardEditor,
     retiring,
-    setRetiring,
+    closeRetirement,
     discarding,
     setDiscarding,
     validation,
     titles,
     catalog,
-    mutation,
+    loading,
+    refreshing,
+    canReorder,
+    readFailed,
+    saving,
+    saveError,
     permission,
     conflict,
     dirty,
@@ -41,6 +45,9 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
     closeEditor,
     updateForm,
     startEditor,
+    startRetirement,
+    retire,
+    refresh,
   } = useAchievementCatalogPanel({ enabled });
   const [ordering, setOrdering] = useState(false);
   return (
@@ -51,32 +58,25 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
           value={gameTitleId ?? ""}
           options={[
             { value: "", label: "作品を選択" },
-            ...(titles.data?.items ?? []).map((title) => ({ value: title.id, label: title.name })),
+            ...titles.map((title) => ({ value: title.id, label: title.name })),
           ]}
-          onValueChange={setSelection}
+          onValueChange={changeTitle}
         />
         <Button
-          disabled={!permission.allowed || !gameTitleId || !catalog.data}
+          disabled={!permission.allowed || !gameTitleId || !catalog}
           onClick={() => startEditor()}
         >
           実績項目を追加
         </Button>
-        <Button
-          variant="secondary"
-          disabled={!permission.allowed || !catalog.data || catalog.isFetching || items.length < 2}
-          onClick={() => setOrdering(true)}
-        >
+        <Button variant="secondary" disabled={!canReorder} onClick={() => setOrdering(true)}>
           表示順を変更
         </Button>
         <Button
           variant="secondary"
           disabled={!permission.allowed}
-          pending={titles.isFetching || catalog.isFetching}
+          pending={refreshing}
           pendingLabel="更新中"
-          onClick={() => {
-            void titles.refetch();
-            void catalog.refetch();
-          }}
+          onClick={refresh}
         >
           表示を更新
         </Button>
@@ -86,43 +86,40 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
           入力は保持しています。確認が終わるまでお待ちください。
         </Notice>
       ) : null}
-      {titles.isError || catalog.isError ? (
+      {readFailed ? (
         <Notice tone="danger" title="実績項目を取得できません">
           取得済みの内容は保持しています。「表示を更新」で再取得してください。
         </Notice>
       ) : null}
-      {titles.isLoading || catalog.isLoading ? <Skeleton className="h-48" /> : null}
-      {catalog.data ? (
+      {loading ? <Skeleton className="h-48" /> : null}
+      {catalog ? (
         <AchievementCatalogTable
           items={items}
-          maps={catalog.data?.maps ?? []}
-          disabled={!permission.allowed || mutation.isPending}
-          onEdit={startEditor}
-          onRetire={(item) => {
-            mutation.reset();
-            setRetiring(item);
-          }}
+          maps={catalog?.maps ?? []}
+          disabled={!permission.allowed || saving}
+          onEdit={(item) => startEditor(item.achievementId)}
+          onRetire={(item) => startRetirement(item.achievementId)}
         />
       ) : null}
       {retiredItems.length > 0 ? (
         <Disclosure summary={`廃止した項目（${retiredItems.length}件）`} panelSpacing="sm">
           <AchievementCatalogTable
             items={retiredItems}
-            maps={catalog.data?.maps ?? []}
+            maps={catalog?.maps ?? []}
             retired
             disabled
-            onEdit={startEditor}
-            onRetire={setRetiring}
+            onEdit={(item) => startEditor(item.achievementId)}
+            onRetire={(item) => startRetirement(item.achievementId)}
           />
         </Disclosure>
       ) : null}
-      {ordering && catalog.data ? (
-        <AchievementOrderDialog catalog={catalog.data} onClose={() => setOrdering(false)} />
+      {ordering && catalog ? (
+        <AchievementOrderDialog catalog={catalog} onClose={() => setOrdering(false)} />
       ) : null}
       {editor ? (
         <Dialog
           open
-          busy={mutation.isPending}
+          busy={saving}
           title={editor.item ? "実績項目を編集" : "実績項目を追加"}
           onOpenChange={(open) => {
             if (!open) closeEditor();
@@ -140,7 +137,7 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
                 入力は保持しています。いったん閉じて最新の項目から編集し直してください。
               </Notice>
             ) : null}
-            <fieldset className="grid gap-4" disabled={mutation.isPending || !permission.allowed}>
+            <fieldset className="grid gap-4" disabled={saving || !permission.allowed}>
               <TextField
                 label="達成内容"
                 required
@@ -203,7 +200,7 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
                   {!editor.form.common ? (
                     <fieldset className="grid gap-1">
                       <legend className={contentText.body}>対象マップ</legend>
-                      {(catalog.data?.maps ?? []).map((map) => (
+                      {(catalog?.maps ?? []).map((map) => (
                         <CheckboxField
                           key={map.mapMasterId}
                           label={map.displayName}
@@ -227,18 +224,18 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
               )}
             </fieldset>
             {validation ? <Notice tone="danger">{validation}</Notice> : null}
-            {mutation.isError ? (
+            {saveError ? (
               <Notice tone="danger" title="項目を保存できませんでした">
-                {normalizeUnknownApiError(mutation.error).detail}入力は保持しています。
+                {saveError}入力は保持しています。
               </Notice>
             ) : null}
             <DialogFooter>
-              <Button variant="secondary" disabled={mutation.isPending} onClick={closeEditor}>
+              <Button variant="secondary" disabled={saving} onClick={closeEditor}>
                 キャンセル
               </Button>
               <Button
                 type="submit"
-                pending={mutation.isPending}
+                pending={saving}
                 pendingLabel="保存中"
                 disabled={!permission.allowed || conflict || !dirty}
               >
@@ -253,10 +250,7 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
         title="未保存の変更を破棄しますか？"
         confirmLabel="破棄して閉じる"
         onOpenChange={setDiscarding}
-        onConfirm={() => {
-          setEditor(undefined);
-          setDiscarding(false);
-        }}
+        onConfirm={discardEditor}
       />
       <AlertDialog
         open={Boolean(retiring)}
@@ -276,21 +270,9 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
             : problem.detail;
         }}
         onOpenChange={(open) => {
-          if (!open) setRetiring(undefined);
+          if (!open) closeRetirement();
         }}
-        onConfirm={async () => {
-          if (!retiring) return;
-          const result = await mutation.mutateAsync({
-            kind: "retire",
-            gameTitleId: retiring.gameTitleId,
-            achievementId: retiring.achievementId,
-            expectedVersion: retiring.version,
-          });
-          if (result.canCommit) {
-            setRetiring(undefined);
-            showToast({ title: "実績項目を廃止しました", tone: "success" });
-          }
-        }}
+        onConfirm={retire}
       />
     </div>
   );

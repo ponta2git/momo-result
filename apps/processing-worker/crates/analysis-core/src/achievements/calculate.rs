@@ -18,15 +18,16 @@ pub fn calculate(
     rows: &[PlayerMatchInput],
     achievement_curve: AchievementCurve,
 ) -> AchievementPayload {
-    let definitions = input
-        .definitions
-        .iter()
-        .map(|item| (&item.achievement_id, item))
-        .collect::<BTreeMap<_, _>>();
+    let mut manual_proofs = manual_proofs(input);
     let matches = rows
         .iter()
         .map(|row| (&row.match_id, row))
         .collect::<BTreeMap<_, _>>();
+    let mut member_rows = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
+    for row in rows {
+        member_rows.entry(&row.member_id).or_default().push(row);
+    }
+    let events = eligible_events(input, rows);
     let items = input
         .definitions
         .iter()
@@ -42,30 +43,17 @@ pub fn calculate(
                     .member_ids
                     .iter()
                     .map(|member_id| {
-                        let mut proofs = Vec::new();
-                        for claim in input.claims.iter().filter(|claim| {
-                            item.rule_kind == RuleKind::Manual && claim.member_id == *member_id
-                        }) {
-                            if claim.state == ClaimState::Cancelled {
-                                continue;
-                            }
-                            if claim.achievement_id == item.achievement_id {
-                                proofs.push(claim_proof(claim, false));
-                            } else if claim.state == ClaimState::Achieved {
-                                let source = definitions.get(&claim.achievement_id);
-                                let permitted = !item.retired
-                                    || input.retired_manual_sources.iter().any(|allowed| {
-                                        allowed.achievement_id == item.achievement_id
-                                            && allowed.claim_id == claim.claim_id
-                                            && allowed.generation_id == claim.generation_id
-                                    });
-                                if permitted && source.is_some_and(|source| implies(source, item)) {
-                                    proofs.push(claim_proof(claim, true));
-                                }
-                            }
-                        }
+                        let mut proofs = manual_proofs
+                            .remove(&(item.achievement_id.as_str(), member_id.as_str()))
+                            .unwrap_or_default();
                         if !item.retired
-                            && let Some(proof) = automatic(item, member_id, input, rows)
+                            && let Some(proof) = automatic(
+                                item,
+                                member_rows
+                                    .get(member_id.as_str())
+                                    .map_or(&[], Vec::as_slice),
+                                events.get(member_id.as_str()).map_or(&[], Vec::as_slice),
+                            )
                         {
                             proofs.push(proof);
                         }
@@ -124,20 +112,104 @@ fn claim_proof(claim: &Claim, derived: bool) -> Proof {
     }
 }
 
-fn implies(source: &Definition, target: &Definition) -> bool {
-    source.rule_kind == RuleKind::Manual
-        && target.rule_kind == RuleKind::Manual
-        && target.common
-        && matches!(
-            (source.fixed_key.as_deref(), target.fixed_key.as_deref()),
+fn manual_proofs(input: &AchievementInput) -> BTreeMap<(&str, &str), Vec<Proof>> {
+    let definitions = input
+        .definitions
+        .iter()
+        .filter(|item| item.rule_kind == RuleKind::Manual)
+        .map(|item| (item.achievement_id.as_str(), item))
+        .collect::<BTreeMap<_, _>>();
+    let mut implied_targets = BTreeMap::<&str, Vec<&Definition>>::new();
+    for item in definitions.values().filter(|item| item.common) {
+        let source_key = match item.fixed_key.as_deref() {
+            Some("momotetsu2-patrol-dubbing-four") => "momotetsu2-patrol-four",
+            Some("momotetsu2-no-one-three-months") => "momotetsu2-no-one-six-months",
+            _ => continue,
+        };
+        implied_targets.entry(source_key).or_default().push(item);
+    }
+    let retirement_sources = input
+        .retired_manual_sources
+        .iter()
+        .map(|allowed| {
             (
-                Some("momotetsu2-patrol-four"),
-                Some("momotetsu2-patrol-dubbing-four")
-            ) | (
-                Some("momotetsu2-no-one-six-months"),
-                Some("momotetsu2-no-one-three-months")
+                &allowed.achievement_id,
+                &allowed.claim_id,
+                &allowed.generation_id,
             )
-        )
+        })
+        .collect::<BTreeSet<_>>();
+    let mut proofs = BTreeMap::<(&str, &str), Vec<Proof>>::new();
+    for claim in input
+        .claims
+        .iter()
+        .filter(|claim| claim.state != ClaimState::Cancelled)
+    {
+        let Some(source) = definitions.get(claim.achievement_id.as_str()) else {
+            continue;
+        };
+        proofs
+            .entry((&claim.achievement_id, &claim.member_id))
+            .or_default()
+            .push(claim_proof(claim, false));
+        let targets = source
+            .fixed_key
+            .as_deref()
+            .and_then(|key| implied_targets.get(key));
+        for target in targets.into_iter().flatten() {
+            if claim.state == ClaimState::Achieved
+                && (!target.retired
+                    || retirement_sources.contains(&(
+                        &target.achievement_id,
+                        &claim.claim_id,
+                        &claim.generation_id,
+                    )))
+            {
+                proofs
+                    .entry((&target.achievement_id, &claim.member_id))
+                    .or_default()
+                    .push(claim_proof(claim, true));
+            }
+        }
+    }
+    proofs
+}
+
+/// Group complete, single-title events once; each rule only checks its own map and rank limits.
+fn eligible_events<'a>(
+    input: &AchievementInput,
+    rows: &'a [PlayerMatchInput],
+) -> BTreeMap<&'a str, Vec<[&'a PlayerMatchInput; 4]>> {
+    if !input
+        .definitions
+        .iter()
+        .any(|item| !item.retired && item.rule_kind == RuleKind::EventAverageRank)
+    {
+        return BTreeMap::new();
+    }
+    let eligible = input
+        .event_compositions
+        .iter()
+        .filter(|event| event.match_count == 4 && event.title_count == 1)
+        .map(|event| event.held_event_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut grouped = BTreeMap::<(&str, &str), Vec<&PlayerMatchInput>>::new();
+    for row in rows
+        .iter()
+        .filter(|row| eligible.contains(row.held_event_id.as_str()))
+    {
+        grouped
+            .entry((&row.member_id, &row.held_event_id))
+            .or_default()
+            .push(row);
+    }
+    let mut events = BTreeMap::<&str, Vec<[&PlayerMatchInput; 4]>>::new();
+    for ((member, _), event_rows) in grouped {
+        if let Ok(event) = event_rows.try_into() {
+            events.entry(member).or_default().push(event);
+        }
+    }
+    events
 }
 
 fn threshold(item: &Definition) -> u32 {
@@ -164,33 +236,18 @@ fn applicable(item: &Definition, row: &PlayerMatchInput) -> bool {
 
 fn automatic(
     item: &Definition,
-    member: &str,
-    input: &AchievementInput,
-    rows: &[PlayerMatchInput],
+    rows: &[&PlayerMatchInput],
+    events: &[[&PlayerMatchInput; 4]],
 ) -> Option<Proof> {
     if item.rule_kind == RuleKind::Manual {
         return None;
     }
     let value = threshold(item);
     let matched = if item.rule_kind == RuleKind::EventAverageRank {
-        let mut events = BTreeMap::<&str, Vec<&PlayerMatchInput>>::new();
-        for row in rows.iter().filter(|row| row.member_id == member) {
-            events.entry(&row.held_event_id).or_default().push(row);
-        }
         events
-            .into_iter()
-            .filter_map(|(id, event)| {
-                let eligible = input
-                    .event_compositions
-                    .binary_search_by(|composition| composition.held_event_id.as_str().cmp(id))
-                    .ok()
-                    .and_then(|index| input.event_compositions.get(index))
-                    .is_some_and(|composition| {
-                        composition.match_count == 4 && composition.title_count == 1
-                    });
-                if eligible
-                    && event.len() == 4
-                    && event.iter().all(|row| applicable(item, row))
+            .iter()
+            .filter_map(|event| {
+                if event.iter().all(|row| applicable(item, row))
                     && i64::from(event.iter().map(|row| row.rank).sum::<i32>()) <= i64::from(value)
                 {
                     event.last().copied()
@@ -201,7 +258,8 @@ fn automatic(
             .min_by(|a, b| row_order(a, b))
     } else {
         rows.iter()
-            .filter(|row| row.member_id == member && applicable(item, row))
+            .copied()
+            .filter(|row| applicable(item, row))
             .find(|row| match item.rule_kind {
                 RuleKind::TotalAssets => i64::from(row.total_assets_man_yen) >= i64::from(value),
                 RuleKind::Destination => i64::from(row.incidents.destination) >= i64::from(value),

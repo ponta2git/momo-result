@@ -113,6 +113,24 @@ fn point_source_tracks_semantic_points_and_preserves_legacy_source_identity() {
     let changed = points_input([0, 1, 4, 6], 6);
     assert_eq!(source_is_current(&saved, &changed).ok(), Some(false));
     assert_eq!(source_is_current(&legacy, &changed).ok(), Some(true));
+    // Preparation/publication already hold the complete payload: compare its point facts without
+    // rerunning achievement rules, and reject a conflicting explicit point marker.
+    for (current, expected) in [(&same_points, true), (&changed, false)] {
+        let mut evaluated = snapshot(current).unwrap_or_else(|e| panic!("snapshot: {e}"));
+        assert!(saved.is_current_in(&evaluated).is_err());
+        evaluated.achievements = Some(Box::new(crate::achievements::calculate(
+            current.game_title_id(),
+            current.achievements(),
+            current.player_matches(),
+            AchievementCurve::default(),
+        )));
+        assert_eq!(saved.is_current_in(&evaluated).ok(), Some(expected));
+        assert_eq!(legacy.is_current_in(&evaluated).ok(), Some(true));
+        if !expected {
+            evaluated.achievement_generation_source = saved.achievement_generation_source.clone();
+            assert!(saved.is_current_in(&evaluated).is_err());
+        }
+    }
     let mut tampered = candidate.basis.unwrap_or_else(|| panic!("basis"));
     if let Some(source) = &mut tampered.achievement_generation_source {
         source

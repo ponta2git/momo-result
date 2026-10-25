@@ -1,6 +1,7 @@
 import { Award, CircleHelp, Flag } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { AchievementDifficulty } from "@/features/achievements/AchievementDifficulty";
 import {
   achievementDateLabel,
   achievementPageHref,
@@ -94,14 +95,18 @@ export function AchievementDetailsDialog({
       <div className="grid gap-6">
         {publicationFeedback}
         <section aria-label="達成条件" className="grid gap-2">
-          <p className={contentText.supporting}>
-            <span aria-label={`難易度：星${item.stars}`}>{"★".repeat(item.stars)}</span>・
-            {item.common
-              ? "全マップ共通"
-              : item.mapMasterIds
-                  .map((id) => maps.find((map) => map.mapMasterId === id)?.displayName ?? "マップ")
-                  .join("・")}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <AchievementDifficulty stars={item.stars} />
+            <p className={contentText.supporting}>
+              {item.common
+                ? "全マップ共通"
+                : item.mapMasterIds
+                    .map(
+                      (id) => maps.find((map) => map.mapMasterId === id)?.displayName ?? "マップ",
+                    )
+                    .join("・")}
+            </p>
+          </div>
           {condition ? <p className={contentText.body}>{condition}</p> : null}
           {item.notes ? <p className={contentText.body}>{item.notes}</p> : null}
           {item.retired ? (

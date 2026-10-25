@@ -2,6 +2,7 @@ import { Award, BookOpen } from "lucide-react";
 
 import { AchievementClaimEditorDialog } from "@/features/achievements/AchievementClaimEditorDialog";
 import { AchievementDetailsDialog } from "@/features/achievements/AchievementDetailsDialog";
+import { AchievementDifficulty } from "@/features/achievements/AchievementDifficulty";
 import { AchievementPointsSummary } from "@/features/achievements/AchievementPointsSummary";
 import { AchievementRecordDialog } from "@/features/achievements/AchievementRecordDialog";
 import { useAchievementsPage } from "@/features/achievements/useAchievementsPage";
@@ -135,10 +136,6 @@ export function AchievementsPage() {
                         <div className="grid gap-1">
                           <p className={cn(contentText.body, "text-pretty")}>{item.name}</p>
                           <p className={contentText.supporting}>
-                            <span aria-label={`難易度：星${item.stars}`}>
-                              {"★".repeat(item.stars)}
-                            </span>
-                            ・
                             {item.common
                               ? "全マップ共通"
                               : item.mapMasterIds
@@ -151,6 +148,12 @@ export function AchievementsPage() {
                           </p>
                         </div>
                       ),
+                    },
+                    {
+                      key: "difficulty",
+                      header: "難易度",
+                      minWidth: "7.5rem",
+                      renderCell: (item) => <AchievementDifficulty stars={item.stars} />,
                     },
                     ...canonicalResultMembers.map((member) => ({
                       key: member.memberId,

@@ -1,7 +1,7 @@
 import { Award, CircleHelp, Flag } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { AchievementDifficulty } from "@/features/achievements/AchievementDifficulty";
+import { AchievementDifficulty } from "@/shared/achievements/AchievementDifficulty";
 import {
   achievementDateLabel,
   achievementPageHref,
@@ -108,7 +108,12 @@ export function AchievementDetailsDialog({
             </p>
           </div>
           {condition ? <p className={contentText.body}>{condition}</p> : null}
-          {item.notes ? <p className={contentText.body}>{item.notes}</p> : null}
+          {item.notes.trim() ? (
+            <dl className="grid gap-1">
+              <dt className={contentText.supporting}>備考</dt>
+              <dd className={cn(contentText.body, "whitespace-pre-wrap")}>{item.notes}</dd>
+            </dl>
+          ) : null}
           {item.retired ? (
             <p className={contentText.supporting}>
               {item.ruleKind !== "manual" ? "廃止時点の記録です。" : "廃止した実績の記録です。"}

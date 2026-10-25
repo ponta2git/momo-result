@@ -117,6 +117,31 @@ async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("AchievementsPage", () => {
+  it.each([
+    { notes: "カードを1回使ったときの枚数。\n別々の試合は合算しません。", present: true },
+    { notes: " \n ", present: false },
+  ])(
+    "shows supplied notes with a label and omits empty notes ($present)",
+    async ({ notes, present }) => {
+      const user = userEvent.setup();
+      const catalog = installRecords();
+      catalog.items[0]!.notes = notes;
+      const resource = makeAchievedResource();
+      resource.items[0]!.notes = notes;
+      server.use(http.get("/api/achievements", () => HttpResponse.json(resource)));
+      renderPage();
+      const details = await openPlayerRecord(user);
+      if (present) {
+        expect(within(details).getByText("備考")).toBeVisible();
+        expect(within(details).getByText(/カードを1回使ったときの枚数。/u)).toHaveTextContent(
+          "別々の試合は合算しません。",
+        );
+      } else {
+        expect(within(details).queryByText("備考")).not.toBeInTheDocument();
+      }
+    },
+  );
+
   it("records an unrecorded manual achievement against the selected match with exact versions and returns to the same player", async () => {
     const user = userEvent.setup();
     const { item, catalog, identity } = installUnrecordedManualItem();

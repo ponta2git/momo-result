@@ -6,17 +6,21 @@ export function AchievementPublicationFeedback({
   statusFailed,
   resourceFailed,
   hasPublishedData,
+  refreshMode = "button",
 }: {
   status: SeriesAnalysisStatusResponse | undefined;
   statusFailed: boolean;
   resourceFailed: boolean;
   hasPublishedData: boolean;
+  refreshMode?: "button" | "page";
 }) {
   if (statusFailed || resourceFailed) {
     return (
       <Notice tone={hasPublishedData ? "warning" : "danger"} title="実績を更新できません">
         {hasPublishedData ? "取得済みの実績を表示しています。" : "達成状況を取得できませんでした。"}
-        通信状態を確認して「表示を更新」を押してください。
+        {refreshMode === "button"
+          ? "通信状態を確認して「表示を更新」を押してください。"
+          : "通信状態を確認してページを開き直してください。"}
       </Notice>
     );
   }
@@ -39,7 +43,9 @@ export function AchievementPublicationFeedback({
     return (
       <Notice tone="info" title="保存された変更の集計を待っています">
         {hasPublishedData ? "集計前の実績を表示しています。" : "初回の集計が終わると表示できます。"}
-        集計後に「表示を更新」を押してください。
+        {refreshMode === "button"
+          ? "集計後に「表示を更新」を押してください。"
+          : "集計後にページを開き直すと反映されます。"}
       </Notice>
     );
   }

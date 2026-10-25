@@ -2,10 +2,10 @@ import { Award, BookOpen } from "lucide-react";
 
 import { AchievementClaimEditorDialog } from "@/features/achievements/AchievementClaimEditorDialog";
 import { AchievementDetailsDialog } from "@/features/achievements/AchievementDetailsDialog";
-import { AchievementDifficulty } from "@/features/achievements/AchievementDifficulty";
 import { AchievementPointsSummary } from "@/features/achievements/AchievementPointsSummary";
 import { AchievementRecordDialog } from "@/features/achievements/AchievementRecordDialog";
 import { useAchievementsPage } from "@/features/achievements/useAchievementsPage";
+import { AchievementDifficulty } from "@/shared/achievements/AchievementDifficulty";
 import { achievementStatusLabel } from "@/shared/achievements/achievementPresentation";
 import { AchievementPublicationFeedback } from "@/shared/achievements/AchievementPublicationFeedback";
 import { canonicalResultMembers } from "@/shared/domain/members";

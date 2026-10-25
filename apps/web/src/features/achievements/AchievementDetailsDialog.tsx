@@ -231,7 +231,7 @@ function AchievementPlayerRecord({
     claims.length === 0 &&
     catalog?.items.some((value) => value.achievementId === item.achievementId && !value.retiredAt);
   const achieved = player?.status === "achieved";
-  const points = item.stars ** 2;
+  const points = [1, 2, 3, 5, 8][item.stars - 1];
   const StateIcon = achieved ? Award : player?.status === "unconfirmed" ? CircleHelp : Flag;
   return (
     <div className="grid gap-6">

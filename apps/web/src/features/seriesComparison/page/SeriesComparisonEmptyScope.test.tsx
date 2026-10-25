@@ -88,7 +88,7 @@ describe("SeriesComparison empty scope", () => {
     const scores = await screen.findByRole("table", { name: "実績達成の点数とポイント" });
     const ponta = within(scores).getByRole("row", { name: /ぽんた/u });
     expect(within(ponta).getByText("10点")).toBeVisible();
-    expect(within(ponta).getByText("4／4")).toBeVisible();
+    expect(within(ponta).getByText("2／2")).toBeVisible();
     expect(screen.getByRole("link", { name: "実績リストを開く" })).toHaveAttribute(
       "href",
       "/achievements?gameTitleId=gt_momotetsu_2&mapMasterId=map_empty",

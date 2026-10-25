@@ -128,10 +128,10 @@ export function makeAchievedResource(): AchievementResource {
   ];
   resource.summaries = resource.summaries.map((summary) => ({
     ...summary,
-    totalPoints: 4,
+    totalPoints: 2,
     players: summary.players.map((player) => ({
       ...player,
-      earnedPoints: player.memberId === "member_ponta" ? 4 : 0,
+      earnedPoints: player.memberId === "member_ponta" ? 2 : 0,
       score: player.memberId === "member_ponta" ? 10 : 1,
     })) as AchievementResource["summaries"][number]["players"],
   }));

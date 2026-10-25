@@ -118,6 +118,30 @@ async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
 
 describe("AchievementsPage", () => {
   it.each([
+    { stars: 1, points: 1 },
+    { stars: 2, points: 2 },
+    { stars: 3, points: 3 },
+    { stars: 4, points: 5 },
+    { stars: 5, points: 8 },
+  ])("shows $points points for a $stars-star achievement", async ({ stars, points }) => {
+    const user = userEvent.setup();
+    const catalog = installRecords();
+    catalog.items[0]!.stars = stars;
+    const resource = makeAchievedResource();
+    resource.items[0]!.stars = stars;
+    resource.summaries.forEach((summary) => {
+      summary.totalPoints = points;
+      summary.players.find((player) => player.memberId === "member_ponta")!.earnedPoints = points;
+    });
+    server.use(http.get("/api/achievements", () => HttpResponse.json(resource)));
+    renderPage();
+    const details = await openPlayerRecord(user);
+    expect(within(details).getByText(`${points}ポイント獲得`)).toBeVisible();
+    await user.click(within(details).getByRole("tab", { name: "いーゆー" }));
+    expect(within(details).getByText(`達成で${points}ポイント`)).toBeVisible();
+  });
+
+  it.each([
     { notes: "カードを1回使ったときの枚数。\n別々の試合は合算しません。", present: true },
     { notes: " \n ", present: false },
   ])(
@@ -331,7 +355,7 @@ describe("AchievementsPage", () => {
       within(details).queryByRole("button", { name: "以前の記録：達成を確認する" }),
     ).not.toBeInTheDocument();
     await user.click(within(details).getByRole("tab", { name: "ぽんた" }));
-    expect(within(details).getByText("4ポイント獲得")).toBeVisible();
+    expect(within(details).getByText("2ポイント獲得")).toBeVisible();
     expect(within(details).queryByRole("button", { name: "記録を直す" })).not.toBeInTheDocument();
     expect(
       within(details).queryByRole("button", { name: "達成を記録する" }),
@@ -389,9 +413,9 @@ describe("AchievementsPage", () => {
       "true",
     );
     expect(within(currentDetails).getByText("まだ記録なし")).toBeVisible();
-    expect(within(currentDetails).queryByText("4ポイント獲得")).not.toBeInTheDocument();
+    expect(within(currentDetails).queryByText("2ポイント獲得")).not.toBeInTheDocument();
     await user.click(within(currentDetails).getByRole("tab", { name: "ぽんた" }));
-    expect(within(currentDetails).getByText("4ポイント獲得")).toBeVisible();
+    expect(within(currentDetails).getByText("2ポイント獲得")).toBeVisible();
     expect(new URLSearchParams(router.state.location.search).get("memberId")).toBe("member_ponta");
     await act(() =>
       router.navigate(
@@ -588,12 +612,12 @@ describe("AchievementsPage", () => {
     );
     renderPage();
     expect(await screen.findByLabelText("獲得／対象ポイント")).toHaveTextContent(
-      /ぽんた4／4ポイント/u,
+      /ぽんた2／2ポイント/u,
     );
     advanced = true;
     await user.click(await screen.findByRole("button", { name: "表示を更新" }));
     expect(await screen.findByText("実績を更新できません")).toBeVisible();
-    expect(screen.getByLabelText("獲得／対象ポイント")).toHaveTextContent(/ぽんた4／4ポイント/u);
+    expect(screen.getByLabelText("獲得／対象ポイント")).toHaveTextContent(/ぽんた2／2ポイント/u);
     expect(screen.getByRole("button", { name: "手入力のテスト実績の記録を見る" })).toBeVisible();
   });
 
@@ -670,7 +694,7 @@ describe("AchievementsPage", () => {
     renderPage();
     expect(await screen.findByText("保存された変更の集計を待っています")).toBeVisible();
     const points = await screen.findByLabelText("獲得／対象ポイント");
-    expect(points).toHaveTextContent(/ぽんた4／4ポイント/u);
+    expect(points).toHaveTextContent(/ぽんた2／2ポイント/u);
     const achievements = screen.getByRole("table", { name: "実績と4人の達成状況" });
     expect(within(achievements).getByLabelText("難易度：星2")).toBeVisible();
     expect(within(achievements).queryByLabelText("難易度：星5")).not.toBeInTheDocument();
@@ -678,7 +702,7 @@ describe("AchievementsPage", () => {
     const details = await openPlayerRecord(user);
     expect(within(details).getByText("日付の記録なし")).toBeVisible();
     expect(within(details).getByText("保存された変更の集計を待っています")).toBeVisible();
-    expect(within(details).getByText("4ポイント獲得")).toBeVisible();
+    expect(within(details).getByText("2ポイント獲得")).toBeVisible();
   });
 
   it("cancels a linked source even when its match is unavailable and preserves its exact timestamp", async () => {
@@ -734,7 +758,7 @@ describe("AchievementsPage", () => {
       },
     ]);
     expect(await screen.findByLabelText("獲得／対象ポイント")).toHaveTextContent(
-      /ぽんた4／4ポイント/u,
+      /ぽんた2／2ポイント/u,
     );
   });
 

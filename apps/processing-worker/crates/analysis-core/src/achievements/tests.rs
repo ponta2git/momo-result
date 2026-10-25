@@ -274,19 +274,27 @@ fn event_average_requires_the_whole_event_to_have_four_same_title_matches() -> T
 }
 
 #[test]
-fn imported_and_automatic_roots_deduplicate_points_without_losing_unknown_history() -> TestResult {
-    let mut source = input(vec![definition(
-        "destination",
-        RuleKind::Destination,
-        Some("6"),
-    )]);
-    source.claims.push(claim("destination", ClaimKind::Import));
-    let payload = calculated(source.clone(), rows(&["2026-01-01T00:00:00.000000Z"]))?;
-    let achieved = player(&payload, "destination", "a")?;
-    assert_eq!(achieved.proofs.len(), 2);
-    assert!(achieved.date_unknown && achieved.first_achieved_at.is_some());
+fn automatic_records_ignore_legacy_claims_and_follow_match_corrections() -> TestResult {
+    let mut upper = definition("upper", RuleKind::TotalAssets, Some("400000"));
+    upper.fixed_key = Some("initial-upper".into());
+    let mut lower = definition("lower", RuleKind::TotalAssets, Some("200000"));
+    lower.fixed_key = Some("initial-lower".into());
+    let mut source = input(vec![upper, lower]);
+    let mut old_claim = claim("upper", ClaimKind::Import);
+    old_claim.achieved_at = Some("2020-01-01T00:00:00.000000Z".into());
+    source.claims.push(old_claim);
+    let mut unconfirmed = claim("lower", ClaimKind::Import);
+    unconfirmed.state = ClaimState::Unconfirmed;
+    source.claims.push(unconfirmed);
+
+    let empty = calculated(source.clone(), vec![])?;
+    for item in ["upper", "lower"] {
+        let record = player(&empty, item, "a")?;
+        assert_eq!(record.status, AchievementStatus::NotRecorded);
+        assert!(record.proofs.is_empty());
+    }
     assert_eq!(
-        payload
+        empty
             .summaries
             .first()
             .ok_or("summary missing")?
@@ -294,36 +302,105 @@ fn imported_and_automatic_roots_deduplicate_points_without_losing_unknown_histor
             .first()
             .ok_or("points missing")?
             .earned_points,
-        4
+        0
     );
-    source.claims.first_mut().ok_or("claim missing")?.state = ClaimState::Cancelled;
-    let cancelled_import = calculated(source, rows(&["2026-01-01T00:00:00.000000Z"]))?;
+
+    let mut matches = rows(&["2026-01-01T00:00:00.000000Z", "2026-02-01T00:00:00.000000Z"]);
+    let first = calculated(source.clone(), matches.clone())?;
+    let achieved = player(&first, "upper", "a")?;
+    assert_eq!(achieved.proofs.len(), 1);
     assert_eq!(
-        player(&cancelled_import, "destination", "a")?.proofs.len(),
-        1
+        achieved.proofs.first().ok_or("proof missing")?.kind,
+        ProofKind::Automatic
     );
-    assert!(!player(&cancelled_import, "destination", "a")?.date_unknown);
+    assert_eq!(
+        achieved.first_achieved_at.as_deref(),
+        Some("2026-01-01T00:00:00.000000Z")
+    );
+    assert!(!achieved.date_unknown);
+    assert_eq!(
+        first
+            .summaries
+            .first()
+            .ok_or("summary missing")?
+            .players
+            .first()
+            .ok_or("points missing")?
+            .earned_points,
+        8
+    );
+
+    for row in &mut matches {
+        if row.match_id == "match-1" {
+            row.total_assets_man_yen = 100_000;
+        }
+    }
+    let corrected = calculated(source.clone(), matches.clone())?;
+    assert_eq!(
+        player(&corrected, "upper", "a")?
+            .first_achieved_at
+            .as_deref(),
+        Some("2026-02-01T00:00:00.000000Z")
+    );
+    for row in &mut matches {
+        row.total_assets_man_yen = 100_000;
+    }
+    let removed = calculated(source, matches)?;
+    for item in ["upper", "lower"] {
+        assert_eq!(
+            player(&removed, item, "a")?.status,
+            AchievementStatus::NotRecorded
+        );
+    }
+    assert_eq!(
+        removed
+            .summaries
+            .first()
+            .ok_or("summary missing")?
+            .players
+            .first()
+            .ok_or("points missing")?
+            .earned_points,
+        0
+    );
+    assert!(valid_payload(&first) && valid_payload(&corrected) && valid_payload(&removed));
     Ok(())
 }
 
 #[test]
-fn migration_inference_uses_initial_identity_instead_of_the_retained_start_date() -> TestResult {
-    let mut upper = definition("upper", RuleKind::Destination, Some("6"));
-    upper.fixed_key = Some("initial-six".into());
-    let mut lower = definition("lower", RuleKind::Destination, Some("4"));
-    lower.fixed_key = Some("initial-four".into());
-    lower.applies_from = Some("2026-10-24".into());
-    let added = definition("added", RuleKind::Destination, Some("5"));
-    let mut source = input(vec![upper, lower, added]);
-    source.claims.push(claim("upper", ClaimKind::Import));
-    let payload = calculated(source, vec![])?;
+fn validation_rejects_active_automatic_imports_but_preserves_retired_snapshots() -> TestResult {
+    let mut manual_source = input(vec![definition("legacy", RuleKind::Manual, None)]);
+    manual_source
+        .claims
+        .push(claim("legacy", ClaimKind::Import));
+    let mut legacy = calculated(manual_source, vec![])?;
+    let item = legacy.items.first_mut().ok_or("legacy item missing")?;
+    item.rule_kind = RuleKind::TotalAssets;
+    item.threshold = Some("400000".into());
+    let historical_players = item.players.clone();
+    assert!(!valid_payload(&legacy));
+
+    let mut retired = definition("legacy", RuleKind::TotalAssets, Some("400000"));
+    retired.retired = true;
+    let mut source = input(vec![retired]);
+    source.retired_achievements.push(RetiredAchievement {
+        achievement_id: "legacy".into(),
+        players: historical_players,
+    });
+    let preserved = calculated(source, vec![])?;
+    assert!(valid_payload(&preserved));
     assert_eq!(
-        player(&payload, "lower", "a")?.status,
+        player(&preserved, "legacy", "a")?.status,
         AchievementStatus::Achieved
     );
+    assert!(player(&preserved, "legacy", "a")?.date_unknown);
     assert_eq!(
-        player(&payload, "added", "a")?.status,
-        AchievementStatus::NotRecorded
+        preserved
+            .summaries
+            .first()
+            .ok_or("summary missing")?
+            .total_points,
+        0
     );
     Ok(())
 }
@@ -529,14 +606,17 @@ fn retired_automatic_history_does_not_supply_an_active_lower_condition() -> Test
 }
 
 #[test]
-fn migration_inference_preserves_independent_lower_claims_and_rescores_after_cancellation()
--> TestResult {
+fn manual_inference_preserves_independent_imports_and_rescores_after_cancellation() -> TestResult {
     let mut source = input(vec![
-        definition("lower", RuleKind::Destination, Some("4")),
-        definition("upper", RuleKind::Destination, Some("6")),
+        definition("lower", RuleKind::Manual, None),
+        definition("upper", RuleKind::Manual, None),
     ]);
     for definition in &mut source.definitions {
-        definition.fixed_key = Some(format!("initial-{}", definition.achievement_id));
+        definition.fixed_key = Some(if definition.achievement_id == "upper" {
+            "momotetsu2-patrol-four".into()
+        } else {
+            "momotetsu2-patrol-dubbing-four".into()
+        });
     }
     source.claims.push(claim("upper", ClaimKind::Import));
     source.claims.push(claim("lower", ClaimKind::Import));

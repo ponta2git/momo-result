@@ -43,11 +43,9 @@ pub fn calculate(
                     .iter()
                     .map(|member_id| {
                         let mut proofs = Vec::new();
-                        for claim in input
-                            .claims
-                            .iter()
-                            .filter(|claim| claim.member_id == *member_id)
-                        {
+                        for claim in input.claims.iter().filter(|claim| {
+                            item.rule_kind == RuleKind::Manual && claim.member_id == *member_id
+                        }) {
                             if claim.state == ClaimState::Cancelled {
                                 continue;
                             }
@@ -61,9 +59,7 @@ pub fn calculate(
                                             && allowed.claim_id == claim.claim_id
                                             && allowed.generation_id == claim.generation_id
                                     });
-                                if permitted
-                                    && source.is_some_and(|source| implies(source, item, claim))
-                                {
+                                if permitted && source.is_some_and(|source| implies(source, item)) {
                                     proofs.push(claim_proof(claim, true));
                                 }
                             }
@@ -128,41 +124,20 @@ fn claim_proof(claim: &Claim, derived: bool) -> Proof {
     }
 }
 
-fn implies(source: &Definition, target: &Definition, claim: &Claim) -> bool {
-    let manual_pair = matches!(
-        (source.fixed_key.as_deref(), target.fixed_key.as_deref()),
-        (
-            Some("momotetsu2-patrol-four"),
-            Some("momotetsu2-patrol-dubbing-four")
-        ) | (
-            Some("momotetsu2-no-one-six-months"),
-            Some("momotetsu2-no-one-three-months")
+fn implies(source: &Definition, target: &Definition) -> bool {
+    source.rule_kind == RuleKind::Manual
+        && target.rule_kind == RuleKind::Manual
+        && target.common
+        && matches!(
+            (source.fixed_key.as_deref(), target.fixed_key.as_deref()),
+            (
+                Some("momotetsu2-patrol-four"),
+                Some("momotetsu2-patrol-dubbing-four")
+            ) | (
+                Some("momotetsu2-no-one-six-months"),
+                Some("momotetsu2-no-one-three-months")
+            )
         )
-    );
-    if manual_pair {
-        return source.rule_kind == RuleKind::Manual
-            && target.rule_kind == RuleKind::Manual
-            && target.common;
-    }
-    // Migration inference is confined to the fixed initial catalog. It is never an
-    // automatic-match dependency and cannot propagate a retired automatic result to active items.
-    if claim.source_kind != ClaimKind::Import
-        || source.fixed_key.is_none()
-        || target.fixed_key.is_none()
-        || source.rule_kind != target.rule_kind
-        || source.rule_kind == RuleKind::Manual
-        || source.common != target.common
-        || source.map_master_ids != target.map_master_ids
-    {
-        return false;
-    }
-    let left = threshold(source);
-    let right = threshold(target);
-    if source.rule_kind == RuleKind::EventAverageRank {
-        left <= right
-    } else {
-        left > right
-    }
 }
 
 fn threshold(item: &Definition) -> u32 {
@@ -497,6 +472,9 @@ pub fn valid_payload(payload: &AchievementPayload) -> bool {
                 !valid_player(player)
                     || player.proofs.iter().any(|proof| {
                         !proof_matches_rule(proof, &item.rule_kind)
+                            || (!item.retired
+                                && item.rule_kind != RuleKind::Manual
+                                && proof.kind != ProofKind::Automatic)
                             || proof
                                 .source_achievement_id
                                 .as_ref()

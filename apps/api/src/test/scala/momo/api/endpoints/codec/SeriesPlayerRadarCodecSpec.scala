@@ -68,8 +68,8 @@ final class SeriesPlayerRadarCodecSpec extends FunSuite:
     assert(decode[SeriesPlayerRadarOperationRequest](missing).isLeft)
     assert(decode[SeriesPlayerRadarOperationRequest](explicit).isRight)
 
-  test("achievement percentages preserve the five submitted boundaries and reject invalid curves"):
-    val custom = List(0.0, 20.0, 40.0, 60.0, 100.0)
+  test("achievement points preserve nine submitted boundaries and reject invalid curves"):
+    val custom = List(0.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 300.0)
     def withCurve(values: List[Double]) = request.copy(manualInput =
       Some(input.copy(
         achievementCurve = Some(SeriesPlayerRadarAchievementCurveRequest(values))
@@ -77,19 +77,31 @@ final class SeriesPlayerRadarCodecSpec extends FunSuite:
     )
     assertEquals(
       SeriesPlayerRadarCodec.command(withCurve(custom))
-        .toOption.flatMap(_.manualInput).flatMap(_.achievementCurve).map(_.thresholds),
+        .toOption.flatMap(_.manualInput).flatMap(_.achievementCurve).map(_.pointThresholds),
       Some(custom)
     )
     List(
       custom.tail,
-      custom :+ 100.0,
-      List(-1.0, 20.0, 40.0, 60.0, 100.0),
-      List(0.0, 20.0, 40.0, 60.0, 101.0),
-      List(0.0, 20.0, 20.0, 60.0, 100.0),
+      custom :+ 400.0,
+      custom.updated(0, -1.0),
+      custom.updated(8, 102401.0),
+      custom.updated(2, 10.0),
       custom.reverse,
-      List(0.0, 20.0, Double.NaN, 60.0, 100.0),
-      List(0.0, 20.0, 40.0, 60.0, Double.PositiveInfinity),
+      custom.updated(2, Double.NaN),
+      custom.updated(8, Double.PositiveInfinity),
     ).foreach(values => assert(SeriesPlayerRadarCodec.command(withCurve(values)).isLeft))
+
+  test("new achievement curve edits reject legacy percentages and mixed-unit payloads"):
+    val points = "[5,10,20,30,50,75,100,150,200]"
+    assert(
+      decode[SeriesPlayerRadarAchievementCurveRequest](s"""{"pointThresholds":$points}""").isRight
+    )
+    assert(
+      decode[SeriesPlayerRadarAchievementCurveRequest]("""{"thresholds":[0,10,25,50,80]}""").isLeft
+    )
+    assert(decode[SeriesPlayerRadarAchievementCurveRequest](
+      s"""{"pointThresholds":$points,"thresholds":[0,10,25,50,80]}"""
+    ).isLeft)
 
   test("withdraw optionally carries a creation operation while still requiring its candidate"):
     val guarded = request.copy(

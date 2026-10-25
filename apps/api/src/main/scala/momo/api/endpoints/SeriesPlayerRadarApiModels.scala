@@ -9,8 +9,21 @@ import momo.api.domain.{SeriesPlayerRadarOperation, SeriesPlayerRadarOperationKi
 
 final case class SeriesPlayerRadarManualAxisRequest(axisId: String, thresholds: List[Double])
     derives Codec.AsObject
-final case class SeriesPlayerRadarAchievementCurveRequest(thresholds: List[Double])
-    derives Codec.AsObject
+final case class SeriesPlayerRadarAchievementCurveRequest(pointThresholds: List[Double])
+
+object SeriesPlayerRadarAchievementCurveRequest:
+  private val derived = Codec.AsObject.derived[SeriesPlayerRadarAchievementCurveRequest]
+  given Codec.AsObject[SeriesPlayerRadarAchievementCurveRequest] = Codec.AsObject.from(
+    Decoder.instance { cursor =>
+      if cursor.keys.exists(_.toSet == Set("pointThresholds")) then derived(cursor)
+      else
+        Left(DecodingFailure(
+          "Achievement curve edits require pointThresholds only.",
+          cursor.history
+        ))
+    },
+    Encoder.AsObject.instance(derived.encodeObject),
+  )
 final case class SeriesPlayerRadarManualInputRequest(
     axes: List[SeriesPlayerRadarManualAxisRequest],
     achievementCurve: Option[SeriesPlayerRadarAchievementCurveRequest] = None,
@@ -110,11 +123,11 @@ object SeriesPlayerRadarApiSchemas:
       )))
   given Schema[SeriesPlayerRadarAchievementCurveRequest] =
     Schema.derived[SeriesPlayerRadarAchievementCurveRequest]
-      .modify(_.thresholds)(_.copy(isOptional =
+      .modify(_.pointThresholds)(_.copy(isOptional =
         false
-      ).validate(Validator.minSize(5)).validate(Validator.maxSize(5)))
-      .modify(_.thresholds)(_.modifyUnsafe[Double](Schema.ModifyCollectionElements)(
-        _.validate(Validator.min(0.0)).validate(Validator.max(100.0))
+      ).validate(Validator.minSize(9)).validate(Validator.maxSize(9)))
+      .modify(_.pointThresholds)(_.modifyUnsafe[Double](Schema.ModifyCollectionElements)(
+        _.validate(Validator.min(0.0)).validate(Validator.max(102400.0))
       ))
   given Schema[SeriesPlayerRadarManualInputRequest] = Schema.derived
   given Schema[SeriesPlayerRadarOperationRequest] = Schema

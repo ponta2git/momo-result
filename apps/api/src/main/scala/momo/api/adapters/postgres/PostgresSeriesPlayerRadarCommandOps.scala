@@ -269,7 +269,8 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
       _ <-
         require(sourceValid, "The radar editing source is no longer available. Refresh its state.")
       payload = manualJson(input).noSpaces
-      defaultAchievementCurve = PostgresSeriesPlayerRadarReadOps.DefaultAchievementCurve.noSpaces
+      defaultAchievementCurve =
+        PostgresSeriesPlayerRadarReadOps.LegacyDefaultAchievementCurve.noSpaces
       unchanged <- EitherT.liftF(sql"""
         SELECT EXISTS(SELECT 1 FROM series_radar_bases b
           WHERE b.id = ${state.currentBasisId} AND b.game_title_id = ${command.gameTitleId.value}
@@ -337,7 +338,8 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
   ).deepMerge(input.achievementCurve.fold(Json.obj())(curve =>
     Json.obj(
       "achievementCurve" ->
-        Json.obj("thresholds" -> Json.fromValues(curve.thresholds.map(Json.fromDoubleOrNull)))
+        Json.obj("pointThresholds" ->
+          Json.fromValues(curve.pointThresholds.map(Json.fromDoubleOrNull)))
     )
   ))
 

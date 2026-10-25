@@ -1908,6 +1908,18 @@ export interface components {
                     number,
                     number
                 ];
+            } | {
+                pointThresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
             };
             gameTitleId: string;
             items: {
@@ -2054,7 +2066,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2595,6 +2607,18 @@ export interface components {
                                 number,
                                 number
                             ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
                         };
                         axes: [
                             {
@@ -2741,6 +2765,18 @@ export interface components {
                     } | {
                         achievementCurve?: {
                             thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
                                 number,
                                 number,
                                 number,
@@ -3337,7 +3373,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3434,7 +3470,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3529,7 +3565,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3611,7 +3647,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3685,7 +3721,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3839,7 +3875,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3856,7 +3892,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3947,7 +3983,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4070,7 +4106,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4113,7 +4149,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4334,7 +4370,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 8;
+                artifactSchemaVersion: 9;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4415,7 +4451,7 @@ export interface components {
         };
         /** SeriesPlayerRadarAchievementCurveRequest */
         SeriesPlayerRadarAchievementCurveRequest: {
-            thresholds: number[];
+            pointThresholds: number[];
         };
         /** SeriesPlayerRadarManualAxisRequest */
         SeriesPlayerRadarManualAxisRequest: {
@@ -4673,6 +4709,18 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
                 };
                 summary: {
                     mapMasterId: null | string;
@@ -4704,6 +4752,18 @@ export interface components {
             afterAchievements: {
                 achievementCurve: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -4746,6 +4806,18 @@ export interface components {
             beforeBasis: ({
                 achievementCurve?: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -4897,6 +4969,18 @@ export interface components {
             } | {
                 achievementCurve?: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -5083,6 +5167,18 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
                 };
                 axes: [
                     {
@@ -5228,6 +5324,18 @@ export interface components {
             } | {
                 achievementCurve?: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -5404,7 +5512,7 @@ export interface components {
                 /** @constant */
                 windowStride: 1;
             };
-            beforeAchievementCurve: {
+            beforeAchievementCurve: ({
                 thresholds: [
                     number,
                     number,
@@ -5412,9 +5520,33 @@ export interface components {
                     number,
                     number
                 ];
-            } | null;
+            } | {
+                pointThresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
+            }) | null;
             afterAchievementCurve: {
                 thresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
+                    number
+                ];
+            } | {
+                pointThresholds: [
+                    number,
+                    number,
+                    number,
+                    number,
                     number,
                     number,
                     number,
@@ -5445,6 +5577,18 @@ export interface components {
                 basis: {
                     achievementCurve?: {
                         thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
                             number,
                             number,
                             number,
@@ -5596,6 +5740,18 @@ export interface components {
                 } | {
                     achievementCurve?: {
                         thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
                             number,
                             number,
                             number,
@@ -5780,6 +5936,18 @@ export interface components {
                         number,
                         number
                     ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
                 };
             } | null;
             previousBasis: {
@@ -5792,6 +5960,18 @@ export interface components {
                 basis: {
                     achievementCurve?: {
                         thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
                             number,
                             number,
                             number,
@@ -5943,6 +6123,18 @@ export interface components {
                 } | {
                     achievementCurve?: {
                         thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
                             number,
                             number,
                             number,
@@ -6121,6 +6313,18 @@ export interface components {
                 };
                 achievementCurve: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -6258,6 +6462,18 @@ export interface components {
                     basis: null | ({
                         achievementCurve?: {
                             thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
                                 number,
                                 number,
                                 number,
@@ -6409,6 +6625,18 @@ export interface components {
                     } | {
                         achievementCurve?: {
                             thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
                                 number,
                                 number,
                                 number,
@@ -6635,10 +6863,34 @@ export interface components {
                             number,
                             number
                         ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
                     };
                 } | null;
                 achievementCurve: {
                     thresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
+                        number
+                    ];
+                } | {
+                    pointThresholds: [
+                        number,
+                        number,
+                        number,
+                        number,
                         number,
                         number,
                         number,
@@ -6658,6 +6910,18 @@ export interface components {
                     basis: {
                         achievementCurve?: {
                             thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
                                 number,
                                 number,
                                 number,
@@ -6809,6 +7073,18 @@ export interface components {
                     } | {
                         achievementCurve?: {
                             thresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                        } | {
+                            pointThresholds: [
+                                number,
+                                number,
+                                number,
+                                number,
                                 number,
                                 number,
                                 number,
@@ -6987,6 +7263,18 @@ export interface components {
                     };
                     achievementCurve: {
                         thresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
+                            number
+                        ];
+                    } | {
+                        pointThresholds: [
+                            number,
+                            number,
+                            number,
+                            number,
                             number,
                             number,
                             number,

@@ -755,7 +755,7 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
         (id, game_title_id, input_revision, algorithm_version, artifact_schema_version,
          source_input_checksum, root_checksum, status, aggregate_chunk_count, review_chunk_count,
          drilldown_chunk_count, match_context_chunk_count, achievement_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v10', 8,
+        VALUES (${artifact.toString}, ${world.title.value}, $input, 'series-analysis-v11', 9,
           $checksum, $checksum, 'staging', 1, 0, 0, 0, 1, $size, $size, ARRAY[]::text[])""".update.run *>
         sql"""INSERT INTO series_analysis_achievement_artifacts
           (artifact_id, scope_key, scope_kind, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)

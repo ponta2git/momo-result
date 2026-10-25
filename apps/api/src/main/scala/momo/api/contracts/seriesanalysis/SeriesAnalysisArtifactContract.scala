@@ -21,7 +21,7 @@ private[api] object SeriesAnalysisArtifactContract:
   locally:
     val fields = Set("$comment", "artifactSchemaVersion", "contractVersion", "validationContractId")
     if !Contract.asObject.exists(_.keys.toSet == fields) ||
-      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 8 ||
+      !Contract.hcursor.get[Int]("contractVersion").contains(2) || ArtifactSchemaVersion != 9 ||
       !ValidationContractId.matches("^[a-z0-9][a-z0-9._-]{0,127}$")
     then sys.error("Unsupported Series analysis publication contract")
 

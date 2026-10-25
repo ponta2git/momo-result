@@ -38,7 +38,9 @@ object SeriesPlayerRadarCodec:
               axis.thresholds
             )
           ),
-          input.achievementCurve.map(curve => SeriesPlayerRadarAchievementCurve(curve.thresholds)),
+          input.achievementCurve.map(curve =>
+            SeriesPlayerRadarAchievementCurve(curve.pointThresholds)
+          ),
         )
       )
       result = SeriesPlayerRadarCommand(

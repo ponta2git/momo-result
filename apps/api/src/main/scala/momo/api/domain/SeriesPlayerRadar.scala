@@ -21,16 +21,17 @@ object SeriesPlayerRadarOperationKind:
   def fromWire(value: String): Option[SeriesPlayerRadarOperationKind] = values.find(_.wire == value)
 
 final case class SeriesPlayerRadarManualAxis(axisId: String, thresholds: List[Double])
-final case class SeriesPlayerRadarAchievementCurve(thresholds: List[Double]):
-  def valid: Boolean = thresholds.size == 5 &&
-    thresholds.forall(value => value.isFinite && value >= 0 && value <= 100) &&
-    thresholds.sliding(2).forall {
+final case class SeriesPlayerRadarAchievementCurve(pointThresholds: List[Double]):
+  def valid: Boolean = pointThresholds.size == 9 &&
+    pointThresholds.forall(value => value.isFinite && value >= 0 && value <= 102400) &&
+    pointThresholds.sliding(2).forall {
       case List(left, right) => left < right
       case _ => true
     }
 
 object SeriesPlayerRadarAchievementCurve:
-  val Default = SeriesPlayerRadarAchievementCurve(List(0.0, 10.0, 25.0, 50.0, 80.0))
+  val Default =
+    SeriesPlayerRadarAchievementCurve(List(5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 200.0))
 
 final case class SeriesPlayerRadarManualInput(
     axes: List[SeriesPlayerRadarManualAxis],
@@ -122,7 +123,9 @@ object SeriesPlayerRadarCommand:
       valid,
       value.copy(
         achievementCurve = value.achievementCurve.map(curve =>
-          curve.copy(thresholds = curve.thresholds.map(bound => if bound == 0 then 0.0 else bound))
+          curve.copy(pointThresholds =
+            curve.pointThresholds.map(bound => if bound == 0 then 0.0 else bound)
+          )
         ),
         axes =
           value.axes.map(axis =>
@@ -130,7 +133,7 @@ object SeriesPlayerRadarCommand:
           )
       ),
       AppError.ValidationFailed(
-        "Manual radar boundaries require the six axes in order, nine finite strictly ordered values per axis, and an average-rank 10-point boundary of at least 1. Achievement percentages require five finite, strictly increasing values between 0 and 100."
+        "Manual radar boundaries require the six axes in order, nine finite strictly ordered values per axis, and an average-rank 10-point boundary of at least 1. Achievement points require nine finite, strictly increasing values between 0 and 102400."
       )
     )
 

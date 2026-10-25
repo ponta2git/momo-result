@@ -67,7 +67,8 @@ final class RequestSeriesPlayerRadarOperation[F[_]: Monad](
              input.axes.map(axis =>
                axis.axisId + ":" + axis.thresholds.map(java.lang.Double.toHexString).mkString(",")
              ).mkString("|") + input.achievementCurve.fold("")(curve =>
-               "|achievement:" + curve.thresholds.map(java.lang.Double.toHexString).mkString(",")
+               "|achievementPoints:" +
+                 curve.pointThresholds.map(java.lang.Double.toHexString).mkString(",")
              )
            ),
          )

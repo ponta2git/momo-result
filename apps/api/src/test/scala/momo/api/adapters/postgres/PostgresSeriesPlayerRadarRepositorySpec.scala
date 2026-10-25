@@ -125,6 +125,16 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(results._1.map(_.status), Right("pending"))
       assertEquals(counts, (1, 1))
       assert(state.isRight)
+      val pending = parser.parse(new String(
+        state.toOption.get.payload,
+        java.nio.charset.StandardCharsets.UTF_8
+      )).toOption.get
+      assertEquals(pending.hcursor.downField("currentBasis").focus, Some(Json.Null))
+      assertEquals(
+        pending.hcursor.downField("candidate").downField("achievementCurve")
+          .get[List[Double]]("pointThresholds"),
+        Right(SeriesPlayerRadarAchievementCurve.Default.pointThresholds)
+      )
 
   test(
     "withdrawal before job materialization fences the desired basis and retains a durable normal recovery"
@@ -286,8 +296,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"""
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
-        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v10', 8,
-          'series-analysis-artifact-v8-full-validation-v2', 'queued', 'manual', 'radar_prepare', $operationId)
+        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v11', 9,
+          'series-analysis-artifact-v9-full-validation-v3', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -324,7 +334,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           artifact_schema_version, source_input_checksum, root_checksum, status,
           aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
           encoded_bytes, decoded_bytes, scope_keys)
-        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v10', 8,
+        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v11', 9,
           'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           'staging', 2, 0, 0, 1, 2, 2, ARRAY['overall', ${scope.key}]
@@ -333,7 +343,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v8-full-validation-v2'
+        SET validation_contract_id = 'series-analysis-artifact-v9-full-validation-v3'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
@@ -614,9 +624,11 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(unchanged, (None, None, 0L, None))
 
   test(
-    "changing only achievement percentages persists the curve while legacy bases retain default presentation"
+    "changing only achievement points persists the curve while legacy bases retain percentage presentation"
   ):
-    val custom = SeriesPlayerRadarAchievementCurve(List(0.0, 20.0, 40.0, 60.0, 100.0))
+    val custom = SeriesPlayerRadarAchievementCurve(List(
+      0.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 150.0, 300.0
+    ))
     val current = manualCommand.copy(
       expectedCurrentBasisId = Some(basisId),
       sourceCandidateId = None
@@ -633,7 +645,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       repository <- repo
       useCase = RequestSeriesPlayerRadarOperation[IO](repository)
       unchanged <-
-        useCase.run(withCurve(SeriesPlayerRadarAchievementCurve.Default), account, "same-curve")
+        useCase.run(current, account, "same-curve")
       saved <- useCase.run(withCurve(custom), account, "custom-curve")
       replay <- useCase.run(withCurve(custom), account, "custom-curve")
       differentPayload <-
@@ -650,8 +662,8 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(
         parser.parse(
           stored
-        ).toOption.get.hcursor.downField("achievementCurve").get[List[Double]]("thresholds"),
-        Right(custom.thresholds)
+        ).toOption.get.hcursor.downField("achievementCurve").get[List[Double]]("pointThresholds"),
+        Right(custom.pointThresholds)
       )
       assert(document.isRight, document.toString)
       val state = parser.parse(new String(
@@ -661,14 +673,14 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(
         state.hcursor.downField(
           "candidate"
-        ).downField("achievementCurve").get[List[Double]]("thresholds"),
-        Right(custom.thresholds)
+        ).downField("achievementCurve").get[List[Double]]("pointThresholds"),
+        Right(custom.pointThresholds)
       )
       assertEquals(
         state.hcursor.downField(
           "currentBasis"
         ).downField("achievementCurve").get[List[Double]]("thresholds"),
-        Right(SeriesPlayerRadarAchievementCurve.Default.thresholds)
+        Right(List(0.0, 10.0, 25.0, 50.0, 80.0))
       )
       assertEquals(
         state.hcursor.downField(

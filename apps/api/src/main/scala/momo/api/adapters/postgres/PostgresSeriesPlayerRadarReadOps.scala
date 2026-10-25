@@ -15,9 +15,15 @@ import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesPlayerRadarReadOps:
   val MaximumDocumentBytes = 262144
-  val DefaultAchievementCurve: Json = Json.obj(
+  // Omitted curves in immutable historical bases still mean percentage thresholds.
+  val LegacyDefaultAchievementCurve: Json = Json.obj(
     "thresholds" -> Json.fromValues(
-      SeriesPlayerRadarAchievementCurve.Default.thresholds.map(Json.fromDoubleOrNull)
+      List(0.0, 10.0, 25.0, 50.0, 80.0).map(Json.fromDoubleOrNull)
+    )
+  )
+  private val DefaultPointCurve: Json = Json.obj(
+    "pointThresholds" -> Json.fromValues(
+      SeriesPlayerRadarAchievementCurve.Default.pointThresholds.map(Json.fromDoubleOrNull)
     )
   )
 
@@ -57,11 +63,11 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         'currentBasis', CASE WHEN cb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', cb.id, 'checksum', cb.checksum, 'createdAt', cb.created_at,
           'appliedAt', r.current_applied_at, 'sourceInputRevision', cb.source_input_revision::text,
-          'basis', cb.payload, 'achievementCurve', COALESCE(cb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
+          'basis', cb.payload, 'achievementCurve', COALESCE(cb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
         'previousBasis', CASE WHEN pb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', pb.id, 'checksum', pb.checksum, 'createdAt', pb.created_at,
           'appliedAt', r.previous_applied_at, 'sourceInputRevision', pb.source_input_revision::text,
-          'basis', pb.payload, 'achievementCurve', COALESCE(pb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
+          'basis', pb.payload, 'achievementCurve', COALESCE(pb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
         'candidate', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object(
           'candidateId', ${identities.wireId(
         "c"
@@ -73,14 +79,16 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'safeFailureCode', c.safe_failure_code, 'createdAt', c.created_at,
           'updatedAt', c.updated_at, 'result', c.result,
           'originKind', c.origin_kind, 'manualInput', c.manual_input,
-          'achievementCurve', COALESCE(c.manual_input->'achievementCurve', c.result->'basis'->'achievementCurve', sb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb),
+          'achievementCurve', COALESCE(c.manual_input->'achievementCurve', effective_basis.payload->'achievementCurve',
+            CASE WHEN effective_basis.payload IS NULL THEN ${DefaultPointCurve.noSpaces}::jsonb
+              ELSE ${LegacyDefaultAchievementCurve.noSpaces}::jsonb END),
           'sourceBasisId', c.source_basis_id, 'sourceCandidateId', c.source_candidate_id,
           'savedBy', CASE WHEN c.saved_by IS NULL THEN NULL ELSE jsonb_build_object(
             'accountId', c.saved_by, 'displayName', c.saved_by_display_name) END,
           'sourceBasis', CASE WHEN sb.id IS NULL THEN NULL ELSE jsonb_build_object(
             'basisId', sb.id, 'checksum', sb.checksum, 'createdAt', sb.created_at,
             'appliedAt', NULL, 'sourceInputRevision', sb.source_input_revision::text,
-            'basis', sb.payload, 'achievementCurve', COALESCE(sb.payload->'achievementCurve', ${DefaultAchievementCurve.noSpaces}::jsonb)) END,
+            'basis', sb.payload, 'achievementCurve', COALESCE(sb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
           'latestPreview', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
             'previewId', ${identities.wireId("p")}, 'beforeBasisId', ${identities.wireReference(
         Entity.RadarBases,
@@ -115,6 +123,13 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       LEFT JOIN series_radar_bases sb ON sb.id = c.source_basis_id AND sb.game_title_id = ${identities.wireId(
         "gt"
       )}
+      LEFT JOIN series_radar_bases candidate_basis ON candidate_basis.id = ${identities.wireReference(
+        Entity.RadarBases,
+        fr"c.basis_id"
+      )} AND candidate_basis.game_title_id = ${identities.wireId("gt")}
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload) AS payload
+      ) effective_basis ON true
       LEFT JOIN LATERAL (
         SELECT preview.* FROM series_radar_previews preview WHERE candidate_id = c.id AND game_title_id = gt.id
         ORDER BY created_at DESC, ${identities.wireId("preview")} DESC LIMIT 1

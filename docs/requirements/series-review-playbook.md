@@ -148,7 +148,7 @@ abs(shrunkSymptom)
 
 ## 7. Acceptance Criteria
 
-本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
 
 | 領域 | 受入条件 |
 | --- | --- |

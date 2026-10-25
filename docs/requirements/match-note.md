@@ -11,7 +11,7 @@
 | 開催詳細の情報設計 | `docs/requirements/held-event-detail.md` |
 | 戦績分析の入力 revision と再計算 | `docs/requirements/series-analysis-batch.md` |
 | UIの共通操作、状態、アクセシビリティ | `docs/ui-rule.md` |
-| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、`docs/architecture.md`、`docs/db-rule.md` |
+| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、[API規約](../api-rule.md)、[アーキテクチャ](../architecture.md)、[DB規約](../db-rule.md) |
 
 本書は特定のテーブル構造やendpoint pathを定めない。実装契約は、ここで定めるメモ専用更新と分析入力更新の分離を保ったうえで各実行正本に置く。
 
@@ -172,7 +172,7 @@
 
 ## 10. Acceptance Criteria
 
-本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
 
 | 観点 | 受入条件 |
 | --- | --- |

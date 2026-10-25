@@ -8,11 +8,8 @@
 
 ## Private
 
-個別 postmortem、follow-up tracker、調査ログ、詳細原因、再現手順、残リスクは `private/post-mortem/` に置く。
-公開範囲と private の参照条件は [AGENTS.md](../../AGENTS.md) に従う。
+個別 postmortem、follow-up tracker、調査ログ、詳細原因、再現手順、残リスクは `private/post-mortem/` に置く。公開範囲と private の参照条件は [AGENTS.md](../../AGENTS.md#作業境界) に従う。
 
 ## 作業の入口
 
-インシデント分析・レビュー・対策の再評価は [postmortem skill](../../.agents/skills/postmortem/SKILL.md) を使う。通常の実装では関連する教訓カードを参照する。
-
-教訓を残す前に、既存の実装や規約で何が不足していたか、新しい対策が維持に見合うかを判断する。恒久ルールが必要なら [文書索引](../README.md) に従って専門正本へ置き、カードには思い出す条件と確認事項を残す。同じ教訓の重複や、単発の失敗から全変更へ課す手順を増やさない。
+インシデント分析・レビュー・対策の再評価は [postmortem skill](../../.agents/skills/postmortem/SKILL.md) を使う。通常の実装では関連する教訓カードを参照する。教訓を恒久ルールへ移す判断、カードの追加・統合・削除の基準は [文書索引の「文書の増減と保守」](../README.md#文書の増減と保守) に従う。

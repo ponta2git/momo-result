@@ -11,7 +11,7 @@
 | 実績の判定・保存・廃止履歴と実績軸 | [実績達成管理](player-achievements.md) |
 | job、artifact、version、公開・復旧 | 本書 |
 | ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
-| runtime / parent-child | `docs/architecture.md` |
+| runtime / parent-child | [Worker規約](../worker-rule.md) |
 | DB / migration | `docs/db-rule.md` と `../momo-db` |
 | artifact / 入力 / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
 | UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
@@ -109,7 +109,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 大容量 staging と短い fenced publication を分ける。stagingはcurrentから不可視とし、fresh transactionで完全性と実行権を再検証してからcurrent / previousを切り替える。
 - publication失敗やcommit成否不明はcurrentを維持し、fresh connection上の永続状態から再開する。
 
-DB lock順とstaging transactionの規則は `docs/db-rule.md`、process責務は `docs/architecture.md` を正本とする。
+DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process責務は [Worker規約](../worker-rule.md) を正本とする。
 
 ### 分析完了通知
 
@@ -218,7 +218,7 @@ OCR同居を有効化する場合は、共通parent-child境界、processごと�
 
 ## 9. Acceptance Criteria
 
-本節に対する evidence の選定と実行は `docs/README.md` 1節の順序に従う。
+本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
 
 | 変更領域 | 受入条件 / production boundary |
 | --- | --- |

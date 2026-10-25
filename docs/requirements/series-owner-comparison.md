@@ -159,7 +159,7 @@
 
 ### 成果物
 
-aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。構造は [aggregate schema](../schemas/series-analysis-aggregate-v5.schema.json)、計算は [owner集計](../../apps/processing-worker/crates/analysis-core/src/compute/owner.rs)、意味検証は [owner validator](../../apps/processing-worker/crates/analysis-core/src/payload/owner.rs) を確認する。
+aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。構造は [aggregate schema](../schemas/series-analysis-aggregate-v6.schema.json)、計算は [owner集計](../../apps/processing-worker/crates/analysis-core/src/compute/owner.rs)、意味検証は [owner validator](../../apps/processing-worker/crates/analysis-core/src/payload/owner.rs) を確認する。
 
 - 親scopeに試合があれば、`owners` と `rows` は既存 `players` と同じ固定4名・同じ順序とし、各行の `cells` もオーナー順の4要素にする。対象0戦の列も含め、重複・欠落・未知参照・順序違いを拒否する。
 - 親scopeが0戦なら `owners: []`、`rows: []`、`recordedOwnerCount: 0` とし、必須fieldを省略しない。Webは共通の空状態を表示する。
@@ -198,7 +198,7 @@ aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。
 - 通常の目次移動、別端末でのURL読込み、reloadでは節へ移動する。browser backではそのvisitの保存位置と起点復帰を優先し、位置がなければ既存fragmentの復元に従う。URLは表示条件を共有し、過去の数値を固定しない。
 - 表示変更の位置保持は、発行元visit・操作・正規化後のtargetを対応させた一度限りのintentで扱う。該当commitにだけ冪等に適用し、別target・POP・unmountでは失効させる。永続したhistory flagや「次の移動を抑止する」booleanにしない。続くcanonical化が新しい操作を上書きせず、指標ごとのremountやURLと同期する第二の選択stateを増やさない。
 
-共通UIへの接続と読解は5節、必須gateは [Change Gates](../dev-rule.md#4-change-gates)、DB schema・migrationを変える場合の事前確認は `AGENTS.md` と [DB利用規約](../db-rule.md) に従う。
+共通UIへの接続と読解は5節、必須gateは [Change Gates](../dev-rule.md#change-gates)、DB schema・migrationを変える場合の事前確認は `AGENTS.md` と [DB利用規約](../db-rule.md) に従う。
 
 ## 8. 受入条件
 
@@ -215,7 +215,7 @@ aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。
 | AC7 | 集計表示に全試合の取得や同期計算を必要とせず、対象試合一覧やdrilldownを追加しない | artifact contract、読み取り境界、画面操作 |
 | AC8 | 既存scopeの集計・振り返り・通知などのconsumerが新契約で壊れず、通常表示の負荷要求を守る | 変更したconsumerの契約証拠、分析バッチのresource検証 |
 
-証拠は [テスト・品質規約](../test-rule.md) に従って選び、[Change Gates](../dev-rule.md#4-change-gates) に割り当てる。各行をすべての層で重複検証する要求ではない。
+証拠は [テスト・品質規約](../test-rule.md) に従って選び、[Change Gates](../dev-rule.md#change-gates) に割り当てる。各行をすべての層で重複検証する要求ではない。
 
 ### 表から答えを得られることの確認
 

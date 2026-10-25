@@ -209,7 +209,18 @@ export function usePlayerRadarOperations(
     onActiveChange: setEditorActive,
     save: async (request) => {
       if (operationReason) throw new Error(operationReason);
-      const response = await submitAsync({ gameTitleId, kind: "manual", ...request });
+      const curve = request.manualInput.achievementCurve;
+      if (curve && !("pointThresholds" in curve))
+        throw new Error("実績ポイントの採点境界を確認してください。");
+      const response = await submitAsync({
+        gameTitleId,
+        kind: "manual",
+        ...request,
+        manualInput: {
+          axes: request.manualInput.axes,
+          ...(curve ? { achievementCurve: { pointThresholds: [...curve.pointThresholds] } } : {}),
+        },
+      });
       if (!response.candidateId) throw new Error("保存済みの案を確認できません。");
       return { candidateId: response.candidateId, operationId: response.operationId };
     },

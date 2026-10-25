@@ -8,9 +8,9 @@ import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radar/r
 import {
   playerRadarSettingAxes,
   playerRadarSettingThresholds,
-  achievementScorePoints,
+  defaultAchievementCurve,
+  defaultAchievementPointCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import type { PlayerRadarSettingAxisId } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -23,8 +23,7 @@ import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-const scoreAt = (axis: PlayerRadarSettingAxisId, index: number) =>
-  axis === "achievement" ? achievementScorePoints[index] : index + 2;
+const scoreAt = (index: number) => index + 2;
 
 export function PlayerRadarThresholdEditor({
   editor,
@@ -56,12 +55,28 @@ export function PlayerRadarThresholdEditor({
   const selectedAxis =
     playerRadarSettingAxes.find((axis) => axis.id === editor.axis) ?? playerRadarSettingAxes[0];
   const unit =
-    editor.axis === "achievement" ? "%" : editor.axis === "averageRank" ? "位以下" : "万円以上";
+    editor.axis === "achievement"
+      ? "pt以上"
+      : editor.axis === "averageRank"
+        ? "位以下"
+        : "万円以上";
   const preview = editor.preview;
+  const legacyCurrent =
+    editor.axis === "achievement" &&
+    Boolean(administration.currentBasis) &&
+    !(
+      "pointThresholds" in
+      (administration.currentBasis?.achievementCurve ?? defaultAchievementCurve)
+    );
   const currentValues =
-    administration.currentBasis || editor.axis === "achievement"
-      ? playerRadarSettingThresholds(administration.currentBasis, editor.axis)
-      : undefined;
+    !administration.currentBasis && editor.axis === "achievement"
+      ? defaultAchievementPointCurve.pointThresholds.map((rawValue, index) => ({
+          rawValue,
+          score: index + 2,
+        }))
+      : administration.currentBasis
+        ? playerRadarSettingThresholds(administration.currentBasis, editor.axis)
+        : undefined;
   const originalValues = editor.referenceThresholds?.[editor.axis];
   const errors = editor.composing
     ? []
@@ -164,7 +179,7 @@ export function PlayerRadarThresholdEditor({
           }
         >
           {playerRadarSettingAxes.find((axis) => axis.id === firstError.axisId)?.label}・
-          {scoreAt(firstError.axisId, firstError.index)}点: {firstError.message}
+          {scoreAt(firstError.index)}点: {firstError.message}
         </Notice>
       ) : null}
       <TabsRoot
@@ -188,9 +203,14 @@ export function PlayerRadarThresholdEditor({
                     <p className={cn(contentText.body, readableTextWidthClass)}>
                       {selectedAxis.description}
                       {editor.axis === "achievement"
-                        ? " 達成率（獲得ポイント÷対象ポイント）を5か所で指定します。点の間を直線で補間し、端の外は1点または10点です。シーズンを選んでも作品通算で比較します。"
+                        ? " 2〜10点になる実績ポイントを9か所で指定します。境界と同じ値は高い方の点数になります。シーズンを選んでも作品通算で比較します。"
                         : ""}
                     </p>
+                    {legacyCurrent ? (
+                      <p className={contentText.supporting}>
+                        適用中は従来の得点率による採点です。新しいポイント境界は初期案を表示しています。比較で点数の変化を確認してから適用してください。
+                      </p>
+                    ) : null}
                     <p className={contentText.supporting}>
                       Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
                     </p>
@@ -206,9 +226,7 @@ export function PlayerRadarThresholdEditor({
                     </div>
                   </div>
                   <fieldset disabled={disabled} className="grid min-w-0 gap-4">
-                    <legend className="sr-only">
-                      {selectedAxis.label}の{axis.id === "achievement" ? "5基準点" : "9境界"}
-                    </legend>
+                    <legend className="sr-only">{selectedAxis.label}の9境界</legend>
                     {editor.drafts?.[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
                       const inputId = `${id}-${axis.id}-${index}`;
@@ -219,7 +237,7 @@ export function PlayerRadarThresholdEditor({
                         <Field
                           key={key}
                           htmlFor={inputId}
-                          label={`${scoreAt(axis.id, index)}点の${axis.id === "achievement" ? "達成率" : "境界"}（${unit}）`}
+                          label={`${scoreAt(index)}点の境界（${unit}）`}
                           error={
                             fieldErrors.length > 0
                               ? fieldErrors.map((error) => error.message).join(" ")
@@ -230,13 +248,17 @@ export function PlayerRadarThresholdEditor({
                           description={
                             <>
                               適用中:{" "}
-                              {currentValues?.[index]
-                                ? `${currentValues[index].rawValue}${unit}`
-                                : "未適用"}
+                              {legacyCurrent
+                                ? "従来の得点率基準"
+                                : currentValues?.[index]
+                                  ? `${currentValues[index].rawValue}${unit}`
+                                  : "未適用"}
                               {showReference ? (
                                 <span className="block">
-                                  編集元: {originalValues?.[index]}
-                                  {unit}
+                                  編集元:{" "}
+                                  {originalValues?.[index] === undefined
+                                    ? "従来の得点率基準"
+                                    : `${originalValues[index]}${unit}`}
                                 </span>
                               ) : null}
                             </>
@@ -244,7 +266,7 @@ export function PlayerRadarThresholdEditor({
                         >
                           <InputControl
                             id={inputId}
-                            aria-label={`${selectedAxis.label} ${scoreAt(axis.id, index)}点の${axis.id === "achievement" ? "達成率" : "境界"}（${unit}）`}
+                            aria-label={`${selectedAxis.label} ${scoreAt(index)}点の境界（${unit}）`}
                             aria-describedby={`${inputId}-reference${fieldErrors.length > 0 ? ` ${inputId}-error` : ""}`}
                             ref={(element) => {
                               if (element) inputs.current.set(key, element);

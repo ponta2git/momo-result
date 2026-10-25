@@ -1,10 +1,11 @@
 import {
   playerRadarAxes,
-  achievementScorePoints,
+  defaultAchievementPointCurve,
   defaultAchievementCurve,
   achievementRadarScore,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
+  PlayerAchievementCurve,
   PlayerRadarAxisId,
   PlayerRadarSettingAxisId,
   PlayerRadarBasis,
@@ -13,7 +14,7 @@ import type {
 
 export type RadarManualInput = {
   axes: Array<{ axisId: PlayerRadarAxisId; thresholds: number[] }>;
-  achievementCurve?: { thresholds: number[] };
+  achievementCurve?: PlayerAchievementCurve;
 };
 export type RadarThresholdDrafts = Readonly<Record<PlayerRadarSettingAxisId, readonly string[]>>;
 export type RadarThresholdError = {
@@ -25,9 +26,7 @@ export type RadarThresholdError = {
 
 export function radarBasisInput(basis: PlayerRadarBasis): RadarManualInput {
   return {
-    achievementCurve: {
-      thresholds: [...(basis.achievementCurve ?? defaultAchievementCurve).thresholds],
-    },
+    achievementCurve: basis.achievementCurve ?? defaultAchievementCurve,
     axes: playerRadarAxes.map(({ id }) => ({
       axisId: id,
       thresholds:
@@ -39,7 +38,13 @@ export function radarBasisInput(basis: PlayerRadarBasis): RadarManualInput {
 export function radarThresholdDrafts(input: RadarManualInput): RadarThresholdDrafts {
   return Object.fromEntries([
     ...input.axes.map((axis) => [axis.axisId, axis.thresholds.map(String)]),
-    ["achievement", (input.achievementCurve ?? defaultAchievementCurve).thresholds.map(String)],
+    [
+      "achievement",
+      (input.achievementCurve && "pointThresholds" in input.achievementCurve
+        ? input.achievementCurve.pointThresholds
+        : defaultAchievementPointCurve.pointThresholds
+      ).map(String),
+    ],
   ]) as Record<PlayerRadarSettingAxisId, string[]>;
 }
 
@@ -109,7 +114,8 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
     return { axisId: id, thresholds };
   });
   const curveTexts = drafts.achievement;
-  const curveThresholds = achievementScorePoints.map((score, index) => {
+  const curveThresholds = Array.from({ length: 9 }, (_, index) => {
+    const score = index + 2;
     const text = curveTexts?.[index]?.trim() ?? "";
     const value = Number(text);
     if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(text) || !Number.isFinite(value)) {
@@ -117,24 +123,24 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
         axisId: "achievement",
         index,
         kind: "numeric",
-        message: "達成率を最後まで入力してください。",
+        message: "実績ポイントを最後まで入力してください。",
       });
-    } else if (value < 0 || value > 100) {
+    } else if (value < 0 || value > 102400) {
       errors.push({
         axisId: "achievement",
         index,
         kind: "range",
-        message: `${score}点の達成率は0〜100%で入力してください。`,
+        message: `${score}点の境界は0〜102400ptで入力してください。`,
       });
     }
     return value;
   });
-  if (curveTexts?.length !== 5)
+  if (curveTexts?.length !== 9)
     errors.push({
       axisId: "achievement",
       index: 0,
       kind: "numeric",
-      message: "1・3・5・7・10点の達成率を入力してください。",
+      message: "2〜10点の9境界を入力してください。",
     });
   for (let index = 1; index < curveThresholds.length; index += 1) {
     const previous = curveThresholds[index - 1] ?? NaN;
@@ -145,29 +151,34 @@ export function parseRadarThresholdDrafts(drafts: RadarThresholdDrafts): {
           axisId: "achievement",
           index: index - 1,
           kind: "order",
-          message: `${achievementScorePoints[index]}点の達成率（${current}%）より小さい値にしてください。`,
+          message: `${index + 2}点の境界（${current}pt）より小さい値にしてください。`,
         },
         {
           axisId: "achievement",
           index,
           kind: "order",
-          message: `${achievementScorePoints[index - 1]}点の達成率（${previous}%）より大きい値にしてください。`,
+          message: `${index + 1}点の境界（${previous}pt）より大きい値にしてください。`,
         },
       );
     }
   }
   return {
-    input: errors.length > 0 ? null : { axes, achievementCurve: { thresholds: curveThresholds } },
+    input:
+      errors.length > 0 ? null : { axes, achievementCurve: { pointThresholds: curveThresholds } },
     errors,
   };
 }
 
 export function sameRadarThresholds(a: RadarManualInput, b: RadarManualInput): boolean {
-  const leftCurve = (a.achievementCurve ?? defaultAchievementCurve).thresholds;
-  const rightCurve = (b.achievementCurve ?? defaultAchievementCurve).thresholds;
+  const leftPolicy = a.achievementCurve ?? defaultAchievementCurve;
+  const rightPolicy = b.achievementCurve ?? defaultAchievementCurve;
+  if ("pointThresholds" in leftPolicy !== "pointThresholds" in rightPolicy) return false;
+  const leftCurve =
+    "pointThresholds" in leftPolicy ? leftPolicy.pointThresholds : leftPolicy.thresholds;
+  const rightCurve =
+    "pointThresholds" in rightPolicy ? rightPolicy.pointThresholds : rightPolicy.thresholds;
   return (
-    leftCurve.length === 5 &&
-    rightCurve.length === 5 &&
+    leftCurve.length === rightCurve.length &&
     leftCurve.every((value, index) => value === rightCurve[index]) &&
     playerRadarAxes.every(({ id }) => {
       const left = a.axes.find((axis) => axis.axisId === id)?.thresholds;
@@ -202,6 +213,7 @@ export function previewRadarThresholds(
   return {
     ...evaluation,
     basis: radarInputBasis(basis, input),
+    achievementCurve: input.achievementCurve ?? basis.achievementCurve ?? defaultAchievementCurve,
     players: evaluation.players.map((player) => ({
       ...player,
       ...(player.achievement

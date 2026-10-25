@@ -12,6 +12,7 @@ type AcceptedRadar = {
   identity: string;
   artifactId: string | undefined;
   summary: AchievementResource["summaries"][number];
+  achievementCurve: AchievementResource["achievementCurve"];
   radar: PlayerRadarDisplay | undefined;
 };
 
@@ -53,20 +54,29 @@ export function useAchievementRadar(
   const [accepted, setAccepted] = useState<AcceptedRadar>();
   if (
     summary &&
+    data &&
     (accepted?.identity !== identity ||
       accepted.artifactId !== artifactId ||
       accepted.summary !== summary ||
       accepted.radar !== radar)
   )
-    setAccepted({ identity, artifactId, summary, radar });
+    setAccepted({ identity, artifactId, summary, achievementCurve: data.achievementCurve, radar });
   const previous = accepted?.identity === identity ? accepted : undefined;
   const displaySummary = summary ?? previous?.summary;
   const displayRadar = summary ? radar : (previous?.radar ?? radar);
+  const achievementCurve = summary ? data?.achievementCurve : previous?.achievementCurve;
   const retained = !summary && previous !== undefined;
   const players = displaySummary?.players.map((player) => ({
     ...player,
     totalPoints: displaySummary.totalPoints,
   }));
   const href = `${achievementPageHref(gameTitleId)}${mapMasterId ? `&mapMasterId=${encodeURIComponent(mapMasterId)}` : ""}`;
-  return { query, summary, players, href, radar: displayRadar, retained };
+  return {
+    query,
+    summary,
+    players,
+    href,
+    radar: displayRadar && achievementCurve ? { ...displayRadar, achievementCurve } : displayRadar,
+    retained,
+  };
 }

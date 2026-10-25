@@ -49,13 +49,33 @@ function renderAdministration() {
   return client;
 }
 
+const pointCurve: NonNullable<
+  ReturnType<typeof makePlayerRadarPreview>["afterAchievements"]
+>["achievementCurve"] = {
+  pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200],
+};
+
+function makePointReadyState() {
+  const state = makeReadyPlayerRadarState();
+  state.candidate!.achievementCurve = pointCurve;
+  state.candidate!.result!.basis!.achievementCurve = pointCurve;
+  return state;
+}
+
+function makePointPreview() {
+  const preview = makePlayerRadarPreview();
+  preview.afterAchievements!.achievementCurve = pointCurve;
+  preview.afterAchievements!.summary.players.forEach((player, index) => {
+    player.score = [6, 4, 3, 1][index]!;
+  });
+  return preview;
+}
+
 function readyHandlers() {
   return [
-    http.get("/api/admin/series-analysis/radar", () =>
-      HttpResponse.json(makeReadyPlayerRadarState()),
-    ),
+    http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
     http.get("/api/admin/series-analysis/radar/preview", () =>
-      HttpResponse.json(makePlayerRadarPreview()),
+      HttpResponse.json(makePointPreview()),
     ),
   ];
 }
@@ -79,7 +99,7 @@ async function openProposalApply(user: ReturnType<typeof userEvent.setup>) {
 describe("PlayerRadarAdministration", () => {
   it("retries a failed operation as an operator with its saved origin identity", async () => {
     const user = userEvent.setup();
-    const state = makeReadyPlayerRadarState();
+    const state = makePointReadyState();
     const failed = {
       ...makePlayerRadarOperation("candidate"),
       operationId: "failed-candidate-operation",
@@ -120,7 +140,7 @@ describe("PlayerRadarAdministration", () => {
 
   it("continues the current basis with the reviewed evidence as an operator", async () => {
     const user = userEvent.setup();
-    const state = makeReadyPlayerRadarState();
+    const state = makePointReadyState();
     state.candidate = null;
     const evidenceKey = `sha256:${"a".repeat(64)}`;
     state.monitor = {
@@ -172,7 +192,7 @@ describe("PlayerRadarAdministration", () => {
     "opens its completed proposal from %s for editing without applying it",
     async (method, kind) => {
       const user = userEvent.setup();
-      const state = makeReadyPlayerRadarState();
+      const state = makePointReadyState();
       state.candidate = null;
       state.previousBasis = { ...makePlayerRadarBasis(), basisId: "radar-basis-previous" };
       const operation = makePlayerRadarOperation(kind);
@@ -183,7 +203,7 @@ describe("PlayerRadarAdministration", () => {
           HttpResponse.json(state.operations[0] ?? operation),
         ),
         http.get("/api/admin/series-analysis/radar/preview", () =>
-          HttpResponse.json(makePlayerRadarPreview()),
+          HttpResponse.json(makePointPreview()),
         ),
         http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
           submitted.push(await request.json());
@@ -216,7 +236,7 @@ describe("PlayerRadarAdministration", () => {
         screen.queryByRole("button", { name: "この変更案を適用する" }),
       ).not.toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "採点境界の編集" })).not.toBeInTheDocument();
-      state.candidate = makeReadyPlayerRadarState().candidate;
+      state.candidate = makePointReadyState().candidate;
       state.operations = [{ ...operation, status: "succeeded" }];
       expect(
         await screen.findByRole("region", { name: "採点境界の編集" }, { timeout: 4000 }),
@@ -231,7 +251,7 @@ describe("PlayerRadarAdministration", () => {
 
   it("opens the proposal boundaries in the editor before a score comparison exists", async () => {
     const user = userEvent.setup();
-    const state = makeReadyPlayerRadarState();
+    const state = makePointReadyState();
     state.candidate!.latestPreview = null;
     server.use(http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)));
     renderAdministration();
@@ -262,14 +282,14 @@ describe("PlayerRadarAdministration", () => {
         return HttpResponse.json(
           completed
             ? {
-                ...makeReadyPlayerRadarState(),
+                ...makePointReadyState(),
                 operations: [{ ...operation, status: "succeeded" }],
               }
             : { ...initial, operations: accepted ? [operation] : [] },
         );
       }),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
         expect(await request.json()).toEqual({ gameTitleId: "gt_momotetsu_2", kind: "candidate" });
@@ -306,7 +326,7 @@ describe("PlayerRadarAdministration", () => {
     server.use(
       http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(state)),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", () => {
         submissions += 1;
@@ -319,7 +339,7 @@ describe("PlayerRadarAdministration", () => {
           await gate.promise;
           return HttpResponse.error();
         }
-        state.candidate = makeReadyPlayerRadarState().candidate;
+        state.candidate = makePointReadyState().candidate;
         state.operations = [{ ...operation, status: "succeeded" }];
         return HttpResponse.json(state.operations[0]);
       }),
@@ -454,10 +474,10 @@ describe("PlayerRadarAdministration", () => {
       http.get("/api/admin/series-analysis/radar", async () => {
         stateReads += 1;
         if (stateReads > 1) await refreshGate.promise;
-        return HttpResponse.json(makeReadyPlayerRadarState());
+        return HttpResponse.json(makePointReadyState());
       }),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json(makePlayerRadarPreview()),
+        HttpResponse.json(makePointPreview()),
       ),
       http.post("/api/admin/series-analysis/radar/operations", () =>
         HttpResponse.json(makePlayerRadarOperation(), { status: 202 }),
@@ -479,11 +499,9 @@ describe("PlayerRadarAdministration", () => {
     let stale = false;
     const commands: string[] = [];
     server.use(
-      http.get("/api/admin/series-analysis/radar", () =>
-        HttpResponse.json(makeReadyPlayerRadarState()),
-      ),
+      http.get("/api/admin/series-analysis/radar", () => HttpResponse.json(makePointReadyState())),
       http.get("/api/admin/series-analysis/radar/preview", () =>
-        HttpResponse.json({ ...makePlayerRadarPreview(), status: stale ? "stale" : "ready" }),
+        HttpResponse.json({ ...makePointPreview(), status: stale ? "stale" : "ready" }),
       ),
       http.post("/api/admin/series-analysis/radar/operations", async ({ request }) => {
         const { kind } = (await request.json()) as { kind: string };
@@ -550,7 +568,7 @@ describe("PlayerRadarAdministration", () => {
         return HttpResponse.json(options);
       }),
       http.get("/api/admin/series-analysis/radar/preview", async ({ request }) => {
-        const preview = makePlayerRadarPreview();
+        const preview = makePointPreview();
         if (!new URL(request.url).searchParams.has("mapMasterId"))
           return HttpResponse.json(preview);
         await gate.promise;

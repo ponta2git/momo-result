@@ -89,7 +89,7 @@ function renderPage() {
 }
 
 describe("radar revision history", () => {
-  it("compares the first achievement revision against the default curve", async () => {
+  it("does not invent the prior scoring curve for an initial application", async () => {
     const user = userEvent.setup();
     render(
       <PlayerRadarHistoryDetail
@@ -99,15 +99,42 @@ describe("radar revision history", () => {
           beforeBasis: null,
           afterBasis: makePlayerRadarBasis().basis,
           beforeAchievementCurve: null,
-          afterAchievementCurve: { thresholds: [0, 15, 30, 60, 90] },
+          afterAchievementCurve: { pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200] },
         }}
       />,
     );
     await user.click(screen.getByRole("tab", { name: "実績達成" }));
     const table = screen.getByRole("table", { name: "実績達成の改訂前後の採点境界" });
-    const seven = within(table).getByRole("row", { name: "7点 50 60 変更あり" });
-    expect(seven).toBeVisible();
-    expect(within(table).queryByText("未適用")).not.toBeInTheDocument();
+    expect(screen.getByText("初回適用のため、変更前の保存基準はありません。")).toBeVisible();
+    expect(within(table).getByRole("columnheader", { name: "変更前（基準未適用）" })).toBeVisible();
+    expect(within(table).getByRole("row", { name: "7点 — 75 新規" })).toBeVisible();
+    expect(within(table).queryByText(/従来の得点率/u)).not.toBeInTheDocument();
+  });
+
+  it("shows legacy percentages and point thresholds in distinct units when the scoring method changes", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlayerRadarHistoryDetail
+        detail={{
+          schemaVersion: 1,
+          revision: revision(),
+          beforeBasis: makePlayerRadarBasis().basis,
+          afterBasis: makePlayerRadarBasis().basis,
+          beforeAchievementCurve: { thresholds: [0, 10, 25, 50, 80] },
+          afterAchievementCurve: { pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200] },
+        }}
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: "実績達成" }));
+    const table = screen.getByRole("table", { name: "実績達成の改訂前後の採点境界" });
+    expect(
+      within(table).getByRole("columnheader", { name: "変更前（%（従来の得点率））" }),
+    ).toBeVisible();
+    expect(within(table).getByRole("columnheader", { name: "変更後（pt以上）" })).toBeVisible();
+    expect(within(table).getByRole("row", { name: "1点 0 — 採点方式の変更" })).toBeVisible();
+    expect(within(table).getByRole("row", { name: "2点 — 5 採点方式の変更" })).toBeVisible();
+    expect(within(table).getByRole("row", { name: "7点 50 75 採点方式の変更" })).toBeVisible();
+    expect(within(table).getByRole("row", { name: "10点 80 200 採点方式の変更" })).toBeVisible();
   });
 
   it("keeps unfinished input when navigation is canceled and leaves the editor after confirmed discard", async () => {

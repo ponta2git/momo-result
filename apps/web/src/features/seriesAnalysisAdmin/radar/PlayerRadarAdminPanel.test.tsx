@@ -7,12 +7,14 @@ import {
   previewRadarThresholds,
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import { defaultAchievementPointCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 function modelFixture() {
   const model = makePlayerRadarEditorView();
   const input = structuredClone(model.editing!.current!.input);
   input.axes[0]!.thresholds[0] = 5;
+  input.achievementCurve = defaultAchievementPointCurve;
   const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "basis-candidate" };
   model.candidate = {
     candidateId: "candidate-1",

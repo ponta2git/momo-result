@@ -17,6 +17,7 @@ import {
   playerRadarScoreLabel,
   playerRadarScoresAreReference,
   playerRadarUnavailableLabel,
+  playerRadarAchievementCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
   PlayerRadarCell,
@@ -235,7 +236,9 @@ export function PlayerRadarSection({
                             id: "achievement",
                             label: "実績達成",
                             value:
-                              "獲得ポイントの割合を、設定された達成率の基準に沿って1〜10点で表示します。対象項目がない場合は採点対象外です。",
+                              "pointThresholds" in playerRadarAchievementCurve(radar)
+                                ? "獲得ポイントが設定された境界に達するごとに、1〜10点で段階的に採点します。対象項目がない場合は採点対象外です。"
+                                : "従来の得点率基準で1〜10点を表示します。対象項目がない場合は採点対象外です。",
                           },
                         ]
                       : []),

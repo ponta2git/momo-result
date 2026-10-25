@@ -279,7 +279,10 @@ export function buildRadarThresholdEditorView(
             ]),
             [
               "achievement",
-              (session.source.basis.achievementCurve ?? defaultAchievementCurve).thresholds,
+              "pointThresholds" in
+              (session.source.basis.achievementCurve ?? defaultAchievementCurve)
+                ? radarThresholdDrafts(session.source.input).achievement.map(Number)
+                : undefined,
             ],
           ]) as Partial<Record<PlayerRadarSettingAxisId, readonly number[]>>)
         : null,

@@ -15,6 +15,7 @@ import {
 import {
   playerRadarAxes,
   defaultAchievementCurve,
+  defaultAchievementPointCurve,
   achievementRadarScore,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarBasis, makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
@@ -23,6 +24,7 @@ import manualFixture from "../../../../../../docs/schemas/fixtures/series-analys
 
 function validInput(): RadarManualInput {
   return {
+    achievementCurve: defaultAchievementPointCurve,
     axes: playerRadarAxes.map(({ id }) => ({
       axisId: id,
       thresholds:
@@ -34,7 +36,7 @@ function validInput(): RadarManualInput {
 }
 
 describe("radar threshold editing", () => {
-  it("scores achievement percentages through the five points independently of the six-axis eligibility", () => {
+  it("preserves historical percentage scores and previews point boundaries independently of six-axis eligibility", () => {
     for (const [earnedPoints, score] of [
       [0, 1],
       [5, 2],
@@ -62,9 +64,10 @@ describe("radar threshold editing", () => {
     before.players[0]!.axes[0]!.scoreUnavailableReasons = ["insufficient_matches"];
     const input = {
       ...radarBasisInput(basis),
-      achievementCurve: { thresholds: [0, 20, 40, 60, 90] },
+      achievementCurve: defaultAchievementPointCurve,
     };
     const after = previewRadarThresholds(before, basis, input);
+    expect(after.achievementCurve).toEqual(defaultAchievementPointCurve);
     expect(after.players[0]!.achievement).toEqual({ earnedPoints: 50, totalPoints: 100, score: 6 });
     expect(after.players[0]!.axes).toEqual(before.players[0]!.axes);
     expect(before.players[0]!.achievement.score).toBe(7);
@@ -72,19 +75,38 @@ describe("radar threshold editing", () => {
   });
 
   it.each([
-    ["0", "10", "10", "50", "80"],
-    ["0", "30", "25", "50", "80"],
-    ["-1", "10", "25", "50", "80"],
-    ["0", "10", "25", "50", "101"],
-    ["0", "", "25", "50", "80"],
-    ["0", "Infinity", "25", "50", "80"],
-  ])("rejects invalid achievement points %j without accepting an old curve", (...achievement) => {
-    const parsed = parseRadarThresholdDrafts({
-      ...radarThresholdDrafts(validInput()),
-      achievement,
-    });
-    expect(parsed.input).toBeNull();
-    expect(parsed.errors.some((error) => error.axisId === "achievement")).toBe(true);
+    ["5", "10", "10", "30", "50", "75", "100", "150", "200"],
+    ["5", "30", "20", "40", "50", "75", "100", "150", "200"],
+    ["-1", "10", "20", "30", "50", "75", "100", "150", "200"],
+    ["5", "10", "20", "30", "50", "75", "100", "150", "102401"],
+    ["5", "", "20", "30", "50", "75", "100", "150", "200"],
+    ["5", "Infinity", "20", "30", "50", "75", "100", "150", "200"],
+    ["0", "10", "25", "50", "80"],
+  ])(
+    "rejects invalid point boundaries %j without accepting a legacy five-point draft",
+    (...achievement) => {
+      const parsed = parseRadarThresholdDrafts({
+        ...radarThresholdDrafts(validInput()),
+        achievement,
+      });
+      expect(parsed.input).toBeNull();
+      expect(parsed.errors.some((error) => error.axisId === "achievement")).toBe(true);
+    },
+  );
+
+  it("starts legacy and missing curves from the point proposal without changing the saved basis", () => {
+    const basis = playerRadarBasisDisplay(makePlayerRadarBasis(), []);
+    for (const achievementCurve of [undefined, { thresholds: [0, 20, 40, 60, 90] }]) {
+      const saved = { ...basis, ...(achievementCurve ? { achievementCurve } : {}) };
+      if (!achievementCurve) delete saved.achievementCurve;
+      const snapshot = structuredClone(saved);
+      const input = radarBasisInput(saved);
+      expect(
+        parseRadarThresholdDrafts(radarThresholdDrafts(input)).input?.achievementCurve,
+      ).toEqual(defaultAchievementPointCurve);
+      expect(saved).toEqual(snapshot);
+      expect(input.achievementCurve).toEqual(achievementCurve ?? defaultAchievementCurve);
+    }
   });
 
   it("matches the Rust shared scoring fixture at equality and adjacent floating-point boundaries", () => {
@@ -92,7 +114,7 @@ describe("radar threshold editing", () => {
     const input = manualFixture.input as RadarManualInput;
     expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual({
       ...input,
-      achievementCurve: input.achievementCurve ?? defaultAchievementCurve,
+      achievementCurve: defaultAchievementPointCurve,
     });
     for (const entry of manualFixture.cases) {
       const raw = makePlayerRadarEvaluation();
@@ -136,7 +158,7 @@ describe("radar threshold editing", () => {
     const input = radarBasisInput(playerRadarBasisDisplay(makePlayerRadarBasis(), []));
     expect(parseRadarThresholdDrafts(radarThresholdDrafts(input)).input).toEqual({
       ...input,
-      achievementCurve: input.achievementCurve ?? defaultAchievementCurve,
+      achievementCurve: defaultAchievementPointCurve,
     });
     const drafts = radarThresholdDrafts(validInput());
     const parsed = parseRadarThresholdDrafts({

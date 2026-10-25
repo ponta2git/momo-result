@@ -86,7 +86,9 @@ export function playerRadarAggregateDisplay(
     basis,
     radar.evaluation.sample.mapCounts,
     response.players,
-    summary ? { summary } : undefined,
+    summary && achievements
+      ? { summary, achievementCurve: achievements.achievementCurve }
+      : undefined,
   );
 }
 
@@ -96,10 +98,15 @@ export function playerRadarEvaluationDisplay(
   basis: PlayerRadarBasis | null,
   maps: readonly DisplayMap[],
   members: readonly DisplayMember[] = [],
-  achievements?: Pick<NonNullable<SeriesPlayerRadarPreview["afterAchievements"]>, "summary"> | null,
+  achievements?:
+    | (Pick<NonNullable<SeriesPlayerRadarPreview["afterAchievements"]>, "summary"> & {
+        achievementCurve?: PlayerAchievementCurve;
+      })
+    | null,
 ): PlayerRadarDisplay {
   return {
     basis,
+    ...(achievements?.achievementCurve ? { achievementCurve: achievements.achievementCurve } : {}),
     sample: {
       ...playerRadarSampleDisplay(evaluation.sample, maps),
       quality: evaluation.sample.quality,

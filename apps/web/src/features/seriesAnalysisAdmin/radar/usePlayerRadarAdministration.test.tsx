@@ -60,7 +60,19 @@ describe("prepared radar edit disposal", () => {
     state.candidate!.latestPreview!.beforeBasisId = null;
     const preview = makePlayerRadarPreview();
     preview.beforeBasisId = null;
-    const curve = { thresholds: [0, 10, 25, 50, 100] as [number, number, number, number, number] };
+    const curve = {
+      pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 250] as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ],
+    };
     const operation = {
       ...makePlayerRadarOperation("manual"),
       operationId: "achievement-manual-operation",
@@ -100,6 +112,9 @@ describe("prepared radar edit disposal", () => {
         preview.candidateBasisId = operation.basisId;
         preview.previewId = operation.previewId;
         preview.afterAchievements!.achievementCurve = curve;
+        preview.afterAchievements!.summary.players.forEach((player, index) => {
+          player.score = [6, 4, 3, 1][index]!;
+        });
         return HttpResponse.json(operation, { status: 202 });
       }),
     );
@@ -119,7 +134,7 @@ describe("prepared radar edit disposal", () => {
     );
     await waitFor(() => expect(result.current.administration?.editing?.candidate).toBeTruthy());
     act(() => result.current.editor.beginFromCandidate());
-    act(() => result.current.editor.change("achievement", 4, "100"));
+    act(() => result.current.editor.change("achievement", 8, "250"));
     await act(async () => {
       await result.current.editor.requestApply();
     });
@@ -130,7 +145,7 @@ describe("prepared radar edit disposal", () => {
     );
     await waitFor(() => expect(result.current.editor.canApply).toBe(true));
     expect(result.current.editor.confirmation.disabled).toBe(false);
-    expect(result.current.editor.drafts?.achievement[4]).toBe("100");
+    expect(result.current.editor.drafts?.achievement[8]).toBe("250");
   });
 
   it.each(["replaced", "withdrawn", "applied", "application_failed"] as const)(

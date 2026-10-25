@@ -52,8 +52,36 @@ export const playerAchievementAxis = {
 export const playerRadarSettingAxes = [...playerRadarAxes, playerAchievementAxis] as const;
 export type PlayerRadarSettingAxisId = (typeof playerRadarSettingAxes)[number]["id"];
 export const achievementScorePoints = [1, 3, 5, 7, 10] as const;
-export type PlayerAchievementCurve = { thresholds: readonly number[] };
+export type PlayerAchievementCurve =
+  | { thresholds: readonly number[] }
+  | { pointThresholds: readonly number[] };
 export const defaultAchievementCurve: PlayerAchievementCurve = { thresholds: [0, 10, 25, 50, 80] };
+export const defaultAchievementPointCurve = {
+  pointThresholds: [5, 10, 20, 30, 50, 75, 100, 150, 200] satisfies [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ],
+};
+
+export function achievementCurveThresholds(curve: PlayerAchievementCurve) {
+  return "pointThresholds" in curve
+    ? curve.pointThresholds.map((rawValue, index) => ({ score: index + 2, rawValue }))
+    : curve.thresholds.map((rawValue, index) => ({
+        score: achievementScorePoints[index] ?? 10,
+        rawValue,
+      }));
+}
+
+export function achievementCurveUnit(curve: PlayerAchievementCurve) {
+  return "pointThresholds" in curve ? "pt以上" : "%（従来の得点率）";
+}
 
 /** Already calculated by the publication; the chart never recalculates this score. */
 export type PlayerAchievementScore = {
@@ -106,9 +134,18 @@ export type PlayerRadarBasis = {
 
 export type PlayerRadarDisplay = {
   basis: PlayerRadarBasis | null;
+  achievementCurve?: PlayerAchievementCurve;
   sample: PlayerRadarSample & { quality: PlayerRadarSampleQuality };
   players: readonly PlayerRadarPlayer[];
 };
+
+export function playerRadarAchievementCurve(display: PlayerRadarDisplay | null) {
+  return (
+    display?.achievementCurve ??
+    display?.basis?.achievementCurve ??
+    (display?.basis ? defaultAchievementCurve : defaultAchievementPointCurve)
+  );
+}
 
 export function playerRadarScoresAreReference(players: readonly PlayerRadarPlayer[]): boolean {
   const scores = players.flatMap((player) => player.axes).filter((cell) => cell.score !== null);
@@ -117,7 +154,7 @@ export function playerRadarScoresAreReference(players: readonly PlayerRadarPlaye
 
 export function formatPlayerRadarRawValue(axisId: PlayerRadarSettingAxisId, value: number | null) {
   if (value === null) return "—";
-  if (axisId === "achievement") return `${formatDecimal(value)}%`;
+  if (axisId === "achievement") return `${formatDecimal(value)}pt`;
   return axisId === "averageRank" ? `${formatDecimal(value)}位` : formatManYen(value);
 }
 
@@ -126,10 +163,7 @@ export function playerRadarSettingThresholds(
   axisId: PlayerRadarSettingAxisId,
 ) {
   return axisId === "achievement"
-    ? (basis?.achievementCurve ?? defaultAchievementCurve).thresholds.map((rawValue, index) => ({
-        score: achievementScorePoints[index] ?? 10,
-        rawValue,
-      }))
+    ? achievementCurveThresholds(basis?.achievementCurve ?? defaultAchievementCurve)
     : (basis?.axes.find((axis) => axis.axisId === axisId)?.thresholds ?? []);
 }
 
@@ -142,19 +176,22 @@ export function playerRadarSettingCell(
   if (!score) return undefined;
   return {
     axisId,
-    rawValue: score.totalPoints > 0 ? (100 * score.earnedPoints) / score.totalPoints : null,
+    rawValue: score.totalPoints > 0 ? score.earnedPoints : null,
     score: score.score,
     sampleQuality: "standard",
     scoreUnavailableReasons: score.totalPoints > 0 ? [] : ["no_target"],
   };
 }
 
-/** The editor interpolates saved points only; earned points remain publication-owned. */
+/** Rescore published points; historical percentage curves retain their original meaning. */
 export function achievementRadarScore(
   points: Pick<PlayerAchievementScore, "earnedPoints" | "totalPoints">,
   curve: PlayerAchievementCurve,
 ): number | null {
   if (points.totalPoints === 0) return null;
+  if ("pointThresholds" in curve) {
+    return 1 + curve.pointThresholds.filter((threshold) => points.earnedPoints >= threshold).length;
+  }
   const percentage = (100 * points.earnedPoints) / points.totalPoints;
   const thresholds = curve.thresholds;
   if (percentage <= (thresholds[0] ?? 0)) return 1;

@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { RadarManualSave } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
+import { previewRadarThresholds } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/useRadarThresholdEditor";
+import { defaultAchievementPointCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { createDeferred } from "@/test/deferred";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
@@ -132,6 +134,8 @@ describe("radar editor saved identity", () => {
     const current = editing?.current;
     const evaluation = editing?.evaluation;
     if (!editing || !current || !evaluation) throw new Error("Missing editor fixture");
+    current.input.achievementCurve = defaultAchievementPointCurve;
+    current.basis.achievementCurve = defaultAchievementPointCurve;
     editing.current = { ...current, expectedCandidateId: "saved", savedCandidateId: "saved" };
     model.candidate = {
       candidateId: "saved",
@@ -147,7 +151,7 @@ describe("radar editor saved identity", () => {
       createdAt: evaluation.createdAt,
       evaluationState: "ready",
       before: evaluation.before,
-      after: evaluation.raw,
+      after: previewRadarThresholds(evaluation.raw, current.basis, current.input),
       beforeBasis: current.basis,
       candidateBasis: current.basis,
     };

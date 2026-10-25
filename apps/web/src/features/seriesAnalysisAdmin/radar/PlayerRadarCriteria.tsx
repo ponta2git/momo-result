@@ -3,8 +3,10 @@ import { PlayerRadarAxisLabel } from "@/shared/seriesAnalysis/PlayerRadarAxisLab
 import {
   formatPlayerRadarBoundary,
   playerRadarAxes,
-  achievementScorePoints,
+  achievementCurveThresholds,
+  achievementCurveUnit,
   defaultAchievementCurve,
+  defaultAchievementPointCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type { PlayerRadarBasis } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { cn } from "@/shared/ui/cn";
@@ -24,6 +26,17 @@ export function PlayerRadarCriteria({
     ...(proposedBasis ? [{ label: "変更案", basis: proposedBasis }] : []),
   ];
   if (sources.length === 0) return null;
+  const currentCurve = currentBasis
+    ? (currentBasis.achievementCurve ?? defaultAchievementCurve)
+    : defaultAchievementPointCurve;
+  const proposedCurve = proposedBasis?.achievementCurve ?? defaultAchievementCurve;
+  const beforeThresholds = achievementCurveThresholds(currentCurve);
+  const afterThresholds = achievementCurveThresholds(proposedCurve);
+  const scores = [
+    ...new Set(
+      [...beforeThresholds, ...(proposedBasis ? afterThresholds : [])].map((entry) => entry.score),
+    ),
+  ].toSorted((a, b) => a - b);
 
   return (
     <div className="grid min-w-0">
@@ -86,14 +99,17 @@ export function PlayerRadarCriteria({
           verticalAlign="top"
         />
         <p className={contentText.supporting}>
-          実績達成は作品通算の達成率で採点します。次の5点の間を直線で結び、端の外は1点・10点です。
+          実績達成は作品通算で採点します。ポイント基準は境界以上で点数が上がります。
+          {"thresholds" in currentCurve || (proposedBasis && "thresholds" in proposedCurve)
+            ? "従来の得点率基準は基準点の間を直線で補間します。"
+            : ""}
         </p>
         <DataTable
           caption={{ content: "実績達成の採点曲線" }}
-          rows={achievementScorePoints.map((score, index) => ({
+          rows={scores.map((score) => ({
             score,
-            before: (currentBasis?.achievementCurve ?? defaultAchievementCurve).thresholds[index],
-            after: (proposedBasis?.achievementCurve ?? defaultAchievementCurve).thresholds[index],
+            before: beforeThresholds.find((entry) => entry.score === score)?.rawValue,
+            after: afterThresholds.find((entry) => entry.score === score)?.rawValue,
           }))}
           getRowKey={(row) => String(row.score)}
           columns={[
@@ -106,17 +122,18 @@ export function PlayerRadarCriteria({
             },
             {
               key: "before",
-              header: currentBasis ? "適用中の達成率" : "初期値の達成率",
+              header: `${currentBasis ? "適用中" : "初期値"}（${achievementCurveUnit(currentCurve)}）`,
               tabular: true,
-              renderCell: (row) => `${row.before}%`,
+              renderCell: (row) => (row.before === undefined ? "—" : String(row.before)),
             },
             ...(proposedBasis
               ? [
                   {
                     key: "after",
-                    header: "変更案の達成率",
+                    header: `変更案（${achievementCurveUnit(proposedCurve)}）`,
                     tabular: true,
-                    renderCell: (row: { after: number | undefined }) => `${row.after}%`,
+                    renderCell: (row: { after: number | undefined }) =>
+                      row.after === undefined ? "—" : String(row.after),
                   },
                 ]
               : []),

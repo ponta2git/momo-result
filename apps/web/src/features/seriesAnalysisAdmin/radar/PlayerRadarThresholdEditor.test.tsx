@@ -8,12 +8,13 @@ import {
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import type { RadarManualInput } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import { defaultAchievementPointCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
 
 afterEach(() => vi.useRealTimers());
 
 describe("radar threshold input workflow", () => {
-  it("edits the achievement curve in the same session, keeps six-axis values, and submits the visible five points", async () => {
+  it("edits the achievement curve in the same session, keeps six-axis values, and submits the visible nine point boundaries", async () => {
     const user = userEvent.setup();
     const model = makePlayerRadarEditorView();
     const save = vi.fn(model.editing!.save);
@@ -23,14 +24,14 @@ describe("radar threshold input workflow", () => {
     const rank = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
     fireEvent.change(rank, { target: { value: "4.95" } });
     await user.click(screen.getByRole("tab", { name: "実績達成" }));
-    expect(screen.getAllByRole("textbox")).toHaveLength(5);
-    const seven = screen.getByRole("textbox", { name: "実績達成 7点の達成率（%）" });
-    expect(seven).toHaveValue("50");
-    fireEvent.change(seven, { target: { value: "60" } });
+    expect(screen.getAllByRole("textbox")).toHaveLength(9);
+    const six = screen.getByRole("textbox", { name: "実績達成 6点の境界（pt以上）" });
+    expect(six).toHaveValue("50");
+    fireEvent.change(six, { target: { value: "60" } });
     await waitFor(() =>
       expect(
         screen.getByRole("img", { name: "実績達成の採点境界と選手の位置" }),
-      ).toHaveAccessibleDescription(/変更案 6.43点/u),
+      ).toHaveAccessibleDescription(/変更案 5点/u),
     );
     await user.click(screen.getByRole("tab", { name: "平均順位" }));
     expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue(
@@ -38,9 +39,9 @@ describe("radar threshold input workflow", () => {
     );
     await user.click(screen.getByRole("button", { name: "変更を適用" }));
     await waitFor(() => expect(save).toHaveBeenCalledOnce());
-    expect(save.mock.calls[0]![0].manualInput.achievementCurve?.thresholds).toEqual([
-      0, 10, 25, 60, 80,
-    ]);
+    expect(save.mock.calls[0]![0].manualInput.achievementCurve).toEqual({
+      pointThresholds: [5, 10, 20, 30, 60, 75, 100, 150, 200],
+    });
     expect(save.mock.calls[0]![0].manualInput.axes[0]!.thresholds[0]).toBe(4.95);
   });
 
@@ -254,6 +255,7 @@ describe("radar threshold input workflow", () => {
     const model = makePlayerRadarEditorView();
     const input: RadarManualInput = structuredClone(model.editing!.current!.input);
     input.axes[0]!.thresholds[0] = 5;
+    input.achievementCurve = defaultAchievementPointCurve;
     const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "saved-basis" };
     model.candidate = {
       candidateId: "saved-candidate",

@@ -61,19 +61,27 @@ function installRecords() {
   return catalog;
 }
 
+async function openPlayerRecord(
+  user: ReturnType<typeof userEvent.setup>,
+  itemName = "手入力のテスト実績",
+) {
+  await user.click(await screen.findByRole("button", { name: `${itemName}の記録を見る` }));
+  const details = await screen.findByRole("dialog", { name: itemName });
+  await user.click(within(details).getByRole("tab", { name: "ぽんた" }));
+  return details;
+}
+
 async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
+  const details = await openPlayerRecord(user);
+  await user.click(within(details).getByRole("button", { name: "記録を直す" }));
   await user.click(
-    await screen.findByRole("button", { name: "手入力のテスト実績・ぽんたの記録を見る（達成！）" }),
-  );
-  await user.click(await screen.findByRole("button", { name: "記録を直す" }));
-  await user.click(
-    await screen.findByRole("button", { name: "試合で入力した記録：日時・試合・達成を直す" }),
+    within(details).getByRole("button", { name: "試合で入力した記録：日時・試合・達成を直す" }),
   );
   return screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんたの記録を訂正" });
 }
 
 describe("AchievementsPage", () => {
-  it("ignores map filters, preserves saved order, and opens retired records from their own links", async () => {
+  it("uses one record action per row, switches players, and honors retired player links", async () => {
     const user = userEvent.setup();
     const resource = makeAchievedResource();
     const source = resource.items[0]!;
@@ -111,12 +119,30 @@ describe("AchievementsPage", () => {
     ).toEqual([expect.stringContaining("到着8回"), expect.stringContaining("到着4回")]);
     expect(screen.queryByRole("combobox", { name: "対象マップ" })).not.toBeInTheDocument();
     expect(screen.queryByText("以前の実績")).not.toBeInTheDocument();
+    for (const row of within(table).getAllByRole("row").slice(1)) {
+      expect(within(row).getAllByRole("button")).toHaveLength(1);
+    }
+    await user.click(within(table).getByRole("button", { name: "到着8回の記録を見る" }));
+    const currentDetails = await screen.findByRole("dialog", { name: "到着8回" });
+    expect(within(currentDetails).getByRole("tab", { name: "いーゆー" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(currentDetails).getByText("まだ記録なし")).toBeVisible();
+    expect(within(currentDetails).queryByText("4ポイント獲得")).not.toBeInTheDocument();
+    await user.click(within(currentDetails).getByRole("tab", { name: "ぽんた" }));
+    expect(within(currentDetails).getByText("4ポイント獲得")).toBeVisible();
+    expect(new URLSearchParams(router.state.location.search).get("memberId")).toBe("member_ponta");
     await act(() =>
       router.navigate(
         "/achievements?gameTitleId=gt_momotetsu_2&achievementId=retired&memberId=member_ponta",
       ),
     );
-    const details = await screen.findByRole("dialog", { name: "以前の実績・ぽんた" });
+    const details = await screen.findByRole("dialog", { name: "以前の実績" });
+    expect(within(details).getByRole("tab", { name: "ぽんた" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(within(details).getByText("廃止した実績の記録です。")).toBeVisible();
     await user.click(within(details).getByRole("button", { name: "記録を直す" }));
     expect(
@@ -155,11 +181,7 @@ describe("AchievementsPage", () => {
       }),
     );
     const { router } = renderPage();
-    await user.click(
-      await screen.findByRole("button", {
-        name: "手入力のテスト実績・ぽんたの記録を見る（確認待ち）",
-      }),
-    );
+    await openPlayerRecord(user);
     await user.click(await screen.findByRole("button", { name: "以前の記録：達成を確認する" }));
     const editor = await screen.findByRole("dialog", { name: /記録を訂正/u });
     // jsdom has no native datetime keyboard editor; change only this native control.
@@ -186,7 +208,13 @@ describe("AchievementsPage", () => {
         },
       ]),
     );
-    expect(await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" })).toBeVisible();
+    const returnedDetails = await screen.findByRole("dialog", {
+      name: "手入力のテスト実績",
+    });
+    expect(within(returnedDetails).getByRole("tab", { name: "ぽんた" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(new URLSearchParams(router.state.location.search).get("achievementId")).toBe(
       claim.achievementId,
     );
@@ -236,12 +264,7 @@ describe("AchievementsPage", () => {
         }),
       );
       renderPage();
-      await user.click(
-        await screen.findByRole("button", {
-          name: `${item.name}・ぽんたの記録を見る（達成状況は未取得）`,
-        }),
-      );
-      const details = await screen.findByRole("dialog", { name: `${item.name}・ぽんた` });
+      const details = await openPlayerRecord(user, item.name);
       expect(within(details).getByText("達成状況は未取得")).toBeVisible();
       expect(within(details).queryByText("達成！")).not.toBeInTheDocument();
       expect(within(details).queryByText(/ポイント獲得/u)).not.toBeInTheDocument();
@@ -267,7 +290,7 @@ describe("AchievementsPage", () => {
           },
         ]),
       );
-      const returnedDetails = await screen.findByRole("dialog", { name: `${item.name}・ぽんた` });
+      const returnedDetails = await screen.findByRole("dialog", { name: item.name });
       expect(within(returnedDetails).getByText("達成状況は未取得")).toBeVisible();
       expect(within(returnedDetails).queryByText("達成！")).not.toBeInTheDocument();
     },
@@ -311,9 +334,7 @@ describe("AchievementsPage", () => {
     await user.click(await screen.findByRole("button", { name: "表示を更新" }));
     expect(await screen.findByText("実績を更新できません")).toBeVisible();
     expect(screen.getByLabelText("獲得／対象ポイント")).toHaveTextContent(/ぽんた4／4ポイント/u);
-    expect(
-      screen.getByRole("button", { name: "手入力のテスト実績・ぽんたの記録を見る（達成！）" }),
-    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "手入力のテスト実績の記録を見る" })).toBeVisible();
   });
 
   it("can restore a cancelled record without published proofs and return to the same player after cancelling the editor", async () => {
@@ -330,12 +351,7 @@ describe("AchievementsPage", () => {
       http.get("/api/achievements", () => HttpResponse.json(resource)),
     );
     const { router } = renderPage();
-    await user.click(
-      await screen.findByRole("button", {
-        name: "手入力のテスト実績・ぽんたの条件を見る（まだ記録なし）",
-      }),
-    );
-    const details = await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" });
+    const details = await openPlayerRecord(user);
     await user.click(within(details).getByRole("button", { name: "記録を直す" }));
     await user.click(
       within(details).getByRole("button", { name: "試合で入力した記録：記録を戻す" }),
@@ -356,7 +372,13 @@ describe("AchievementsPage", () => {
         await screen.findByRole("alertdialog", { name: "未保存の訂正を破棄しますか？" }),
       ).getByRole("button", { name: "破棄して閉じる" }),
     );
-    expect(await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" })).toBeVisible();
+    const returnedDetails = await screen.findByRole("dialog", {
+      name: "手入力のテスト実績",
+    });
+    expect(within(returnedDetails).getByRole("tab", { name: "ぽんた" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(new URLSearchParams(router.state.location.search).get("achievementId")).toBe(
       claim.achievementId,
     );
@@ -390,12 +412,7 @@ describe("AchievementsPage", () => {
     expect(within(achievements).getByLabelText("難易度：星2")).toBeVisible();
     expect(within(achievements).queryByLabelText("難易度：星5")).not.toBeInTheDocument();
     const user = userEvent.setup();
-    await user.click(
-      within(achievements).getByRole("button", {
-        name: "手入力のテスト実績・ぽんたの記録を見る（達成！）",
-      }),
-    );
-    const details = await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" });
+    const details = await openPlayerRecord(user);
     expect(within(details).getByText("日付の記録なし")).toBeVisible();
     expect(within(details).getByText("保存された変更の集計を待っています")).toBeVisible();
     expect(within(details).getByText("4ポイント獲得")).toBeVisible();

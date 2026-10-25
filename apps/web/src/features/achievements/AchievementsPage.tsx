@@ -1,10 +1,10 @@
-import { Award } from "lucide-react";
+import { Award, BookOpen } from "lucide-react";
 
 import { AchievementClaimEditorDialog } from "@/features/achievements/AchievementClaimEditorDialog";
 import { AchievementDetailsDialog } from "@/features/achievements/AchievementDetailsDialog";
 import { AchievementPointsSummary } from "@/features/achievements/AchievementPointsSummary";
-import { AchievementStatusButton } from "@/features/achievements/AchievementStatusButton";
 import { useAchievementsPage } from "@/features/achievements/useAchievementsPage";
+import { achievementStatusLabel } from "@/shared/achievements/achievementPresentation";
 import { AchievementPublicationFeedback } from "@/shared/achievements/AchievementPublicationFeedback";
 import { canonicalResultMembers } from "@/shared/domain/members";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
@@ -37,8 +37,8 @@ export function AchievementsPage() {
     items,
     maps,
     selectedItem,
-    selectedPlayer,
     selectedMember,
+    changeMember,
     editingClaim,
     editingItem,
     refreshing,
@@ -155,34 +155,60 @@ export function AchievementsPage() {
                           {member.displayName}
                         </MemberSequenceLabel>
                       ),
-                      minWidth: "10rem",
+                      minWidth: "7rem",
                       renderCell: (item: (typeof items)[number]) => {
                         const player = item.players.find(
                           (value) => value.memberId === member.memberId,
                         );
                         return (
-                          <AchievementStatusButton
-                            name={item.name}
-                            displayName={member.displayName}
-                            player={player}
-                            onClick={() =>
-                              setSearch((previous) => {
-                                const next = new URLSearchParams(previous);
-                                if (gameTitleId) next.set("gameTitleId", gameTitleId);
-                                next.set("achievementId", item.achievementId);
-                                next.set("memberId", member.memberId);
-                                return next;
-                              })
-                            }
-                          />
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                            {player?.status === "achieved" ? (
+                              <Award
+                                aria-hidden="true"
+                                className="size-4 text-[var(--color-success)]"
+                              />
+                            ) : null}
+                            <span
+                              className={
+                                player?.status === "achieved"
+                                  ? contentText.compactPrimary
+                                  : contentText.body
+                              }
+                            >
+                              {player ? achievementStatusLabel(player.status) : "未取得"}
+                            </span>
+                          </span>
                         );
                       },
                     })),
+                    {
+                      key: "records",
+                      header: "記録",
+                      minWidth: "9rem",
+                      renderCell: (item) => (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<BookOpen />}
+                          aria-label={`${item.name}の記録を見る`}
+                          onClick={() =>
+                            setSearch((previous) => {
+                              const next = new URLSearchParams(previous);
+                              if (gameTitleId) next.set("gameTitleId", gameTitleId);
+                              next.set("achievementId", item.achievementId);
+                              next.delete("memberId");
+                              return next;
+                            })
+                          }
+                        >
+                          記録を見る
+                        </Button>
+                      ),
+                    },
                   ]}
                   rows={items}
                   getRowKey={(item) => item.achievementId}
                   stickyRowHeader
-                  verticalAlign="top"
                   emptyState={<p>対象の実績はありません。</p>}
                 />
               </section>
@@ -193,8 +219,9 @@ export function AchievementsPage() {
       {selectedItem && selectedMember && !editingClaimId ? (
         <AchievementDetailsDialog
           item={selectedItem}
-          player={selectedPlayer}
-          member={selectedMember}
+          players={selectedItem.players}
+          memberId={selectedMember.memberId}
+          onMemberChange={changeMember}
           catalog={catalog.data}
           catalogLoading={catalog.isLoading}
           catalogFailed={catalog.isError}

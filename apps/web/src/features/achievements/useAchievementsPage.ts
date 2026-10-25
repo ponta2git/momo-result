@@ -32,12 +32,9 @@ export function useAchievementsPage() {
   const items = allItems.filter((item) => !item.retired);
   const maps = data?.maps ?? catalog.data?.maps ?? [];
   const selectedItem = allItems.find((item) => item.achievementId === search.get("achievementId"));
-  const selectedPlayer = selectedItem?.players.find(
-    (player) => player.memberId === search.get("memberId"),
-  );
-  const selectedMember = canonicalResultMembers.find(
-    (member) => member.memberId === search.get("memberId"),
-  );
+  const selectedMember =
+    canonicalResultMembers.find((member) => member.memberId === search.get("memberId")) ??
+    canonicalResultMembers[0];
   const editingClaim = catalog.data?.claims.find((claim) => claim.claimId === editingClaimId);
   const editingItem = catalog.data?.items.find(
     (item) => item.achievementId === editingClaim?.achievementId,
@@ -66,6 +63,15 @@ export function useAchievementsPage() {
       next.delete("memberId");
       return next;
     });
+  const changeMember = (memberId: string) =>
+    setSearch(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        next.set("memberId", memberId);
+        return next;
+      },
+      { replace: true },
+    );
   const editClaim = (claimId: string) => {
     setEditingClaimId(claimId);
   };
@@ -90,8 +96,8 @@ export function useAchievementsPage() {
     items,
     maps,
     selectedItem,
-    selectedPlayer,
     selectedMember,
+    changeMember,
     editingClaim,
     editingItem,
     refreshing,

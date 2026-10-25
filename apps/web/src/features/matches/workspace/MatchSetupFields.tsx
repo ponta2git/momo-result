@@ -61,7 +61,7 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
         <TextField
           data-validation-path="playedAt"
           error={fieldError("playedAt")}
-          label="開催日時（必須）"
+          label="対戦日時（必須）"
           type="datetime-local"
           value={toLocalDateTimeInputValue(values.playedAt)}
           onChange={(event) => actions.onChangeField("playedAt", event.currentTarget.value)}

@@ -63,7 +63,7 @@ export function MastersEditStatusProvider({ children }: { children: ReactNode })
         pending={pending}
         preservesInput={preservesMastersInput}
         showPendingDialog={false}
-        description="変更した通知設定はまだ保存されていません。このページに残れば、設定タブを切り替えても編集を続けられます。"
+        description="変更した設定はまだ保存されていません。このページに残れば、設定タブを切り替えても編集を続けられます。"
         pendingDescription="設定の追加・保存・削除の結果を確認しています。このページでお待ちください。"
       />
       <EditFeedback value={feedback}>{children}</EditFeedback>

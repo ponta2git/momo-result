@@ -4,11 +4,49 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { RadarManualSave } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
+import { previewRadarThresholds } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { useRadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/useRadarThresholdEditor";
 import { createDeferred } from "@/test/deferred";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 describe("radar editor saved identity", () => {
+  it("treats a different inherited legacy curve as a change even when the six axes match the current basis", async () => {
+    const model = makePlayerRadarEditorView();
+    const source = structuredClone(model.editing!.current!);
+    source.basis = {
+      ...source.basis,
+      basisId: "different-legacy",
+      achievementCurve: { thresholds: [0, 20, 40, 60, 90] },
+    };
+    source.input.axes[0]!.thresholds[0] = 5;
+    source.basis.axes[0]!.thresholds[0]!.rawValue = 5;
+    source.expectedCandidateId = "legacy-candidate";
+    source.savedCandidateId = "legacy-candidate";
+    source.sourceCandidateId = "legacy-candidate";
+    source.sourceBasisId = source.basis.basisId;
+    model.candidate = {
+      candidateId: "legacy-candidate",
+      status: "ready",
+      basis: source.basis,
+      source: source.basis.source,
+      failureMessage: null,
+      unavailableAxes: [],
+    };
+    model.editing!.candidate = source;
+    const save = vi.fn(model.editing!.save);
+    model.editing!.save = save;
+    const { result } = renderHook(() => useRadarThresholdEditor(model));
+    act(() => result.current.beginFromCandidate());
+    act(() => result.current.change("averageRank", 0, "4.9"));
+    expect(result.current.noChangeFromCurrent).toBe(false);
+    await act(async () => {
+      await result.current.requestApply();
+    });
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0]![0].manualInput).not.toHaveProperty("achievementCurve");
+  });
+
   it("keeps the settled preview while draft text changes and publishes it after the debounce", () => {
     vi.useFakeTimers();
     try {
@@ -132,6 +170,8 @@ describe("radar editor saved identity", () => {
     const current = editing?.current;
     const evaluation = editing?.evaluation;
     if (!editing || !current || !evaluation) throw new Error("Missing editor fixture");
+    current.input.achievementCurve = pointAchievementCurveFixture;
+    current.basis.achievementCurve = pointAchievementCurveFixture;
     editing.current = { ...current, expectedCandidateId: "saved", savedCandidateId: "saved" };
     model.candidate = {
       candidateId: "saved",
@@ -147,7 +187,7 @@ describe("radar editor saved identity", () => {
       createdAt: evaluation.createdAt,
       evaluationState: "ready",
       before: evaluation.before,
-      after: evaluation.raw,
+      after: previewRadarThresholds(evaluation.raw, current.basis, current.input),
       beforeBasis: current.basis,
       candidateBasis: current.basis,
     };

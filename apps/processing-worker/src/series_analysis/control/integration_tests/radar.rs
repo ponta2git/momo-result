@@ -295,7 +295,7 @@ async fn prepare_candidate(
         ", &[&candidate]).await?;
     assert_eq!(row.try_get::<_, i32>(1)?, 4);
     assert_eq!(row.try_get::<_, i64>(2)?, 4);
-    assert_eq!(row.try_get::<_, i64>(3)?, 1);
+    assert_eq!(row.try_get::<_, i64>(3)?, claim.input_revision);
     assert!(row.try_get::<_, bool>(4)?);
     row.try_get(0).map_err(Into::into)
 }

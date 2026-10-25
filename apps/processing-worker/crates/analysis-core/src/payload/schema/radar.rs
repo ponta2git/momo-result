@@ -1,4 +1,6 @@
-use super::{COUNT, Field, ID, NULLABLE_ID, NULLABLE_NUMBER, NUMBER, Schema, field};
+use super::{
+    COUNT, Field, ID, NULLABLE_ID, NULLABLE_NUMBER, NUMBER, Schema, field, optional_field,
+};
 
 const AXIS: Schema = Schema::StringEnum(&[
     "averageRank",
@@ -50,16 +52,46 @@ const AXIS_BASIS: Schema = Schema::Object(&[
     field("q90", &NUMBER),
     field("thresholds", &THRESHOLDS),
 ]);
+const ACHIEVEMENT_PLAYER: Schema = Schema::Object(&[
+    field("memberId", &ID),
+    field("earnedPoints", &Schema::Unsigned { maximum: 102_400 }),
+]);
+const ACHIEVEMENT_SOURCE: Schema = Schema::Object(&[
+    field(
+        "methodVersion",
+        &Schema::StringEnum(&["achievement-points-spread-v1"]),
+    ),
+    field("totalPoints", &Schema::Unsigned { maximum: 102_400 }),
+    field("players", &Schema::Tuple(&[&ACHIEVEMENT_PLAYER; 4])),
+]);
+const ACHIEVEMENT_GENERATION: Schema = Schema::Object(&[
+    field("source", &ACHIEVEMENT_SOURCE),
+    field("q10", &NULLABLE_NUMBER),
+    field("median", &NULLABLE_NUMBER),
+    field("q90", &NULLABLE_NUMBER),
+    field("pointThresholds", &Schema::Nullable(&THRESHOLDS)),
+    field(
+        "unavailableReason",
+        &Schema::Nullable(&Schema::StringEnum(&[
+            "no_target",
+            "degenerate_distribution",
+        ])),
+    ),
+]);
 const BASIS_COMMON: &[Field] = &[
     field("definitionVersion", &DEFINITION),
     field("methodVersion", &METHOD),
     field("windowSize", &Schema::ExactUnsigned(20)),
     field("windowStride", &Schema::ExactUnsigned(1)),
     field("source", &SOURCE),
+    optional_field("achievementCurve", &super::achievements::CURVE),
 ];
 const GENERATED_BASIS: Schema = Schema::MergedObject(&[
     BASIS_COMMON,
-    &[field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6]))],
+    &[
+        field("axes", &Schema::Tuple(&[&AXIS_BASIS; 6])),
+        optional_field("achievementGenerationSource", &ACHIEVEMENT_SOURCE),
+    ],
 ]);
 const MANUAL_AXIS: Schema = Schema::Object(&[
     field("axisId", &AXIS),
@@ -162,6 +194,7 @@ pub(super) const CANDIDATE: Schema = Schema::Object(&[
     field("valuesPerAxis", &COUNT),
     field("axes", &Schema::Tuple(&[&CANDIDATE_AXIS; 6])),
     field("basis", &NULLABLE_BASIS),
+    optional_field("achievementGeneration", &ACHIEVEMENT_GENERATION),
 ]);
 const REVIEW_REASON: Schema = Schema::Object(&[
     field(

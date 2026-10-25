@@ -4,6 +4,13 @@ export type IdempotencyKeyStore = {
 };
 
 export const idempotencyOperations = [
+  "achievements.create",
+  "achievements.update",
+  "achievements.retire",
+  "achievements.order",
+  "achievements.correctClaim",
+  "achievements.addMatch",
+  "matchWorkspace.addAchievements",
   "adminAccounts.createLoginAccount",
   "adminAccounts.updateLoginAccount",
   "heldEvents.createHeldEvent",

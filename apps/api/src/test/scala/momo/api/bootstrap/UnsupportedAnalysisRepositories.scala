@@ -1,14 +1,48 @@
 package momo.api.bootstrap
 
+import java.util.UUID
+
 import cats.effect.Sync
 
 import momo.api.domain.*
-import momo.api.domain.ids.{AccountId, GameTitleId}
+import momo.api.domain.ids.{AccountId, GameTitleId, MatchId}
 import momo.api.errors.AppError
-import momo.api.repositories.{SeriesAnalysisRepository, SeriesPlayerRadarRepository}
+import momo.api.repositories.{
+  AchievementsRepository,
+  SeriesAnalysisRepository,
+  SeriesPlayerRadarRepository
+}
 
 /** Analysis persistence is intentionally absent from the lightweight HTTP fixture. */
 private[bootstrap] object UnsupportedAnalysisRepositories:
+  def achievements[F[_]: Sync]: AchievementsRepository[F] = new AchievementsRepository[F]:
+    def catalog(title: GameTitleId): F[Either[AppError, AchievementCatalog]] = unsupported
+    def reorder(command: ReorderAchievements): F[Either[AppError, AchievementCatalog]] = unsupported
+    def create(
+        command: CreateAchievement,
+        context: AchievementMutationContext
+    ): F[Either[AppError, AchievementItem]] = unsupported
+    def update(
+        id: UUID,
+        command: UpdateAchievement,
+        context: AchievementMutationContext
+    ): F[Either[AppError, AchievementItem]] = unsupported
+    def retire(
+        id: UUID,
+        version: Long,
+        context: AchievementMutationContext
+    ): F[Either[AppError, AchievementItem]] = unsupported
+    def correctClaim(
+        id: UUID,
+        command: CorrectAchievementClaim,
+        context: AchievementMutationContext
+    ): F[Either[AppError, AchievementClaim]] = unsupported
+    def addToMatch(
+        id: MatchId,
+        command: AddMatchAchievements,
+        context: AchievementMutationContext
+    ): F[Either[AppError, Unit]] = unsupported
+
   private def unsupported[F[_]: Sync, A]: F[A] = Sync[F].raiseError(
     new IllegalStateException("Analysis persistence requires PostgresHttpAppTestFixtures.")
   )

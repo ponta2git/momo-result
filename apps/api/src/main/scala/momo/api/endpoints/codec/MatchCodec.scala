@@ -67,6 +67,7 @@ object MatchCodec:
       players <- request.players.traverse(toPlayerResult)
       noteBody <- request.noteBody.fold(Right(None))(MatchNoteBody.fromString)
         .leftMap(AppError.ValidationFailed.apply)
+      achievements <- AchievementCodec.additions(request.achievements.getOrElse(Nil))
     yield ConfirmMatchCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
@@ -83,6 +84,7 @@ object MatchCodec:
       ),
       players = players,
       noteBody = noteBody,
+      achievements = achievements,
     )
 
   def toReplaceNoteCommand(
@@ -97,6 +99,7 @@ object MatchCodec:
 
   def toUpdateCommand(request: UpdateMatchRequest): Either[AppError, UpdateMatchCommand] =
     for
+      expectedVersion <- AchievementCodec.requiredMatchVersion(request.expectedVersion)
       heldEventId <- BoundaryId.required("heldEventId", request.heldEventId)(HeldEventId.fromString)
       gameTitleId <- BoundaryId.required("gameTitleId", request.gameTitleId)(GameTitleId.fromString)
       seasonMasterId <- BoundaryId
@@ -112,6 +115,7 @@ object MatchCodec:
       incidentLogDraftId <- BoundaryId
         .optional("draftIds.incidentLog", request.draftIds.incidentLog)(OcrDraftId.fromString)
       players <- request.players.traverse(toPlayerResult)
+      achievements <- AchievementCodec.additions(request.achievements.getOrElse(Nil))
     yield UpdateMatchCommand(
       heldEventId = heldEventId,
       matchNoInEvent = request.matchNoInEvent,
@@ -126,5 +130,7 @@ object MatchCodec:
         incidentLog = incidentLogDraftId,
       ),
       players = players,
+      expectedVersion = Some(expectedVersion),
+      achievements = achievements,
     )
 end MatchCodec

@@ -41,6 +41,8 @@ pub struct PayloadSetValidator {
     scopes: BTreeMap<ScopeRef, ScopeResources>,
     outlook: outlook::OutlookSet,
     title_id: Option<String>,
+    achievements_seen: bool,
+    achievement_members: BTreeSet<String>,
 }
 
 struct ScopeResources {
@@ -68,6 +70,7 @@ struct ContextReferences<'a> {
 }
 
 enum ResourceReferences<'a> {
+    Achievements(Box<crate::achievements::AchievementPayload>),
     OutlookSummary(Box<crate::outlook::Summary>),
     OutlookReference(Box<crate::outlook::Reference>),
     Aggregate(AggregateReferences),
@@ -132,6 +135,15 @@ impl PayloadSetValidator {
     ///
     /// Returns an error when a scope is incomplete or its context item counts do not balance.
     pub fn finish(self) -> Result<(), PayloadError> {
+        if !self.achievements_seen {
+            return Err(PayloadError::ResourceSetMismatch);
+        }
+        if self.scopes.get(&ScopeRef::Overall).is_some_and(|scope| {
+            !scope.aggregate.member_ids.is_empty()
+                && scope.aggregate.member_ids != self.achievement_members
+        }) {
+            return Err(PayloadError::ResourceSetMismatch);
+        }
         self.outlook
             .finish(&self.scopes, self.title_id.as_deref())?;
         for resources in self.scopes.into_values() {
@@ -158,12 +170,41 @@ impl PayloadSetValidator {
         Ok(())
     }
 
+    fn record_achievements(
+        &mut self,
+        scope: &ScopeRef,
+        payload: &crate::achievements::AchievementPayload,
+    ) -> Result<(), PayloadError> {
+        if self.achievements_seen
+            || *scope != ScopeRef::Overall
+            || self
+                .title_id
+                .as_ref()
+                .is_some_and(|id| *id != payload.game_title_id)
+        {
+            return Err(PayloadError::ResourceSetMismatch);
+        }
+        self.achievement_members = payload
+            .summaries
+            .first()
+            .ok_or(PayloadError::ResourceSetMismatch)?
+            .players
+            .iter()
+            .map(|player| player.member_id.clone())
+            .collect();
+        self.achievements_seen = true;
+        Ok(())
+    }
+
     fn record(
         &mut self,
         scope: ScopeRef,
         references: ResourceReferences<'_>,
     ) -> Result<(), PayloadError> {
         match references {
+            ResourceReferences::Achievements(payload) => {
+                return self.record_achievements(&scope, &payload);
+            }
             ResourceReferences::OutlookSummary(summary) => {
                 return self.outlook.add_summary(scope, *summary);
             }
@@ -207,8 +248,10 @@ impl PayloadSetValidator {
             .get_mut(&scope)
             .ok_or(PayloadError::ResourceSetMismatch)?;
         let inserted = match references {
-            ResourceReferences::Aggregate(_) => return Err(PayloadError::ResourceSetMismatch),
-            ResourceReferences::OutlookSummary(_) | ResourceReferences::OutlookReference(_) => {
+            ResourceReferences::Achievements(_)
+            | ResourceReferences::Aggregate(_)
+            | ResourceReferences::OutlookSummary(_)
+            | ResourceReferences::OutlookReference(_) => {
                 return Err(PayloadError::ResourceSetMismatch);
             }
             ResourceReferences::Review(member_ids) => {
@@ -273,6 +316,9 @@ fn validate_computed_resource(
 ) -> Result<ResourceReferences<'_>, PayloadError> {
     let item_count = u64::try_from(resource.item_count)?;
     match &resource.kind {
+        ComputedResourceKind::Achievements => {
+            validate_achievements(&resource.payload, &resource.scope, item_count)
+        }
         ComputedResourceKind::OutlookSummary => {
             outlook::summary(&resource.payload, &resource.scope, item_count)
                 .map(|value| ResourceReferences::OutlookSummary(Box::new(value)))
@@ -321,6 +367,9 @@ fn validate_manifest_resource<'a>(
     payload: &'a Value,
 ) -> Result<ResourceReferences<'a>, PayloadError> {
     match resource {
+        ResourceManifest::Achievements { common } => {
+            validate_achievements(payload, &common.scope, common.item_count)
+        }
         ResourceManifest::OutlookSummary { common } => {
             outlook::summary(payload, &common.scope, common.item_count)
                 .map(|value| ResourceReferences::OutlookSummary(Box::new(value)))
@@ -362,13 +411,30 @@ fn validate_manifest_resource<'a>(
 
 const fn resource_scope(resource: &ResourceManifest) -> &ScopeRef {
     match resource {
-        ResourceManifest::Aggregate { common }
+        ResourceManifest::Achievements { common }
+        | ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
         | ResourceManifest::OutlookSummary { common }
         | ResourceManifest::OutlookReference { common, .. }
         | ResourceManifest::Drilldown { common, .. }
         | ResourceManifest::MatchContext { common, .. } => &common.scope,
     }
+}
+
+fn validate_achievements(
+    payload: &Value,
+    scope: &ScopeRef,
+    item_count: u64,
+) -> Result<ResourceReferences<'static>, PayloadError> {
+    schema::validate_achievements(payload)?;
+    let parsed: crate::achievements::AchievementPayload = serde_json::from_value(payload.clone())?;
+    if *scope != ScopeRef::Overall || !crate::achievements::valid_payload(&parsed) {
+        return Err(PayloadError::InvalidSchema);
+    }
+    if u64::try_from(parsed.items.len())? != item_count {
+        return Err(PayloadError::ItemCountMismatch);
+    }
+    Ok(ResourceReferences::Achievements(Box::new(parsed)))
 }
 
 fn validate_aggregate<'a>(

@@ -25,5 +25,25 @@ export function toUpdateMatchRequest(values: MatchFormValues): MatchUpdateReques
     noteBody: _noteBody,
     ...request
   } = toConfirmMatchRequest(values);
-  return request;
+  if (values.expectedVersion === undefined)
+    throw new Error("試合の版が不明です。試合を読み込み直してください。");
+  return { ...request, expectedVersion: values.expectedVersion };
+}
+
+/** Compare only the saved result fields, so an achievement-only save never rewrites the result. */
+export function matchResultFingerprint(values: MatchFormValues): string {
+  const {
+    achievements: _achievements,
+    matchDraftId: _draft,
+    noteBody: _note,
+    ...result
+  } = toConfirmMatchRequest(values);
+  return JSON.stringify(result);
+}
+
+export function isAchievementOnlyUpdate(values: MatchFormValues): boolean {
+  return Boolean(
+    values.achievements?.length &&
+    values.initialResultFingerprint === matchResultFingerprint(values),
+  );
 }

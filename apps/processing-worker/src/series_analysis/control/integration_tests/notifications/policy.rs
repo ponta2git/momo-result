@@ -357,6 +357,14 @@ async fn real_postgres_coalesced_requests_notify_only_actual_match_changes() -> 
     for (label, triggers) in [
         ("manual-first", ["manual", "match_mutation"]),
         ("mutation-first", ["match_mutation", "manual"]),
+        (
+            "achievement-first",
+            ["achievement_mutation", "match_mutation"],
+        ),
+        (
+            "match-first-achievement",
+            ["match_mutation", "achievement_mutation"],
+        ),
     ] {
         edit_match(&harness.client, MATCH_ID).await?;
         let next = next_revision(&harness.client, &previous, label).await?;
@@ -364,6 +372,11 @@ async fn real_postgres_coalesced_requests_notify_only_actual_match_changes() -> 
         harness.expect_matches(&next, &[MATCH_ID]).await?;
         previous = next;
     }
+    let achievements = next_revision(&harness.client, &previous, "achievements-only").await?;
+    harness
+        .publish(&achievements, &["achievement_mutation"])
+        .await?;
+    previous = achievements;
     // An accepted mutation request is necessary but does not make unchanged input a change.
     let noop = next_revision(&harness.client, &previous, "noop").await?;
     harness.publish(&noop, &["match_mutation"]).await?;
@@ -394,6 +407,7 @@ async fn real_postgres_coalesced_requests_notify_only_actual_match_changes() -> 
         "algorithm_update",
         "artifact_schema_update",
         "validation_contract_update",
+        "achievement_mutation",
     ] {
         let next = next_job(&harness.client, &previous, trigger).await?;
         harness.publish(&next, &[trigger]).await?;

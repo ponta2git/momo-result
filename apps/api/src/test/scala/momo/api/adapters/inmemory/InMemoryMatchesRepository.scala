@@ -31,6 +31,13 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
   ): F[Either[AppError, MatchRecord]] = ref.modify { current =>
     current.get(id) match
       case None => (current, Left(AppError.NotFound("match", id.value)))
+      case Some(existing) if change.expectedVersion.exists(_ != existing.analysisRevision) =>
+        (current, Left(AppError.Conflict("The match changed. Refresh before saving.")))
+      case Some(_) if change.achievements.nonEmpty =>
+        (
+          current,
+          Left(AppError.ValidationFailed("Achievement persistence requires a PostgreSQL fixture."))
+        )
       case Some(existing) =>
         val record = change.applyTo(existing)
         if containsMatchNo(current, record, excluding = Some(id)) then
@@ -38,7 +45,7 @@ final class InMemoryMatchesRepository[F[_]: Sync] private (ref: Ref[F, Map[Match
         else (current.updated(id, record), Right(record))
   }
 
-  override def delete(id: MatchId): F[Boolean] = ref
+  override def delete(id: MatchId, actor: Option[AccountId]): F[Boolean] = ref
     .modify(m => if m.contains(id) then (m - id, true) else (m, false))
 
   override def replace(
@@ -139,10 +146,11 @@ object InMemoryMatchesRepository:
         updatedAt: java.time.Instant,
     ): F[Either[AppError, MatchRecord]] = matches.update(id, change, updatedAt)
 
-    override def delete(id: MatchId): F[Boolean] = matches.delete(id).flatTap {
-      case true => matchDrafts.deleteConfirmedByMatchId(id).void
-      case false => Sync[F].unit
-    }
+    override def delete(id: MatchId, actor: Option[AccountId]): F[Boolean] =
+      matches.delete(id, actor).flatTap {
+        case true => matchDrafts.deleteConfirmedByMatchId(id).void
+        case false => Sync[F].unit
+      }
 
     override def find(id: MatchId): F[Option[MatchRecord]] = matches.find(id)
 

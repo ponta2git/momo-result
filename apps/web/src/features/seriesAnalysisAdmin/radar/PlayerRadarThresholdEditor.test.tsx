@@ -5,14 +5,82 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlayerRadarAdminPanel } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdminPanel";
 import {
   previewRadarThresholds,
+  radarBasisInput,
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import type { RadarManualInput } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 afterEach(() => vi.useRealTimers());
 
 describe("radar threshold input workflow", () => {
+  it.each(["legacy", "unavailable"] as const)(
+    "keeps the %s achievement curve while editing six axes without inventing an achievement draft",
+    async (kind) => {
+      const user = userEvent.setup();
+      const model = makePlayerRadarEditorView();
+      if (kind === "unavailable") {
+        model.currentBasis!.achievementCurve = { unavailableReason: "no_target" };
+        model.editing!.evaluation!.raw.achievementCurve = model.currentBasis!.achievementCurve;
+        for (const player of model.editing!.evaluation!.raw.players)
+          player.achievement!.score = null;
+      }
+      model.editing!.current!.input = radarBasisInput(model.currentBasis!);
+      const savedCurve = structuredClone(model.currentBasis!.achievementCurve);
+      const save = vi.fn(model.editing!.save);
+      model.editing!.save = save;
+      render(<PlayerRadarAdminPanel administration={model} />);
+      await user.click(screen.getByRole("button", { name: "調整を始める" }));
+      await user.click(screen.getByRole("tab", { name: "実績達成" }));
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.getByText(/実績の境界も作るには編集を終了し/u)).toBeVisible();
+      expect(screen.queryByText(/初期案/u)).not.toBeInTheDocument();
+      await user.click(screen.getByRole("tab", { name: "平均順位" }));
+      fireEvent.change(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" }), {
+        target: { value: "4.95" },
+      });
+      await user.click(screen.getByRole("button", { name: "変更を適用" }));
+      await waitFor(() => expect(save).toHaveBeenCalledOnce());
+      expect(save.mock.calls[0]![0].manualInput).not.toHaveProperty("achievementCurve");
+      expect(save.mock.calls[0]![0].manualInput.axes[0]!.thresholds[0]).toBe(4.95);
+      expect(model.currentBasis!.achievementCurve).toEqual(savedCurve);
+    },
+  );
+
+  it("edits the achievement curve in the same session, keeps six-axis values, and submits the visible nine point boundaries", async () => {
+    const user = userEvent.setup();
+    const model = makePlayerRadarEditorView();
+    model.currentBasis!.achievementCurve = pointAchievementCurveFixture;
+    model.editing!.current!.input.achievementCurve = pointAchievementCurveFixture;
+    const save = vi.fn(model.editing!.save);
+    model.editing!.save = save;
+    render(<PlayerRadarAdminPanel administration={model} />);
+    await user.click(screen.getByRole("button", { name: "調整を始める" }));
+    const rank = screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" });
+    fireEvent.change(rank, { target: { value: "4.95" } });
+    await user.click(screen.getByRole("tab", { name: "実績達成" }));
+    expect(screen.getAllByRole("textbox")).toHaveLength(9);
+    const six = screen.getByRole("textbox", { name: "実績達成 6点の境界（pt以上）" });
+    expect(six).toHaveValue("50");
+    fireEvent.change(six, { target: { value: "60" } });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("img", { name: "実績達成の採点境界と選手の位置" }),
+      ).toHaveAccessibleDescription(/変更案 5点/u),
+    );
+    await user.click(screen.getByRole("tab", { name: "平均順位" }));
+    expect(screen.getByRole("textbox", { name: "平均順位 2点の境界（位以下）" })).toHaveValue(
+      "4.95",
+    );
+    await user.click(screen.getByRole("button", { name: "変更を適用" }));
+    await waitFor(() => expect(save).toHaveBeenCalledOnce());
+    expect(save.mock.calls[0]![0].manualInput.achievementCurve).toEqual({
+      pointThresholds: [5, 10, 20, 30, 60, 75, 100, 150, 200],
+    });
+    expect(save.mock.calls[0]![0].manualInput.axes[0]!.thresholds[0]).toBe(4.95);
+  });
+
   it("keeps edits when leaving is cancelled and discards them only after confirmation", async () => {
     const user = userEvent.setup();
     render(<PlayerRadarAdminPanel administration={makePlayerRadarEditorView()} />);
@@ -223,6 +291,7 @@ describe("radar threshold input workflow", () => {
     const model = makePlayerRadarEditorView();
     const input: RadarManualInput = structuredClone(model.editing!.current!.input);
     input.axes[0]!.thresholds[0] = 5;
+    input.achievementCurve = pointAchievementCurveFixture;
     const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "saved-basis" };
     model.candidate = {
       candidateId: "saved-candidate",

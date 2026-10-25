@@ -65,8 +65,8 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     ).foreach { case (kind, file, obsoletePayloadVersions) =>
       val current = sharedFixture(file)
       val request = simpleRequest(kind)
-      assert(validate(current, request, None, 6))
-      List(0, 1, 2, 3, 4, 5, 99).foreach(version =>
+      assert(validate(current, request, None, 10))
+      List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
         assert(!validate(current, request, None, version))
       )
       obsoletePayloadVersions.foreach(version =>
@@ -74,22 +74,23 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           current.mapObject(_.add("schemaVersion", Json.fromInt(version))),
           request,
           None,
-          6
+          10
         ))
       )
     }
     val currentId = SeriesAnalysisArtifactContract.ValidationContractId
-    assert(SeriesAnalysisArtifactContract.supports(6, Some(currentId)))
-    List(0, 1, 2, 3, 4, 5, 99).foreach(version =>
+    assert(SeriesAnalysisArtifactContract.supports(10, Some(currentId)))
+    List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
       assert(!SeriesAnalysisArtifactContract.supports(version, Some(currentId)))
     )
     List(
       None,
       Some("series-analysis-artifact-v2-full-validation-v1"),
       Some("series-analysis-artifact-v3-full-validation-v1"),
+      Some("series-analysis-artifact-v7-full-validation-v1"),
       Some("unknown")
     ).foreach(id =>
-      assert(!SeriesAnalysisArtifactContract.supports(6, id))
+      assert(!SeriesAnalysisArtifactContract.supports(10, id))
     )
 
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
@@ -209,7 +210,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       request: SeriesAnalysisChunkRequest,
       revision: Option[Long]
   ): Boolean =
-    validate(json, request, revision, 6)
+    validate(json, request, revision, SeriesAnalysisArtifactContract.ArtifactSchemaVersion)
 
   private def validate(
       json: Json,

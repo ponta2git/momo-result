@@ -36,6 +36,7 @@ export function useRadarEditingEvaluation({
     prepared,
     query: target,
     aggregate: read.aggregate,
+    achievements: read.achievements,
     scopeState: read.scopeState,
     fetching: read.fetching,
     failed: read.failed,

@@ -47,6 +47,29 @@ function radarFixture(): PlayerRadarDisplay {
 }
 
 describe("PlayerRadarSection", () => {
+  it.each([0, 100])(
+    "distinguishes no targets from an unapplied achievement basis with %s total points",
+    async (totalPoints) => {
+      const user = userEvent.setup();
+      const radar = radarFixture();
+      // A saved no-target basis can outlive the addition of achievement items.
+      radar.achievementCurve = { unavailableReason: "no_target" };
+      const achievements = radar.players.map((player) => ({
+        memberId: player.memberId,
+        displayName: player.displayName,
+        earnedPoints: 0,
+        totalPoints,
+        score: null,
+      }));
+      render(<PlayerRadarSection radar={radar} achievements={achievements} />);
+      await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));
+      const row = screen.getByRole("rowheader", { name: "実績達成" }).parentElement!;
+      expect(within(row).getAllByText(totalPoints ? "基準未適用" : "採点対象外")).toHaveLength(4);
+      expect(within(row).getAllByText(`0／${totalPoints}ポイント`)).toHaveLength(4);
+      expect(within(row).queryByText("1点")).not.toBeInTheDocument();
+    },
+  );
+
   it("groups a common reference warning above the charts and table while retaining unscored axes", async () => {
     const user = userEvent.setup();
     const radar = radarFixture();
@@ -64,7 +87,7 @@ describe("PlayerRadarSection", () => {
     expect(screen.getAllByText("参考値")).toHaveLength(1);
     expect(screen.getByText("40試合未満・8開催未満")).toBeVisible();
     for (const chart of screen.getAllByRole("img")) {
-      expect(chart).toHaveAccessibleDescription(/^点数は参考値です。/u);
+      expect(chart).toHaveAccessibleDescription(/^成績6軸の点数は参考値です。/u);
       expect(within(chart).queryByText("参考")).not.toBeInTheDocument();
     }
     await user.click(screen.getByRole("button", { name: "プレーヤーレーダーの数値を表で見る" }));

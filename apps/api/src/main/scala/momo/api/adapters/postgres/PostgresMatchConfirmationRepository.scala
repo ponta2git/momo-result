@@ -19,7 +19,13 @@ import momo.api.adapters.postgres.PostgresMatchInsertOps.insertMatchCascade
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.PostgresSeriesAnalysisMutationOps.enqueueMatchMutation
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchDraftConfirmability, MatchDraftStatus, MatchRecord}
+import momo.api.domain.{
+  AchievementMutationContext,
+  AddMatchAchievement,
+  MatchDraftConfirmability,
+  MatchDraftStatus,
+  MatchRecord
+}
 import momo.api.errors.{AppError, AppException}
 import momo.api.repositories.{
   MatchConfirmationRepository,
@@ -51,9 +57,10 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
+      achievements: List[AddMatchAchievement],
   ): F[Either[AppError, MatchConfirmationResult]] =
     val program = draft match
-      case None => insert(record, updatedAt).as(MatchConfirmationResult.Confirmed)
+      case None => insert(record, updatedAt, achievements).as(MatchConfirmationResult.Confirmed)
       case Some(expected) =>
         for
           updatedImages <-
@@ -84,7 +91,7 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](
             case Some(images) =>
               PostgresOcrSubmissions.abortForDrafts(List(expected.draftId), updatedAt) *>
                 PostgresSourceImageLifecycle.stageDeletion(images.imageIds, updatedAt) *>
-                insert(record, updatedAt) *> attachConfirmedMatch(expected, record) *>
+                insert(record, updatedAt, achievements) *> attachConfirmedMatch(expected, record) *>
                 PostgresResultNotificationCancellation.draftsUnavailable(
                   List(expected.draftId),
                   updatedAt
@@ -93,11 +100,34 @@ final class PostgresMatchConfirmationRepository[F[_]: MonadCancelThrow](
         yield
           if updatedImages.nonEmpty then MatchConfirmationResult.Confirmed
           else MatchConfirmationResult.DraftSnapshotMismatch
-    RepositoryResult.capture(program.transact(transactor))
+    RepositoryResult.capture((PostgresAchievementMatchLocks.lockEvents(List(record.heldEventId)) *>
+      program).transact(transactor))
 
-  private def insert(record: MatchRecord, updatedAt: Instant): ConnectionIO[Unit] =
-    (insertMatchCascade(record, updatedAt) *> enqueueMatchMutation(List(record.gameTitleId)) *>
-      PostgresSeriesPlayerRadarMutationOps.changed(List(record.gameTitleId), record.id, false))
+  private def insert(
+      record: MatchRecord,
+      updatedAt: Instant,
+      achievements: List[AddMatchAchievement]
+  ): ConnectionIO[Unit] =
+    (for
+      before <- PostgresAchievementMatchLocks.affectedTitles(List(record.heldEventId))
+      _ <- insertMatchCascade(record, updatedAt)
+      items <- PostgresAchievementWriteOps.lockForMatch(record.id, achievements)
+      _ <- PostgresAchievementWriteOps.addDeclarations(
+        PostgresAchievementMatchLocks.MatchSource(
+          record.id,
+          record.heldEventId,
+          record.gameTitleId,
+          record.mapMasterId,
+          record.playedAt,
+          record.analysisRevision
+        ),
+        achievements,
+        items,
+        AchievementMutationContext(record.createdByAccountId, updatedAt)
+      )
+      _ <- enqueueMatchMutation(before :+ record.gameTitleId)
+      _ <- PostgresSeriesPlayerRadarMutationOps.changed(before :+ record.gameTitleId, None)
+    yield ())
       .exceptSomeSqlState {
         case state if isUniqueViolation(state) =>
           conflict[Unit](s"matchNoInEvent ${record.matchNoInEvent.value

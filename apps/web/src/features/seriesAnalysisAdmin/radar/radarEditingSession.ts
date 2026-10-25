@@ -20,8 +20,9 @@ import type {
   RadarManualInput,
   RadarThresholdDrafts,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import { defaultAchievementCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
-  PlayerRadarAxisId,
+  PlayerRadarSettingAxisId,
   PlayerRadarBasis,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
@@ -56,7 +57,7 @@ export function beginRadarEdit(source: RadarEditingSource): RadarEditSession {
 }
 export function changeRadarThreshold(
   session: RadarEditSession | null,
-  axis: PlayerRadarAxisId,
+  axis: PlayerRadarSettingAxisId,
   index: number,
   value: string,
 ): RadarEditSession | null {
@@ -80,7 +81,17 @@ export function adoptRadarEditingSource(
   session: RadarEditSession | null,
   source: RadarEditingSource,
 ): RadarEditSession | null {
-  return session ? { ...session, source, saved: null, confirmed: false } : null;
+  return session
+    ? {
+        ...session,
+        source,
+        drafts: session.drafts.achievement.length
+          ? session.drafts
+          : { ...session.drafts, achievement: radarThresholdDrafts(source.input).achievement },
+        saved: null,
+        confirmed: false,
+      }
+    : null;
 }
 function sameRadarSaveSource(a: RadarManualSave, b: RadarManualSave | RadarEditingSource) {
   return (
@@ -231,6 +242,11 @@ export function buildRadarThresholdEditorView(
     session &&
     previewRadarThresholds(formal.after, session.source.basis, parsed.input).players.some(
       (player) =>
+        Math.abs(
+          (player.achievement?.score ?? 0) -
+            (formal.after?.players.find((p) => p.memberId === player.memberId)?.achievement
+              ?.score ?? 0),
+        ) > 1e-12 ||
         player.axes.some(
           (cell) =>
             cell.score !==
@@ -253,8 +269,24 @@ export function buildRadarThresholdEditorView(
     !matchesSaved &&
     parsed?.input &&
     administration.currentBasis &&
-    sameRadarThresholds(parsed.input, radarBasisInput(administration.currentBasis)),
+    sameRadarThresholds(parsed.input, radarBasisInput(administration.currentBasis)) &&
+    JSON.stringify(
+      parsed.input.achievementCurve ??
+        session?.source.basis.achievementCurve ??
+        defaultAchievementCurve,
+    ) === JSON.stringify(administration.currentBasis.achievementCurve ?? defaultAchievementCurve),
   );
+  const inheritedCurve = session?.source.basis.achievementCurve ?? defaultAchievementCurve;
+  const achievementEditingReason =
+    !session || session.drafts.achievement.length > 0
+      ? null
+      : "unavailableReason" in inheritedCurve
+        ? inheritedCurve.unavailableReason === "no_target"
+          ? "基準の作成時に対象の実績項目がなかったため、ポイント境界はありません。"
+          : inheritedCurve.unavailableReason === "degenerate_distribution"
+            ? "4人の実績ポイントの分布に広がりがないため、ポイント境界を作れません。"
+            : "実績ポイントの採点基準はまだ作成されていません。"
+        : "編集元は従来の得点率基準です。";
   return {
     parsed,
     formalPreviewId: formal?.previewId,
@@ -265,13 +297,21 @@ export function buildRadarThresholdEditorView(
       errors: parsed?.errors ?? [],
       inputValid: Boolean(parsed?.input),
       sourceLabel: session?.source.label ?? "",
+      achievementEditingReason,
       referenceThresholds: session
-        ? (Object.fromEntries(
-            session.source.basis.axes.map((axis) => [
+        ? (Object.fromEntries([
+            ...session.source.basis.axes.map((axis) => [
               axis.axisId,
               axis.thresholds.map((threshold) => threshold.rawValue),
             ]),
-          ) as Partial<Record<PlayerRadarAxisId, readonly number[]>>)
+            [
+              "achievement",
+              "pointThresholds" in
+              (session.source.basis.achievementCurve ?? defaultAchievementCurve)
+                ? radarThresholdDrafts(session.source.input).achievement.map(Number)
+                : undefined,
+            ],
+          ]) as Partial<Record<PlayerRadarSettingAxisId, readonly number[]>>)
         : null,
       replacesCandidate: Boolean(session?.source.expectedCandidateId),
       preview: session?.confirmed && formal ? formal : localPreview,

@@ -66,6 +66,10 @@
     --ref-rank-3: oklch(50% 0.085 55);
     --ref-rank-4: oklch(56% 0.145 28);
 
+    --ref-gold-50: oklch(97% 0.028 88);
+    --ref-gold-300: oklch(79% 0.075 80);
+    --ref-gold-800: oklch(43% 0.085 75);
+
     --ref-tray-assets: oklch(60% 0.09 240);
     --ref-tray-revenue: oklch(61% 0.09 92);
     --ref-tray-incident: oklch(59% 0.075 160);
@@ -167,6 +171,9 @@
   --color-rank-2-foreground: var(--color-text-primary);
   --color-rank-3-foreground: var(--color-text-inverse);
   --color-rank-4-foreground: var(--color-text-inverse);
+  --color-achievement-premium-foreground: var(--ref-gold-800);
+  --color-achievement-premium-surface: var(--ref-gold-50);
+  --color-achievement-premium-border: var(--ref-gold-300);
   --color-chart-segment-separator: var(--color-surface);
   --color-tray-assets: var(--ref-tray-assets);
   --color-tray-revenue: var(--ref-tray-revenue);

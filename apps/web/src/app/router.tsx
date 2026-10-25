@@ -13,6 +13,7 @@ import {
 } from "@/app/routeGuards";
 import {
   LoginPage,
+  loadAchievementsPage,
   loadDraftReviewPage,
   loadExportPage,
   loadHeldEventDetailPage,
@@ -29,6 +30,7 @@ import {
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
 const DraftReviewPage = lazy(() => loadLazyModule(loadDraftReviewPage));
+const AchievementsPage = lazy(() => loadLazyModule(loadAchievementsPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
 const HeldEventsPage = lazy(() => loadLazyModule(loadHeldEventsPage));
@@ -66,6 +68,11 @@ export const appRoutes: RouteObject[] = [
           </AuthenticatedRoute>
         ),
         children: [
+          {
+            path: "achievements",
+            handle: { title: "実績達成" },
+            element: <AchievementsPage />,
+          },
           {
             path: "matches",
             handle: { title: "試合一覧" },

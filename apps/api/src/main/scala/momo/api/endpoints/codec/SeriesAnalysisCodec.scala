@@ -111,7 +111,7 @@ object SeriesAnalysisCodec:
   ): Either[AppError, Unit] =
     val valid = kind match
       case SeriesAnalysisChunkKind.Aggregate | SeriesAnalysisChunkKind.Review |
-          SeriesAnalysisChunkKind.OutlookSummary =>
+          SeriesAnalysisChunkKind.OutlookSummary | SeriesAnalysisChunkKind.Achievements =>
         memberId.isEmpty && metric.isEmpty && matchId.isEmpty
       case SeriesAnalysisChunkKind.Drilldown =>
         memberId.nonEmpty && metric.nonEmpty && matchId.isEmpty

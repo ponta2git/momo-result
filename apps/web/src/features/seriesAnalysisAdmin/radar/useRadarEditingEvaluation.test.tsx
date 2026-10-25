@@ -9,6 +9,7 @@ import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
+import { makeAchievementResource } from "@/test/msw/achievementFixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
   analysisArtifact,
@@ -57,6 +58,7 @@ describe("radar editing evaluation refresh", () => {
     const requestedScopes: Array<string | null> = [];
     const requestedAggregates: Array<string | null> = [];
     server.use(
+      http.get("/api/achievements", () => HttpResponse.json(makeAchievementResource({ artifact }))),
       http.get("/api/analytics/series-comparison/v2/status", () =>
         HttpResponse.json(makeSeriesAnalysisStatus({ currentArtifact: artifact })),
       ),

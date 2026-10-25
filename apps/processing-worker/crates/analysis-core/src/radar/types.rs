@@ -87,11 +87,16 @@ pub struct RadarSourceMatch {
 }
 
 /// Durable private preparation input. Public summaries contain only its bounded metadata/hash.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RadarSourceSnapshot {
     pub game_title_id: String,
     pub matches: Vec<RadarSourceMatch>,
+    /// Present only for formal comparisons; the six-axis source identity excludes this resource.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievements: Option<Box<crate::achievements::AchievementPayload>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation_source: Option<Box<super::AchievementGenerationSource>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -136,6 +141,11 @@ pub struct RadarBasis {
     pub window_stride: usize,
     pub source: RadarSourceSummary,
     pub axes: [RadarAxisBasis; 6],
+    /// Omitted legacy values retain their original immutable bytes and checksum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_curve: Option<crate::achievements::AchievementCurve>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation_source: Option<Box<super::AchievementGenerationSource>>,
     /// Absent on legacy generated criteria so their canonical bytes and checksum stay unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manual: Option<Box<RadarManualProvenance>>,
@@ -161,6 +171,8 @@ pub struct RadarManualAxis {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RadarManualInput {
     pub axes: [RadarManualAxis; 6],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_curve: Option<crate::achievements::AchievementCurve>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -180,6 +192,12 @@ pub struct RadarAggregate {
 }
 
 impl RadarBasis {
+    #[must_use]
+    pub fn effective_achievement_curve(&self) -> crate::achievements::AchievementCurve {
+        self.achievement_curve
+            .unwrap_or_else(crate::achievements::AchievementCurve::legacy_percentage_default)
+    }
+
     /// Selects the immutable snapshot used for review monitoring, never the latest preview.
     #[must_use]
     pub fn monitoring_source(&self) -> &RadarSourceSummary {
@@ -229,6 +247,10 @@ impl RadarBasis {
                 unavailable_reasons: Vec::new(),
             }),
             basis: Some(self.clone()),
+            achievement_generation: self
+                .achievement_generation_source
+                .as_deref()
+                .map(|source| Box::new(source.generate())),
         })
     }
 }
@@ -261,6 +283,8 @@ pub struct RadarCandidate {
     pub values_per_axis: usize,
     pub axes: [RadarCandidateAxis; 6],
     pub basis: Option<RadarBasis>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation: Option<Box<super::AchievementGeneration>>,
 }
 
 /// Admin-visible preparation result, excluding the complete source record snapshot.
@@ -272,6 +296,8 @@ pub struct RadarCandidateSummary {
     pub values_per_axis: usize,
     pub axes: [RadarCandidateAxis; 6],
     pub basis: Option<RadarBasis>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_generation: Option<Box<super::AchievementGeneration>>,
 }
 
 impl RadarCandidate {
@@ -283,6 +309,7 @@ impl RadarCandidate {
             values_per_axis: self.values_per_axis,
             axes: self.axes.clone(),
             basis: self.basis.clone(),
+            achievement_generation: self.achievement_generation.clone(),
         }
     }
 }

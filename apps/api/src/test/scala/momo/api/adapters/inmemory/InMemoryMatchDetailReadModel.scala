@@ -63,7 +63,10 @@ final class InMemoryMatchDetailReadModel[F[_]: MonadThrow](
             record.matchNoInEvent,
             record.playedAt,
             labels.gameTitleName,
-            labels.seasonName
+            labels.seasonName,
+            gameTitleId = record.gameTitleId,
+            mapMasterId = record.mapMasterId,
+            analysisRevision = record.analysisRevision,
           )
         )
     })

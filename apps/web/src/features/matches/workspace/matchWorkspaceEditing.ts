@@ -1,3 +1,4 @@
+import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import type {
   IncidentKey,
   MatchFormValues,
@@ -34,6 +35,7 @@ export type MatchWorkspaceEdit =
       value: string | number;
     }
   | { type: "change-note"; value: string }
+  | { type: "change-achievements"; value: MatchAchievementSelection[] }
   | { type: "change-player"; index: number; field: EditablePlayerField; value: string | number }
   | { type: "change-incident"; index: number; key: IncidentKey; value: number }
   | { type: "change-play-order"; index: number; value: number }
@@ -145,6 +147,8 @@ export function transitionMatchWorkspaceEditing(
         ...state,
         values: { ...state.values, noteBody: edit.value },
       };
+    case "change-achievements":
+      return { ...state, values: { ...state.values, achievements: edit.value } };
     case "change-numeric-draft": {
       const values = setNumericDraft(state.values, edit.path, edit.value);
       return values === state.values ? state : { ...state, values };

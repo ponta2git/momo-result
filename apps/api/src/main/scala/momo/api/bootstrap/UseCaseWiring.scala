@@ -112,6 +112,7 @@ private[bootstrap] object UseCaseWiring:
       matchDraftCancellation: MatchDraftCancellationRepository[F],
       matchList: MatchListReadModel[F],
       seriesAnalysis: SeriesAnalysisRepository[F],
+      achievements: AchievementsRepository[F],
       seriesPlayerRadar: SeriesPlayerRadarRepository[F],
       matchConfirmation: MatchConfirmationRepository[F],
       appSessions: AppSessionsRepository[F],

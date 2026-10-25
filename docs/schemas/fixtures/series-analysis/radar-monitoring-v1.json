@@ -5,7 +5,7 @@
   "latestWindows": [
     {
       "evaluation": {
-        "basisChecksum": "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
+        "basisChecksum": "sha256:58099b9df837d7d9ee93fd9ea33ec8a7a44f73d5dc10562355630c0fd90d932f",
         "definitionVersion": "player-radar-six-axes-v1",
         "methodVersion": "player-radar-spread-v1",
         "players": [
@@ -241,7 +241,7 @@
     },
     {
       "evaluation": {
-        "basisChecksum": "sha256:20aa7a12379a61df6e336890b4bd0a3612ce86316209cc1617abf0cffd0f1ec4",
+        "basisChecksum": "sha256:58099b9df837d7d9ee93fd9ea33ec8a7a44f73d5dc10562355630c0fd90d932f",
         "definitionVersion": "player-radar-six-axes-v1",
         "methodVersion": "player-radar-spread-v1",
         "players": [
@@ -487,7 +487,7 @@
         "totalAssetsMedian",
         "totalAssetsP90"
       ],
-      "evidenceChecksum": "sha256:256f1705f4dc836d22cf06b742c346013a7a1153da9624e082d91302ebaf3f66",
+      "evidenceChecksum": "sha256:3cedc54e638776a37be08aec496ebd62c7384ec87361cd9d4a520ade322cd8ac",
       "kind": "high_score_concentration",
       "mapMasterIds": []
     }

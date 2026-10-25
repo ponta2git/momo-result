@@ -7,7 +7,7 @@ import cats.syntax.applicative.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 
-import momo.api.domain.{MatchDraftConfirmability, MatchRecord}
+import momo.api.domain.{AddMatchAchievement, MatchDraftConfirmability, MatchRecord}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   MatchConfirmationRepository,
@@ -26,9 +26,12 @@ final class InMemoryMatchConfirmationRepository[F[_]: MonadCancelThrow](
       record: MatchRecord,
       draft: Option[MatchDraftConfirmation],
       updatedAt: Instant,
-  ): F[Either[AppError, MatchConfirmationResult]] = RepositoryResult.capture(
-    confirmUnchecked(record, draft, updatedAt)
-  )
+      achievements: List[AddMatchAchievement],
+  ): F[Either[AppError, MatchConfirmationResult]] =
+    if achievements.nonEmpty then
+      Left(AppError.ValidationFailed("Achievement persistence requires a PostgreSQL fixture."))
+        .pure[F]
+    else RepositoryResult.capture(confirmUnchecked(record, draft, updatedAt))
 
   private def confirmUnchecked(
       record: MatchRecord,

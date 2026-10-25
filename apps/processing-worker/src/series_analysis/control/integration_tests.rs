@@ -33,6 +33,7 @@ use crate::series_analysis::artifact::{
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
+mod achievements;
 mod claim_wait;
 mod fencing;
 mod heartbeat;
@@ -73,7 +74,22 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     let input =
         crate::series_analysis::input_repository::load_analysis_input(&mut primary, TITLE_ID, 1)
             .await?;
-    assert_eq!(input, analysis_input().try_into_normalized()?);
+    let mut expected_achievements = analysis_input()
+        .try_into_normalized()?
+        .achievements()
+        .clone();
+    expected_achievements.event_compositions =
+        vec![momo_analysis_core::achievements::EventComposition {
+            held_event_id: String::from(EVENT_ID),
+            match_count: 1,
+            title_count: 1,
+        }];
+    assert_eq!(
+        input,
+        analysis_input()
+            .try_into_normalized()?
+            .with_achievements(expected_achievements)?
+    );
     primary.batch_execute("RESET TIME ZONE").await?;
     assert_claim_reports_database_availability_delay(&mut primary).await?;
     assert_recovery_locks_title_before_job(&mut primary, &mut secondary).await?;
@@ -127,7 +143,8 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
             ResourceManifest::MatchContext { common, .. } => {
                 Some(old_directory.path().join(&common.path))
             }
-            ResourceManifest::Aggregate { .. }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
             | ResourceManifest::OutlookSummary { .. }
             | ResourceManifest::OutlookReference { .. }
@@ -418,7 +435,8 @@ async fn assert_staged_metadata_requires_an_exact_set(
     let mut additional = reordered.clone();
     let mut absent_resource = first.clone();
     match &mut absent_resource {
-        ResourceManifest::Aggregate { common }
+        ResourceManifest::Achievements { common }
+        | ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
         | ResourceManifest::OutlookSummary { common }
         | ResourceManifest::OutlookReference { common, .. }
@@ -436,7 +454,8 @@ async fn assert_staged_metadata_requires_an_exact_set(
         .first_mut()
         .ok_or("fixture resource missing")?
     {
-        ResourceManifest::Aggregate { common }
+        ResourceManifest::Achievements { common }
+        | ResourceManifest::Aggregate { common }
         | ResourceManifest::Review { common }
         | ResourceManifest::OutlookSummary { common }
         | ResourceManifest::OutlookReference { common, .. }
@@ -513,7 +532,8 @@ fn corrupt_last_match_context(
         .rev()
         .find_map(|resource| match resource {
             ResourceManifest::MatchContext { common, .. } => Some(common),
-            ResourceManifest::Aggregate { .. }
+            ResourceManifest::Achievements { .. }
+            | ResourceManifest::Aggregate { .. }
             | ResourceManifest::Review { .. }
             | ResourceManifest::OutlookSummary { .. }
             | ResourceManifest::OutlookReference { .. }

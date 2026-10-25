@@ -5,7 +5,11 @@ import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdm
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarPreview";
 import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import {
+  playerRadarSettingAxes,
+  playerRadarSettingThresholds,
+  defaultAchievementCurve,
+} from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -17,6 +21,8 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
+
+const scoreAt = (index: number) => index + 2;
 
 export function PlayerRadarThresholdEditor({
   editor,
@@ -46,12 +52,23 @@ export function PlayerRadarThresholdEditor({
   const pending = editor.preparingApply || administration.communicationUnknown;
   const disabled = pending || editor.discarding || Boolean(editor.permissionReason);
   const selectedAxis =
-    playerRadarAxes.find((axis) => axis.id === editor.axis) ?? playerRadarAxes[0];
-  const unit = editor.axis === "averageRank" ? "位以下" : "万円以上";
+    playerRadarSettingAxes.find((axis) => axis.id === editor.axis) ?? playerRadarSettingAxes[0];
+  const unit =
+    editor.axis === "achievement"
+      ? "pt以上"
+      : editor.axis === "averageRank"
+        ? "位以下"
+        : "万円以上";
   const preview = editor.preview;
-  const currentValues = administration.currentBasis?.axes.find(
-    (axis) => axis.axisId === editor.axis,
-  )?.thresholds;
+  const legacyCurrent =
+    editor.axis === "achievement" &&
+    Boolean(administration.currentBasis) &&
+    "thresholds" in (administration.currentBasis?.achievementCurve ?? defaultAchievementCurve);
+  const currentValues = administration.currentBasis
+    ? playerRadarSettingThresholds(administration.currentBasis, editor.axis)
+    : undefined;
+  const achievementEditingReason =
+    editor.axis === "achievement" ? editor.achievementEditingReason : null;
   const originalValues = editor.referenceThresholds?.[editor.axis];
   const errors = editor.composing
     ? []
@@ -153,8 +170,8 @@ export function PlayerRadarThresholdEditor({
             </Button>
           }
         >
-          {playerRadarAxes.find((axis) => axis.id === firstError.axisId)?.label}・
-          {firstError.index + 2}点: {firstError.message}
+          {playerRadarSettingAxes.find((axis) => axis.id === firstError.axisId)?.label}・
+          {scoreAt(firstError.index)}点: {firstError.message}
         </Notice>
       ) : null}
       <TabsRoot
@@ -162,14 +179,14 @@ export function PlayerRadarThresholdEditor({
         onValueChange={(value) => editor.setAxis(value as typeof editor.axis)}
       >
         <TabsList aria-label="編集する観点" variant="underline">
-          {playerRadarAxes.map((axis) => (
+          {playerRadarSettingAxes.map((axis) => (
             <TabsTab key={axis.id} value={axis.id}>
               {axis.label}
               {errors.some((error) => error.axisId === axis.id) ? "（要確認）" : ""}
             </TabsTab>
           ))}
         </TabsList>
-        {playerRadarAxes.map((axis) => (
+        {playerRadarSettingAxes.map((axis) => (
           <TabsPanel key={axis.id} value={axis.id}>
             {axis.id === editor.axis ? (
               <div className="mt-4 grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(18rem,26rem)_minmax(0,1fr)]">
@@ -177,22 +194,38 @@ export function PlayerRadarThresholdEditor({
                   <div className="grid gap-1">
                     <p className={cn(contentText.body, readableTextWidthClass)}>
                       {selectedAxis.description}
+                      {editor.axis === "achievement" && !achievementEditingReason
+                        ? " 2〜10点になる実績ポイントを9か所で指定します。境界と同じ値は高い方の点数になります。シーズンを選んでも作品通算で比較します。"
+                        : ""}
                     </p>
-                    <p className={contentText.supporting}>
-                      Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
-                    </p>
-                    <div>
-                      <Button
-                        size="sm"
-                        variant="quiet"
-                        aria-pressed={showReference}
-                        onClick={() => setShowReference((current) => !current)}
-                      >
-                        {showReference ? "編集元の値を隠す" : "編集元の値を参照"}
-                      </Button>
-                    </div>
+                    {achievementEditingReason ? (
+                      <p className={contentText.supporting}>
+                        {achievementEditingReason}
+                        6軸だけを調整する場合、実績の基準は引き継ぎます。実績の境界も作るには編集を終了し、「最新の記録から作り直す」を選んでください。
+                      </p>
+                    ) : null}
+                    {!achievementEditingReason ? (
+                      <>
+                        <p className={contentText.supporting}>
+                          Enterで次の欄、Shift+Enterで前の欄へ。Escでその欄の編集を戻せます。
+                        </p>
+                        <div>
+                          <Button
+                            size="sm"
+                            variant="quiet"
+                            aria-pressed={showReference}
+                            onClick={() => setShowReference((current) => !current)}
+                          >
+                            {showReference ? "編集元の値を隠す" : "編集元の値を参照"}
+                          </Button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
-                  <fieldset disabled={disabled} className="grid min-w-0 gap-4">
+                  <fieldset
+                    disabled={disabled || Boolean(achievementEditingReason)}
+                    className="grid min-w-0 gap-4"
+                  >
                     <legend className="sr-only">{selectedAxis.label}の9境界</legend>
                     {editor.drafts?.[axis.id].map((text, index) => {
                       const key = `${axis.id}:${index}`;
@@ -204,7 +237,7 @@ export function PlayerRadarThresholdEditor({
                         <Field
                           key={key}
                           htmlFor={inputId}
-                          label={`${index + 2}点の境界（${unit}）`}
+                          label={`${scoreAt(index)}点の境界（${unit}）`}
                           error={
                             fieldErrors.length > 0
                               ? fieldErrors.map((error) => error.message).join(" ")
@@ -215,13 +248,17 @@ export function PlayerRadarThresholdEditor({
                           description={
                             <>
                               適用中:{" "}
-                              {currentValues?.[index]
-                                ? `${currentValues[index].rawValue}${unit}`
-                                : "未適用"}
+                              {legacyCurrent
+                                ? "従来の得点率基準"
+                                : currentValues?.[index]
+                                  ? `${currentValues[index].rawValue}${unit}`
+                                  : "未適用"}
                               {showReference ? (
                                 <span className="block">
-                                  編集元: {originalValues?.[index]}
-                                  {unit}
+                                  編集元:{" "}
+                                  {originalValues?.[index] === undefined
+                                    ? "未生成"
+                                    : `${originalValues[index]}${unit}`}
                                 </span>
                               ) : null}
                             </>
@@ -229,14 +266,18 @@ export function PlayerRadarThresholdEditor({
                         >
                           <InputControl
                             id={inputId}
-                            aria-label={`${selectedAxis.label} ${index + 2}点の境界（${unit}）`}
+                            aria-label={`${selectedAxis.label} ${scoreAt(index)}点の境界（${unit}）`}
                             aria-describedby={`${inputId}-reference${fieldErrors.length > 0 ? ` ${inputId}-error` : ""}`}
                             ref={(element) => {
                               if (element) inputs.current.set(key, element);
                               else inputs.current.delete(key);
                             }}
                             type="text"
-                            inputMode={axis.id === "averageRank" ? "decimal" : "text"}
+                            inputMode={
+                              axis.id === "averageRank" || axis.id === "achievement"
+                                ? "decimal"
+                                : "text"
+                            }
                             textAlign="end"
                             value={text}
                             invalid={fieldErrors.length > 0}

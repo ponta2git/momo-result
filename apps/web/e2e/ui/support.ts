@@ -8,6 +8,10 @@ import {
   makeHeldEventResponse,
   makeMatchDetail,
 } from "../../src/test/factories";
+import {
+  makeAchievementCatalog,
+  makeAchievementResource,
+} from "../../src/test/msw/achievementFixtures";
 import { incidentMastersSeed, mswState } from "../../src/test/msw/fixtures";
 import { makeSeriesAnalysisStatus } from "../../src/test/msw/seriesAnalysisFixtures";
 import { confirmedContext } from "./fixtures/records";
@@ -88,6 +92,25 @@ export const test = base.extend<{ mockedApi: void }>({
         const url = new URL(request.url());
         const path = url.pathname;
         if (request.method() === "GET") {
+          if (path === "/api/achievements/catalog") {
+            await route.fulfill({
+              json: makeAchievementCatalog({
+                gameTitleId: url.searchParams.get("gameTitleId") ?? confirmedContext.gameTitleId,
+              }),
+            });
+            return;
+          }
+          if (path === "/api/achievements") {
+            const resource = makeAchievementResource();
+            resource.gameTitleId = url.searchParams.get("gameTitleId") ?? resource.gameTitleId;
+            resource.artifact = {
+              ...resource.artifact,
+              gameTitleId: resource.gameTitleId,
+              artifactId: url.searchParams.get("artifactId") ?? resource.artifact.artifactId,
+            };
+            await route.fulfill({ json: resource });
+            return;
+          }
           if (path === "/api/matches") {
             const items = summaries.filter((match) => {
               for (const key of ["heldEventId", "gameTitleId", "seasonMasterId"] as const) {
@@ -105,6 +128,9 @@ export const test = base.extend<{ mockedApi: void }>({
             await route.fulfill({
               json: {
                 matchId: identity.matchId,
+                gameTitleId: identity.gameTitleId,
+                mapMasterId: identity.mapMasterId,
+                version: identity.version,
                 matchNoInEvent: identity.matchNoInEvent,
                 playedAt: identity.playedAt,
                 gameTitleName: identity.gameTitleName ?? confirmedContext.gameTitleName,

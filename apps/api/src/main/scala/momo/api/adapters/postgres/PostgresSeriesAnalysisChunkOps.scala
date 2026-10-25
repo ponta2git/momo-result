@@ -34,7 +34,8 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
   final case class DisplayMetadata(
       memberNames: Map[String, String],
       scopeName: Option[String],
-      mapNames: Map[String, String]
+      mapNames: Map[String, String],
+      achievementMetadata: Option[AchievementDisplayMetadata] = None,
   )
 
   private final case class MatchIdentityRow(
@@ -145,8 +146,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       fr"LEFT JOIN members snapshot_member ON snapshot_member.id = ${identities.lookup(Entity.Members, request.memberId.map(_.value))}"
     else Fragment.empty
     // An empty title has no aggregate scope index, but its no-target outlook summary is mandatory.
-    val overallOutlook = request.kind == SeriesAnalysisChunkKind.OutlookSummary &&
-      request.scope == SeriesAnalysisScope.Overall
+    val overallOutlook =
+      (request.kind == SeriesAnalysisChunkKind.OutlookSummary ||
+        request.kind == SeriesAnalysisChunkKind.Achievements) &&
+        request.scope == SeriesAnalysisScope.Overall
     val query = fr"SELECT" ++ exists ++ fr"," ++ memberExists ++
       fr", ${request.scope.key} = ANY(a.scope_keys)," ++
       storedColumns(config) ++ fr"," ++ memberColumns ++
@@ -169,6 +172,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
                 (request.kind == SeriesAnalysisChunkKind.Aggregate ||
                   request.kind == SeriesAnalysisChunkKind.Review ||
                   request.kind == SeriesAnalysisChunkKind.OutlookSummary ||
+                  request.kind == SeriesAnalysisChunkKind.Achievements ||
                   request.kind == SeriesAnalysisChunkKind.OutlookReference))) =>
         AppError.Internal("A published analysis scope resource is missing.").asLeft
       case (_, _, Some(false), Some(row), _) if row.scopeKind.nonEmpty && !overallOutlook =>
@@ -254,6 +258,10 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
         LEFT JOIN series_analysis_outlook_reference_artifacts c
           ON c.artifact_id = a.id AND c.scope_key = ${request.scope.key}
          AND c.member_id = ${request.memberId.map(_.value)}
+      """
+    case SeriesAnalysisChunkKind.Achievements => fr"""
+        LEFT JOIN series_analysis_achievement_artifacts c
+          ON c.artifact_id = a.id AND c.scope_key = ${request.scope.key}
       """
 
   private def matchContextCio(

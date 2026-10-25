@@ -1,7 +1,7 @@
-import type { PlayerRadarAxisId } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import type { PlayerRadarSettingAxisId } from "@/shared/seriesAnalysis/playerRadarPresentation";
 
 /** Walk the raw-value axis left to right; equality always earns the higher score. */
-export function radarScoringSteps(axisId: PlayerRadarAxisId, thresholds: readonly number[]) {
+export function radarScoringSteps(axisId: PlayerRadarSettingAxisId, thresholds: readonly number[]) {
   const steps = thresholds.map((rawValue, index) => ({
     rawValue,
     from: axisId === "averageRank" ? index + 2 : index + 1,

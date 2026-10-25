@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { fixedMemberIds } from "@/shared/domain/members";
 
@@ -30,6 +31,9 @@ const matchFormValuesSchema = z.object({
   matchNoInEvent: z.number().finite(),
   ownerMemberId: z.enum(memberIds),
   playedAt: z.string(),
+  achievements: z.array(matchAchievementSelectionSchema).default([]),
+  expectedVersion: z.string().optional(),
+  initialResultFingerprint: z.string().optional(),
   players: z
     .array(
       z.object({

@@ -27,7 +27,10 @@ use super::{
 ///
 /// Rejects invalid fixed rosters and values that cannot be represented canonically.
 pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandidate, RadarError> {
-    let source = snapshot(input)?;
+    let mut source = snapshot(input)?;
+    let achievement_source = super::AchievementGenerationSource::from_input(input)?;
+    let achievement_generation = achievement_source.generate();
+    source.achievement_generation_source = Some(Box::new(achievement_source.clone()));
     let source_summary = source.summary()?;
     let mut reasons = Vec::new();
     if source_summary.match_count < RADAR_MINIMUM_MATCHES {
@@ -75,15 +78,19 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         })
         .collect::<Option<Vec<_>>>()
         .and_then(|axes| axes.try_into().ok());
-    let basis = basis_axes.map(|valid_axes| RadarBasis {
-        definition_version: RADAR_DEFINITION_VERSION.to_owned(),
-        method_version: RADAR_METHOD_VERSION.to_owned(),
-        window_size: RADAR_WINDOW_SIZE,
-        window_stride: 1,
-        source: source_summary.clone(),
-        axes: valid_axes,
-        manual: None,
-    });
+    let basis = basis_axes
+        .filter(|_| achievement_generation.permits_basis())
+        .map(|valid_axes| RadarBasis {
+            definition_version: RADAR_DEFINITION_VERSION.to_owned(),
+            method_version: RADAR_METHOD_VERSION.to_owned(),
+            window_size: RADAR_WINDOW_SIZE,
+            window_stride: 1,
+            source: source_summary.clone(),
+            axes: valid_axes,
+            achievement_curve: Some(achievement_generation.curve()),
+            achievement_generation_source: Some(Box::new(achievement_source)),
+            manual: None,
+        });
     Ok(RadarCandidate {
         source,
         source_summary,
@@ -91,6 +98,7 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
         values_per_axis: window_count * 4,
         axes,
         basis,
+        achievement_generation: Some(Box::new(achievement_generation)),
     })
 }
 
@@ -101,6 +109,12 @@ pub fn generate_candidate(input: &NormalizedAnalysisInput) -> Result<RadarCandid
 /// Rejects non-finite values, a changed axis order, duplicate/reversed boundaries, and a rank
 /// threshold for ten points below the attainable rank of one.
 pub fn validate_manual_input(input: &RadarManualInput) -> Result<(), RadarError> {
+    if input
+        .achievement_curve
+        .is_some_and(|curve| !curve.is_valid())
+    {
+        return Err(RadarError::InvalidBasis);
+    }
     for (axis, expected) in input.axes.iter().zip(RadarAxis::ALL) {
         if axis.axis_id != expected
             || axis.thresholds.iter().any(|value| !value.is_finite())
@@ -146,6 +160,12 @@ pub fn create_manual_basis(
         window_size: RADAR_WINDOW_SIZE,
         window_stride: 1,
         source: source_basis.source.clone(),
+        achievement_generation_source: None,
+        achievement_curve: Some(
+            manual_input
+                .achievement_curve
+                .unwrap_or_else(|| source_basis.effective_achievement_curve()),
+        ),
         axes: manual_input.axes.clone().map(|axis| RadarAxisBasis {
             axis_id: axis.axis_id,
             q10: None,
@@ -239,8 +259,19 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
         || basis.source.match_count < RADAR_MINIMUM_MATCHES
         || basis.source.held_event_count < RADAR_MINIMUM_EVENTS
         || !valid_nonempty_source(&basis.source)
+        || !basis.effective_achievement_curve().is_valid()
     {
         return Err(RadarError::InvalidBasis);
+    }
+    if let Some(source) = &basis.achievement_generation_source {
+        let generated = source.generate();
+        if basis.manual.is_some()
+            || !source.is_valid()
+            || !generated.permits_basis()
+            || basis.achievement_curve != Some(generated.curve())
+        {
+            return Err(RadarError::InvalidBasis);
+        }
     }
     if let Some(manual) = &basis.manual {
         if manual.source_basis_id.is_empty()
@@ -258,6 +289,7 @@ pub fn validate_basis(basis: &RadarBasis) -> Result<(), RadarError> {
             return Err(RadarError::InvalidBasis);
         }
         return validate_manual_input(&RadarManualInput {
+            achievement_curve: basis.achievement_curve,
             axes: basis
                 .axes
                 .clone()

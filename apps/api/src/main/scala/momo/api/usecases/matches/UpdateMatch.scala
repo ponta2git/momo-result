@@ -7,7 +7,7 @@ import cats.data.EitherT
 import cats.syntax.all.*
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchPolicy, MatchRecord, MatchUpdate, PlayerResult}
+import momo.api.domain.{AddMatchAchievement, MatchPolicy, MatchRecord, MatchUpdate, PlayerResult}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   EntityReferenceResolver,
@@ -29,6 +29,8 @@ final case class UpdateMatchCommand(
     playedAt: Instant,
     draftRefs: MatchDraftRefs,
     players: List[PlayerResult.Input],
+    expectedVersion: Option[Long] = None,
+    achievements: List[AddMatchAchievement] = Nil,
 )
 
 final class UpdateMatch[F[_]: Monad](
@@ -45,16 +47,26 @@ final class UpdateMatch[F[_]: Monad](
     MatchReferenceValidation(heldEvents, gameTitles, mapMasters, seasonMasters)
   )
 
-  def run(matchId: MatchId, command: UpdateMatchCommand): F[Either[AppError, MatchRecord]] =
+  def run(
+      matchId: MatchId,
+      command: UpdateMatchCommand,
+  ): F[Either[AppError, MatchRecord]] = run(matchId, command, None)
+
+  def run(
+      matchId: MatchId,
+      command: UpdateMatchCommand,
+      actor: Option[AccountId]
+  ): F[Either[AppError, MatchRecord]] =
     ReferenceNormalization.update(
       command,
       references.getOrElse(EntityReferenceResolver.preserve[F])
     )
-      .flatMap(normalized => runResolved(matchId, normalized))
+      .flatMap(normalized => runResolved(matchId, normalized, actor))
 
   private def runResolved(
       matchId: MatchId,
-      command: UpdateMatchCommand
+      command: UpdateMatchCommand,
+      actor: Option[AccountId],
   ): F[Either[AppError, MatchRecord]] = (for
     allowed <- EitherT.liftF(allowedMemberIds)
     validation <- inputValidation.validate(
@@ -86,6 +98,9 @@ final class UpdateMatch[F[_]: Monad](
       totalAssetsDraftId = command.draftRefs.totalAssets,
       revenueDraftId = command.draftRefs.revenue,
       incidentLogDraftId = command.draftRefs.incidentLog,
+      expectedVersion = command.expectedVersion,
+      achievements = command.achievements,
+      updatedByAccountId = actor,
     )
     record <- EitherT(matches.update(matchId, change, updatedAt))
   yield record).value

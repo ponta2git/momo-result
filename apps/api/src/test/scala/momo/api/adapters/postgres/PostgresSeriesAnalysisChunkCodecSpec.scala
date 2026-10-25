@@ -85,7 +85,11 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     val payload = aggregateFixture.getBytes(StandardCharsets.UTF_8)
     val row = stored(payload, nestingDepth = nestingDepth(aggregateFixture))
 
-    List(None, Some("unknown-validation-contract")).foreach { contract =>
+    List(
+      None,
+      Some("unknown-validation-contract"),
+      Some("series-analysis-artifact-v9-full-validation-v3"),
+    ).foreach { contract =>
       assertInternal(
         PostgresSeriesAnalysisChunkCodec.decode(
           row.copy(validationContractId = contract),
@@ -451,8 +455,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 6,
-      validationContractId = Some("series-analysis-artifact-v6-full-validation-v2"),
+      artifactSchemaVersion = 10,
+      validationContractId = Some("series-analysis-artifact-v10-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -467,8 +471,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v7",
-    6,
+    "series-analysis-v13",
+    10,
     Instant.parse("2026-08-09T00:00:00Z"),
   )
 

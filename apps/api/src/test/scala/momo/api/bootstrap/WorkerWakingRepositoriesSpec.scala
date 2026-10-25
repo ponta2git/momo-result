@@ -265,7 +265,8 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
           change: MatchUpdate,
           updatedAt: Instant,
       ): IO[Either[AppError, MatchRecord]] = updateResult.get
-      override def delete(id: MatchId): IO[Boolean] = deleteResult.get
+      override def delete(id: MatchId, actor: Option[AccountId]): IO[Boolean] =
+        deleteResult.get
 
   private def failingMatchesRepository: MatchesRepository[IO] = new StubMatchesRepository:
     override def update(
@@ -281,7 +282,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         change: MatchUpdate,
         updatedAt: Instant,
     ): IO[Either[AppError, MatchRecord]] = IO.pure(Right(matchRecord))
-    override def delete(id: MatchId): IO[Boolean] = IO.pure(false)
+    override def delete(id: MatchId, actor: Option[AccountId]): IO[Boolean] = IO.pure(false)
     override def find(id: MatchId): IO[Option[MatchRecord]] = IO.pure(None)
     override def existsMatchNo(
         heldEventId: HeldEventId,
@@ -300,6 +301,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
         record: MatchRecord,
         draft: Option[MatchDraftConfirmation],
         updatedAt: Instant,
+        achievements: List[AddMatchAchievement],
     ): IO[Either[AppError, MatchConfirmationResult]] = result.get
 
   private def seriesAnalysisRepository(

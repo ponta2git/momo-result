@@ -12,7 +12,7 @@ import {
   useRadarEditingControls,
 } from "@/features/seriesAnalysisAdmin/radar/RadarThresholdEditorProvider";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
-import { playerRadarAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
+import { playerRadarSettingAxes } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -146,8 +146,11 @@ function PlayerRadarAdminPanelContent({ administration, active = true, applyFina
               <ul className="grid gap-1">
                 {candidate.unavailableAxes.map((axis) => (
                   <li key={axis.axisId}>
-                    {playerRadarAxes.find((definition) => definition.id === axis.axisId)?.label}:{" "}
-                    {axis.reason}
+                    {
+                      playerRadarSettingAxes.find((definition) => definition.id === axis.axisId)
+                        ?.label
+                    }
+                    : {axis.reason}
                   </li>
                 ))}
               </ul>

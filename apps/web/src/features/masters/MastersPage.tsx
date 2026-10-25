@@ -5,6 +5,7 @@ import {
 import type { MasterTabId } from "@/features/masters/mastersNavigation";
 import {
   AccountsTab,
+  AchievementsTab,
   AliasesTab,
   CatalogTab,
   IncidentsTab,
@@ -60,6 +61,7 @@ export function MastersPage() {
               ))}
             </TabsList>
             <CatalogTab enabled={navigation.openedTabs.includes("catalog")} />
+            <AchievementsTab enabled={navigation.openedTabs.includes("achievements")} />
             <AliasesTab {...adminAccess} enabled={navigation.openedTabs.includes("aliases")} />
             <IncidentsTab enabled={navigation.openedTabs.includes("incidents")} />
             <NotificationsTab

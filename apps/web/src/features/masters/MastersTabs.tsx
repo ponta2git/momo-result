@@ -1,5 +1,6 @@
 import { AccountSettingsPanel } from "@/features/masters/accounts/AccountSettingsPanel";
 import { useAccountSettings } from "@/features/masters/accounts/useAccountSettings";
+import { AchievementCatalogPanel } from "@/features/masters/achievements/AchievementCatalogPanel";
 import { MemberAliasPanel } from "@/features/masters/aliases/MemberAliasPanel";
 import { useMemberAliases } from "@/features/masters/aliases/useMemberAliases";
 import { MasterCatalogPanel } from "@/features/masters/catalog/MasterCatalogPanel";
@@ -14,6 +15,16 @@ import { TabsPanel } from "@/shared/ui/forms/Tabs";
 
 type TabAccess = { enabled: boolean };
 type AdminTabAccess = TabAccess & { retained: boolean; epoch: number };
+
+export function AchievementsTab({ enabled }: TabAccess) {
+  return (
+    <TabsPanel keepMounted value="achievements">
+      <div className="mt-6">
+        <AchievementCatalogPanel enabled={enabled} />
+      </div>
+    </TabsPanel>
+  );
+}
 
 // These connectors stay mounted for the route. Epoch keys reset inputs without resetting queues.
 export function CatalogTab({ enabled }: TabAccess) {

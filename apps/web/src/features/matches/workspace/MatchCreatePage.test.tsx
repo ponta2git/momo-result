@@ -59,6 +59,7 @@ describe("MatchCreatePage", () => {
       setDevUser();
       const noteBody = "カード交換を次戦に生かす";
       const expectedRequest = {
+        achievements: [],
         heldEventId: "held-1",
         matchNoInEvent: 7,
         gameTitleId: "gt_momotetsu_2",

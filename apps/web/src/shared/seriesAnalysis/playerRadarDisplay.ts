@@ -1,10 +1,14 @@
+import type { AchievementResource } from "@/shared/api/achievements";
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import type {
   SeriesPlayerRadarBasisRecord,
   SeriesPlayerRadarEvaluation,
+  SeriesPlayerRadarPreview,
 } from "@/shared/api/seriesPlayerRadar";
 import { memberDisplayName } from "@/shared/domain/members";
+import { defaultAchievementCurve } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import type {
+  PlayerAchievementCurve,
   PlayerRadarBasis,
   PlayerRadarDisplay,
   PlayerRadarSample,
@@ -38,11 +42,14 @@ export function playerRadarSampleDisplay(
 export function playerRadarBasisDisplay(
   record: Pick<SeriesPlayerRadarBasisRecord, "basisId" | "appliedAt" | "basis"> & {
     createdAt: string | null;
+    achievementCurve?: PlayerAchievementCurve | null;
   },
   maps: readonly DisplayMap[],
 ): PlayerRadarBasis {
   return {
     basisId: record.basisId,
+    achievementCurve:
+      record.achievementCurve ?? record.basis.achievementCurve ?? defaultAchievementCurve,
     createdAt: record.createdAt,
     appliedAt: record.appliedAt,
     definitionVersion: record.basis.definitionVersion,
@@ -57,6 +64,7 @@ export function playerRadarBasisDisplay(
 
 export function playerRadarAggregateDisplay(
   response: SeriesComparisonAggregate,
+  achievements?: AchievementResource,
 ): PlayerRadarDisplay {
   const radar = response.playerRadar;
   const basis = radar.basis
@@ -69,11 +77,18 @@ export function playerRadarAggregateDisplay(
         radar.basis.basis.source.mapCounts,
       )
     : null;
+  const summary = achievements?.summaries.find(
+    (entry) =>
+      entry.mapMasterId === ("mapMasterId" in response.scope ? response.scope.mapMasterId : null),
+  );
   return playerRadarEvaluationDisplay(
     radar.evaluation,
     basis,
     radar.evaluation.sample.mapCounts,
     response.players,
+    summary && achievements
+      ? { summary, achievementCurve: achievements.achievementCurve }
+      : undefined,
   );
 }
 
@@ -83,9 +98,15 @@ export function playerRadarEvaluationDisplay(
   basis: PlayerRadarBasis | null,
   maps: readonly DisplayMap[],
   members: readonly DisplayMember[] = [],
+  achievements?:
+    | (Pick<NonNullable<SeriesPlayerRadarPreview["afterAchievements"]>, "summary"> & {
+        achievementCurve?: PlayerAchievementCurve;
+      })
+    | null,
 ): PlayerRadarDisplay {
   return {
     basis,
+    ...(achievements?.achievementCurve ? { achievementCurve: achievements.achievementCurve } : {}),
     sample: {
       ...playerRadarSampleDisplay(evaluation.sample, maps),
       quality: evaluation.sample.quality,
@@ -96,6 +117,19 @@ export function playerRadarEvaluationDisplay(
         members.find((member) => member.memberId === player.memberId)?.displayName ??
         memberDisplayName(player.memberId),
       axes: player.axes,
+      ...(achievements
+        ? {
+            achievement: {
+              earnedPoints:
+                achievements.summary.players.find((entry) => entry.memberId === player.memberId)
+                  ?.earnedPoints ?? 0,
+              totalPoints: achievements.summary.totalPoints,
+              score:
+                achievements.summary.players.find((entry) => entry.memberId === player.memberId)
+                  ?.score ?? null,
+            },
+          }
+        : {}),
     })),
   };
 }

@@ -8,11 +8,13 @@ import {
   radarInputBasis,
 } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
 import { makePlayerRadarEditorView } from "@/test/fixtures/playerRadarEditorView";
+import { pointAchievementCurveFixture } from "@/test/msw/playerRadarFixtures";
 
 function modelFixture() {
   const model = makePlayerRadarEditorView();
   const input = structuredClone(model.editing!.current!.input);
   input.axes[0]!.thresholds[0] = 5;
+  input.achievementCurve = pointAchievementCurveFixture;
   const basis = { ...radarInputBasis(model.currentBasis!, input), basisId: "basis-candidate" };
   model.candidate = {
     candidateId: "candidate-1",

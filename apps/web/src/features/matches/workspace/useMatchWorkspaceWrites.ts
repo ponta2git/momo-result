@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
+import { invalidateAchievementReads } from "@/shared/api/achievementQueryOptions";
+import { addMatchAchievements } from "@/shared/api/achievements";
 import {
   invalidateAfterDraftCancelled,
   invalidateAfterMatchConfirmed,
@@ -15,7 +17,9 @@ import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
 
 type WriteKind = "confirm" | "update" | "cancelDraft";
-type SavedWrite = { kind: "confirm" | "update"; matchId: string } | { kind: "cancelDraft" };
+type SavedWrite =
+  | { kind: "confirm" | "update"; matchId: string; achievementOnly?: boolean }
+  | { kind: "cancelDraft" };
 type FailedWrite =
   | { kind: "confirm"; error: unknown; draftId: string | undefined }
   | { kind: "update" | "cancelDraft"; error: unknown };
@@ -32,7 +36,11 @@ export function useMatchWorkspaceWrites(events: WriteEvents): {
   cancelDraftPending: boolean;
   confirm: (request: ConfirmMatchRequest) => Promise<void>;
   pending: boolean;
-  update: (matchId: string | undefined, request: UpdateMatchRequest) => void;
+  update: (
+    matchId: string | undefined,
+    request: UpdateMatchRequest,
+    achievementOnly?: boolean,
+  ) => void;
 } {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
@@ -55,11 +63,28 @@ export function useMatchWorkspaceWrites(events: WriteEvents): {
     mutationFn: ({
       matchId,
       request,
+      achievementOnly,
     }: {
       matchId: string | undefined;
       request: UpdateMatchRequest;
+      achievementOnly: boolean;
     }) => {
       assertDefined(matchId, "matchId");
+      if (achievementOnly) {
+        const additional = {
+          expectedMatchVersion: request.expectedVersion,
+          achievements: request.achievements ?? [],
+        };
+        return runIdempotentMutation(
+          idempotencyKeys,
+          "matchWorkspace.addAchievements",
+          { matchId, request: additional },
+          async (options) => {
+            await addMatchAchievements(matchId, additional, options);
+            return { matchId };
+          },
+        );
+      }
       return runIdempotentMutation(
         idempotencyKeys,
         "matchWorkspace.updateMatch",
@@ -67,10 +92,11 @@ export function useMatchWorkspaceWrites(events: WriteEvents): {
         (options) => updateMatch(matchId, request, options),
       );
     },
-    onSuccess: async (response, { matchId }) => {
+    onSuccess: async (response, { matchId, request, achievementOnly }) => {
       assertDefined(matchId, "matchId");
-      await invalidateAfterMatchUpdated(queryClient, matchId);
-      events.saved({ kind: "update", matchId: response.matchId });
+      if (achievementOnly) await invalidateAchievementReads(queryClient, request.gameTitleId);
+      else await invalidateAfterMatchUpdated(queryClient, matchId);
+      events.saved({ kind: "update", matchId: response.matchId, achievementOnly });
     },
     onError: (error) => events.failed({ kind: "update", error }),
   });
@@ -106,8 +132,8 @@ export function useMatchWorkspaceWrites(events: WriteEvents): {
     [cancelRequest],
   );
   const updateMatchRequest = useCallback(
-    (matchId: string | undefined, request: UpdateMatchRequest) => {
-      updateRequest({ matchId, request });
+    (matchId: string | undefined, request: UpdateMatchRequest, achievementOnly = false) => {
+      updateRequest({ matchId, request, achievementOnly });
     },
     [updateRequest],
   );

@@ -13,6 +13,7 @@ object SeriesAnalysisVocabulary:
     "algorithm_update",
     "initial_backfill",
     "match_mutation",
+    "achievement_mutation",
   )
   val StoredTriggersByPriority: List[String] = TriggersByPriority.flatMap {
     case trigger @ "manual" => List(trigger, "validation_contract_update")
@@ -193,7 +194,7 @@ final case class SeriesAnalysisChunk(
 )
 
 enum SeriesAnalysisChunkKind derives CanEqual:
-  case Aggregate, Review, Drilldown, MatchContext, OutlookSummary, OutlookReference
+  case Aggregate, Review, Drilldown, MatchContext, OutlookSummary, OutlookReference, Achievements
 
 /** A reference is stored once per member; its bounded HTTP reads expose only one use. */
 enum SeriesAnalysisChunkProjection derives CanEqual:

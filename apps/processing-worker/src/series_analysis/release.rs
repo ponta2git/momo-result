@@ -614,6 +614,8 @@ async fn lock_targets(
             "SELECT title.legacy_id, \
                     $1::text <> 'initial_backfill' OR EXISTS (\
                       SELECT 1 FROM matches m WHERE m.game_title_id = s.game_title_id\
+                    ) OR EXISTS (\
+                      SELECT 1 FROM achievement_items a WHERE a.game_title_id = s.game_title_id\
                     ), s.input_revision \
              FROM series_analysis_title_states s JOIN game_titles title ON title.id=s.game_title_id \
              ORDER BY title.legacy_id FOR UPDATE OF s",
@@ -1528,6 +1530,22 @@ mod tests {
             Some(ARTIFACT_VALIDATION_CONTRACT_ID)
         );
         assert!(!inherited.try_get::<_, bool>(3)?);
+
+        let without_items = lock_targets(&transaction, PromotionTrigger::InitialBackfill).await?;
+        assert_eq!(without_items.len(), 1);
+        assert!(!without_items.first().ok_or("new title missing")?.eligible);
+        transaction.execute(
+            "INSERT INTO achievement_items(id,game_title_id,name,stars,rule_kind,scope_kind)
+             SELECT gen_random_uuid(),id,'Zero-match achievement',1,'manual','common' FROM game_titles WHERE legacy_id=$1",
+            &[&NEW_TITLE_ID],
+        ).await?;
+        let with_items = lock_targets(&transaction, PromotionTrigger::InitialBackfill).await?;
+        assert!(
+            with_items
+                .first()
+                .ok_or("achievement title missing")?
+                .eligible
+        );
 
         transaction.rollback().await?;
         Ok(())

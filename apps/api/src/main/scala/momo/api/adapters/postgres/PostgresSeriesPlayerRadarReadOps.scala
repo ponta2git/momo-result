@@ -15,6 +15,12 @@ import momo.api.errors.AppError
 
 private[postgres] object PostgresSeriesPlayerRadarReadOps:
   val MaximumDocumentBytes = 262144
+  // Omitted curves in immutable historical bases still mean percentage thresholds.
+  val LegacyDefaultAchievementCurve: Json = Json.obj(
+    "thresholds" -> Json.fromValues(
+      List(0.0, 10.0, 25.0, 50.0, 80.0).map(Json.fromDoubleOrNull)
+    )
+  )
 
   def operationColumns(using identities: PostgresIdentities): Fragment = fr"""
     ${identities.wireId("o")}, ${identities.retainedColumn("o", "game_title_id")}, o.kind, o.status,
@@ -52,11 +58,11 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         'currentBasis', CASE WHEN cb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', cb.id, 'checksum', cb.checksum, 'createdAt', cb.created_at,
           'appliedAt', r.current_applied_at, 'sourceInputRevision', cb.source_input_revision::text,
-          'basis', cb.payload) END,
+          'basis', cb.payload, 'achievementCurve', COALESCE(cb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
         'previousBasis', CASE WHEN pb.id IS NULL THEN NULL ELSE jsonb_build_object(
           'basisId', pb.id, 'checksum', pb.checksum, 'createdAt', pb.created_at,
           'appliedAt', r.previous_applied_at, 'sourceInputRevision', pb.source_input_revision::text,
-          'basis', pb.payload) END,
+          'basis', pb.payload, 'achievementCurve', COALESCE(pb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
         'candidate', CASE WHEN c.id IS NULL THEN NULL ELSE jsonb_build_object(
           'candidateId', ${identities.wireId(
         "c"
@@ -68,13 +74,20 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           'safeFailureCode', c.safe_failure_code, 'createdAt', c.created_at,
           'updatedAt', c.updated_at, 'result', c.result,
           'originKind', c.origin_kind, 'manualInput', c.manual_input,
+          'achievementCurve', COALESCE(c.manual_input->'achievementCurve', effective_basis.payload->'achievementCurve',
+            CASE WHEN effective_basis.payload IS NOT NULL THEN ${LegacyDefaultAchievementCurve.noSpaces}::jsonb
+              WHEN c.result->'achievementGeneration'->>'pointThresholds' IS NOT NULL THEN
+                jsonb_build_object('pointThresholds', c.result->'achievementGeneration'->'pointThresholds')
+              WHEN c.result->'achievementGeneration'->>'unavailableReason' IS NOT NULL THEN
+                jsonb_build_object('unavailableReason', c.result->'achievementGeneration'->'unavailableReason')
+              ELSE NULL END),
           'sourceBasisId', c.source_basis_id, 'sourceCandidateId', c.source_candidate_id,
           'savedBy', CASE WHEN c.saved_by IS NULL THEN NULL ELSE jsonb_build_object(
             'accountId', c.saved_by, 'displayName', c.saved_by_display_name) END,
           'sourceBasis', CASE WHEN sb.id IS NULL THEN NULL ELSE jsonb_build_object(
             'basisId', sb.id, 'checksum', sb.checksum, 'createdAt', sb.created_at,
             'appliedAt', NULL, 'sourceInputRevision', sb.source_input_revision::text,
-            'basis', sb.payload) END,
+            'basis', sb.payload, 'achievementCurve', COALESCE(sb.payload->'achievementCurve', ${LegacyDefaultAchievementCurve.noSpaces}::jsonb)) END,
           'latestPreview', CASE WHEN p.id IS NULL THEN NULL ELSE jsonb_build_object(
             'previewId', ${identities.wireId("p")}, 'beforeBasisId', ${identities.wireReference(
         Entity.RadarBases,
@@ -82,7 +95,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       )},
             'inputRevision', p.input_revision::text,
             'status', CASE WHEN p.status = 'ready' AND (
-              p.before_basis_id IS DISTINCT FROM r.current_basis_id
+              p.before_basis_id IS DISTINCT FROM r.current_basis_id OR p.evaluation_snapshot->'achievements' IS NULL
             ) THEN 'stale' ELSE p.status END,
             'createdAt', p.created_at) END) END,
         'operations', COALESCE(ops.items, '[]'::jsonb),
@@ -109,6 +122,13 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
       LEFT JOIN series_radar_bases sb ON sb.id = c.source_basis_id AND sb.game_title_id = ${identities.wireId(
         "gt"
       )}
+      LEFT JOIN series_radar_bases candidate_basis ON candidate_basis.id = ${identities.wireReference(
+        Entity.RadarBases,
+        fr"c.basis_id"
+      )} AND candidate_basis.game_title_id = ${identities.wireId("gt")}
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(NULLIF(c.result->'basis', 'null'::jsonb), candidate_basis.payload, sb.payload) AS payload
+      ) effective_basis ON true
       LEFT JOIN LATERAL (
         SELECT preview.* FROM series_radar_previews preview WHERE candidate_id = c.id AND game_title_id = gt.id
         ORDER BY created_at DESC, ${identities.wireId("preview")} DESC LIMIT 1
@@ -183,7 +203,7 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
         )}, 'candidateBasisId', ${identities.wireReference(Entity.RadarBases, fr"c.basis_id")},
         'status', CASE WHEN c.status = 'invalid' THEN 'invalid'
           WHEN p.status = 'ready' AND
-            p.before_basis_id IS DISTINCT FROM r.current_basis_id THEN 'stale'
+            (p.before_basis_id IS DISTINCT FROM r.current_basis_id OR p.evaluation_snapshot->'achievements' IS NULL) THEN 'stale'
           ELSE p.status END,
         'createdAt', p.created_at,
         'scope', jsonb_build_object(
@@ -197,7 +217,8 @@ private[postgres] object PostgresSeriesPlayerRadarReadOps:
           WHEN p.status <> 'ready' THEN 'awaiting_analysis'
           WHEN ${scope.key} = ANY(p.scope_keys) AND s.payload IS NULL THEN 'unavailable'
           WHEN ${scope.key} = ANY(p.scope_keys) THEN 'available' ELSE 'empty' END),
-        'before', s.payload->'before', 'after', s.payload->'after'
+        'before', s.payload->'before', 'after', s.payload->'after',
+        'beforeAchievements', s.payload->'beforeAchievements', 'afterAchievements', s.payload->'afterAchievements'
       ) AS document
       FROM series_radar_previews p
       JOIN series_analysis_title_states a ON a.game_title_id = p.game_title_id

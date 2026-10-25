@@ -7,7 +7,7 @@ use crate::{canonical::FramedSha256, model::NormalizedAnalysisInput};
 
 use super::{
     calculation::{evaluate_matches, sample, validate_basis},
-    snapshot::{snapshot, source_is_current},
+    snapshot::snapshot,
     types::{
         RADAR_MINIMUM_EVENTS, RADAR_MINIMUM_MATCHES, RADAR_WINDOW_SIZE, RadarAxis, RadarBasis,
         RadarError, RadarMonitoring, RadarMonitoringStatus, RadarMonitoringWindow,
@@ -42,7 +42,7 @@ pub fn monitor(
         return Err(RadarError::InvalidSource);
     }
     let basis_checksum = basis.checksum()?;
-    let mut reasons = source_reasons(input, &current, source, &basis_checksum)?;
+    let mut reasons = source_reasons(&current, source, &basis_checksum)?;
     let source_match_ids = source
         .matches
         .iter()
@@ -189,13 +189,12 @@ fn without_basis(current: &RadarSourceSnapshot) -> Result<RadarMonitoring, Radar
 }
 
 fn source_reasons(
-    input: &NormalizedAnalysisInput,
     current: &RadarSourceSnapshot,
     source: &RadarSourceSnapshot,
     basis_checksum: &str,
 ) -> Result<Vec<RadarReviewReason>, RadarError> {
     let mut reasons = Vec::new();
-    if !source_is_current(source, input)? {
+    if !source.matches_are_current_in(current) {
         let source_ids = source
             .matches
             .iter()

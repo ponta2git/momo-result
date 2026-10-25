@@ -70,7 +70,7 @@ export function AchievementMatchPicker({
                   </span>
                   <span className={contentText.supporting}>
                     {match.mapName ?? "マップ未取得"}
-                    {eligible ? "" : "・対象外"}
+                    {eligible ? "" : "・この実績の対象外"}
                   </span>
                 </div>
               </ContentWithActions>

@@ -6,7 +6,7 @@ import { useAchievementPublication } from "@/shared/achievements/useAchievementP
 import { achievementCatalogQueryOptions } from "@/shared/api/achievementQueryOptions";
 import { gameTitlesQueryOptions } from "@/shared/api/queryOptions";
 import { usePermissionFacts } from "@/shared/auth/useAuthorization";
-import { orderFixedMembers } from "@/shared/domain/members";
+import { canonicalResultMembers } from "@/shared/domain/members";
 
 export function useAchievementsPage() {
   const [search, setSearch] = useSearchParams();
@@ -14,49 +14,46 @@ export function useAchievementsPage() {
   const operations = usePermissionFacts("operations");
   const titles = useQuery(gameTitlesQueryOptions());
   const gameTitleId = search.get("gameTitleId") ?? titles.data?.items?.[0]?.id;
-  const mapMasterId = search.get("mapMasterId") ?? "";
   const publication = useAchievementPublication(gameTitleId);
   const catalog = useQuery(achievementCatalogQueryOptions(gameTitleId));
   const data = publication.data;
   const titleChanged = Boolean(data && data.gameTitleId !== gameTitleId);
-  const invalidMap = Boolean(
-    data && mapMasterId && !data.maps.some((map) => map.mapMasterId === mapMasterId),
-  );
-  const summary = data?.summaries.find((entry) => (entry.mapMasterId ?? "") === mapMasterId);
-  const items =
-    data?.items.filter(
-      (item) =>
-        !item.retired && (!mapMasterId || item.common || item.mapMasterIds.includes(mapMasterId)),
-    ) ?? [];
-  const currentCatalog = catalog.data;
-  const claims = currentCatalog
-    ? currentCatalog.items
-        .filter((item) => !item.retiredAt)
-        .flatMap((item) =>
-          orderFixedMembers(
-            currentCatalog.claims.filter((claim) => claim.achievementId === item.achievementId),
-          ).map((claim) => ({ claim, item })),
-        )
-    : [];
-  const selectedItem = data?.items.find(
-    (item) => item.achievementId === search.get("achievementId"),
-  );
+  const summary = data?.summaries.find((entry) => entry.mapMasterId === null);
+  // Published definitions keep their points and stars in sync. Catalog-only items
+  // remain reachable for corrections without inventing an unpublished result.
+  const allItems = [
+    ...(data?.items ?? []),
+    ...(catalog.data?.items ?? [])
+      .filter(
+        (item) => !data?.items.some((published) => published.achievementId === item.achievementId),
+      )
+      .map((item) => ({ ...item, retired: Boolean(item.retiredAt), players: [] })),
+  ];
+  const items = allItems.filter((item) => !item.retired);
+  const maps = data?.maps ?? catalog.data?.maps ?? [];
+  const selectedItem = allItems.find((item) => item.achievementId === search.get("achievementId"));
   const selectedPlayer = selectedItem?.players.find(
     (player) => player.memberId === search.get("memberId"),
+  );
+  const selectedMember = canonicalResultMembers.find(
+    (member) => member.memberId === search.get("memberId"),
   );
   const editingClaim = catalog.data?.claims.find((claim) => claim.claimId === editingClaimId);
   const editingItem = catalog.data?.items.find(
     (item) => item.achievementId === editingClaim?.achievementId,
   );
   const refreshing =
-    publication.status.isFetching || publication.resource.isFetching || titles.isFetching;
+    publication.status.isFetching ||
+    publication.resource.isFetching ||
+    catalog.isFetching ||
+    titles.isFetching;
 
-  const changeSelection = (key: "gameTitleId" | "mapMasterId", value: string) => {
+  const changeTitle = (value: string) => {
     setSearch((previous) => {
       const next = new URLSearchParams(previous);
-      if (value) next.set(key, value);
-      else next.delete(key);
-      if (key === "gameTitleId") next.delete("mapMasterId");
+      if (value) next.set("gameTitleId", value);
+      else next.delete("gameTitleId");
+      next.delete("mapMasterId");
       next.delete("achievementId");
       next.delete("memberId");
       return next;
@@ -70,7 +67,6 @@ export function useAchievementsPage() {
       return next;
     });
   const editClaim = (claimId: string) => {
-    closeDetails();
     setEditingClaimId(claimId);
   };
   const refresh = () => {
@@ -86,21 +82,20 @@ export function useAchievementsPage() {
     operations,
     titles,
     gameTitleId,
-    mapMasterId,
     publication,
     catalog,
     data,
     titleChanged,
-    invalidMap,
     summary,
     items,
-    claims,
+    maps,
     selectedItem,
     selectedPlayer,
+    selectedMember,
     editingClaim,
     editingItem,
     refreshing,
-    changeSelection,
+    changeTitle,
     closeDetails,
     editClaim,
     refresh,

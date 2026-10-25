@@ -2,6 +2,9 @@ import type { AchievementResource } from "@/shared/api/achievements";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 
 export type PublishedAchievement = AchievementResource["items"][number];
+export type AchievementDefinition = Omit<PublishedAchievement, "players" | "ruleKind"> & {
+  ruleKind: string;
+};
 export type PublishedAchievementPlayer = PublishedAchievement["players"][number];
 export type PublishedAchievementProof = PublishedAchievementPlayer["proofs"][number];
 
@@ -16,32 +19,32 @@ export const achievementRuleOptions = [
 export function achievementStatusLabel(status: PublishedAchievementPlayer["status"]) {
   switch (status) {
     case "achieved":
-      return "達成済み";
+      return "達成！";
     case "unconfirmed":
-      return "移行元で未確認";
+      return "確認待ち";
     case "not_recorded":
-      return "達成記録なし";
+      return "まだ記録なし";
   }
 }
 
 export function achievementDateLabel(player: PublishedAchievementPlayer): string | null {
   if (player.status !== "achieved") return null;
   if (player.firstAchievedAt) {
-    return `${player.dateUnknown ? "記録上 " : ""}${formatDateTimeLong(player.firstAchievedAt)}`;
+    return formatDateTimeLong(player.firstAchievedAt);
   }
-  return "日時不明";
+  return "日付の記録なし";
 }
 
 export function achievementProofLabel(kind: PublishedAchievementProof["kind"]): string {
   switch (kind) {
     case "manual":
-      return "手入力";
+      return "試合で記録した達成";
     case "import":
-      return "移行時の申告";
+      return "以前の実績リストから";
     case "derived":
-      return "上位実績からの補完";
+      return "ほかの実績と一緒に達成";
     case "automatic":
-      return "試合結果による判定";
+      return "試合結果から達成";
   }
 }
 

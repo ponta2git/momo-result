@@ -62,10 +62,11 @@ export function AchievementClaimEditorDialog({
             else void submit().catch(() => undefined);
           }}
         >
-          <p className={contentText.supporting}>
-            {claim.sourceKind === "import" ? "移行時の申告" : "手入力の記録"}
-            を訂正します。ほかの根拠による達成は維持されます。
-          </p>
+          {claim.sourceKind === "import" ? (
+            <p className={contentText.body}>
+              以前の実績リストから引き継いだ記録です。達成の有無を直したり、分かった日時や試合を追加したりできます。
+            </p>
+          ) : null}
           {conflict ? (
             <Notice
               tone="warning"
@@ -89,9 +90,9 @@ export function AchievementClaimEditorDialog({
               label="達成の確認"
               value={form.state}
               options={[
-                { value: "achieved", label: "達成済み" },
+                { value: "achieved", label: "達成した" },
                 ...(baseline.claim.state === "unconfirmed"
-                  ? [{ value: "unconfirmed", label: "移行元で未確認" }]
+                  ? [{ value: "unconfirmed", label: "確認待ち" }]
                   : []),
                 { value: "cancelled", label: "この記録の達成を取り消す" },
               ]}
@@ -99,7 +100,7 @@ export function AchievementClaimEditorDialog({
             />
             {confirmationRequired ? (
               <Notice tone="info">
-                確認できた結果に応じて「達成済み」または「この記録の達成を取り消す」を選んでから保存してください。
+                確認できたら「達成した」または「この記録の達成を取り消す」を選んで保存できます。
               </Notice>
             ) : null}
             {form.matchId ? (
@@ -108,27 +109,27 @@ export function AchievementClaimEditorDialog({
                   {matchIdentity
                     ? `${formatDateTimeLong(matchIdentity.playedAt)}・第${matchIdentity.matchNoInEvent}試合`
                     : identity.data?.kind === "notFound"
-                      ? "根拠の試合が見つかりません"
-                      : "根拠の試合を確認中"}
+                      ? "達成した試合が見つかりません"
+                      : "達成した試合を読み込み中"}
                 </p>
                 <Button
                   variant="quiet"
                   size="sm"
                   onClick={() => setForm((current) => ({ ...current, matchId: "" }))}
                 >
-                  根拠の紐づけを外す
+                  試合の指定を外す
                 </Button>
                 {identity.isError ? (
                   <Notice
                     tone="danger"
-                    title="根拠の試合を確認できません"
+                    title="達成した試合を読み込めません"
                     action={
                       <Button variant="secondary" size="sm" onClick={() => void identity.refetch()}>
                         再読み込み
                       </Button>
                     }
                   >
-                    再読み込みするか、根拠の紐づけを外してください。
+                    再読み込みするか、試合の指定を外してください。
                   </Notice>
                 ) : null}
                 {!identity.isLoading && !eligibleIdentity ? (
@@ -148,14 +149,14 @@ export function AchievementClaimEditorDialog({
                 }
                 description={
                   baseline.claim.matchId
-                    ? "記録していた達成日時を保持します。根拠の紐づけを外して保存した後に、日時を訂正できます。"
-                    : "分かる範囲で補完してください。未入力なら日時不明として残します。"
+                    ? "日時は今のまま残ります。試合の指定を外して保存すると、日時も変更できます。"
+                    : "分かる日時を入力してください。分からない場合は空欄のまま保存できます。"
                 }
               />
             )}
             <Disclosure
-              summary={form.matchId ? "根拠の試合を付け替える" : "根拠の試合を選ぶ"}
-              ariaLabel="根拠の確定試合を選ぶ"
+              summary={form.matchId ? "達成した試合を変更する" : "達成した試合を選ぶ"}
+              ariaLabel={form.matchId ? "達成した試合を変更する" : "達成した試合を選ぶ"}
               triggerVariant="supporting"
               panelSpacing="sm"
             >
@@ -200,6 +201,11 @@ export function AchievementClaimEditorDialog({
       </Dialog>
       <AlertDialog
         open={confirmation !== null}
+        description={
+          confirmation === "cancel"
+            ? "別の試合や以前の記録でも達成している場合、その達成は残ります。"
+            : undefined
+        }
         title={
           confirmation === "cancel"
             ? "この記録の達成を取り消しますか？"

@@ -31,7 +31,7 @@ beforeAll(() =>
   ]),
 );
 
-function renderPage() {
+function renderPage(entry = "/achievements?gameTitleId=gt_momotetsu_2") {
   setDevUser();
   const client = createTestQueryClient();
   const router = createMemoryRouter(
@@ -39,7 +39,7 @@ function renderPage() {
       { path: "/achievements", element: <AchievementsPage /> },
       { path: "/matches/:matchId", element: <p>根拠の試合</p> },
     ],
-    { initialEntries: ["/achievements?gameTitleId=gt_momotetsu_2"] },
+    { initialEntries: [entry] },
   );
   render(
     <QueryClientProvider client={client}>
@@ -63,19 +63,28 @@ function installRecords() {
 
 async function openCorrection(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
-    await screen.findByRole("button", { name: "手入力のテスト実績・ぽんたの達成済み" }),
+    await screen.findByRole("button", { name: "手入力のテスト実績・ぽんたの記録を見る（達成！）" }),
   );
-  await user.click(await screen.findByRole("button", { name: "ぽんたの手入力を訂正" }));
+  await user.click(await screen.findByRole("button", { name: "記録を直す" }));
+  await user.click(
+    await screen.findByRole("button", { name: "試合で入力した記録：日時・試合・達成を直す" }),
+  );
   return screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんたの記録を訂正" });
 }
 
 describe("AchievementsPage", () => {
-  it("uses the saved item order, omits retired items from ordinary lists, and preserves a retired item link", async () => {
+  it("ignores map filters, preserves saved order, and opens retired records from their own links", async () => {
     const user = userEvent.setup();
     const resource = makeAchievedResource();
     const source = resource.items[0]!;
     resource.items = [
-      { ...source, achievementId: "second-name", name: "到着8回" },
+      {
+        ...source,
+        achievementId: "second-name",
+        name: "到着8回",
+        common: false,
+        mapMasterIds: ["map_east"],
+      },
       { ...source, achievementId: "first-name", name: "到着4回" },
       { ...source, achievementId: "retired", name: "以前の実績", retired: true },
     ];
@@ -93,16 +102,15 @@ describe("AchievementsPage", () => {
       http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
       http.get("/api/achievements", () => HttpResponse.json(resource)),
     );
-    const { router } = renderPage();
+    const { router } = renderPage("/achievements?gameTitleId=gt_momotetsu_2&mapMasterId=map_empty");
     const table = await screen.findByRole("table", { name: "実績と4人の達成状況" });
     expect(
       within(table)
         .getAllByRole("rowheader")
         .map((cell) => cell.textContent),
     ).toEqual([expect.stringContaining("到着8回"), expect.stringContaining("到着4回")]);
-    await user.click(screen.getByRole("button", { name: "保存済みの実績記録を訂正" }));
+    expect(screen.queryByRole("combobox", { name: "対象マップ" })).not.toBeInTheDocument();
     expect(screen.queryByText("以前の実績")).not.toBeInTheDocument();
-    expect(screen.getByText("手入力・移行の記録はありません。")).toBeVisible();
     await act(() =>
       router.navigate(
         "/achievements?gameTitleId=gt_momotetsu_2&achievementId=retired&memberId=member_ponta",
@@ -110,7 +118,10 @@ describe("AchievementsPage", () => {
     );
     const details = await screen.findByRole("dialog", { name: "以前の実績・ぽんた" });
     expect(within(details).getByText("廃止した実績の記録です。")).toBeVisible();
-    expect(within(details).getByRole("button", { name: "ぽんたの手入力を訂正" })).toBeEnabled();
+    await user.click(within(details).getByRole("button", { name: "記録を直す" }));
+    expect(
+      within(details).getByRole("button", { name: "試合で入力した記録：日時・試合・達成を直す" }),
+    ).toBeEnabled();
   });
 
   it("requires an explicit result before saving an unconfirmed import", async () => {
@@ -121,10 +132,21 @@ describe("AchievementsPage", () => {
       achievedAt: null,
     });
     const catalog = makeAchievementCatalog({ items: [makeAchievementItem()], claims: [claim] });
+    const resource = makeAchievedResource();
+    const player = resource.items[0]!.players.find((entry) => entry.memberId === claim.memberId)!;
+    player.status = "unconfirmed";
+    player.dateUnknown = false;
+    player.proofs = [{ ...player.proofs[0]!, kind: "import", state: "unconfirmed" }];
+    resource.summaries.forEach((summary) => {
+      summary.players.forEach((entry) => {
+        entry.earnedPoints = 0;
+        entry.score = 1;
+      });
+    });
     const submitted: CorrectAchievementClaimRequest[] = [];
     server.use(
       http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
-      http.get("/api/achievements", () => HttpResponse.json(makeAchievementResource())),
+      http.get("/api/achievements", () => HttpResponse.json(resource)),
       http.put("/api/achievements/claims/claim-direct", async ({ request }) => {
         const body = (await request.json()) as CorrectAchievementClaimRequest;
         submitted.push(body);
@@ -132,11 +154,13 @@ describe("AchievementsPage", () => {
         return HttpResponse.json(catalog.claims[0]);
       }),
     );
-    renderPage();
-    await user.click(screen.getByRole("button", { name: "保存済みの実績記録を訂正" }));
+    const { router } = renderPage();
     await user.click(
-      await screen.findByRole("button", { name: "手入力のテスト実績・ぽんたの移行記録を訂正" }),
+      await screen.findByRole("button", {
+        name: "手入力のテスト実績・ぽんたの記録を見る（確認待ち）",
+      }),
     );
+    await user.click(await screen.findByRole("button", { name: "以前の記録：達成を確認する" }));
     const editor = await screen.findByRole("dialog", { name: /記録を訂正/u });
     // jsdom has no native datetime keyboard editor; change only this native control.
     fireEvent.change(within(editor).getByLabelText("達成日時（日本時間）"), {
@@ -162,7 +186,92 @@ describe("AchievementsPage", () => {
         },
       ]),
     );
+    expect(await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" })).toBeVisible();
+    expect(new URLSearchParams(router.state.location.search).get("achievementId")).toBe(
+      claim.achievementId,
+    );
+    expect(new URLSearchParams(router.state.location.search).get("memberId")).toBe(claim.memberId);
   });
+
+  it.each([
+    { scenario: "before the first publication", hasPublication: false },
+    { scenario: "while a new item is absent from the publication", hasPublication: true },
+  ])(
+    "keeps imported records reachable $scenario without inventing a result",
+    async ({ hasPublication }) => {
+      const user = userEvent.setup();
+      const item = makeAchievementItem({
+        achievementId: "catalog-only",
+        name: "まだ集計されていない実績",
+      });
+      const claim = makeAchievementClaim({
+        achievementId: item.achievementId,
+        sourceKind: "import",
+        state: "unconfirmed",
+        achievedAt: null,
+      });
+      const catalog = makeAchievementCatalog({ items: [item], claims: [claim] });
+      const resource = hasPublication ? makeAchievedResource() : makeAchievementResource();
+      const status = makeSeriesAnalysisStatus({
+        artifactFreshness: hasPublication ? "stale" : "unavailable",
+        calculation: {
+          finishedAt: null,
+          requestedAt: "2026-08-09T02:00:00.000Z",
+          startedAt: null,
+          status: "queued",
+          trigger: "achievement_mutation",
+        },
+      });
+      if (!hasPublication) status.currentArtifact = null;
+      const submitted: CorrectAchievementClaimRequest[] = [];
+      server.use(
+        http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+        http.get("/api/analytics/series-comparison/v2/status", () => HttpResponse.json(status)),
+        http.get("/api/achievements", () => HttpResponse.json(resource)),
+        http.put("/api/achievements/claims/claim-direct", async ({ request }) => {
+          const body = (await request.json()) as CorrectAchievementClaimRequest;
+          submitted.push(body);
+          catalog.claims[0] = { ...claim, ...body, version: "3" };
+          return HttpResponse.json(catalog.claims[0]);
+        }),
+      );
+      renderPage();
+      await user.click(
+        await screen.findByRole("button", {
+          name: `${item.name}・ぽんたの記録を見る（達成状況は未取得）`,
+        }),
+      );
+      const details = await screen.findByRole("dialog", { name: `${item.name}・ぽんた` });
+      expect(within(details).getByText("達成状況は未取得")).toBeVisible();
+      expect(within(details).queryByText("達成！")).not.toBeInTheDocument();
+      expect(within(details).queryByText(/ポイント獲得/u)).not.toBeInTheDocument();
+      await user.click(within(details).getByRole("button", { name: "以前の記録：達成を確認する" }));
+      const editor = await screen.findByRole("dialog", {
+        name: `${item.name}・ぽんたの記録を訂正`,
+      });
+      await selectOption(
+        user,
+        within(editor).getByRole("combobox", { name: "達成の確認" }),
+        "achieved",
+      );
+      await user.click(within(editor).getByRole("button", { name: "記録を保存" }));
+      await waitFor(() =>
+        expect(submitted).toEqual([
+          {
+            expectedVersion: "2",
+            expectedItemVersion: "1",
+            state: "achieved",
+            matchId: null,
+            achievedAt: null,
+            expectedMatchVersion: null,
+          },
+        ]),
+      );
+      const returnedDetails = await screen.findByRole("dialog", { name: `${item.name}・ぽんた` });
+      expect(within(returnedDetails).getByText("達成状況は未取得")).toBeVisible();
+      expect(within(returnedDetails).queryByText("達成！")).not.toBeInTheDocument();
+    },
+  );
 
   it("retains the last successful publication when a newly published artifact cannot be fetched", async () => {
     const user = userEvent.setup();
@@ -195,14 +304,63 @@ describe("AchievementsPage", () => {
       ),
     );
     renderPage();
-    expect(await screen.findByRole("row", { name: /ぽんた 10点 4／4/u })).toBeVisible();
+    expect(await screen.findByLabelText("獲得／対象ポイント")).toHaveTextContent(
+      /ぽんた4／4ポイント/u,
+    );
     advanced = true;
     await user.click(await screen.findByRole("button", { name: "表示を更新" }));
     expect(await screen.findByText("実績を更新できません")).toBeVisible();
-    expect(screen.getByRole("row", { name: /ぽんた 10点 4／4/u })).toBeVisible();
+    expect(screen.getByLabelText("獲得／対象ポイント")).toHaveTextContent(/ぽんた4／4ポイント/u);
     expect(
-      screen.getByRole("button", { name: "手入力のテスト実績・ぽんたの達成済み" }),
+      screen.getByRole("button", { name: "手入力のテスト実績・ぽんたの記録を見る（達成！）" }),
     ).toBeVisible();
+  });
+
+  it("can restore a cancelled record without published proofs and return to the same player after cancelling the editor", async () => {
+    const user = userEvent.setup();
+    const claim = makeAchievementClaim({ state: "cancelled" });
+    const resource = makeAchievedResource();
+    const player = resource.items[0]!.players.find((entry) => entry.memberId === claim.memberId)!;
+    player.status = "not_recorded";
+    player.dateUnknown = false;
+    player.proofs = [];
+    const catalog = makeAchievementCatalog({ items: [makeAchievementItem()], claims: [claim] });
+    server.use(
+      http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)),
+      http.get("/api/achievements", () => HttpResponse.json(resource)),
+    );
+    const { router } = renderPage();
+    await user.click(
+      await screen.findByRole("button", {
+        name: "手入力のテスト実績・ぽんたの条件を見る（まだ記録なし）",
+      }),
+    );
+    const details = await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" });
+    await user.click(within(details).getByRole("button", { name: "記録を直す" }));
+    await user.click(
+      within(details).getByRole("button", { name: "試合で入力した記録：記録を戻す" }),
+    );
+    const editor = await screen.findByRole("dialog", { name: /記録を訂正/u });
+    expect(within(editor).getByRole("combobox", { name: "達成の確認" })).toHaveTextContent(
+      "この記録の達成を取り消す",
+    );
+    await selectOption(
+      user,
+      within(editor).getByRole("combobox", { name: "達成の確認" }),
+      "achieved",
+    );
+    expect(within(editor).getByRole("button", { name: "記録を保存" })).toBeEnabled();
+    await user.click(within(editor).getByRole("button", { name: "キャンセル" }));
+    await user.click(
+      within(
+        await screen.findByRole("alertdialog", { name: "未保存の訂正を破棄しますか？" }),
+      ).getByRole("button", { name: "破棄して閉じる" }),
+    );
+    expect(await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" })).toBeVisible();
+    expect(new URLSearchParams(router.state.location.search).get("achievementId")).toBe(
+      claim.achievementId,
+    );
+    expect(new URLSearchParams(router.state.location.search).get("memberId")).toBe(claim.memberId);
   });
 
   it("keeps published stars and points together while newer edits wait for calculation", async () => {
@@ -226,12 +384,21 @@ describe("AchievementsPage", () => {
     );
     renderPage();
     expect(await screen.findByText("保存された変更の集計を待っています")).toBeVisible();
-    const points = await screen.findByRole("table", { name: "実績達成の点数とポイント" });
-    expect(within(points).getByRole("row", { name: /ぽんた 10点 4／4/u })).toBeVisible();
+    const points = await screen.findByLabelText("獲得／対象ポイント");
+    expect(points).toHaveTextContent(/ぽんた4／4ポイント/u);
     const achievements = screen.getByRole("table", { name: "実績と4人の達成状況" });
     expect(within(achievements).getByLabelText("難易度：星2")).toBeVisible();
     expect(within(achievements).queryByLabelText("難易度：星5")).not.toBeInTheDocument();
-    expect(within(achievements).getByText("日時不明")).toBeVisible();
+    const user = userEvent.setup();
+    await user.click(
+      within(achievements).getByRole("button", {
+        name: "手入力のテスト実績・ぽんたの記録を見る（達成！）",
+      }),
+    );
+    const details = await screen.findByRole("dialog", { name: "手入力のテスト実績・ぽんた" });
+    expect(within(details).getByText("日付の記録なし")).toBeVisible();
+    expect(within(details).getByText("保存された変更の集計を待っています")).toBeVisible();
+    expect(within(details).getByText("4ポイント獲得")).toBeVisible();
   });
 
   it("cancels only the chosen source with its versions and preserves an unchanged exact timestamp", async () => {
@@ -249,7 +416,7 @@ describe("AchievementsPage", () => {
     );
     renderPage();
     const editor = await openCorrection(user);
-    await user.click(within(editor).getByRole("button", { name: "根拠の紐づけを外す" }));
+    await user.click(within(editor).getByRole("button", { name: "試合の指定を外す" }));
     expect(within(editor).getByLabelText("達成日時（日本時間）")).toHaveValue("2026-04-04T21:34");
     expect(within(editor).getByLabelText("達成日時（日本時間）")).toHaveAttribute("readonly");
     await selectOption(
@@ -276,7 +443,9 @@ describe("AchievementsPage", () => {
         achievedAt: "2026-04-04T12:34:56.000Z",
       },
     ]);
-    expect(await screen.findByRole("row", { name: /ぽんた 10点 4／4/u })).toBeVisible();
+    expect(await screen.findByLabelText("獲得／対象ポイント")).toHaveTextContent(
+      /ぽんた4／4ポイント/u,
+    );
   });
 
   it("retains unsaved correction after a conflict and explicitly reloads the latest source", async () => {
@@ -325,7 +494,7 @@ describe("AchievementsPage", () => {
       }),
     );
     expect(within(editor).getByRole("combobox", { name: "達成の確認" })).toHaveTextContent(
-      "達成済み",
+      "達成した",
     );
     expect(screen.queryByText("保存済みの記録が更新されています")).not.toBeInTheDocument();
   });

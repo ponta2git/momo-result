@@ -129,7 +129,11 @@ async fn real_postgres_radar_application_restore_and_failure_keep_artifact_and_b
             &[],
         )
         .await?;
-    assert_changed_source_cannot_be_newly_applied(&mut client, &config).await?;
+    Box::pin(assert_changed_source_cannot_be_newly_applied(
+        &mut client,
+        &config,
+    ))
+    .await?;
     drop(config);
     clean(&client).await
 }

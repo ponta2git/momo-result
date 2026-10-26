@@ -17,8 +17,6 @@ import { writeSessionFixtureManifest } from "./session-fixture.mts";
 // contract from the working tree with the same Dockerfile targets as CI.
 // BuildKit reuses layers by content, so local edits are always rebuilt;
 // nothing is selected by commit SHA.
-if (process.argv.length > 2) throw new Error("Usage: pnpm e2e:prepare");
-const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const execute = promisify(execFile);
 const workerDockerfile = "apps/processing-worker/Dockerfile";
 const images = {
@@ -30,60 +28,85 @@ const images = {
     target: "e2e-test",
   },
 } as const;
-const output = join(repoRoot, "target/e2e");
-const fixture = join(output, "session-fixture");
+const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
-configureDockerHost();
-const signal = createInterruptionSignal("E2E preparation");
-const build = (label: string, buildArgs: string[]) =>
-  runCommand("docker", ["buildx", "build", ...buildArgs, "."], {
-    cwd: repoRoot,
-    env: childEnvironment({
-      BUILDX_BUILDER: process.env["BUILDX_BUILDER"],
-      DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
-      DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
-      DOCKER_HOST: process.env["DOCKER_HOST"],
-    }),
-    label,
-    signal,
+export async function prepareE2eInputs(repoRoot: string, signal: AbortSignal) {
+  const output = join(repoRoot, "target/e2e");
+  const fixture = join(output, "session-fixture");
+  const environment = join(output, "prepared.env");
+  const env = childEnvironment({
+    BUILDX_BUILDER: process.env["BUILDX_BUILDER"],
+    DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
+    DOCKER_CONTEXT: process.env["DOCKER_CONTEXT"],
+    DOCKER_HOST: process.env["DOCKER_HOST"],
   });
-await rm(fixture, { recursive: true, force: true });
-await mkdir(output, { recursive: true });
-// The Runtime and fixture share API stages; both Worker targets share the native build.
-await settle([
-  (async () => {
-    const runtime = images.MOMO_E2E_RUNTIME_IMAGE;
-    await build("Runtime image", ["--load", "--file", runtime.file, "--tag", runtime.tag]);
-    await build("Session fixture", [
-      "--target",
-      "e2e-session-fixture",
-      "--output",
-      `type=local,dest=${fixture}`,
+  const build = (label: string, buildArgs: string[]) =>
+    runCommand("docker", ["buildx", "build", ...buildArgs, "."], {
+      cwd: repoRoot,
+      env,
+      label,
+      signal,
+    });
+  const buildImage = async (image: { tag: string; file: string; target?: string }) => {
+    await build(image.tag, [
+      "--load",
+      "--file",
+      image.file,
+      ...(image.target ? ["--target", image.target] : []),
+      "--tag",
+      image.tag,
     ]);
-    const id = (
-      await execute("docker", ["image", "inspect", "--format", "{{.Id}}", runtime.tag])
+    return (
+      await execute("docker", ["image", "inspect", "--format", "{{.Id}}", image.tag], {
+        cwd: repoRoot,
+        env,
+        signal,
+      })
     ).stdout.trim();
-    await writeSessionFixtureManifest(fixture, id);
-  })(),
-  (async () => {
-    for (const image of [images.MOMO_E2E_WORKER_IMAGE, images.MOMO_E2E_CONTROLLED_WORKER_IMAGE])
-      await build(image.tag, [
-        "--load",
-        "--file",
-        image.file,
-        ...("target" in image ? ["--target", image.target] : []),
-        "--tag",
-        image.tag,
+  };
+  // A failed rebuild must not leave the previous inputs looking ready to use.
+  await rm(environment, { force: true });
+  await rm(fixture, { recursive: true, force: true });
+  await mkdir(output, { recursive: true });
+  // Runtime and fixture share API stages; both Worker targets share the native build.
+  const [runtimeId, [workerId, controlledWorkerId]] = await settle([
+    (async () => {
+      const id = await buildImage(images.MOMO_E2E_RUNTIME_IMAGE);
+      await build("Session fixture", [
+        "--target",
+        "e2e-session-fixture",
+        "--output",
+        `type=local,dest=${fixture}`,
       ]);
-  })(),
-]);
-const environment = join(output, "prepared.env");
-await writeFile(
-  environment,
-  [
-    ...Object.entries(images).map(([name, image]) => `export ${name}=${image.tag}`),
-    `export MOMO_E2E_SESSION_FIXTURE_DIR=${fixture}`,
-    "",
-  ].join("\n"),
-);
-console.log(`E2E inputs prepared. Load them with: source ${environment}`);
+      await writeSessionFixtureManifest(fixture, id);
+      return id;
+    })(),
+    (async () =>
+      [
+        await buildImage(images.MOMO_E2E_WORKER_IMAGE),
+        await buildImage(images.MOMO_E2E_CONTROLLED_WORKER_IMAGE),
+      ] as const)(),
+  ]);
+  signal.throwIfAborted();
+  await writeFile(
+    environment,
+    Object.entries({
+      MOMO_E2E_RUNTIME_IMAGE: runtimeId,
+      MOMO_E2E_WORKER_IMAGE: workerId,
+      MOMO_E2E_CONTROLLED_WORKER_IMAGE: controlledWorkerId,
+      MOMO_E2E_SESSION_FIXTURE_DIR: fixture,
+    })
+      .map(([name, value]) => `export ${name}=${shellQuote(value)}\n`)
+      .join(""),
+  );
+  console.log(`E2E inputs prepared. Load them with: source ${shellQuote(environment)}`);
+}
+
+if (import.meta.main) {
+  if (process.argv.length > 2) throw new Error("Usage: pnpm e2e:prepare");
+  configureDockerHost();
+  await prepareE2eInputs(
+    fileURLToPath(new URL("../../", import.meta.url)),
+    createInterruptionSignal("E2E preparation"),
+  );
+}

@@ -43,8 +43,7 @@ function MemoText({
     <p
       className={cn(
         compact ? contentText.supporting : contentText.body,
-        "whitespace-pre-line text-pretty",
-        compact ? "line-clamp-2" : "line-clamp-3",
+        "line-clamp-2 whitespace-pre-line text-pretty",
       )}
     >
       {splitMemoHighlights(text, memoQuery).map((part, index) => (
@@ -136,7 +135,7 @@ export const MatchesTable = memo(function MatchesTable({
           header: "順位",
           key: "ranks",
           renderCell: (item) => <RankList item={item} />,
-          width: "22rem",
+          width: "40%",
         },
         {
           header: "メモ",

@@ -21,11 +21,11 @@ import {
   applyMigrations,
   childEnvironment,
   configureDockerHost,
-  runCommand,
   startPostgres,
   stopProcessGroup,
 } from "../../apps/web/scripts/e2e/runtime.mts";
 import { settle } from "../../apps/web/scripts/e2e/settle.mts";
+import { sessionFixtureJar, verifiedSessionFixture } from "./session-fixture.mts";
 import { analysisEnvironment } from "./worker-smoke-support.mts";
 
 const execute = promisify(execFile);
@@ -76,6 +76,11 @@ export async function withSystemEnvironment(
   const workerImageId = await imageIdentity(
     controlled ? "MOMO_E2E_CONTROLLED_WORKER_IMAGE" : "MOMO_E2E_WORKER_IMAGE",
   );
+  const fixtureDirectory = process.env["MOMO_E2E_SESSION_FIXTURE_DIR"];
+  if (!fixtureDirectory)
+    throw new Error("MOMO_E2E_SESSION_FIXTURE_DIR must name a prepared session fixture.");
+  // Reject a missing, corrupt, or other-Runtime fixture before owning any resource.
+  const sessionFixture = await verifiedSessionFixture(resolve(fixtureDirectory), runtimeImageId);
   const summitDir = resolve(process.env["MOMO_E2E_SUMMIT_DIR"] ?? join(repoRoot, "_deps/summit"));
   const pinned = (await readFile(join(repoRoot, ".summit-ref"), "utf8")).trim();
   const revision = (await execute("git", ["-C", summitDir, "rev-parse", "HEAD"])).stdout.trim();
@@ -113,6 +118,23 @@ export async function withSystemEnvironment(
     remember();
     checkpoint();
     return container;
+  }
+  /** Runs one owned container to completion; interruption removes it by name. */
+  async function runContainer(name: string, args: string[]) {
+    checkpoint();
+    ownership.containerNames.push(name);
+    resources.push({
+      label: "fixture container",
+      close: async () => {
+        const id = (await docker(["ps", "-aq", "--filter", `name=^/${name}$`])).stdout.trim();
+        if (id) await docker(["rm", "--force", id]);
+      },
+    });
+    remember();
+    await docker(
+      ["run", "--rm", "--name", name, "--label", `momo.test.run=${basename(runDir)}`, ...args],
+      signal,
+    );
   }
   async function launchContainer(name: string, args: string[]) {
     checkpoint();
@@ -167,20 +189,40 @@ export async function withSystemEnvironment(
     phase = "migrate disposable database";
     await applyMigrations(postgres, databaseName, signal);
     phase = "prepare session fixtures";
-    const sessionsFile = join(runDir, "sessions.json");
-    await runCommand("sbt", ["--server", "--batch", "Test/runMain momo.api.e2e.SessionFixture"], {
-      cwd: join(repoRoot, "apps/api"),
-      env: childEnvironment({
-        APP_ENV: "dev",
-        DATABASE_URL: databaseUrl,
-        DEV_MEMBER_IDS: devMembers,
-        E2E_SERVICES_ARE_ISOLATED: "true",
-        E2E_SESSION_FIXTURE_PATH: sessionsFile,
-        MOMO_HTTP4S_PATCHED_VERSION: process.env["MOMO_HTTP4S_PATCHED_VERSION"],
-      }),
-      label: "System E2E session fixtures",
-      signal,
+    // The candidate Runtime's JVM and staged libraries run the production
+    // SessionService; only the verified fixture entry point is added.
+    const fixtureJar = join(runDir, sessionFixtureJar);
+    const sessionDir = join(runDir, "session");
+    const sessionsFile = join(sessionDir, "sessions.json");
+    const fixtureEnv = join(runDir, "session-fixture.env");
+    await writeFile(fixtureJar, sessionFixture, { flag: "wx", mode: 0o600 });
+    await mkdir(sessionDir, { mode: 0o700 });
+    await writeEnvironment(fixtureEnv, {
+      APP_ENV: "dev",
+      DATABASE_URL: containerURL(databaseUrl),
+      DEV_MEMBER_IDS: devMembers,
+      E2E_SERVICES_ARE_ISOLATED: "true",
+      E2E_SESSION_FIXTURE_PATH: "/momo-e2e/session/sessions.json",
     });
+    await runContainer(`momo-system-session-fixture-${basename(runDir)}`, [
+      "--network",
+      `container:${storage.minio.getId()}`,
+      // The runner's identity owns both bind mounts and the 0600 output.
+      "--user",
+      `${process.getuid?.() ?? 0}:${process.getgid?.() ?? 0}`,
+      "--env-file",
+      fixtureEnv,
+      "--mount",
+      `type=bind,src=${fixtureJar},dst=/momo-e2e/${sessionFixtureJar},readonly`,
+      "--mount",
+      `type=bind,src=${sessionDir},dst=/momo-e2e/session`,
+      "--entrypoint",
+      "/opt/java/openjdk/bin/java",
+      runtimeImageId,
+      "-cp",
+      `/opt/momo-result/api/lib/*:/momo-e2e/${sessionFixtureJar}`,
+      "momo.api.e2e.SessionFixture",
+    ]);
     phase = "start notification receiver";
     const token = randomBytes(32).toString("hex");
     const recorder = Object.assign(

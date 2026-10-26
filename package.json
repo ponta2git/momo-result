@@ -28,6 +28,7 @@
     "web:typecheck": "pnpm --filter web typecheck",
     "analysis:maintain": "scripts/ops/analysis.sh",
     "web:e2e:ui": "pnpm --filter web e2e:ui",
+    "e2e:prepare": "node scripts/e2e/prepare.mts",
     "e2e": "node scripts/e2e/run-system.mts",
     "e2e:recovery": "node scripts/e2e/run-system.mts --controlled",
     "test:notification-contract": "node scripts/e2e/run-notification-contract.mts"

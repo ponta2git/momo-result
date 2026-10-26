@@ -14,6 +14,7 @@ nonzero exit blocks its flow.
 | `runtime-deployment` | Existing `key=value` deployment outputs. Preserves schema v1/v2/v3 and the recorded producer attempt; historical patch revisions are not compared to the current checkout. |
 | `runtime-release-selection` | Selected artifact ID/name, producer attempt, and image reference as `key=value`. |
 | `analysis-release-selection` | No output. Checks the worker metadata artifact against its producer run/attempt and validates its digest. |
+| `e2e-candidate` | System E2E test artifact, not a release candidate. `controlled-worker` prints `image_ref`/`image_id` after archive sidecar and hash checks; `session-fixture` prints nothing after checking the JAR hash and its binding to the supplied, already verified Runtime image ID. Both check the producer run/attempt/commit and the artifact ID/digest format. |
 | `postdeploy-evidence` | `{"schemaVersion":1,"status":"ok"}`. Requires one document within the existing size limit and every required check. Legacy version omission remains accepted. Failure uses the existing structured error classification. |
 | `worker-readiness` | JSON readiness report. Reads a provider JSON stream and requires all four events for the selected machine/workers with RFC3339 timestamps. Invalid inner application messages are ignored; malformed outer JSON rejects the input. Last occurrence uses stream order. |
 | `artifact-digest` | Canonical `sha256:` digest from a lowercase bare or prefixed digest. |
@@ -50,6 +51,7 @@ All provider commands validate before publishing allowlisted evidence.
 | `create-http4s-patch` | `--repository URL --scala-version VERSION --source-sha SHA --version VERSION` | Four-field patch JSON; source must match checkout `.http4s-ref` |
 | `create-runtime-candidate` | `--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF` | Runtime candidate v2; checks recorded image identity/archive checksum, hashes archive and checkout config, validates patch pin |
 | `create-analysis-candidate` | Same flags plus `--artifact-id ID --artifact-digest DIGEST` | Analysis candidate v1; checks archive and image records, hashes checkout config, canonicalizes artifact digest |
+| `create-e2e-candidate` | `--kind controlled-worker\|session-fixture --artifact-dir DIR --run-id ID --run-attempt N --commit SHA`, plus `--runtime-image-id ID` for `session-fixture` only | E2E candidate v1 from the measured archive or JAR; the fixture must already be bound to that Runtime image ID |
 | `create-runtime-deployment` | `--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST` | Deployment v3; source attempt/commit/run/image identity come from the validated candidate; deployment attempt is explicit |
 
 `create-runtime-deployment` validates candidate metadata against checkout config

@@ -119,9 +119,19 @@ func createE2ECandidate(args []string, out io.Writer) error {
 	return encode(out, m)
 }
 
+// e2eArtifactSelection rejects incomplete producer outputs before download:
+// an empty artifact ID would make download-artifact select every artifact.
+func e2eArtifactSelection(producerAttempt, artifactID, artifactDigest string) error {
+	if !positiveIDPattern.MatchString(producerAttempt) || !positiveIDPattern.MatchString(artifactID) {
+		return errors.New("Invalid E2E artifact identity.")
+	}
+	_, err := normalizeArtifactDigest(artifactDigest)
+	return err
+}
+
 // e2eCandidate checks a downloaded artifact against the selected producer. The
-// artifact ID and digest are the producer's upload outputs; download verifies
-// the bytes against the digest, so only their identity format is checked here.
+// upload digest is format-checked here; download-artifact verifies downloaded
+// bytes against GitHub's artifact metadata digest, not this supplied value.
 func e2eCandidate(args []string) (string, error) {
 	kind := ""
 	if len(args) > 0 {
@@ -130,10 +140,7 @@ func e2eCandidate(args []string) (string, error) {
 	if (kind != e2eControlledWorker || len(args) != 7) && (kind != e2eSessionFixture || len(args) != 8) {
 		return "", flag.ErrHelp
 	}
-	if !positiveIDPattern.MatchString(args[5]) {
-		return "", errors.New("Invalid E2E artifact identity.")
-	}
-	if _, err := normalizeArtifactDigest(args[6]); err != nil {
+	if err := e2eArtifactSelection(args[3], args[5], args[6]); err != nil {
 		return "", err
 	}
 	runtimeImageID := ""

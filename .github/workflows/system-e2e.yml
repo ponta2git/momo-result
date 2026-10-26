@@ -124,7 +124,10 @@ jobs:
           WORKER_DIGEST: ${{ inputs.worker_metadata_digest }}
           WORKER_NAME: ${{ inputs.worker_metadata_name }}
           WORKER_ATTEMPT: ${{ inputs.worker_run_attempt }}
+          CONTROLLED_WORKER_ID: ${{ inputs.controlled_worker_artifact_id }}
           CONTROLLED_WORKER_DIGEST: ${{ inputs.controlled_worker_artifact_digest }}
+          CONTROLLED_WORKER_ATTEMPT: ${{ inputs.controlled_worker_run_attempt }}
+          SESSION_FIXTURE_ID: ${{ inputs.session_fixture_artifact_id }}
           SESSION_FIXTURE_DIGEST: ${{ inputs.session_fixture_artifact_digest }}
         run: |
           scripts/ci/ci-tool.sh runtime-release-selection \
@@ -133,10 +136,10 @@ jobs:
           scripts/ci/ci-tool.sh analysis-release-selection \
             "${GITHUB_RUN_ID}" "${WORKER_ATTEMPT}" "${WORKER_NAME}" \
             "${WORKER_ID}" "${WORKER_DIGEST}"
-          # A skipped E2E producer has no upload digest. Reject it before an empty
-          # artifact-ids input could select every artifact in the run.
-          scripts/ci/ci-tool.sh artifact-digest "${CONTROLLED_WORKER_DIGEST}" > /dev/null
-          scripts/ci/ci-tool.sh artifact-digest "${SESSION_FIXTURE_DIGEST}" > /dev/null
+          scripts/ci/ci-tool.sh e2e-artifact-selection \
+            "${CONTROLLED_WORKER_ATTEMPT}" "${CONTROLLED_WORKER_ID}" "${CONTROLLED_WORKER_DIGEST}"
+          scripts/ci/ci-tool.sh e2e-artifact-selection \
+            "${RUNTIME_ATTEMPT}" "${SESSION_FIXTURE_ID}" "${SESSION_FIXTURE_DIGEST}"
       - name: Download exact Runtime candidate
         if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

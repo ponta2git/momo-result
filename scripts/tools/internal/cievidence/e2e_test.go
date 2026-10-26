@@ -46,6 +46,28 @@ func e2eArgs(kind, dir string) []string {
 	return args
 }
 
+func TestE2EArtifactSelectionRejectsIncompleteOrMultipleProducerOutputs(t *testing.T) {
+	for _, digest := range []string{e2eArtifactDigest, "sha256:" + e2eArtifactDigest} {
+		code, out, stderr := run(t, "e2e-artifact-selection", []string{"1", e2eArtifactID, digest}, "")
+		if code != 0 || out != "" || stderr != "" {
+			t.Fatalf("valid selection: code=%d stdout=%q stderr=%q", code, out, stderr)
+		}
+	}
+	for name, args := range map[string][]string{
+		"missing-id-with-valid-digest": {"1", "", e2eArtifactDigest},
+		"zero-id":                      {"1", "0", e2eArtifactDigest},
+		"multiple-ids":                 {"1", "777,888", e2eArtifactDigest},
+		"missing-producer-attempt":     {"", e2eArtifactID, e2eArtifactDigest},
+		"zero-producer-attempt":        {"0", e2eArtifactID, e2eArtifactDigest},
+		"missing-digest":               {"1", e2eArtifactID, ""},
+		"malformed-digest":             {"1", e2eArtifactID, "sha512:" + e2eArtifactDigest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rejected(t, "e2e-artifact-selection", args, "")
+		})
+	}
+}
+
 func TestE2ECandidatesAcceptProducerAttemptAcrossConsumerRetries(t *testing.T) {
 	worker := e2eArtifact(t, e2eControlledWorker)
 	code, out, stderr := run(t, "e2e-candidate", e2eArgs(e2eControlledWorker, worker), "")

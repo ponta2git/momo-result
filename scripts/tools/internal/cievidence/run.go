@@ -22,6 +22,7 @@ var usages = map[string]string{
 	"image-id-match":             "<expected-id> <actual-id>",
 	"file-digest-match":          "<file> <bare-sha256>",
 	"analysis-release-selection": "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
+	"e2e-artifact-selection":     "<producer-attempt> <artifact-id> <artifact-digest>",
 	"e2e-candidate":              "controlled-worker|session-fixture <artifact-directory> <run-id> <producer-attempt> <commit> <artifact-id> <artifact-digest> [<runtime-image-id> for session-fixture]",
 	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
 	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
@@ -48,6 +49,7 @@ var argumentCounts = map[string]int{
 	"runtime-release-selection": 7, "worker-readiness": 4, "artifact-digest": 1,
 	"analysis-archive": 3, "image-id-match": 2,
 	"file-digest-match": 2, "analysis-release-selection": 5,
+	"e2e-artifact-selection": 3,
 }
 
 // Run preserves the validators' positional arguments and stdout contracts.
@@ -83,6 +85,8 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 		result, err = runtimeReleaseSelection(args)
 	case "analysis-release-selection":
 		err = analysisReleaseSelection(args)
+	case "e2e-artifact-selection":
+		err = e2eArtifactSelection(args[0], args[1], args[2])
 	case "e2e-candidate":
 		result, err = e2eCandidate(args)
 	case "postdeploy-evidence":

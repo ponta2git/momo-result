@@ -1704,6 +1704,7 @@ export interface components {
             mapName?: string;
             publicId?: string;
             heldEventPublicId?: string;
+            noteBody?: string;
         };
         /** MemberAliasListResponse */
         MemberAliasListResponse: {
@@ -8886,8 +8887,24 @@ export interface operations {
                 pageSize?: number;
                 /** @description Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot. */
                 cursor?: string;
-                /** @description status_priority, updated_desc, held_desc, held_asc, or match_no_asc. */
+                /** @description status_priority, updated_desc, held_desc, held_asc, or match_no_asc. held_desc and held_asc order by held time, then match number ascending within the same held time. */
                 sort?: string;
+                /** @description Map master ID. Confirmed-match criterion; requires kind=match. */
+                mapMasterId?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to. Confirmed-match criterion; requires kind=match. */
+                from?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo). Confirmed-match criterion; requires kind=match. */
+                to?: string;
+                /** @description Case-insensitive literal substring of the match note; trimmed, at most 50 characters, blank means absent. Confirmed-match criterion; requires kind=match. */
+                q?: string;
+                /** @description Limits the record condition to this player; requires record. Without it any player matches. */
+                memberId?: string;
+                /** @description destination, plus_station, minus_station, card_station, card_shop, suri_no_ginji, total_assets, or revenue (万円); requires recordValue. Confirmed-match criterion; requires kind=match. */
+                record?: string;
+                /** @description Compared value; requires record. Incident counts must be 0 or greater and a missing count is 0. */
+                recordValue?: number;
+                /** @description gte (default) or lte; requires record. */
+                recordRange?: string;
             };
             header?: {
                 "X-Momo-Account-Id"?: string;
@@ -8905,7 +8922,7 @@ export interface operations {
                     "application/json": components["schemas"]["MatchListResponse"];
                 };
             };
-            /** @description Invalid value for: query parameter pageSize */
+            /** @description Invalid value for: query parameter pageSize, Invalid value for: query parameter recordValue */
             400: {
                 headers: {
                     [name: string]: unknown;

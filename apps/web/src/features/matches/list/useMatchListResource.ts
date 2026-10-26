@@ -6,24 +6,21 @@ import {
   resolveMatchListDisplayState,
   toMatchListItemViews,
 } from "@/features/matches/list/matchListPresentation";
-import {
-  buildMatchListApiQuery,
-  buildMatchListSummaryQuery,
-} from "@/features/matches/list/matchListQuery";
+import { buildMatchListApiQuery } from "@/features/matches/list/matchListQuery";
 import type { MatchListRefreshResult } from "@/features/matches/list/matchListRefresh";
 import { buildMatchListSearchParams } from "@/features/matches/list/matchListSearchParams";
 import type {
   MatchListFilterCandidates,
   MatchListItemView,
   MatchListSearch,
-  MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  seasonMastersQueryOptions,
+  mapMastersQueryOptions,
   matchListQueryOptions,
   matchListSummaryQueryOptions,
+  seasonMastersQueryOptions,
 } from "@/shared/api/queryOptions";
 import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import type { PaginationState } from "@/shared/lib/pagination";
@@ -32,6 +29,8 @@ import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 const matchListStaleTimeMs = 10_000;
 
 export type MatchListResource = {
+  /** Unconfirmed drafts across all scopes; undefined while unknown so the notice stays hidden. */
+  draftCount: number | undefined;
   filters: {
     candidates: MatchListFilterCandidates;
     loadFailed: boolean;
@@ -39,6 +38,7 @@ export type MatchListResource = {
   };
   list: {
     items: MatchListItemView[];
+    memoQuery: string;
     loadFailed: boolean;
     loading: boolean;
     pagination: PaginationState | undefined;
@@ -47,16 +47,8 @@ export type MatchListResource = {
     scopeChanging: boolean;
     updating: boolean;
   };
-  /** Reads the first page and summary without changing the selected URL. */
+  /** Reads the first page and the draft count without changing the selected URL. */
   refresh: () => Promise<MatchListRefreshResult>;
-  summary: {
-    counts: MatchListSummaryCounts | undefined;
-    loadFailed: boolean;
-    loading: boolean;
-    masked: boolean;
-    retryPending: boolean;
-    retry: () => void;
-  };
 };
 
 /**
@@ -78,14 +70,14 @@ export function useMatchListResource({
 
   const heldEventPicker = useHeldEventPickerDirectory({ selectedId: currentSearch.heldEventId });
   const gameTitlesQuery = useQuery(gameTitlesQueryOptions());
-  const seasonsQuery = useQuery(seasonMastersQueryOptions(currentSearch.gameTitleId || undefined));
+  // All seasons and maps are read once so a draft title in the search sheet can scope them locally.
+  const seasonsQuery = useQuery(seasonMastersQueryOptions(undefined));
+  const mapsQuery = useQuery(mapMastersQueryOptions(undefined));
   const matchesQuery = useQuery({
     ...matchListQueryOptions(buildMatchListApiQuery(deferredSearch)),
     staleTime: matchListStaleTimeMs,
   });
-  const summaryQuery = useQuery(
-    matchListSummaryQueryOptions(buildMatchListSummaryQuery(deferredSearch)),
-  );
+  const draftSummaryQuery = useQuery(matchListSummaryQueryOptions({}));
   const currentSearchScope = buildMatchListSearchParams(currentSearch).toString();
 
   const items = useMemo(
@@ -95,8 +87,6 @@ export function useMatchListResource({
 
   const listLoading = isInitialQueryLoading(matchesQuery);
   const displayState = resolveMatchListDisplayState({
-    current: currentSearch,
-    deferred: deferredSearch,
     locationSettling,
     list: {
       available: matchesQuery.data !== undefined,
@@ -104,29 +94,20 @@ export function useMatchListResource({
       refreshing: matchesQuery.isFetching && !listLoading,
       fromPreviousSelection: matchesQuery.isPlaceholderData,
     },
-    summary: {
-      refreshing: summaryQuery.isFetching && summaryQuery.data !== undefined,
-      fromPreviousSelection: summaryQuery.isPlaceholderData,
-    },
   });
   const listFailed = useRetryNotice(
     shouldShowBlockingQueryError(matchesQuery),
     matchesQuery.isFetching || manualRefresh.pending,
     currentSearchScope,
   );
-  const summaryFailed = useRetryNotice(
-    shouldShowBlockingQueryError(summaryQuery),
-    summaryQuery.isFetching,
-    JSON.stringify(buildMatchListSummaryQuery(currentSearch)),
-  );
+  const candidateQueries = [gameTitlesQuery, seasonsQuery, mapsQuery];
   const filtersFailed = useRetryNotice(
-    shouldShowBlockingQueryError(gameTitlesQuery) ||
-      shouldShowBlockingQueryError(seasonsQuery) ||
+    candidateQueries.some((query) => shouldShowBlockingQueryError(query)) ||
       Boolean(heldEventPicker.error),
-    gameTitlesQuery.isFetching || seasonsQuery.isFetching || heldEventPicker.pending,
+    candidateQueries.some((query) => query.isFetching) || heldEventPicker.pending,
   );
   const refreshFailed = useRetryNotice(
-    manualRefresh.failed || matchesQuery.isRefetchError || summaryQuery.isRefetchError,
+    manualRefresh.failed || matchesQuery.isRefetchError,
     manualRefresh.pending || displayState.sameScopeRefreshing,
     currentSearchScope,
   );
@@ -139,16 +120,15 @@ export function useMatchListResource({
           staleTime: 0,
         })
       : matchesQuery.refetch({ throwOnError: true });
-    const [list, summary] = await Promise.allSettled([
-      listRefresh,
-      summaryQuery.refetch({ throwOnError: true }),
-    ]);
+    // The draft count is a secondary notice; its failure keeps the last known count.
+    const [list] = await Promise.allSettled([listRefresh, draftSummaryQuery.refetch()]);
     return list.status === "fulfilled"
-      ? { kind: "refreshed", origin: currentSearch, summaryFailed: summary.status === "rejected" }
+      ? { kind: "refreshed", origin: currentSearch }
       : { kind: "failed", origin: currentSearch };
   };
 
   return {
+    draftCount: draftSummaryQuery.data?.incompleteCount,
     filters: {
       candidates: {
         gameTitles: gameTitlesQuery.data?.items ?? [],
@@ -165,20 +145,24 @@ export function useMatchListResource({
           selectedHeldEvent: heldEventPicker.selectedHeldEvent,
           onPageChange: heldEventPicker.onPageChange,
         },
+        maps: mapsQuery.data?.items ?? [],
         seasons: seasonsQuery.data?.items ?? [],
       },
       loadFailed: filtersFailed,
       refresh: {
-        pending: gameTitlesQuery.isFetching || seasonsQuery.isFetching || heldEventPicker.pending,
+        pending: candidateQueries.some((query) => query.isFetching) || heldEventPicker.pending,
         run: () => {
-          if (shouldShowBlockingQueryError(gameTitlesQuery)) void gameTitlesQuery.refetch();
-          if (shouldShowBlockingQueryError(seasonsQuery)) void seasonsQuery.refetch();
+          for (const query of candidateQueries) {
+            if (shouldShowBlockingQueryError(query)) void query.refetch();
+          }
           if (heldEventPicker.error) void heldEventPicker.refresh();
         },
       },
     },
     list: {
       items,
+      // Retained rows belong to a different search; highlight only the current response's term.
+      memoQuery: matchesQuery.isPlaceholderData ? "" : deferredSearch.q,
       loadFailed: listFailed,
       loading: displayState.initialLoading && !listFailed,
       pagination: matchesQuery.data?.pagination,
@@ -188,13 +172,5 @@ export function useMatchListResource({
       updating: displayState.updating,
     },
     refresh,
-    summary: {
-      counts: summaryQuery.data,
-      loadFailed: summaryFailed,
-      loading: isInitialQueryLoading(summaryQuery) && !summaryFailed,
-      masked: displayState.summaryMasked,
-      retryPending: summaryQuery.isFetching && !manualRefresh.pending,
-      retry: () => void summaryQuery.refetch(),
-    },
   };
 }

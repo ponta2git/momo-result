@@ -19,6 +19,11 @@ import momo.api.domain.{
 }
 import momo.api.repositories.MatchListReadModel
 
+/**
+ * HTTP double for list wiring and pagination. Confirmed-match search criteria
+ * (`Filter.search`) are not simulated; their semantics are verified on PostgreSQL in
+ * `PostgresMatchListReadModelSpec`.
+ */
 final class InMemoryMatchListReadModel[F[_]: Monad](
     matches: MatchFixtureStore[F],
     matchDrafts: MatchDraftFixtureStore[F],
@@ -158,6 +163,7 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
           ranks = record.players.byPlayOrder
             .map(p => MatchListRankEntry(p.memberId, p.rank, p.playOrder)),
           hasNote = Some(record.note.body.isDefined),
+          noteBody = record.note.body.map(_.value),
         )
       }
 
@@ -227,12 +233,16 @@ final class InMemoryMatchListReadModel[F[_]: Monad](
         firstNonZero(desc(left.updatedAt, right.updatedAt), tieBreaker.head, tieBreaker(1))
       case MatchListSort.HeldDesc => firstNonZero(
           desc(left.heldAt, right.heldAt),
+          asc(left.matchNoIsNull, right.matchNoIsNull),
+          asc(left.matchNoSort, right.matchNoSort),
           desc(left.updatedAt, right.updatedAt),
           tieBreaker.head,
           tieBreaker(1),
         )
       case MatchListSort.HeldAsc => firstNonZero(
           asc(left.heldAt, right.heldAt),
+          asc(left.matchNoIsNull, right.matchNoIsNull),
+          asc(left.matchNoSort, right.matchNoSort),
           desc(left.updatedAt, right.updatedAt),
           tieBreaker.head,
           tieBreaker(1),

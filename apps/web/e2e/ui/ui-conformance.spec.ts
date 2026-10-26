@@ -1,9 +1,6 @@
-import type { Route } from "@playwright/test";
-
-import { createDeferred } from "../../src/test/deferred";
 import { installAdjacentNavigationResponses } from "./fixtures/adjacentNavigation";
-import { uiContext } from "./fixtures/records";
-import { selectControlOption, expect, installUiAuth, test } from "./support";
+import { confirmedContext, confirmedMatchIds } from "./fixtures/records";
+import { expect, installUiAuth, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
   await installUiAuth(page);
@@ -79,165 +76,8 @@ test("keeps an uncommitted select choice when keyboard focus moves to the next d
   await expect(trigger).toHaveText("試合参加者に紐づけない");
 });
 
-test("preserves keyboard filtering and recovers the match list after a failed request", async ({
-  page,
-}) => {
-  const {
-    heldEventId,
-    mapName,
-    primaryGameTitleId,
-    primaryGameTitleName,
-    seasonMasterId,
-    seasonName,
-    secondaryGameTitleId,
-  } = uiContext;
-
-  await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
-    await page.setViewportSize({ height: 844, width: 320 });
-    await page.goto(
-      `/matches?heldEventId=${encodeURIComponent(heldEventId)}&gameTitleId=${encodeURIComponent(
-        primaryGameTitleId,
-      )}&seasonMasterId=${encodeURIComponent(seasonMasterId)}`,
-    );
-
-    await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
-    const filterBar = page.getByRole("region", { name: "試合の表示条件" });
-    const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
-    await expect(statusFilter).toBeVisible();
-    await expect(statusFilter).toHaveText("すべて");
-    await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
-    await expect(filterBar).toContainText(`シーズン ${seasonName}`);
-    await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
-
-    await page.setViewportSize({ height: 900, width: 1280 });
-    await expect(filterBar).toBeVisible();
-  });
-
-  await test.step("continue keyboard filtering while protecting the previous results", async () => {
-    const gate = createDeferred();
-    let requested = false;
-    const pattern = "**/api/matches?**";
-    const holdCondition = async (route: Route) => {
-      const url = new URL(route.request().url());
-      if (url.searchParams.get("status") === "confirmed") {
-        requested = true;
-        await gate.promise;
-      }
-      await route.fallback();
-    };
-    await page.route(pattern, holdCondition);
-    const status = page.getByRole("combobox", { exact: true, name: "確定状況" });
-    const sort = page.getByRole("combobox", { exact: true, name: "並び順" });
-    const list = page.getByRole("region", { exact: true, name: "登録済みの試合" });
-    try {
-      await status.focus();
-      await selectControlOption(page, status, "confirmed");
-      await expect.poll(() => requested).toBe(true);
-      await expect(status).toBeEnabled();
-      await expect(status).toBeFocused();
-      await expect(list.locator("[inert]")).toHaveCount(1);
-      await status.press("Tab");
-      await expect(sort).toBeFocused();
-    } finally {
-      gate.resolve();
-    }
-    await expect(list.locator("[inert]")).toHaveCount(0);
-    await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
-    await expect(sort).toBeFocused();
-    await expect(status).toHaveText("確定済み");
-    await page.unroute(pattern, holdCondition);
-  });
-
-  await test.step("distinguish update from retry and preserve visible rows while updating", async () => {
-    let holdNextListRequest = false;
-    let listRequestHeld = false;
-    const listRequestGate = createDeferred();
-    const listPattern = /\/api\/matches(?:\?.*)?$/u;
-    const holdListRequest = async (route: Route) => {
-      const url = new URL(route.request().url());
-      if (
-        holdNextListRequest &&
-        url.pathname === "/api/matches" &&
-        url.searchParams.get("heldEventId") === heldEventId
-      ) {
-        holdNextListRequest = false;
-        listRequestHeld = true;
-        await listRequestGate.promise;
-      }
-      await route.fallback();
-    };
-    await page.route(listPattern, holdListRequest);
-
-    const visibleMatchRow = page
-      .getByRole("row")
-      .filter({ hasText: mapName })
-      .filter({ hasText: "第1試合" });
-    await expect(visibleMatchRow).toHaveCount(1);
-    holdNextListRequest = true;
-    try {
-      await page.getByRole("button", { name: "最新情報に更新" }).click();
-      await expect.poll(() => listRequestHeld).toBe(true);
-      await expect(page.getByRole("button", { name: "一覧を更新中" })).toBeDisabled();
-      await expect(page.getByRole("region", { name: "試合の表示条件" })).not.toHaveAttribute(
-        "aria-busy",
-        "true",
-      );
-      const updatingStatus = page
-        .getByRole("region", { name: "登録済みの試合" })
-        .getByRole("status")
-        .filter({ hasText: "一覧を更新中" });
-      await expect(updatingStatus).toBeVisible();
-      await expect(visibleMatchRow).toBeVisible();
-      await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toHaveCount(0);
-    } finally {
-      listRequestGate.resolve();
-    }
-    await expect(page.getByRole("button", { name: "最新情報に更新" })).toBeEnabled();
-    await page.unroute(listPattern, holdListRequest);
-
-    let retryAllowed = false;
-    const failUncachedScope = async (route: Route) => {
-      const url = new URL(route.request().url());
-      if (
-        !retryAllowed &&
-        url.pathname === "/api/matches" &&
-        url.searchParams.get("gameTitleId") === secondaryGameTitleId
-      ) {
-        await route.fulfill({
-          json: {
-            code: "INTERNAL_ERROR",
-            detail: "E2E retry contract",
-            status: 500,
-            title: "Internal error",
-            type: "about:blank",
-          },
-          status: 500,
-        });
-        return;
-      }
-      await route.fallback();
-    };
-    await page.route(listPattern, failUncachedScope);
-    try {
-      await page.goto(
-        `/matches?status=needs_review&gameTitleId=${encodeURIComponent(secondaryGameTitleId)}`,
-      );
-      await expect(page.getByText("試合一覧を読み込めません")).toBeVisible();
-      await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "最新情報に更新" })).toBeVisible();
-
-      retryAllowed = true;
-      await page.getByRole("button", { name: "一覧を再読み込み" }).click();
-      await expect(page.getByText("該当する試合はありません")).toBeVisible();
-    } finally {
-      retryAllowed = true;
-      await page.unroute(listPattern, failUncachedScope);
-    }
-  });
-});
-
 test("changes an export choice by keyboard and restores focus", async ({ page }) => {
-  const { heldEventId, matchIds } = uiContext;
+  const { heldEventId } = confirmedContext;
   // Keep the keyboard candidate order explicit for this browser scenario.
   // Candidate records and their directory scope are controlled.
   await page.route(/\/api\/matches(?:\?.*)?$/u, async (route) => {
@@ -247,8 +87,7 @@ test("changes an export choice by keyboard and restores focus", async ({ page })
   });
 
   await test.step("keep export choices native and restore focus after keyboard selection", async () => {
-    const selectedMatchId = matchIds[0];
-    if (!selectedMatchId) throw new Error("export conformance requires a match fixture");
+    const selectedMatchId = confirmedMatchIds[0];
 
     await page.setViewportSize({ height: 812, width: 375 });
     await page.goto(`/exports?matchId=${encodeURIComponent(selectedMatchId)}`);
@@ -264,9 +103,8 @@ test("changes an export choice by keyboard and restores focus", async ({ page })
       elements.map((element) => (element as HTMLInputElement).value),
     );
     expect(radioValues).toHaveLength(2);
-    expect(radioValues).toEqual(expect.arrayContaining(matchIds));
-    const nextMatchId = matchIds[1];
-    if (!nextMatchId) throw new Error("export conformance requires a next owned candidate");
+    expect(radioValues).toEqual(expect.arrayContaining([...confirmedMatchIds]));
+    const nextMatchId = confirmedMatchIds[1];
 
     const selectedRadio = dialog.locator(`input[type="radio"][value="${selectedMatchId}"]`);
     await expect(selectedRadio).toBeChecked();

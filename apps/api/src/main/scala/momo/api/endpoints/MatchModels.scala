@@ -192,6 +192,7 @@ final case class MatchSummaryResponse(
     mapName: Option[String] = None,
     publicId: Option[String] = None,
     heldEventPublicId: Option[String] = None,
+    noteBody: Option[String] = None,
 ) derives Codec.AsObject
 
 final case class MatchNoteResponse(
@@ -331,6 +332,7 @@ object MatchSummaryResponse:
     mapName = item.labels.mapName,
     publicId = item.publicId.map(_.decimalString),
     heldEventPublicId = item.heldEventPublicId.map(_.decimalString),
+    noteBody = item.noteBody,
   )
 
 object MatchDetailResponse:

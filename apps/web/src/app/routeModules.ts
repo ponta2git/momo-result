@@ -41,6 +41,11 @@ export const loadMatchesListPage = () =>
     default: module.MatchesListPage,
   }));
 
+export const loadDraftsPage = () =>
+  import("@/features/matches/drafts/DraftsPage").then((module) => ({
+    default: module.DraftsPage,
+  }));
+
 export const loadMatchEditPage = () =>
   import("@/features/matches/workspace/MatchEditPage").then((module) => ({
     default: module.MatchEditPage,
@@ -67,6 +72,7 @@ const routePreloaders: Array<{
 }> = [
   { matches: (pathname) => pathname === "/achievements", preload: loadAchievementsPage },
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
+  { matches: (pathname) => pathname === "/drafts", preload: loadDraftsPage },
   { matches: (pathname) => pathname === "/held-events", preload: loadHeldEventsPage },
   {
     matches: (pathname) => /^\/(?:held-events|e)\/[^/]+$/u.test(pathname),

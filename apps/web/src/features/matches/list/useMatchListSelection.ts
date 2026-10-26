@@ -16,11 +16,13 @@ import type {
 } from "@/features/matches/list/matchListRefresh";
 import {
   buildMatchListSearchParams,
-  defaultMatchListSearch,
-  hasMatchListFilters,
+  hasMatchListConditions,
   parseMatchListSearchParams,
 } from "@/features/matches/list/matchListSearchParams";
-import { changeMatchListSelection } from "@/features/matches/list/matchListSelection";
+import {
+  changeMatchListSelection,
+  clearMatchListConditions,
+} from "@/features/matches/list/matchListSelection";
 import type { MatchListSelectionChange } from "@/features/matches/list/matchListSelection";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 
@@ -29,7 +31,7 @@ export type MatchListSelection = {
   clear: () => void;
   current: MatchListSearch;
   deferred: MatchListSearch;
-  hasFilters: boolean;
+  hasConditions: boolean;
   applyRefresh: (result: MatchListRefreshResult) => MatchListRefreshFailure | null;
   settling: boolean;
 };
@@ -68,7 +70,10 @@ export function useMatchListSelection(): MatchListSelection {
     },
     [hash, navigate, setOptimisticSearch],
   );
-  const clear = useCallback(() => navigateToSearch(defaultMatchListSearch), [navigateToSearch]);
+  const clear = useCallback(
+    () => navigateToSearch(clearMatchListConditions(latestSearchRef.current)),
+    [navigateToSearch],
+  );
   const change = useCallback(
     (intent: MatchListSelectionChange) => {
       const nextSearch = changeMatchListSelection(latestSearchRef.current, intent);
@@ -90,7 +95,7 @@ export function useMatchListSelection(): MatchListSelection {
     clear,
     current,
     deferred,
-    hasFilters: hasMatchListFilters(current),
+    hasConditions: hasMatchListConditions(current),
     applyRefresh,
     settling: isTransitionPending || searchSignature(current) !== searchSignature(deferred),
   };

@@ -1,12 +1,42 @@
 package momo.api.endpoints.codec
 
+import java.time.LocalDate
+
+import scala.util.Try
+
+import cats.syntax.all.*
+
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchListKindFilter, MatchListSort, MatchListStatusFilter}
+import momo.api.domain.{
+  MatchListKindFilter,
+  MatchListRecordCriterion,
+  MatchListRecordField,
+  MatchListRecordRange,
+  MatchListSearchCriteria,
+  MatchListSort,
+  MatchListStatusFilter
+}
 import momo.api.errors.AppError
 import momo.api.usecases.matches.ListMatchesCommand
 
 /** Query-parameter ↔ command conversion for `MatchesEndpoints.list`. */
 object MatchListCodec:
+  private val IsoDate = "[0-9]{4}-[0-9]{2}-[0-9]{2}".r
+
+  final case class SearchParams(
+      mapMasterId: Option[String],
+      from: Option[String],
+      to: Option[String],
+      q: Option[String],
+      memberId: Option[String],
+      record: Option[String],
+      recordValue: Option[Int],
+      recordRange: Option[String],
+  )
+
+  object SearchParams:
+    val empty: SearchParams = SearchParams(None, None, None, None, None, None, None, None)
+
   def toListCommand(
       heldEventId: Option[String],
       gameTitleId: Option[String],
@@ -16,6 +46,7 @@ object MatchListCodec:
       pageSize: Option[Int],
       cursor: Option[String],
       sort: Option[String],
+      search: SearchParams,
   ): Either[AppError, ListMatchesCommand] =
     for
       parsedHeldEventId <- BoundaryId.optional("heldEventId", heldEventId)(HeldEventId.fromString)
@@ -25,6 +56,14 @@ object MatchListCodec:
       parsedStatus <- parseStatus(status)
       parsedKind <- parseKind(kind)
       parsedSort <- parseSort(sort)
+      parsedSearch <- parseSearch(search)
+      _ <- Either.cond(
+        parsedSearch.isEmpty || parsedKind == MatchListKindFilter.Match,
+        (),
+        AppError.ValidationFailed(
+          "kind must be match when mapMasterId, from, to, q, or record is specified."
+        ),
+      )
     yield ListMatchesCommand(
       heldEventId = parsedHeldEventId,
       gameTitleId = parsedGameTitleId,
@@ -34,6 +73,7 @@ object MatchListCodec:
       pageSize = pageSize,
       cursor = cursor,
       sort = parsedSort,
+      search = parsedSearch,
     )
 
   def parseSummaryFilter(
@@ -47,6 +87,78 @@ object MatchListCodec:
       parsedSeasonMasterId <- BoundaryId
         .optional("seasonMasterId", seasonMasterId)(SeasonMasterId.fromString)
     yield (parsedHeldEventId, parsedGameTitleId, parsedSeasonMasterId)
+
+  private def parseSearch(params: SearchParams): Either[AppError, MatchListSearchCriteria] =
+    for
+      mapMasterId <- BoundaryId.optional("mapMasterId", params.mapMasterId)(MapMasterId.fromString)
+      from <- params.from.traverse(parseDate("from", _))
+      to <- params.to.traverse(parseDate("to", _))
+      _ <- Either.cond(
+        (from, to).tupled.forall { case (start, end) => !start.isAfter(end) },
+        (),
+        AppError.ValidationFailed("from must be on or before to."),
+      )
+      noteQuery <- parseNoteQuery(params.q)
+      record <- parseRecord(params)
+    yield MatchListSearchCriteria(mapMasterId, from, to, noteQuery, record)
+
+  private def parseDate(field: String, raw: String): Either[AppError, LocalDate] =
+    val invalid = AppError.ValidationFailed(s"$field must be a date in YYYY-MM-DD format.")
+    if IsoDate.matches(raw) then Try(LocalDate.parse(raw)).toEither.leftMap(_ => invalid)
+    else Left(invalid)
+
+  private def parseNoteQuery(raw: Option[String]): Either[AppError, Option[String]] =
+    raw.map(_.dropWhile(isQueryWhitespace).reverse.dropWhile(isQueryWhitespace).reverse)
+      .filter(_.nonEmpty).traverse { query =>
+        if query.codePointCount(0, query.length) > MatchListSearchCriteria.NoteQueryMaxCodePoints
+        then
+          Left(AppError.ValidationFailed(
+            s"q must be at most ${MatchListSearchCriteria.NoteQueryMaxCodePoints} characters."
+          ))
+        else if query.exists(Character.isISOControl) then
+          Left(AppError.ValidationFailed("q must not contain control characters."))
+        else Right(query)
+      }
+
+  // Match the browser's String.trim, including full-width spaces, NBSP and BOM.
+  private def isQueryWhitespace(character: Char): Boolean =
+    Character.isSpaceChar(character) || (character >= '\t' && character <= '\r') ||
+      character == '\ufeff'
+
+  private def parseRecord(
+      params: SearchParams
+  ): Either[AppError, Option[MatchListRecordCriterion]] = params.record match
+    case None =>
+      val dependent = List(
+        params.recordValue.map(_ => "recordValue"),
+        params.recordRange.map(_ => "recordRange"),
+        params.memberId.map(_ => "memberId"),
+      ).flatten
+      dependent.headOption
+        .fold(Right(None): Either[AppError, Option[MatchListRecordCriterion]])(name =>
+          Left(AppError.ValidationFailed(s"$name requires record."))
+        )
+    case Some(rawField) =>
+      for
+        field <- MatchListRecordField.fromWire(rawField).toRight(AppError.ValidationFailed(
+          s"record must be one of ${MatchListRecordField.values.map(_.wire).mkString(", ")}: $rawField"
+        ))
+        value <- params.recordValue
+          .toRight(AppError.ValidationFailed("recordValue is required when record is specified."))
+        _ <- Either.cond(
+          field.incidentKind.isEmpty || value >= 0,
+          (),
+          AppError.ValidationFailed("recordValue must be 0 or greater for incident records."),
+        )
+        range <- params.recordRange.fold(Right(MatchListRecordRange.Gte): Either[
+          AppError,
+          MatchListRecordRange,
+        ])(raw =>
+          MatchListRecordRange.fromWire(raw)
+            .toRight(AppError.ValidationFailed(s"recordRange must be gte or lte: $raw"))
+        )
+        memberId <- BoundaryId.optional("memberId", params.memberId)(MemberId.fromString)
+      yield Some(MatchListRecordCriterion(field, value, range, memberId))
 
   private def parseStatus(status: Option[String]): Either[AppError, MatchListStatusFilter] = status
     .fold(Right(MatchListStatusFilter.All): Either[AppError, MatchListStatusFilter])(other =>

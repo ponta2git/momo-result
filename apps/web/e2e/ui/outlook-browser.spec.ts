@@ -85,7 +85,7 @@ test("retains an edited outlook within comparison and resets it after match-list
   await expect(page).toHaveURL(
     (url) =>
       url.pathname === "/matches" &&
-      url.searchParams.get("status") === "confirmed" &&
+      !url.searchParams.has("status") &&
       url.searchParams.get("gameTitleId") === outlook.gameTitleId &&
       url.searchParams.get("seasonMasterId") === outlook.seasonMasterId &&
       !url.searchParams.has("mapMasterId") &&
@@ -94,7 +94,7 @@ test("retains an edited outlook within comparison and resets it after match-list
   await expect(
     page
       .getByRole("region", { name: "試合一覧", exact: true })
-      .getByRole("link", { name: `第1試合 ${outlook.mapName}の試合結果を見る` }),
+      .getByRole("link", { name: `第1試合 · ${outlook.mapName}` }),
   ).toHaveAttribute("href", `/matches/${outlook.matchId}`);
   await page.goBack();
   await expect(page).toHaveURL(outlookUrl);

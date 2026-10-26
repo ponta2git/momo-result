@@ -13,7 +13,7 @@ import {
   test,
 } from "./support";
 
-test("creates a held event and persists a manually entered result and note", async ({
+test("creates a held event, saves a result and finds it by its memo and player record", async ({
   e2eRun,
   page,
   request,
@@ -74,6 +74,53 @@ test("creates a held event and persists a manually entered result and note", asy
       }),
     ),
   });
+
+  await test.step("find the persisted result through the mobile search sheet", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/matches");
+    await page.getByRole("button", { name: "検索条件", exact: true }).click();
+    const search = page.getByRole("dialog", { name: "検索条件", exact: true });
+    await selectControlOption(
+      page,
+      search.getByRole("combobox", { name: "作品", exact: true }),
+      masters.gameTitleId,
+    );
+    await selectControlOption(
+      page,
+      search.getByRole("combobox", { name: "マップ", exact: true }),
+      masters.mapMasterId,
+    );
+    await search.getByLabel("メモに含む語句").fill(note);
+    await selectControlOption(
+      page,
+      search.getByRole("combobox", { name: "プレーヤー", exact: true }),
+      "member_ponta",
+    );
+    await selectControlOption(
+      page,
+      search.getByRole("combobox", { name: "記録", exact: true }),
+      "total_assets",
+    );
+    await search.getByLabel("金額（万円）").fill("492");
+    await search.getByRole("button", { name: "この条件で検索" }).click();
+    await expect(page).toHaveURL(
+      (url) =>
+        url.searchParams.get("q") === note &&
+        url.searchParams.get("mapMasterId") === masters.mapMasterId &&
+        url.searchParams.get("memberId") === "member_ponta" &&
+        url.searchParams.get("record") === "total_assets" &&
+        url.searchParams.get("recordValue") === "492",
+    );
+    const results = page.getByRole("region", { name: "確定済みの試合", exact: true });
+    await expect(results.getByText("1試合", { exact: true })).toBeVisible();
+    await expect(results.locator("mark")).toHaveText(note);
+    await results.getByRole("link", { name: `第1試合 · ${masters.mapName}`, exact: true }).click();
+    await expect(page.getByText(note, { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
+      "href",
+      `/matches/${matchId}/edit`,
+    );
+  });
 });
 
 test("finds a saved match, edits it and exports the saved values", async ({
@@ -83,11 +130,6 @@ test("finds a saved match, edits it and exports the saved values", async ({
 }) => {
   const fixture = await seedConfirmedContext(request, e2eRun);
   await page.goto("/matches");
-  await selectControlOption(
-    page,
-    page.getByRole("combobox", { exact: true, name: "確定状況" }),
-    "confirmed",
-  );
   await page.getByText("詳細条件", { exact: true }).click();
   await page.getByRole("button", { name: "開催を変更" }).click();
   await page

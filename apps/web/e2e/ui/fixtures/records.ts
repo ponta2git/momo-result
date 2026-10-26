@@ -10,10 +10,4 @@ export const confirmedContext = {
   matchId: "match-1",
 } as const;
 
-export const uiContext = {
-  ...confirmedContext,
-  matchIds: ["match-1", "match-2"],
-  primaryGameTitleId: confirmedContext.gameTitleId,
-  primaryGameTitleName: confirmedContext.gameTitleName,
-  secondaryGameTitleId: "gt_ui_other",
-};
+export const confirmedMatchIds = ["match-1", "match-2"] as const;

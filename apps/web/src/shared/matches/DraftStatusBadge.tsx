@@ -22,7 +22,7 @@ const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentat
   },
   needs_review: {
     icon: <AlertTriangle />,
-    tone: "attention",
+    tone: "warning",
   },
   ocr_failed: {
     icon: <AlertTriangle />,

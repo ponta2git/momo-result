@@ -75,7 +75,7 @@ describe("OcrStartDialog", () => {
     expect(
       await screen.findByRole("dialog", { name: "この送信の受付は終了しました" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "試合一覧で確認" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下書きで確認" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "未受付の画像を新しく送信" }),
     ).not.toBeInTheDocument();

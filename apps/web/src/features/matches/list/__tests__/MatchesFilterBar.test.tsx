@@ -1,30 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
+import { defaultMatchListSearch } from "@/features/matches/list/matchListSearchParams";
 import type {
   MatchListFilterCandidates,
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
 import { selectOption } from "@/test/selectOption";
-
-const initialSearch: MatchListSearch = {
-  cursor: "",
-  gameTitleId: "",
-  heldEventId: "",
-  pageSize: 10,
-  seasonMasterId: "",
-  sort: "held_desc",
-  status: "all",
-};
-
-const counts = {
-  incompleteCount: 8,
-  needsReviewCount: 2,
-  ocrRunningCount: 3,
-  preConfirmCount: 5,
-};
 
 const candidates: MatchListFilterCandidates = {
   gameTitles: [
@@ -37,6 +22,15 @@ const candidates: MatchListFilterCandidates = {
     },
   ],
   heldEvents: [],
+  maps: [
+    {
+      createdAt: "2026-01-01T00:00:00.000Z",
+      displayOrder: 1,
+      gameTitleId: "game-1",
+      id: "map-1",
+      name: "日本全国",
+    },
+  ],
   seasons: [
     {
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -48,34 +42,80 @@ const candidates: MatchListFilterCandidates = {
   ],
 };
 
+function renderFilterBar(search: MatchListSearch = defaultMatchListSearch) {
+  const onChange = vi.fn();
+  function Harness() {
+    const [current, setCurrent] = useState(search);
+    return (
+      <>
+        <MatchesFilterBar
+          actions={{ onChange, onClear: vi.fn() }}
+          candidates={candidates}
+          hasConditions={false}
+          search={current}
+        />
+        <button type="button" onClick={() => setCurrent(defaultMatchListSearch)}>
+          external reset
+        </button>
+      </>
+    );
+  }
+  render(<Harness />);
+  return onChange;
+}
+
 describe("MatchesFilterBar", () => {
-  it("sends the selected status and sort without reconstructing the URL", async () => {
+  it("sends visible scope and sort changes as field intents", async () => {
     const user = userEvent.setup();
-    const onChange = vi.fn();
-    const search = { ...initialSearch, cursor: "opaque-cursor", status: "incomplete" as const };
+    const onChange = renderFilterBar();
 
-    const { rerender } = render(
-      <MatchesFilterBar
-        actions={{ onChange, onClear: vi.fn() }}
-        candidates={candidates}
-        counts={counts}
-        search={search}
-      />,
-    );
+    await selectOption(user, screen.getByLabelText("マップ"), "map-1");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "map", mapMasterId: "map-1" });
+    await selectOption(user, screen.getByLabelText("並び順"), "held_asc");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "sort", sort: "held_asc" });
+  });
 
-    await selectOption(user, screen.getByLabelText("確定状況"), "ocr_running");
-    expect(onChange).toHaveBeenLastCalledWith({ kind: "status", status: "ocr_running" });
+  it("searches the memo only when the reader commits the words", async () => {
+    const user = userEvent.setup();
+    const onChange = renderFilterBar();
+    await user.click(screen.getByRole("button", { name: /詳細条件/u }));
 
-    onChange.mockClear();
-    rerender(
-      <MatchesFilterBar
-        actions={{ onChange, onClear: vi.fn() }}
-        candidates={candidates}
-        counts={counts}
-        search={search}
-      />,
-    );
-    await selectOption(user, screen.getByLabelText("並び順"), "updated_desc");
-    expect(onChange).toHaveBeenLastCalledWith({ kind: "sort", sort: "updated_desc" });
+    await user.type(screen.getByLabelText("メモに含む語句"), "  ボンビー ");
+    expect(onChange).not.toHaveBeenCalled();
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "memo", q: "ボンビー" });
+  });
+
+  it("sends a player record only once it is complete, and keeps an invalid value editable", async () => {
+    const user = userEvent.setup();
+    const onChange = renderFilterBar();
+    await user.click(screen.getByRole("button", { name: /詳細条件/u }));
+
+    await selectOption(user, screen.getByLabelText("プレーヤー"), "member_ponta");
+    await selectOption(user, screen.getByLabelText("記録"), "suri_no_ginji");
+    expect(onChange).not.toHaveBeenCalled();
+
+    const count = screen.getByLabelText("回数");
+    await user.type(count, "-1");
+    await user.tab();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(count).toHaveAccessibleDescription(/0以上の整数/u);
+
+    await user.clear(count);
+    await user.type(count, "2{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: "record",
+      record: { memberId: "member_ponta", range: "gte", record: "suri_no_ginji", value: "2" },
+    });
+  });
+
+  it("replaces an uncommitted draft when the committed search changes elsewhere", async () => {
+    const user = userEvent.setup();
+    renderFilterBar({ ...defaultMatchListSearch, q: "ボンビー" });
+
+    const memo = screen.getByLabelText("メモに含む語句");
+    expect(memo).toHaveValue("ボンビー");
+    await user.click(screen.getByRole("button", { name: "external reset" }));
+    expect(memo).toHaveValue("");
   });
 });

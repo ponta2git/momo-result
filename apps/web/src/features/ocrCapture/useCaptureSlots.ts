@@ -198,7 +198,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
     (kind: SlotKind) => {
       const currentSlot = readCurrentSlots().find((slot) => slot.kind === kind);
       if (currentSlot && isWorkingStatus(currentSlot.status)) {
-        reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
+        reportFailure("読み取り中の画像は破棄できません。下書き画面で状態を確認してください。");
         return;
       }
       updateLocalSlots((current) =>
@@ -211,7 +211,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
 
   const clearAllImages = useCallback(() => {
     if (readCurrentSlots().some((slot) => isWorkingStatus(slot.status))) {
-      reportFailure("読み取り中の画像は破棄できません。試合一覧で状態を確認してください。");
+      reportFailure("読み取り中の画像は破棄できません。下書き画面で状態を確認してください。");
       return;
     }
     updateLocalSlots(createInitialSlots);
@@ -226,7 +226,7 @@ export function useCaptureSlots({ feedback, onDraftLoadError }: CaptureSlotsOpti
       const targetSlot = currentSlots.find((slot) => slot.kind === targetKind);
       if (!sourceSlot || !targetSlot || !sourceSlot.file) return;
       if (isWorkingStatus(sourceSlot.status) || isWorkingStatus(targetSlot.status)) {
-        reportFailure("読み取り中は分類を変更できません。試合一覧で状態を確認してください。");
+        reportFailure("読み取り中は分類を変更できません。下書き画面で状態を確認してください。");
         return;
       }
       updateLocalSlots((current) =>

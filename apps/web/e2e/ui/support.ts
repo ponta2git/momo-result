@@ -14,7 +14,7 @@ import {
 } from "../../src/test/msw/achievementFixtures";
 import { incidentMastersSeed, mswState } from "../../src/test/msw/fixtures";
 import { makeSeriesAnalysisStatus } from "../../src/test/msw/seriesAnalysisFixtures";
-import { confirmedContext } from "./fixtures/records";
+import { confirmedContext, confirmedMatchIds } from "./fixtures/records";
 
 export { expect };
 
@@ -24,11 +24,11 @@ export const test = base.extend<{ mockedApi: void }>({
   mockedApi: [
     async ({ context }, use) => {
       const unexpected: string[] = [];
-      const matches = [1, 2].map((matchNoInEvent) =>
+      const matches = confirmedMatchIds.map((matchId, index) =>
         makeMatchDetail({
           ...confirmedContext,
-          matchId: `match-${matchNoInEvent}`,
-          matchNoInEvent,
+          matchId,
+          matchNoInEvent: index + 1,
           layoutFamily: "momotetsu_2",
           players: makeFourPlayerResults(),
         }),
@@ -52,6 +52,9 @@ export const test = base.extend<{ mockedApi: void }>({
           ownerMemberId: match.ownerMemberId,
           playedAt: match.playedAt,
           status: "confirmed",
+          ...(match.matchNoInEvent === 1
+            ? { hasNote: true, noteBody: "終盤にキングボンビーが付いた。" }
+            : {}),
           ranks: (match.players ?? []).map(({ memberId, playOrder, rank }) => ({
             memberId,
             playOrder,
@@ -68,12 +71,7 @@ export const test = base.extend<{ mockedApi: void }>({
           memberId: "member_ponta",
         } satisfies components["schemas"]["AuthMeResponse"],
         "/api/admin/login-accounts": { items: mswState.loginAccounts },
-        "/api/game-titles": {
-          items: [
-            ...mswState.gameTitles,
-            { ...mswState.gameTitles[0], id: "gt_ui_other", name: "別作品" },
-          ],
-        },
+        "/api/game-titles": { items: mswState.gameTitles },
         "/api/map-masters": { items: mswState.mapMasters },
         "/api/season-masters": { items: mswState.seasonMasters },
         "/api/member-aliases": { items: mswState.memberAliases },
@@ -112,15 +110,44 @@ export const test = base.extend<{ mockedApi: void }>({
             return;
           }
           if (path === "/api/matches") {
+            // This shared fixture serves one page of confirmed matches. Scenarios using
+            // other search contracts must supply their own responses before falling back.
+            const unsupported = [
+              "from",
+              "to",
+              "memberId",
+              "record",
+              "recordValue",
+              "recordRange",
+              "cursor",
+            ].filter((key) => url.searchParams.has(key));
+            if (unsupported.length > 0) {
+              unexpected.push(`GET ${path}: unsupported conditions ${unsupported.join(", ")}`);
+              await route.abort("blockedbyclient");
+              return;
+            }
             const items = summaries.filter((match) => {
-              for (const key of ["heldEventId", "gameTitleId", "seasonMasterId"] as const) {
+              for (const key of [
+                "heldEventId",
+                "gameTitleId",
+                "seasonMasterId",
+                "mapMasterId",
+              ] as const) {
                 const requested = url.searchParams.get(key);
                 if (requested && requested !== match[key]) return false;
               }
+              const q = url.searchParams.get("q");
+              if (q && !match.noteBody?.includes(q)) return false;
               const status = url.searchParams.get("status");
-              return !status || status === "all" || status === "confirmed";
+              return (
+                url.searchParams.get("kind") !== "match_draft" &&
+                (!status || status === "all" || status === "confirmed")
+              );
             });
-            await route.fulfill({ json: { items, pagination: pagination(1, 100, items.length) } });
+            const pageSize = Number(url.searchParams.get("pageSize") ?? 25);
+            await route.fulfill({
+              json: { items, pagination: pagination(1, pageSize, items.length) },
+            });
             return;
           }
           const identity = matches.find((item) => path === `/api/matches/${item.matchId}/identity`);

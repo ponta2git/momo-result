@@ -138,10 +138,13 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
   cargo test --locked --lib --no-run --message-format=json > /tmp/momo-test-build.json \
   && install -d -m 0755 /tmp/e2e-root/usr/local/bin \
   && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/tmp/e2e-root/usr/local/bin/mom24-worker-test')" \
-  && lddtree -l /tmp/e2e-root/usr/local/bin/mom24-worker-test \
-    | grep -E '^/(lib|usr/lib|opt/tesseract/lib)/' \
-    | sort -u \
-    | while IFS= read -r library; do cp -L --parents "${library}" /tmp/e2e-root; done \
+  && strip --strip-debug /tmp/e2e-root/usr/local/bin/mom24-worker-test \
+  && lddtree -l /tmp/e2e-root/usr/local/bin/mom24-worker-test > /tmp/e2e-libraries \
+  && while IFS= read -r library; do \
+    case "${library}" in \
+      /lib/*|/usr/lib/*|/opt/tesseract/lib/*) cp -L --parents "${library}" /tmp/e2e-root || exit 1 ;; \
+    esac; \
+  done < /tmp/e2e-libraries \
   && cp -R --parents /workspace/docs/schemas /workspace/apps/processing-worker/testdata /tmp/e2e-root
 
 # System E2E transfers this image between jobs. Keep only the test executable, its dynamic

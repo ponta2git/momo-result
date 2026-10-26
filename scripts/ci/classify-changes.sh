@@ -39,10 +39,6 @@ while IFS= read -r -d '' path; do
     apps/api/redocly.yaml)
       web=true
       ;;
-    apps/api/src/test/scala/momo/api/e2e/*)
-      api=true
-      system_e2e=true
-      ;;
     apps/api/src/test/*)
       api=true
       ;;
@@ -159,6 +155,10 @@ while IFS= read -r -d '' path; do
       analysis=true
       analysis_image=true
       ;;
+    scripts/ci/load-e2e-artifacts.sh)
+      # Verifies and loads the System E2E test artifacts before the runner starts.
+      system_e2e=true
+      ;;
     scripts/ci/check-pr-branch-policy.sh | scripts/ci/check-pr-ready.sh | \
       scripts/ci/classify-changes.sh | scripts/ci/classify-git-range.sh | \
       scripts/ci/extract-release-notes.sh | scripts/ci/runtime-release-notes.sh)
@@ -194,13 +194,17 @@ while IFS= read -r -d '' path; do
       web=true
       ;;
     .github/workflows/processing-worker.yml)
+      # Also produces the controlled E2E worker.
       analysis=true
       analysis_image=true
+      system_e2e=true
       ;;
     .github/workflows/analysis-production.yml)
       ;;
     .github/workflows/deploy.yml)
+      # Also produces the System E2E session fixture.
       runtime=true
+      system_e2e=true
       ;;
     .github/workflows/runtime-rollback.yml)
       ;;
@@ -219,6 +223,10 @@ while IFS= read -r -d '' path; do
       policy_scripts=true
       ;;
     .github/workflows/public-safety.yml | .github/actions/*)
+      ;;
+    scripts/tools/internal/cievidence/e2e.go)
+      system_e2e=true
+      policy_scripts=true
       ;;
     scripts/tools/cmd/ci-tool/* | scripts/tools/internal/ci*/* | scripts/tools/go.mod | scripts/tools/go.sum)
       policy_scripts=true

@@ -409,7 +409,7 @@ export function buildOutlookWorkspaceLinks(
 ) {
   const reviewSearch = new URLSearchParams(location.search);
   reviewSearch.set("view", "review");
-  const matchParams = new URLSearchParams({ gameTitleId, status: "confirmed" });
+  const matchParams = new URLSearchParams({ gameTitleId });
   if (selection.seasonMasterId) matchParams.set("seasonMasterId", selection.seasonMasterId);
   return {
     reviewHref: `${location.pathname}?${reviewSearch}#review-member-${focusMemberId}`,

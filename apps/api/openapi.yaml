@@ -2128,7 +2128,80 @@
           {
             "name" : "sort",
             "in" : "query",
-            "description" : "status_priority, updated_desc, held_desc, held_asc, or match_no_asc.",
+            "description" : "status_priority, updated_desc, held_desc, held_asc, or match_no_asc. held_desc and held_asc order by held time, then match number ascending within the same held time.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mapMasterId",
+            "in" : "query",
+            "description" : "Map master ID. Confirmed-match criterion; requires kind=match.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "from",
+            "in" : "query",
+            "description" : "Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to. Confirmed-match criterion; requires kind=match.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "to",
+            "in" : "query",
+            "description" : "Inclusive held date (YYYY-MM-DD, Asia/Tokyo). Confirmed-match criterion; requires kind=match.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "q",
+            "in" : "query",
+            "description" : "Case-insensitive literal substring of the match note; trimmed, at most 50 characters, blank means absent. Confirmed-match criterion; requires kind=match.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "description" : "Limits the record condition to this player; requires record. Without it any player matches.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "record",
+            "in" : "query",
+            "description" : "destination, plus_station, minus_station, card_station, card_shop, suri_no_ginji, total_assets, or revenue (万円); requires recordValue. Confirmed-match criterion; requires kind=match.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "recordValue",
+            "in" : "query",
+            "description" : "Compared value; requires record. Incident counts must be 0 or greater and a missing count is 0.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "recordRange",
+            "in" : "query",
+            "description" : "gte (default) or lte; requires record.",
             "required" : false,
             "schema" : {
               "type" : "string"
@@ -2147,7 +2220,7 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter pageSize",
+            "description" : "Invalid value for: query parameter pageSize, Invalid value for: query parameter recordValue",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -8637,6 +8710,9 @@
             "type" : "string"
           },
           "heldEventPublicId" : {
+            "type" : "string"
+          },
+          "noteBody" : {
             "type" : "string"
           }
         }

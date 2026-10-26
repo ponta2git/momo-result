@@ -18,8 +18,7 @@ export function useMatchListRefresh(
   const refreshGenerationRef = useRef(0);
   const selectionKey = buildMatchListSearchParams(search).toString();
 
-  if (failure && failure.originScope !== selectionKey && failure.targetScope !== selectionKey)
-    setFailure(null);
+  if (failure && failure.scope !== selectionKey) setFailure(null);
 
   useEffect(() => {
     const currentGeneration = refreshGenerationRef.current;
@@ -38,7 +37,7 @@ export function useMatchListRefresh(
       if (refreshGenerationRef.current === refreshGeneration) setFailure(applyResult(result));
     } catch {
       if (refreshGenerationRef.current === refreshGeneration) {
-        setFailure({ originScope: selectionKey, targetScope: selectionKey });
+        setFailure({ scope: selectionKey });
       }
     } finally {
       refreshInFlightRef.current = false;
@@ -46,5 +45,5 @@ export function useMatchListRefresh(
     }
   };
 
-  return { pending, failed: failure?.targetScope === selectionKey, run };
+  return { pending, failed: failure?.scope === selectionKey, run };
 }

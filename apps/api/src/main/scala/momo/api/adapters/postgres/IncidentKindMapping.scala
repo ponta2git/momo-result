@@ -21,7 +21,11 @@ private[postgres] object IncidentKindMapping:
     "suri_no_ginji" -> IncidentKind.SuriNoGinji,
   )
 
+  private val keyByKind: Map[IncidentKind, String] = byKey.map(_.swap)
+
   def kindOf(key: String): Option[IncidentKind] = byKey.get(key)
+
+  def keyOf(kind: IncidentKind): String = keyByKind(kind)
 
   def masterIds(using ids: PostgresIdentities): ConnectionIO[Map[IncidentKind, IncidentMasterId]] =
     sql"SELECT ${ids.wireId("incident_masters")}, key FROM incident_masters ORDER BY key LIMIT 7"

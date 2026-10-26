@@ -28,6 +28,7 @@ ARG TESSERACT_SHA256=9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616b
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV PATH="/opt/tesseract/bin:${PATH}"
 ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig"
+WORKDIR /tmp/runtime-libssl
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && apt-get install -y --no-install-recommends \
@@ -46,7 +47,13 @@ RUN apt-get update \
     openssl \
     pax-utils \
     pkg-config \
-  && rm -rf /var/lib/apt/lists/*
+  && mkdir -p /opt/runtime-libssl/var/lib/dpkg/status.d \
+  && apt-get download "libssl3=$(dpkg-query --show --showformat='${Version}' libssl3)" \
+  && dpkg-deb --extract ./*.deb /opt/runtime-libssl \
+  && dpkg-deb --field ./*.deb > /opt/runtime-libssl/var/lib/dpkg/status.d/libssl3 \
+  && dpkg-deb --control ./*.deb control \
+  && cp control/md5sums /opt/runtime-libssl/var/lib/dpkg/status.d/libssl3.md5sums \
+  && rm -rf /tmp/runtime-libssl /var/lib/apt/lists/*
 WORKDIR /tmp/tesseract-build
 RUN curl -fsSL -o /tmp/tesseract.tar.gz \
     "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/${TESSERACT_VERSION}.tar.gz" \
@@ -146,6 +153,8 @@ COPY --from=diagnostics /etc/group /etc/group
 # supported toolbox surface enforceable while still allowing `fly ssh console` access.
 COPY --from=builder --chmod=0755 /bin/dash /momo-toolbox/sh
 COPY --from=builder /tmp/runtime-root/ /
+# Keep OpenSSL providers, engines, and Distroless package metadata consistent with the copied libraries.
+COPY --from=native-builder /opt/runtime-libssl/ /
 # Copy the parent last so the prepared child directory remains an archive entry whose 0700 mode and
 # service ownership cannot be replaced by the root-owned dynamic-library closure above. Copying the
 # empty directory's contents directly produced builder-dependent destination permissions because the

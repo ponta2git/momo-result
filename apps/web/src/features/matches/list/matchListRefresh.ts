@@ -1,14 +1,13 @@
 import { buildMatchListSearchParams } from "@/features/matches/list/matchListSearchParams";
 import type { MatchListSearch } from "@/features/matches/list/matchListTypes";
 
-/** A refreshed list is cached at its first page; summary failure does not invalidate that page. */
+/** A refreshed list is cached at its first page. */
 export type MatchListRefreshResult =
-  | { kind: "refreshed"; origin: MatchListSearch; summaryFailed: boolean }
+  | { kind: "refreshed"; origin: MatchListSearch }
   | { kind: "failed"; origin: MatchListSearch };
 
 export type MatchListRefreshFailure = {
-  originScope: string;
-  targetScope: string;
+  scope: string;
 };
 
 /** Only an unchanged selection may adopt the refreshed first page. */
@@ -21,12 +20,7 @@ export function resolveMatchListRefresh(current: MatchListSearch, result: MatchL
       ? { ...current, cursor: "" }
       : undefined;
   const failure: MatchListRefreshFailure | null =
-    result.kind === "failed" || result.summaryFailed
-      ? {
-          originScope,
-          targetScope: nextSearch ? buildMatchListSearchParams(nextSearch).toString() : originScope,
-        }
-      : null;
+    result.kind === "failed" ? { scope: originScope } : null;
 
   return { nextSearch, failure };
 }

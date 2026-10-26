@@ -8,6 +8,7 @@ import momo.api.domain.ids.{GameTitleId, HeldEventId, SeasonMasterId}
 import momo.api.domain.{
   MatchListItem,
   MatchListKindFilter,
+  MatchListSearchCriteria,
   MatchListSort,
   MatchListStatusFilter,
   MatchListSummary
@@ -78,6 +79,7 @@ object MatchListReadModel:
       kind: MatchListKindFilter = MatchListKindFilter.All,
       page: CursorPageRequest = CursorPageRequest(pageSize = 100),
       sort: MatchListSort = MatchListSort.StatusPriority,
+      search: MatchListSearchCriteria = MatchListSearchCriteria.empty,
   )
 
   final case class SummaryFilter(

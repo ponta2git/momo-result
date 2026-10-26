@@ -1,13 +1,21 @@
 package momo.api.usecases.matches
 
 import java.nio.charset.StandardCharsets
-import java.time.Instant
+import java.time.{Instant, LocalDate}
 import java.util.Base64
 
 import munit.FunSuite
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchListKindFilter, MatchListSort, MatchListStatusFilter}
+import momo.api.domain.{
+  MatchListKindFilter,
+  MatchListRecordCriterion,
+  MatchListRecordField,
+  MatchListRecordRange,
+  MatchListSearchCriteria,
+  MatchListSort,
+  MatchListStatusFilter
+}
 import momo.api.errors.AppError
 import momo.api.repositories.MatchListReadModel
 
@@ -21,6 +29,18 @@ final class MatchListCursorCodecSpec extends FunSuite:
     kind = MatchListKindFilter.MatchDraft,
     sort = MatchListSort.HeldAsc,
     pageSize = 25,
+    search = MatchListSearchCriteria(
+      mapMasterId = Some(MapMasterId.unsafeFromString("map-1")),
+      from = Some(LocalDate.parse("2026-08-01")),
+      to = Some(LocalDate.parse("2026-08-31")),
+      noteQuery = Some("100%_メモ"),
+      record = Some(MatchListRecordCriterion(
+        MatchListRecordField.Revenue,
+        -500,
+        MatchListRecordRange.Lte,
+        Some(MemberId.unsafeFromString("member-1")),
+      )),
+    ),
   )
   private val cursor = MatchListReadModel.Cursor(
     direction = MatchListReadModel.CursorDirection.After,
@@ -63,6 +83,27 @@ final class MatchListCursorCodecSpec extends FunSuite:
       scope.copy(kind = MatchListKindFilter.All),
       scope.copy(sort = MatchListSort.UpdatedDesc),
       scope.copy(pageSize = 50),
+      scope.copy(search = MatchListSearchCriteria.empty),
+      scope.copy(search = scope.search.copy(mapMasterId = None)),
+      scope.copy(search = scope.search.copy(from = Some(LocalDate.parse("2026-08-02")))),
+      scope.copy(search = scope.search.copy(to = None)),
+      scope.copy(search = scope.search.copy(noteQuery = Some("100%_めも"))),
+      scope.copy(search =
+        scope.search.copy(record =
+          scope.search.record.map(_.copy(range = MatchListRecordRange.Gte))
+        )
+      ),
+      scope.copy(search =
+        scope.search.copy(record = scope.search.record.map(_.copy(value = -499)))
+      ),
+      scope.copy(search =
+        scope.search.copy(record = scope.search.record.map(_.copy(memberId = None)))
+      ),
+      scope.copy(search =
+        scope.search.copy(record =
+          scope.search.record.map(_.copy(field = MatchListRecordField.TotalAssets))
+        )
+      ),
     )
     changedScopes.foreach(changed => assertInvalid(MatchListCursorCodec.decode(encoded, changed)))
 
@@ -73,7 +114,9 @@ final class MatchListCursorCodecSpec extends FunSuite:
   test("rejects unknown versions, enums, malformed IDs, numbers, and instants"):
     val valid = rawJson()
     List(
-      valid.replace("\"version\":1", "\"version\":2"),
+      valid.replace("\"version\":2", "\"version\":1"),
+      valid.replace("\"from\":\"2026-08-01\"", "\"from\":\"2026-13-01\""),
+      valid.replace("\"field\":\"revenue\"", "\"field\":\"unknown\""),
       valid.replace("\"direction\":\"after\"", "\"direction\":\"sideways\""),
       valid.replace("\"status\":\"needs_review\"", "\"status\":\"unknown\""),
       valid.replace("\"heldEventId\":\"event-1\"", "\"heldEventId\":\"\""),
@@ -102,7 +145,7 @@ final class MatchListCursorCodecSpec extends FunSuite:
     assertInvalid(MatchListCursorCodec.decode(encodeJson(firstPageAfter), scope))
 
   private def rawJson(): String =
-    s"""{"version":1,"scope":{"accountId":"account-1","heldEventId":"event-1","gameTitleId":"title-1","seasonMasterId":"season-1","status":"needs_review","kind":"match_draft","sort":"held_asc","pageSize":25},"direction":"after","page":3,"totalItems":72,"position":$positionJson}"""
+    s"""{"version":2,"scope":{"accountId":"account-1","heldEventId":"event-1","gameTitleId":"title-1","seasonMasterId":"season-1","status":"needs_review","kind":"match_draft","sort":"held_asc","pageSize":25,"mapMasterId":"map-1","from":"2026-08-01","to":"2026-08-31","q":"100%_メモ","record":{"field":"revenue","value":-500,"range":"lte","memberId":"member-1"}},"direction":"after","page":3,"totalItems":72,"position":$positionJson}"""
 
   private def positionJson: String =
     """{"statusPriority":1,"updatedAt":"2026-08-14T12:34:56.123456Z","heldAt":"2026-08-01T00:00:00Z","matchNoIsNull":false,"matchNoSort":7,"kind":"match_draft","id":"draft-7"}"""

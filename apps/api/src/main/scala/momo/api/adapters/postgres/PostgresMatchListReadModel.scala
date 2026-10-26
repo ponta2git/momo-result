@@ -47,7 +47,7 @@ object PostgresMatchList extends PostgresMatchListSupport:
           filter.seasonMasterId.map(v =>
             fr"m.season_master_id = ${ids.lookup(Entity.SeasonMasters, v.value)}"
           ),
-        ).flatten
+        ).flatten ++ searchConditions(filter.search)
         val confirmedSelect = confirmedBase(publicIds) ++ fragments.whereAndOpt(confirmedConditions)
 
         val draftConditionsCommon = List(
@@ -79,7 +79,9 @@ object PostgresMatchList extends PostgresMatchListSupport:
           fragments.whereAndOpt(draftConditionsCommon ++ draftStatusCondition.toList)
 
         val includeMatches = MatchListProjection.includeMatches(filter.kind, filter.status)
-        val includeDrafts = MatchListProjection.includeDrafts(filter.kind, filter.status)
+        // Search criteria describe confirmed results only, so they never select drafts.
+        val includeDrafts = MatchListProjection.includeDrafts(filter.kind, filter.status) &&
+          filter.search.isEmpty
 
         val unionSelect = (includeMatches, includeDrafts) match
           case (true, true) => Some(confirmedSelect ++ fr"UNION ALL" ++ draftSelect)

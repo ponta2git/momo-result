@@ -771,7 +771,7 @@ describe("app routing", () => {
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
 
     const detailLinks = await screen.findAllByRole("link", {
-      name: "第1試合 東日本編の試合結果を見る",
+      name: "第1試合 · 東日本編",
     });
     const detailLink = detailLinks[0];
     if (!detailLink) throw new Error("expected a detail link");

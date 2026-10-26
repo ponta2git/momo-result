@@ -62,11 +62,12 @@ test("starts document login navigation when its action becomes pending", async (
       body: "<main>ログインへの移動を確認</main>",
     });
   });
-  await page.goto("/login?next=%2Fmatches%3Fstatus%3Dconfirmed");
+  const destination = "/matches?mapMasterId=map_east";
+  await page.goto(`/login?${new URLSearchParams({ next: destination })}`);
   const login = page.getByRole("link", { name: "Discordでログインする" });
   await expect(login).toBeVisible();
   await login.click();
   await expect(page.getByRole("main")).toHaveText("ログインへの移動を確認");
-  expect(loginUrl?.searchParams.get("next")).toBe("/matches?status=confirmed");
+  expect(loginUrl?.searchParams.get("next")).toBe(destination);
   expect(loginUrl?.searchParams.get("silent")).toBe("1");
 });

@@ -83,6 +83,16 @@ object MatchModule:
             pageSize = input.pageSize,
             cursor = input.cursor,
             sort = input.sort,
+            search = MatchListCodec.SearchParams(
+              mapMasterId = input.mapMasterId,
+              from = input.from,
+              to = input.to,
+              q = input.q,
+              memberId = input.memberId,
+              record = input.record,
+              recordValue = input.recordValue,
+              recordRange = input.recordRange,
+            ),
           )
         )(command => listMatches.run(command, member.accountId))(result =>
           MatchListResponse(

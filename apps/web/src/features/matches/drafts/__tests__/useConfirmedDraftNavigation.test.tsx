@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { useConfirmedDraftNavigation } from "@/features/matches/list/useConfirmedDraftNavigation";
+import { useConfirmedDraftNavigation } from "@/features/matches/drafts/useConfirmedDraftNavigation";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";

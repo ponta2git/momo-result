@@ -18,9 +18,14 @@ import momo.api.domain.{
   MatchListItem,
   MatchListItemKind,
   MatchListRankEntry,
+  MatchListRecordCriterion,
+  MatchListRecordField,
+  MatchListRecordRange,
+  MatchListSearchCriteria,
   MatchListSort,
   MatchListSummary,
   MatchNoInEvent,
+  MatchNoteBody,
   PlayOrder,
   PublicId,
   Rank
@@ -44,6 +49,7 @@ private[postgres] trait PostgresMatchListSupport:
       createdAt: Instant,
       updatedAt: Instant,
       hasNote: Option[Boolean],
+      noteBody: Option[String],
       heldAtSort: Instant,
       heldAt: Option[Instant],
       publicId: Option[PublicId],
@@ -106,6 +112,7 @@ private[postgres] trait PostgresMatchListSupport:
     m.created_at,
     m.updated_at,
     (m.note_body IS NOT NULL) AS has_note,
+    LEFT(m.note_body, ${MatchNoteBody.MaximumCodePoints + 1}) AS note_body,
     COALESCE(he.start_at, m.played_at, m.updated_at) AS held_at_sort,
     he.start_at,
   """ ++ publicIds.column(fr"m.public_id") ++ fr" AS public_id," ++
@@ -131,18 +138,54 @@ private[postgres] trait PostgresMatchListSupport:
     d.created_at,
     d.updated_at,
     NULL::boolean AS has_note,
+    NULL::text AS note_body,
     COALESCE(he.start_at, d.played_at, d.updated_at) AS held_at_sort,
     he.start_at, NULL::bigint AS public_id,
   """ ++ publicIds.column(fr"he.public_id") ++ fr""" AS held_event_public_id
   FROM match_drafts d
   LEFT JOIN held_events he ON he.id = d.held_event_id"""
 
+  /** Confirmed-match search predicates; `m` and `he` are the aliases of `confirmedBase`. */
+  protected final def searchConditions(search: MatchListSearchCriteria)(using
+      ids: PostgresIdentities): List[Fragment] =
+    val heldAt = fr"COALESCE(he.start_at, m.played_at, m.updated_at)"
+    List(
+      search.mapMasterId.map(v => fr"m.map_master_id = ${ids.lookup(Entity.MapMasters, v.value)}"),
+      search.heldFromInclusive.map(from => heldAt ++ fr" >= $from"),
+      search.heldToExclusive.map(to => heldAt ++ fr" < $to"),
+      // strpos keeps the user's text literal: no LIKE wildcard or escape interpretation.
+      search.noteQuery.map(q => fr"strpos(lower(m.note_body), lower($q)) > 0"),
+      search.record.map(recordCondition),
+    ).flatten
+
+  private def recordCondition(criterion: MatchListRecordCriterion)(using
+      ids: PostgresIdentities): Fragment =
+    val playerValue = (criterion.field.incidentKind, criterion.field) match
+      case (Some(kind), _) =>
+        // A missing count row means the player had none of that incident.
+        fr"""COALESCE((SELECT mi.count FROM match_incidents mi
+          JOIN incident_masters im ON im.id = mi.incident_master_id
+          WHERE mi.match_id = mp.match_id AND mi.member_id = mp.member_id
+            AND im.key = ${IncidentKindMapping.keyOf(kind)}), 0)"""
+      case (None, MatchListRecordField.Revenue) => fr"mp.revenue_man_yen"
+      case (None, _) => fr"mp.total_assets_man_yen"
+    val comparison = criterion.range match
+      case MatchListRecordRange.Gte => fr" >= "
+      case MatchListRecordRange.Lte => fr" <= "
+    val member = criterion.memberId
+      .map(v => fr"AND mp.member_id = ${ids.lookup(Entity.Members, v.value)}")
+    fr"EXISTS (SELECT 1 FROM match_players mp WHERE mp.match_id = m.id" ++
+      member.getOrElse(Fragment.empty) ++ fr"AND" ++ playerValue ++ comparison ++
+      fr"${criterion.value})"
+
   /** Decorate after selection so master joins are bounded by the displayed page. */
   protected final def withLabels(select: Fragment)(using ids: PostgresIdentities): Fragment =
     val nameLimit = PostgresReadBudget.NameCodePoints
+    val noteLimit = MatchNoteBody.MaximumCodePoints
     fr"""SELECT COALESCE(char_length(gt.name) <= $nameLimit, true)
         AND COALESCE(char_length(season.name) <= $nameLimit, true)
-        AND COALESCE(char_length(map.name) <= $nameLimit, true),
+        AND COALESCE(char_length(map.name) <= $nameLimit, true)
+        AND COALESCE(char_length(sortable.note_body) <= $noteLimit, true),
         sortable.*, LEFT(gt.name, $nameLimit), LEFT(season.name, $nameLimit),
         LEFT(map.name, $nameLimit) FROM (""" ++ select ++ fr""") sortable
       LEFT JOIN game_titles gt ON ${ids.wireId("gt")} = sortable.game_title_id
@@ -167,7 +210,7 @@ private[postgres] trait PostgresMatchListSupport:
 
   private final case class SortTerm(
       column: Fragment,
-      value: Fragment,
+      value: MatchListReadModel.CursorPosition => Fragment,
       ascending: Boolean,
   )
 
@@ -175,13 +218,13 @@ private[postgres] trait PostgresMatchListSupport:
       sort: MatchListSort,
       cursor: MatchListReadModel.Cursor,
   ): Option[Fragment] = cursor.position.map { position =>
-    val terms = sortTerms(sort, position)
+    val terms = sortTerms(sort)
     val branches = terms.indices.toList.map { index =>
-      val prefix = terms.take(index).map(term => term.column ++ fr" = " ++ term.value)
+      val prefix = terms.take(index).map(term => term.column ++ fr" = " ++ term.value(position))
       val term = terms(index)
       val later = cursor.direction == MatchListReadModel.CursorDirection.After
       val greater = if later then term.ascending else !term.ascending
-      val comparison = term.column ++ (if greater then fr" > " else fr" < ") ++ term.value
+      val comparison = term.column ++ (if greater then fr" > " else fr" < ") ++ term.value(position)
       fragments.and(NonEmptyList.fromListUnsafe(prefix :+ comparison))
     }
     fr"(" ++ branches.intercalate(fr" OR ") ++ fr")"
@@ -194,45 +237,33 @@ private[postgres] trait PostgresMatchListSupport:
     val reverse = direction == MatchListReadModel.CursorDirection.Before
     def ordering(ascending: Boolean): Fragment =
       if ascending != reverse then fr"ASC" else fr"DESC"
-    val statusPriority = fr"sortable.status_priority " ++ ordering(ascending = true)
-    val updatedAt = fr"sortable.updated_at " ++ ordering(ascending = false)
-    val heldAt = fr"sortable.held_at_sort " ++ ordering(sort == MatchListSort.HeldAsc)
-    val matchNoIsNull = fr"sortable.match_no_is_null " ++ ordering(ascending = true)
-    val matchNoSort = fr"sortable.match_no_sort " ++ ordering(ascending = true)
-    val kind = fr"sortable.kind " ++ ordering(ascending = true)
-    val id = fr"sortable.id " ++ ordering(ascending = true)
-    sort match
-      case MatchListSort.StatusPriority =>
-        fr"ORDER BY " ++ statusPriority ++ fr", " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
-      case MatchListSort.UpdatedDesc =>
-        fr"ORDER BY " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
-      case MatchListSort.HeldDesc | MatchListSort.HeldAsc =>
-        fr"ORDER BY " ++ heldAt ++ fr", " ++ updatedAt ++ fr", " ++ kind ++ fr", " ++ id
-      case MatchListSort.MatchNoAsc =>
-        fr"ORDER BY " ++ matchNoIsNull ++ fr", " ++ matchNoSort ++ fr", " ++ updatedAt ++
-          fr", " ++ kind ++ fr", " ++ id
+    fr"ORDER BY " ++ sortTerms(sort)
+      .map(term => term.column ++ ordering(term.ascending)).intercalate(fr", ")
 
+  // Ordering and keyset boundaries must use the same columns and directions.
   private def sortTerms(
-      sort: MatchListSort,
-      position: MatchListReadModel.CursorPosition,
+      sort: MatchListSort
   ): List[SortTerm] =
     val statusPriority =
-      SortTerm(fr"sortable.status_priority", fr"${position.statusPriority}", true)
-    val updatedAt = SortTerm(fr"sortable.updated_at", fr"${position.updatedAt}", false)
+      SortTerm(fr"sortable.status_priority", position => fr"${position.statusPriority}", true)
+    val updatedAt = SortTerm(fr"sortable.updated_at", position => fr"${position.updatedAt}", false)
     val heldAt = SortTerm(
       fr"sortable.held_at_sort",
-      fr"${position.heldAt}",
+      position => fr"${position.heldAt}",
       sort == MatchListSort.HeldAsc,
     )
     val matchNoIsNull =
-      SortTerm(fr"sortable.match_no_is_null", fr"${position.matchNoIsNull}", true)
-    val matchNoSort = SortTerm(fr"sortable.match_no_sort", fr"${position.matchNoSort}", true)
-    val kind = SortTerm(fr"sortable.kind", fr"${position.kind}", true)
-    val id = SortTerm(fr"sortable.id", fr"${position.id}", true)
+      SortTerm(fr"sortable.match_no_is_null", position => fr"${position.matchNoIsNull}", true)
+    val matchNoSort =
+      SortTerm(fr"sortable.match_no_sort", position => fr"${position.matchNoSort}", true)
+    val kind = SortTerm(fr"sortable.kind", position => fr"${position.kind}", true)
+    val id = SortTerm(fr"sortable.id", position => fr"${position.id}", true)
     sort match
       case MatchListSort.StatusPriority => List(statusPriority, updatedAt, kind, id)
       case MatchListSort.UpdatedDesc => List(updatedAt, kind, id)
-      case MatchListSort.HeldDesc | MatchListSort.HeldAsc => List(heldAt, updatedAt, kind, id)
+      case MatchListSort.HeldDesc | MatchListSort.HeldAsc =>
+        // Within one held-at value, match numbers stay ascending in both directions.
+        List(heldAt, matchNoIsNull, matchNoSort, updatedAt, kind, id)
       case MatchListSort.MatchNoAsc => List(matchNoIsNull, matchNoSort, updatedAt, kind, id)
 
   protected final def loadRanks(
@@ -277,6 +308,7 @@ private[postgres] trait PostgresMatchListSupport:
       updatedAt = row.updatedAt,
       ranks = ranks,
       hasNote = row.hasNote,
+      noteBody = row.noteBody,
       heldAt = row.heldAt,
       labels = labels,
       publicId = row.publicId,

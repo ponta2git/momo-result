@@ -1,14 +1,9 @@
-import { useMemo } from "react";
-
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
   MatchListItemView,
-  MatchListRowActions,
   MatchListSearch,
-  MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
-import { useConfirmedDraftNavigation } from "@/features/matches/list/useConfirmedDraftNavigation";
 import { useMatchListRefresh } from "@/features/matches/list/useMatchListRefresh";
 import { useMatchListResource } from "@/features/matches/list/useMatchListResource";
 import { useMatchListSelection } from "@/features/matches/list/useMatchListSelection";
@@ -20,11 +15,11 @@ type MatchListRefreshAction = {
 };
 
 export type MatchesListView = {
-  draftNavigation: { rowActions: MatchListRowActions };
+  draftCount: number | undefined;
   filters: {
     actions: MatchListFilterActions;
     candidates: MatchListFilterCandidates;
-    hasActive: boolean;
+    hasConditions: boolean;
     loadFailed: boolean;
     pending: boolean;
     refresh: { pending: boolean; run: () => void };
@@ -32,6 +27,7 @@ export type MatchesListView = {
   };
   list: {
     items: MatchListItemView[];
+    memoQuery: string;
     loadFailed: boolean;
     loading: boolean;
     pagination:
@@ -48,21 +44,13 @@ export type MatchesListView = {
     updating: boolean;
   };
   navigation: {
-    exportHref: string;
+    draftsHref: string;
     manualCreateHref: string;
     ocrHref: string;
   };
-  summary: {
-    counts: MatchListSummaryCounts | undefined;
-    loadFailed: boolean;
-    loading: boolean;
-    masked: boolean;
-    retryPending: boolean;
-    retry: () => void;
-  };
 };
 
-/** Composes URL selection, list reads, and draft navigation for the page. */
+/** Composes URL selection and list reads for the page. */
 export function useMatchesList(): MatchesListView {
   const selection = useMatchListSelection();
   const refresh = useMatchListRefresh(selection.current, selection.applyRefresh);
@@ -72,18 +60,6 @@ export function useMatchesList(): MatchesListView {
     locationSettling: selection.settling,
     manualRefresh: refresh,
   });
-  const draftNavigation = useConfirmedDraftNavigation();
-
-  const { checkingIds, errors, run: checkDraftStatus } = draftNavigation;
-  const rowActions = useMemo<MatchListRowActions>(
-    () => ({
-      checkingDraftIds: checkingIds,
-      draftErrors: errors,
-      disabled: resource.list.scopeChanging,
-      onDraftStatusCheckAction: (action) => void checkDraftStatus(action),
-    }),
-    [checkingIds, errors, resource.list.scopeChanging, checkDraftStatus],
-  );
 
   const paginationValue = resource.list.pagination;
   const pagination = paginationValue
@@ -97,13 +73,11 @@ export function useMatchesList(): MatchesListView {
     : undefined;
 
   return {
-    draftNavigation: {
-      rowActions,
-    },
+    draftCount: resource.draftCount,
     filters: {
       actions: { onChange: selection.change, onClear: selection.clear },
       candidates: resource.filters.candidates,
-      hasActive: selection.hasFilters,
+      hasConditions: selection.hasConditions,
       loadFailed: resource.filters.loadFailed,
       pending: resource.list.scopeChanging,
       refresh: resource.filters.refresh,
@@ -111,6 +85,7 @@ export function useMatchesList(): MatchesListView {
     },
     list: {
       items: resource.list.items,
+      memoQuery: resource.list.memoQuery,
       loadFailed: resource.list.loadFailed,
       loading: resource.list.loading,
       pagination,
@@ -121,10 +96,9 @@ export function useMatchesList(): MatchesListView {
       updating: resource.list.updating,
     },
     navigation: {
-      exportHref: "/exports",
+      draftsHref: "/drafts",
       manualCreateHref: "/matches/new",
       ocrHref: "/ocr/new",
     },
-    summary: resource.summary,
   };
 }

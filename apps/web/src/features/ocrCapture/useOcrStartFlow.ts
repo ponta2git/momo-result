@@ -15,12 +15,12 @@ import type { OcrSubmission } from "@/features/ocrCapture/useOcrSubmission";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
-const incompleteMatchesUrl = "/matches?status=incomplete&sort=updated_desc";
+const draftsUrl = "/drafts";
 
 function ocrResultDestination(plan: OcrSubmissionPlan): string {
   return plan.setup.heldEventId
     ? `/held-events/${encodeURIComponent(plan.setup.heldEventId)}`
-    : incompleteMatchesUrl;
+    : draftsUrl;
 }
 
 export function useOcrStartFlow({
@@ -134,7 +134,7 @@ export function useOcrStartFlow({
   }, [state]);
 
   const viewMatches = useCallback(() => {
-    navigateToResult("plan" in state ? ocrResultDestination(state.plan) : incompleteMatchesUrl);
+    navigateToResult("plan" in state ? ocrResultDestination(state.plan) : draftsUrl);
   }, [state, navigateToResult]);
   const open = useCallback(
     (plan: OcrSubmissionPlan) => setState({ plan, status: "confirming" }),

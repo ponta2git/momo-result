@@ -53,7 +53,7 @@ test("retries a lost response as the same accepted operation and delivers its re
   const retry = page.getByRole("dialog", { name: "読み取りの受付を確認できませんでした" });
   await expect(retry).toBeVisible();
   await retry.getByRole("button", { name: "もう一度試す" }).click();
-  await expect(page).toHaveURL(/\/matches\?status=incomplete&sort=updated_desc$/u);
+  await expect(page).toHaveURL(/\/drafts$/u);
   expect((await submission(request, operation.id)).members).toEqual(original.members);
   expect([...submissionIds]).toEqual([operation.id]);
   await release("total_assets");

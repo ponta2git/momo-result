@@ -27,10 +27,7 @@ function RefreshHarness({
       >
         refresh
       </button>
-      <button
-        type="button"
-        onClick={() => selection.change({ kind: "sort", sort: "updated_desc" })}
-      >
+      <button type="button" onClick={() => selection.change({ kind: "sort", sort: "held_asc" })}>
         change sort
       </button>
     </>
@@ -39,7 +36,7 @@ function RefreshHarness({
 
 describe("manual list refresh completion", () => {
   it.each(["unchanged", "pending sort"] as const)(
-    "keeps partial failure with its accepted selection when the selection is %s",
+    "keeps a failed refresh with its origin selection when the selection is %s",
     async (selection) => {
       const refreshGate = createDeferred();
       const navigationGate = createDeferred();
@@ -50,14 +47,14 @@ describe("manual list refresh completion", () => {
             path: "/matches",
             hydrateFallbackElement: <p>経路を準備中</p>,
             loader: ({ request }) =>
-              new URL(request.url).searchParams.get("sort") === "updated_desc"
+              new URL(request.url).searchParams.get("sort") === "held_asc"
                 ? navigationGate.promise
                 : null,
             element: (
               <RefreshHarness
                 read={async (origin) => {
                   await refreshGate.promise;
-                  return { kind: "refreshed", origin, summaryFailed: true };
+                  return { kind: "failed", origin };
                 }}
               />
             ),
@@ -70,7 +67,7 @@ describe("manual list refresh completion", () => {
 
       if (selection === "pending sort") {
         await user.click(screen.getByRole("button", { name: "change sort" }));
-        expect(screen.getByLabelText("selected sort")).toHaveTextContent("updated_desc");
+        expect(screen.getByLabelText("selected sort")).toHaveTextContent("held_asc");
         expect(router.state.location.search).toBe("?cursor=opaque-cursor");
       }
       await act(async () => refreshGate.resolve());
@@ -78,11 +75,11 @@ describe("manual list refresh completion", () => {
 
       if (selection === "pending sort") {
         expect(screen.getByLabelText("refresh failed")).toHaveTextContent("false");
-        expect(screen.getByLabelText("selected sort")).toHaveTextContent("updated_desc");
+        expect(screen.getByLabelText("selected sort")).toHaveTextContent("held_asc");
         await act(async () => navigationGate.resolve());
-        await waitFor(() => expect(router.state.location.search).toBe("?sort=updated_desc"));
+        await waitFor(() => expect(router.state.location.search).toBe("?sort=held_asc"));
       } else {
-        await waitFor(() => expect(router.state.location.search).toBe(""));
+        expect(router.state.location.search).toBe("?cursor=opaque-cursor");
         expect(screen.getByLabelText("refresh failed")).toHaveTextContent("true");
       }
       expect(router.state.location.hash).toBe("#results");

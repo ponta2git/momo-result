@@ -52,6 +52,9 @@ export const test = base.extend<{ mockedApi: void }>({
           ownerMemberId: match.ownerMemberId,
           playedAt: match.playedAt,
           status: "confirmed",
+          ...(match.matchNoInEvent === 1
+            ? { hasNote: true, noteBody: "終盤にキングボンビーが付いた。" }
+            : {}),
           ranks: (match.players ?? []).map(({ memberId, playOrder, rank }) => ({
             memberId,
             playOrder,
@@ -113,12 +116,22 @@ export const test = base.extend<{ mockedApi: void }>({
           }
           if (path === "/api/matches") {
             const items = summaries.filter((match) => {
-              for (const key of ["heldEventId", "gameTitleId", "seasonMasterId"] as const) {
+              for (const key of [
+                "heldEventId",
+                "gameTitleId",
+                "seasonMasterId",
+                "mapMasterId",
+              ] as const) {
                 const requested = url.searchParams.get(key);
                 if (requested && requested !== match[key]) return false;
               }
+              const q = url.searchParams.get("q");
+              if (q && !match.noteBody?.includes(q)) return false;
               const status = url.searchParams.get("status");
-              return !status || status === "all" || status === "confirmed";
+              return (
+                url.searchParams.get("kind") !== "match_draft" &&
+                (!status || status === "all" || status === "confirmed")
+              );
             });
             await route.fulfill({ json: { items, pagination: pagination(1, 100, items.length) } });
             return;

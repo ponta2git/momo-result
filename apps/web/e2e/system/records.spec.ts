@@ -83,11 +83,6 @@ test("finds a saved match, edits it and exports the saved values", async ({
 }) => {
   const fixture = await seedConfirmedContext(request, e2eRun);
   await page.goto("/matches");
-  await selectControlOption(
-    page,
-    page.getByRole("combobox", { exact: true, name: "確定状況" }),
-    "confirmed",
-  );
   await page.getByText("詳細条件", { exact: true }).click();
   await page.getByRole("button", { name: "開催を変更" }).click();
   await page

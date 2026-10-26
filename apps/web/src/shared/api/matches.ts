@@ -24,6 +24,23 @@ export type ListMatchesQuery = {
   pageSize?: number;
   cursor?: string;
   sort?: "status_priority" | "updated_desc" | "held_desc" | "held_asc" | "match_no_asc";
+  /** Confirmed-match search criteria; the API accepts them only with `kind: "match"`. */
+  mapMasterId?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  memberId?: string;
+  record?:
+    | "destination"
+    | "plus_station"
+    | "minus_station"
+    | "card_station"
+    | "card_shop"
+    | "suri_no_ginji"
+    | "total_assets"
+    | "revenue";
+  recordValue?: number;
+  recordRange?: "gte" | "lte";
 };
 
 export async function listMatches(
@@ -39,6 +56,14 @@ export async function listMatches(
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
   if (query.cursor) params.set("cursor", query.cursor);
   if (query.sort) params.set("sort", query.sort);
+  if (query.mapMasterId) params.set("mapMasterId", query.mapMasterId);
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  if (query.q) params.set("q", query.q);
+  if (query.memberId) params.set("memberId", query.memberId);
+  if (query.record) params.set("record", query.record);
+  if (query.recordValue !== undefined) params.set("recordValue", String(query.recordValue));
+  if (query.recordRange) params.set("recordRange", query.recordRange);
   const qs = params.toString();
   return apiRequest<MatchListResponse>(`/api/matches${qs ? `?${qs}` : ""}`, options);
 }

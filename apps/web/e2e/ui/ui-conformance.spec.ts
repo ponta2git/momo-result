@@ -84,6 +84,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
 }) => {
   const {
     heldEventId,
+    mapMasterId,
     mapName,
     primaryGameTitleId,
     primaryGameTitleName,
@@ -92,7 +93,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     secondaryGameTitleId,
   } = uiContext;
 
-  await test.step("keep the complete match filter contract at mobile and desktop widths", async () => {
+  await test.step("keep the complete search contract at mobile and desktop widths", async () => {
     await page.setViewportSize({ height: 844, width: 320 });
     await page.goto(
       `/matches?heldEventId=${encodeURIComponent(heldEventId)}&gameTitleId=${encodeURIComponent(
@@ -101,16 +102,34 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     );
 
     await expect(page.getByRole("region", { exact: true, name: "試合一覧" })).toBeVisible();
-    const filterBar = page.getByRole("region", { name: "試合の表示条件" });
-    const statusFilter = filterBar.getByRole("combobox", { exact: true, name: "確定状況" });
-    await expect(statusFilter).toBeVisible();
-    await expect(statusFilter).toHaveText("すべて");
-    await expect(filterBar).toContainText(`作品 ${primaryGameTitleName}`);
-    await expect(filterBar).toContainText(`シーズン ${seasonName}`);
-    await expect(page.getByRole("region", { name: "登録済みの試合" })).toContainText("2件");
+    await expect(page.getByRole("button", { name: "検索条件（3）" })).toBeVisible();
+    const chips = page.getByRole("list", { name: "適用中の条件" });
+    await expect(chips).toContainText(`作品 ${primaryGameTitleName}`);
+    await expect(chips).toContainText(`シーズン ${seasonName}`);
+    const list = page.getByRole("region", { exact: true, name: "確定済みの試合" });
+    await expect(list).toContainText("2試合");
+    await expect(list.getByRole("link", { name: "第1試合をCSV/TSV出力" })).toHaveAttribute(
+      "href",
+      "/exports?matchId=match-1",
+    );
+    await page.getByRole("button", { name: "検索条件（3）" }).click();
+    const searchDialog = page.getByRole("dialog", { name: "検索条件", exact: true });
+    await searchDialog.getByLabel("メモに含む語句").fill("ボンビー");
+    await page.setViewportSize({ height: 900, width: 1280 });
+    await expect(searchDialog.getByLabel("メモに含む語句")).toHaveValue("ボンビー");
+    await page.setViewportSize({ height: 844, width: 320 });
+    await expect(searchDialog.getByLabel("メモに含む語句")).toHaveValue("ボンビー");
+    await searchDialog.press("Escape");
+    await expect(searchDialog).not.toBeVisible();
 
     await page.setViewportSize({ height: 900, width: 1280 });
-    await expect(filterBar).toBeVisible();
+    const filterBar = page.getByRole("region", { name: "試合の検索条件" });
+    await expect(filterBar.getByRole("combobox", { exact: true, name: "作品" })).toHaveText(
+      primaryGameTitleName,
+    );
+    // Visible scope controls own their values on PC; only the held event stays a chip.
+    await expect(chips).not.toContainText(`作品 ${primaryGameTitleName}`);
+    await expect(chips).toContainText("開催");
   });
 
   await test.step("continue keyboard filtering while protecting the previous results", async () => {
@@ -119,24 +138,24 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     const pattern = "**/api/matches?**";
     const holdCondition = async (route: Route) => {
       const url = new URL(route.request().url());
-      if (url.searchParams.get("status") === "confirmed") {
+      if (url.searchParams.get("mapMasterId") === mapMasterId) {
         requested = true;
         await gate.promise;
       }
       await route.fallback();
     };
     await page.route(pattern, holdCondition);
-    const status = page.getByRole("combobox", { exact: true, name: "確定状況" });
+    const map = page.getByRole("combobox", { exact: true, name: "マップ" });
     const sort = page.getByRole("combobox", { exact: true, name: "並び順" });
-    const list = page.getByRole("region", { exact: true, name: "登録済みの試合" });
+    const list = page.getByRole("region", { exact: true, name: "確定済みの試合" });
     try {
-      await status.focus();
-      await selectControlOption(page, status, "confirmed");
+      await map.focus();
+      await selectControlOption(page, map, mapMasterId);
       await expect.poll(() => requested).toBe(true);
-      await expect(status).toBeEnabled();
-      await expect(status).toBeFocused();
+      await expect(map).toBeEnabled();
+      await expect(map).toBeFocused();
       await expect(list.locator("[inert]")).toHaveCount(1);
-      await status.press("Tab");
+      await map.press("Tab");
       await expect(sort).toBeFocused();
     } finally {
       gate.resolve();
@@ -144,7 +163,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     await expect(list.locator("[inert]")).toHaveCount(0);
     await expect(list.getByRole("table").locator("tbody tr")).toHaveCount(2);
     await expect(sort).toBeFocused();
-    await expect(status).toHaveText("確定済み");
+    await expect(map).toHaveText(mapName);
     await page.unroute(pattern, holdCondition);
   });
 
@@ -178,12 +197,12 @@ test("preserves keyboard filtering and recovers the match list after a failed re
       await page.getByRole("button", { name: "最新情報に更新" }).click();
       await expect.poll(() => listRequestHeld).toBe(true);
       await expect(page.getByRole("button", { name: "一覧を更新中" })).toBeDisabled();
-      await expect(page.getByRole("region", { name: "試合の表示条件" })).not.toHaveAttribute(
+      await expect(page.getByRole("region", { name: "試合の検索条件" })).not.toHaveAttribute(
         "aria-busy",
         "true",
       );
       const updatingStatus = page
-        .getByRole("region", { name: "登録済みの試合" })
+        .getByRole("region", { name: "確定済みの試合" })
         .getByRole("status")
         .filter({ hasText: "一覧を更新中" });
       await expect(updatingStatus).toBeVisible();
@@ -220,7 +239,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
     await page.route(listPattern, failUncachedScope);
     try {
       await page.goto(
-        `/matches?status=needs_review&gameTitleId=${encodeURIComponent(secondaryGameTitleId)}`,
+        `/matches?q=${encodeURIComponent("該当なし")}&gameTitleId=${encodeURIComponent(secondaryGameTitleId)}`,
       );
       await expect(page.getByText("試合一覧を読み込めません")).toBeVisible();
       await expect(page.getByRole("button", { name: "一覧を再読み込み" })).toBeVisible();
@@ -228,7 +247,7 @@ test("preserves keyboard filtering and recovers the match list after a failed re
 
       retryAllowed = true;
       await page.getByRole("button", { name: "一覧を再読み込み" }).click();
-      await expect(page.getByText("該当する試合はありません")).toBeVisible();
+      await expect(page.getByText("条件に合う試合はありません")).toBeVisible();
     } finally {
       retryAllowed = true;
       await page.unroute(listPattern, failUncachedScope);

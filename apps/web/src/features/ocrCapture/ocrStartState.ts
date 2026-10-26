@@ -46,7 +46,7 @@ export type OcrStartDialogView =
 
 export function buildOcrStartDialogView(state: OcrStartState): OcrStartDialogView {
   if (state.status === "closed") return state;
-  const destinationLabel = state.plan.setup.heldEventId ? "開催詳細で確認" : "試合一覧で確認";
+  const destinationLabel = state.plan.setup.heldEventId ? "開催詳細で確認" : "下書きで確認";
   switch (state.status) {
     case "confirming":
       return {

@@ -5,14 +5,14 @@ import {
   confirmedDraftDestination,
   confirmedDraftMessages,
 } from "@/features/matches/confirmedDraftNavigation";
-import type { MatchListAction } from "@/features/matches/list/matchListTypes";
+import type { DraftAction } from "@/features/matches/drafts/draftsTypes";
 import { useMatchDraftResource } from "@/features/matches/useMatchDraftResource";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
 export type ConfirmedDraftNavigation = {
   checkingIds: ReadonlySet<string>;
   errors: Readonly<Record<string, string>>;
-  run: (action: MatchListAction) => Promise<void>;
+  run: (action: DraftAction) => Promise<void>;
 };
 
 type DraftNavigationOwner = {
@@ -50,7 +50,7 @@ export function useConfirmedDraftNavigation(): ConfirmedDraftNavigation {
   }, [scope]);
 
   const run = useCallback(
-    async (action: MatchListAction) => {
+    async (action: DraftAction) => {
       const draftId = action.draftStatusCheck?.draftId;
       const owner = ownerRef.current;
       if (

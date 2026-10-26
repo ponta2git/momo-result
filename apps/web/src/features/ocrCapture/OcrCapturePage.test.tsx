@@ -69,6 +69,16 @@ function renderCaptureRoute(
         element: (
           <>
             <LocationProbe />
+            <p>drafts-page</p>
+          </>
+        ),
+        path: "/drafts",
+        ...destination,
+      },
+      {
+        element: (
+          <>
+            <LocationProbe />
             <p>held-event-page</p>
           </>
         ),
@@ -466,7 +476,7 @@ describe("OcrCapturePage", () => {
     expect(authRequests).toBe(1);
   });
 
-  it("creates a match draft, starts OCR jobs, and returns to matches", async () => {
+  it("creates a match draft, starts OCR jobs, and returns to drafts", async () => {
     setDevUser();
     const createdDrafts: MatchDraftRequestBody[] = [];
     const createdJobs: OcrJobRequestBody[] = [];
@@ -507,7 +517,7 @@ describe("OcrCapturePage", () => {
     await user.upload(input, new File(["image"], "assets.png", { type: "image/png" }));
     await startOcrAllowingPartialTray();
 
-    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(await screen.findByText("drafts-page")).toBeInTheDocument();
     const localStorageValues = Array.from({ length: window.localStorage.length }, (_, index) => {
       const key = window.localStorage.key(index);
       return key ? `${key}:${window.localStorage.getItem(key)}` : "";
@@ -649,10 +659,8 @@ describe("OcrCapturePage", () => {
     });
 
     draftGate.resolve();
-    expect(await screen.findByText("matches-page")).toBeInTheDocument();
-    expect(screen.getByLabelText("current location")).toHaveTextContent(
-      "/matches?status=incomplete&sort=updated_desc",
-    );
+    expect(await screen.findByText("drafts-page")).toBeInTheDocument();
+    expect(screen.getByLabelText("current location")).toHaveTextContent("/drafts");
   });
 
   it("submits the reviewed tray and game hints even if reference data refreshes before confirmation", async () => {
@@ -804,7 +812,7 @@ describe("OcrCapturePage", () => {
     ).toBeInTheDocument();
     expect(operations).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "未受付の画像を新しく送信" }));
-    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(await screen.findByText("drafts-page")).toBeInTheDocument();
     expect(operations).toHaveLength(2);
     expect(operations[1]?.id).not.toBe(operations[0]?.id);
     expect(operations[1]?.body.matchDraftId).toBe(operations[0]?.body.matchDraftId);
@@ -816,7 +824,7 @@ describe("OcrCapturePage", () => {
     );
   });
 
-  it("keeps a partial submission result visible until the user opens the match list", async () => {
+  it("keeps a partial submission result visible until the user opens drafts", async () => {
     setDevUser();
     let jobRequestCount = 0;
 
@@ -857,11 +865,11 @@ describe("OcrCapturePage", () => {
       await screen.findByRole("dialog", { name: "一部の読み取りを開始しました" }),
     ).toBeInTheDocument();
     expect(screen.getByText("1件を開始・1件は受付未確認")).toBeInTheDocument();
-    expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
+    expect(screen.queryByText("drafts-page")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ダイアログを閉じる" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
-    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下書きで確認" }));
+    expect(await screen.findByText("drafts-page")).toBeInTheDocument();
   });
 
   it.each(["loader", "component"] as const)(
@@ -877,7 +885,7 @@ describe("OcrCapturePage", () => {
       };
       const LazyMatches = lazy(async () => {
         await waitForDestination();
-        return { default: () => <p>matches-page</p> };
+        return { default: () => <p>drafts-page</p> };
       });
       server.use(
         http.post("/api/ocr-jobs", () =>
@@ -902,7 +910,7 @@ describe("OcrCapturePage", () => {
       expect(
         await screen.findByRole("dialog", { name: "読み取りの受付を確認できませんでした" }),
       ).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "試合一覧で確認" }));
+      await user.click(screen.getByRole("button", { name: "下書きで確認" }));
       await waitFor(() => expect(destinationStarted).toBe(true));
       expect(screen.getByRole("button", { name: "移動中…" })).toBeDisabled();
       expect(screen.getByRole("dialog")).toHaveTextContent("送信を完了できませんでした");
@@ -911,7 +919,7 @@ describe("OcrCapturePage", () => {
       expect(beforeUnload.defaultPrevented).toBe(false);
 
       destinationGate.resolve();
-      expect(await screen.findByText("matches-page")).toBeInTheDocument();
+      expect(await screen.findByText("drafts-page")).toBeInTheDocument();
     },
   );
 
@@ -961,12 +969,12 @@ describe("OcrCapturePage", () => {
     await startOcrAllowingPartialTray();
 
     expect(cancelledDraftIds).toEqual([]);
-    expect(screen.queryByText("matches-page")).not.toBeInTheDocument();
+    expect(screen.queryByText("drafts-page")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("dialog", { name: "読み取りの受付を確認できませんでした" }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "もう一度試す" }));
-    expect(await screen.findByText("matches-page")).toBeInTheDocument();
+    expect(await screen.findByText("drafts-page")).toBeInTheDocument();
     expect(draftCreates).toBe(1);
     expect(uploads).toBe(1);
     expect(jobKeys).toHaveLength(2);

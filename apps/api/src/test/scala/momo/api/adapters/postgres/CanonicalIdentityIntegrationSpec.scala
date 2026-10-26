@@ -358,6 +358,16 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
               .withQueryParam("sort", "held_asc").withQueryParam("pageSize", "1")
               .withQueryParam("cursor", cursor))
           )
+          searched <- json(
+            app,
+            readGet(Uri.unsafeFromString("/api/matches")
+              .withQueryParam("kind", "match").withQueryParam("sort", "held_asc")
+              .withQueryParam("mapMasterId", canonical(Entity.MapMasters, map).toString)
+              .withQueryParam("memberId", canonical(Entity.Members, "member_ponta").toString)
+              .withQueryParam("record", "suri_no_ginji").withQueryParam("recordValue", "0")
+              .withQueryParam("recordRange", "lte")
+              .withQueryParam("from", "2026-10-18").withQueryParam("to", "2026-10-18"))
+          )
           exported <- new PostgresMatchExportsRepository[IO](transactor, identities).project(
             MatchExportsRepository.Selection(
               matchId = Some(MatchId.unsafeFromString(secondUuid)),
@@ -393,6 +403,10 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
             assertEquals(
               jsonField[List[Json]](nextPage, "items").map(jsonField[String](_, "id")),
               List(secondMatch)
+            )
+            assertEquals(
+              jsonField[List[Json]](searched, "items").map(jsonField[String](_, "id")),
+              List(firstMatch, secondMatch)
             )
             assertEquals(exported.size, 4)
             assert(exported.forall(row => row.seasonNo == 2 && row.gameTitleMatchNo == 2))

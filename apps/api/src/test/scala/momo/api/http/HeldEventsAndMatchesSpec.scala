@@ -374,6 +374,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       _ <- assertProblem(statusRes, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
       kindRes <- httpApp.run(readGet(uri"/api/matches?kind=unknown"))
       _ <- assertProblem(kindRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
+      searchRes <- httpApp.run(readGet(uri"/api/matches?kind=match_draft&q=memo"))
+      _ <- assertProblem(searchRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind=match")
+      rangeRes <- httpApp.run(readGet(uri"/api/matches?kind=match&from=2026-05-02&to=2026-05-01"))
+      _ <- assertProblem(rangeRes, Status.UnprocessableContent, "VALIDATION_FAILED", "from")
     yield ()
   }
 

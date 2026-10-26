@@ -28,7 +28,17 @@ object MatchesEndpoints:
       pageSize: Option[Int],
       cursor: Option[String],
       sort: Option[String],
+      mapMasterId: Option[String],
+      from: Option[String],
+      to: Option[String],
+      q: Option[String],
+      memberId: Option[String],
+      record: Option[String],
+      recordValue: Option[Int],
+      recordRange: Option[String],
   )
+
+  private val matchOnly = " Confirmed-match criterion; requires kind=match."
 
   private val listInput: EndpointInput[ListInput] = query[Option[String]]("heldEventId")
     .and(query[Option[String]]("gameTitleId"))
@@ -40,7 +50,33 @@ object MatchesEndpoints:
       "Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot."
     ))
     .and(query[Option[String]]("sort").description(
-      "status_priority, updated_desc, held_desc, held_asc, or match_no_asc."
+      "status_priority, updated_desc, held_desc, held_asc, or match_no_asc. held_desc and " +
+        "held_asc order by held time, then match number ascending within the same held time."
+    ))
+    .and(query[Option[String]]("mapMasterId").description("Map master ID." + matchOnly))
+    .and(query[Option[String]]("from").description(
+      "Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to." + matchOnly
+    ))
+    .and(query[Option[String]]("to").description(
+      "Inclusive held date (YYYY-MM-DD, Asia/Tokyo)." + matchOnly
+    ))
+    .and(query[Option[String]]("q").description(
+      "Case-insensitive literal substring of the match note; trimmed, at most 50 characters, " +
+        "blank means absent." + matchOnly
+    ))
+    .and(query[Option[String]]("memberId").description(
+      "Limits the record condition to this player; requires record. Without it any player matches."
+    ))
+    .and(query[Option[String]]("record").description(
+      "destination, plus_station, minus_station, card_station, card_shop, suri_no_ginji, " +
+        "total_assets, or revenue (万円); requires recordValue." + matchOnly
+    ))
+    .and(query[Option[Int]]("recordValue").description(
+      "Compared value; requires record. Incident counts must be 0 or greater and a missing " +
+        "count is 0."
+    ))
+    .and(query[Option[String]]("recordRange").description(
+      "gte (default) or lte; requires record."
     ))
     .mapTo[ListInput]
 

@@ -1,6 +1,6 @@
 package momo.api.integration
 
-import java.time.Instant
+import java.time.{Instant, LocalDate}
 
 import cats.effect.IO
 import doobie.implicits.*
@@ -19,6 +19,10 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
   private val seasonMasterId = SeasonMasterId.unsafeFromString("season_2024_spring")
   private val heldEventId = HeldEventId.unsafeFromString("held_2026_04_30")
   private val baseTime = Instant.parse("2026-04-30T00:00:00Z")
+  private val westMapId = MapMasterId.unsafeFromString("map_west")
+  // 2026-05-01 00:00 and 2026-04-30 23:59:59 in Asia/Tokyo.
+  private val jstMayFirstEventId = HeldEventId.unsafeFromString("held_jst_may_first")
+  private val jstAprilLastEventId = HeldEventId.unsafeFromString("held_jst_april_last")
 
   private def gameTitles = new PostgresGameTitlesRepository[IO](transactor)
   private def mapMasters = new PostgresMapMastersRepository[IO](transactor)
@@ -509,5 +513,216 @@ final class PostgresMatchListReadModelSpec extends IntegrationSuite:
     yield
       assertEquals(items.map(_.id), List("draft_second", "draft_fourth"))
       assertEquals(items.map(_.matchNoInEvent.map(_.value)), List(Some(2), Some(4)))
+
+  private def seedSearchPrereqs: IO[Unit] =
+    for
+      _ <- seedPrereqs
+      _ <- mapMasters
+        .createWithNextDisplayOrder(MapMaster(westMapId, gameTitleId, "西日本編", 2, baseTime))
+      _ <- heldEvents
+        .create(HeldEvent(jstMayFirstEventId, Instant.parse("2026-04-30T15:00:00Z")))
+      _ <- heldEvents
+        .create(HeldEvent(jstAprilLastEventId, Instant.parse("2026-04-30T14:59:59Z")))
+    yield ()
+
+  private def withNote(record: MatchRecord, body: String): MatchRecord = record.copy(note =
+    MatchNote(
+      Some(MatchNoteBody.fromRequiredString(body).getOrElse(fail("invalid note fixture"))),
+      MatchNoteVersion.Initial.next,
+      Some(AccountId.unsafeFromString("account_ponta")),
+      Some(record.createdAt),
+    )
+  )
+
+  private def search(
+      criteria: MatchListSearchCriteria,
+      sort: MatchListSort = MatchListSort.MatchNoAsc, // scalafix:ok DisableSyntax.defaultArgs
+  ): IO[List[String]] = matchList.list(MatchListReadModel.Filter(
+    kind = MatchListKindFilter.Match,
+    sort = sort,
+    search = criteria,
+  )).map(_.items.map(_.id))
+
+  private def record(
+      field: MatchListRecordField,
+      value: Int,
+      range: MatchListRecordRange,
+      memberId: Option[String],
+  ): MatchListSearchCriteria = MatchListSearchCriteria(record =
+    Some(MatchListRecordCriterion(field, value, range, memberId.map(MemberId.unsafeFromString)))
+  )
+
+  test("searches notes as a case-insensitive literal and returns the saved note body"):
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(withNote(sampleMatch("note-percent", 1, baseTime), "Big 100% WIN"))
+      _ <- createMatch(withNote(sampleMatch("note-plain", 2, baseTime), "100x win"))
+      _ <- createMatch(withNote(sampleMatch("note-underscore", 3, baseTime), "a_b"))
+      _ <- createMatch(withNote(sampleMatch("note-ab", 4, baseTime), "aXb"))
+      _ <- createMatch(sampleMatch("note-none", 5, baseTime))
+      _ <- drafts.create(sampleDraft("note-draft", MatchDraftStatus.DraftReady, baseTime))
+      percent <- search(MatchListSearchCriteria(noteQuery = Some("100%")))
+      caseless <- search(MatchListSearchCriteria(noteQuery = Some("win")))
+      underscore <- search(MatchListSearchCriteria(noteQuery = Some("_")))
+      all <- matchList.list(MatchListReadModel.Filter(sort = MatchListSort.MatchNoAsc))
+    yield
+      assertEquals(percent, List("note-percent"))
+      assertEquals(caseless, List("note-percent", "note-plain"))
+      assertEquals(underscore, List("note-underscore"))
+      val bodies = all.items.map(item => item.id -> (item.hasNote, item.noteBody)).toMap
+      assertEquals(bodies("note-percent"), (Some(true), Some("Big 100% WIN")))
+      assertEquals(bodies("note-none"), (Some(false), None))
+      assertEquals(bodies("note-draft"), (None, None))
+
+  test("compares a member's incident count with a missing count row as zero"):
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(sampleMatch("incident-absent", 1, baseTime))
+      _ <- createMatch(sampleMatch("incident-two", 2, baseTime))
+      _ <- sql"""
+        DELETE FROM match_incidents
+        WHERE match_id = 'incident-absent' AND member_id = 'member_ponta'
+          AND incident_master_id = (SELECT id FROM incident_masters WHERE key = 'suri_no_ginji')
+      """.update.run.transact(transactor)
+      _ <- sql"""
+        UPDATE match_incidents SET count = 2
+        WHERE match_id = 'incident-two' AND member_id = 'member_eu'
+          AND incident_master_id = (SELECT id FROM incident_masters WHERE key = 'suri_no_ginji')
+      """.update.run.transact(transactor)
+      anyAtLeastOne <- search(record(
+        MatchListRecordField.SuriNoGinji,
+        1,
+        MatchListRecordRange.Gte,
+        None,
+      ))
+      euAtLeastTwo <- search(record(
+        MatchListRecordField.SuriNoGinji,
+        2,
+        MatchListRecordRange.Gte,
+        Some("member_eu"),
+      ))
+      pontaAtMostZero <- search(record(
+        MatchListRecordField.SuriNoGinji,
+        0,
+        MatchListRecordRange.Lte,
+        Some("member_ponta"),
+      ))
+      pontaAtLeastZero <- search(record(
+        MatchListRecordField.SuriNoGinji,
+        0,
+        MatchListRecordRange.Gte,
+        Some("member_ponta"),
+      ))
+      pontaAtLeastOne <- search(record(
+        MatchListRecordField.SuriNoGinji,
+        1,
+        MatchListRecordRange.Gte,
+        Some("member_ponta"),
+      ))
+    yield
+      assertEquals(anyAtLeastOne, List("incident-two"))
+      assertEquals(euAtLeastTwo, List("incident-two"))
+      assertEquals(pontaAtMostZero, List("incident-absent", "incident-two"))
+      assertEquals(pontaAtLeastZero, List("incident-absent", "incident-two"))
+      assertEquals(pontaAtLeastOne, Nil)
+
+  test("matches negative revenue on any player or only the selected member"):
+    for
+      _ <- seedPrereqs
+      _ <- createMatch(sampleMatch("revenue-positive", 1, baseTime))
+      _ <- createMatch(sampleMatch("revenue-negative", 2, baseTime))
+      _ <- sql"""
+        UPDATE match_players SET revenue_man_yen = -250
+        WHERE match_id = 'revenue-negative' AND member_id = 'member_otaka'
+      """.update.run.transact(transactor)
+      anyLoss <- search(record(MatchListRecordField.Revenue, -100, MatchListRecordRange.Lte, None))
+      deeperLoss <-
+        search(record(MatchListRecordField.Revenue, -300, MatchListRecordRange.Lte, None))
+      pontaLoss <- search(record(
+        MatchListRecordField.Revenue,
+        -100,
+        MatchListRecordRange.Lte,
+        Some("member_ponta"),
+      ))
+      topAssets <- search(record(
+        MatchListRecordField.TotalAssets,
+        9_000,
+        MatchListRecordRange.Gte,
+        Some("member_ponta"),
+      ))
+    yield
+      assertEquals(anyLoss, List("revenue-negative"))
+      assertEquals(deeperLoss, Nil)
+      assertEquals(pontaLoss, Nil)
+      assertEquals(topAssets, List("revenue-positive", "revenue-negative"))
+
+  test("filters inclusive Asia/Tokyo held dates and the map"):
+    for
+      _ <- seedSearchPrereqs
+      _ <- createMatch(sampleMatch("date-april-morning", 1, baseTime))
+      _ <- createMatch(sampleMatch("date-april-last", 1, baseTime).copy(
+        heldEventId = jstAprilLastEventId,
+        mapMasterId = westMapId,
+      ))
+      _ <- createMatch(sampleMatch("date-may-first", 1, baseTime).copy(
+        heldEventId = jstMayFirstEventId,
+      ))
+      april <- search(
+        MatchListSearchCriteria(
+          from = Some(LocalDate.parse("2026-04-30")),
+          to = Some(LocalDate.parse("2026-04-30")),
+        ),
+        MatchListSort.HeldAsc
+      )
+      may <- search(MatchListSearchCriteria(from = Some(LocalDate.parse("2026-05-01"))))
+      untilApril <- search(MatchListSearchCriteria(to = Some(LocalDate.parse("2026-04-30"))))
+      west <- search(MatchListSearchCriteria(mapMasterId = Some(westMapId)))
+      eastInMay <- search(MatchListSearchCriteria(
+        mapMasterId = Some(mapMasterId),
+        from = Some(LocalDate.parse("2026-05-01")),
+      ))
+    yield
+      assertEquals(april, List("date-april-morning", "date-april-last"))
+      assertEquals(may, List("date-may-first"))
+      assertEquals(untilApril.toSet, Set("date-april-morning", "date-april-last"))
+      assertEquals(west, List("date-april-last"))
+      assertEquals(eastInMay, List("date-may-first"))
+
+  test("orders held-at sorts by match number within one held event across cursor pages"):
+    def page(sort: MatchListSort, cursor: Option[MatchListReadModel.Cursor]) =
+      matchList.list(MatchListReadModel.Filter(
+        kind = MatchListKindFilter.Match,
+        sort = sort,
+        page = MatchListReadModel.CursorPageRequest(pageSize = 1, cursor = cursor),
+      ))
+    def collect(sort: MatchListSort, cursor: Option[MatchListReadModel.Cursor]): IO[List[String]] =
+      page(sort, cursor).flatMap(page =>
+        page.nextCursor match
+          case None => IO.pure(page.items.map(_.id))
+          case Some(next) => collect(sort, Some(next)).map(page.items.map(_.id) ++ _)
+      )
+    def lastAndPrevious(sort: MatchListSort): IO[List[String]] =
+      for
+        first <- page(sort, None)
+        last <- page(sort, Some(first.lastCursor.getOrElse(fail("last cursor missing"))))
+        previous <- page(sort, Some(last.previousCursor.getOrElse(fail("previous cursor missing"))))
+      yield (last.items ++ previous.items).map(_.id)
+    for
+      _ <- seedSearchPrereqs
+      // Updated order deliberately disagrees with match numbers.
+      _ <- createMatch(sampleMatch("held-third", 3, baseTime.plusSeconds(10)))
+      _ <- createMatch(sampleMatch("held-first", 1, baseTime.plusSeconds(30)))
+      _ <- createMatch(sampleMatch("held-second", 2, baseTime.plusSeconds(20)))
+      _ <-
+        createMatch(sampleMatch("held-later", 1, baseTime).copy(heldEventId = jstMayFirstEventId))
+      heldDesc <- collect(MatchListSort.HeldDesc, None)
+      heldAsc <- collect(MatchListSort.HeldAsc, None)
+      heldDescBack <- lastAndPrevious(MatchListSort.HeldDesc)
+      heldAscBack <- lastAndPrevious(MatchListSort.HeldAsc)
+    yield
+      assertEquals(heldDesc, List("held-later", "held-first", "held-second", "held-third"))
+      assertEquals(heldAsc, List("held-first", "held-second", "held-third", "held-later"))
+      assertEquals(heldDescBack, List("held-third", "held-second"))
+      assertEquals(heldAscBack, List("held-later", "held-third"))
 
 end PostgresMatchListReadModelSpec

@@ -271,4 +271,5 @@ final case class MatchListItem(
     labels: MatchLabels = MatchLabels.empty,
     publicId: Option[PublicId] = None,
     heldEventPublicId: Option[PublicId] = None,
+    noteBody: Option[String] = None,
 )

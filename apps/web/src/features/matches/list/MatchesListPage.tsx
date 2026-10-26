@@ -104,21 +104,23 @@ export function MatchesListPage() {
       <div className="grid gap-4">
         <DraftNotice count={draftCount} href={navigation.draftsHref} />
         <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
-          {showDesktopTable ? (
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-center gap-2",
+              showDesktopTable ? "justify-end" : "justify-between",
+            )}
+          >
+            <Button
+              hidden={showDesktopTable}
+              icon={<Filter aria-hidden="true" />}
+              size="sm"
+              variant="secondary"
+              onClick={() => setSheetOpen(true)}
+            >
+              {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
+            </Button>
             <RegisterActions navigation={navigation} />
-          ) : (
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <Button
-                icon={<Filter aria-hidden="true" />}
-                size="sm"
-                variant="secondary"
-                onClick={() => setSheetOpen(true)}
-              >
-                {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
-              </Button>
-              <RegisterActions navigation={navigation} />
-            </div>
-          )}
+          </div>
 
           {filters.loadFailed ? (
             <Notice

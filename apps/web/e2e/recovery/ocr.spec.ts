@@ -20,13 +20,14 @@ test.afterEach(async () => {
   await Promise.all(screens.map((screen) => release(screen)));
 });
 
-test("retries a lost response as the same accepted operation and delivers its result once", async ({
+test("retries a lost OCR response once and continues from the drafts page", async ({
   page,
   request,
   e2eRun,
 }) => {
   await outcomes({ total_assets: "hold:success" });
-  await prepareRead(page, await seedMasterContext(request, e2eRun));
+  const masters = await seedMasterContext(request, e2eRun);
+  await prepareRead(page, masters);
   const submissionIds = new Set<string>();
   page.on("request", (value) => {
     if (value.method() === "PUT" && value.url().includes("/api/ocr-submissions/"))
@@ -59,7 +60,10 @@ test("retries a lost response as the same accepted operation and delivers its re
   await release("total_assets");
   await delivered(request, operation);
   expect(await messages(operation.id)).toHaveLength(1);
-  await page.goto(`/review/${operation.draftId}`);
+  await page.getByRole("button", { name: "最新情報に更新", exact: true }).click();
+  const draftRow = page.getByRole("listitem").filter({ hasText: masters.mapName });
+  await draftRow.getByRole("button", { name: /^(内容を確認|確認事項を直す)$/u }).click();
+  await expect(page).toHaveURL(`/review/${operation.draftId}`);
   await expect(page.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
 });
 

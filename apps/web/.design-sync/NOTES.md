@@ -14,7 +14,8 @@
 - Typecheck previews before building: `node_modules/.bin/tsc --noEmit -p .design-sync/tsconfig.previews.json` (maps `momo-result-ui` to entry.ts). The converter does NOT typecheck - e.g. StatusBadge takes `label`, not children, and silently rendered empty.
 - Content: Japanese UI, domain is 桃鉄 (Momotaro Dentetsu) match results - players (ももたろう/きんたろう/うらしま/かぐや), 総資産/収益 in 万円, 開催, 試合, 目的地.
 - Overlays (Dialog, AlertDialog, DialogFooter, ToastHost) use `cardMode: single`; DataTable uses `cardMode: column`. Changing an override's viewport needs a full `package-build.mjs` (`preview-rebuild.mjs` refuses with `[CONFIG_STALE]`).
-- Only Tailwind utilities already used in `src/` exist in the compiled CSS; others silently no-op. Grep `.design-sync/.cache/pkg/app.css` (arbitrary values are escaped, e.g. `grep -F 'bg-\[var\(--color-surface\)\]'`) or use inline `style`. Seen missing: `w-56 w-80 w-96 pt-2 pt-3 pt-10 max-w-xs border-collapse bg-[var(--color-canvas)]`.
+- Only Tailwind utilities already used in `src/` exist in the compiled CSS; others silently no-op. Grep `.design-sync/.cache/pkg/app.css` (arbitrary values are escaped, e.g. `grep -F 'bg-\[var\(--color-surface\)\]'`) or use inline `style`. Seen missing: `w-80 w-96 pt-2 pt-3 pt-10 max-w-xs border-collapse bg-[var(--color-canvas)]`.
+- `src/styles.css` has `@source not "../.design-sync"`: Tailwind v4 auto-detects sources from every non-gitignored file, so without it class names written in NOTES.md/conventions.md/previews were generated into the app CSS (and made "missing" classes silently exist). Keep it; previews must still use only classes from `src/`.
 - Page-layout previews: wrap in `<div className="p-4" style={{ background: "var(--color-canvas)" }}>` so white surfaces are visible.
 - Static-only states: Tooltip/TooltipProvider and IconButton/IconLink `tooltip` need hover (trigger-only cards); Select popups and ChoicePickerDialogField's dialog need interaction (closed state shown).
 - ToastHost renders statically when the preview seeds toasts via `showToast({ ..., timeout: 0 })` in a `useEffect` with stable ids.
@@ -29,7 +30,7 @@
 ## Re-sync risks
 
 - `.design-sync/entry.ts` is a hand-curated list: new shared/ui components are not synced until added there (and to a preview).
-- `app.css` is the app's compiled Tailwind output: class availability (and the conventions header's class list) shifts whenever src/ stops or starts using a utility. Re-run the conventions validation after big UI refactors.
+- `app.css` is the app's compiled Tailwind output: class availability (and the conventions header's class list) shifts whenever src/ stops or starts using a utility (e.g. `w-56` became available via a feature). Re-run the conventions validation after big UI refactors, checking exact selectors (`.pt-2` must not match `.pt-20`).
 - `build-pkg.mjs` rewrites `@/` specifiers in emitted .d.ts; a new tsconfig path alias would need the same treatment.
 - Toolchain assumptions: node 24 (mise), pnpm 10, playwright 1.63.0 in `.ds-sync` (matches cached chromium headless shell 1243).
 - Previews for Dialog/Toast/Tooltip depend on Base UI internals rendering `open`/seeded state statically; a Base UI upgrade may change that.

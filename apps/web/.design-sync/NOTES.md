@@ -7,6 +7,7 @@
 - Converter command (from `apps/web`): `node .ds-sync/package-build.mjs --config .design-sync/config.json --node-modules ./node_modules --out ./ds-bundle`.
 - Component CSS is the app's compiled Tailwind v4 output: only utilities used somewhere in `src/` exist. Arbitrary values like `bg-[var(--color-surface-subtle)]` are fine only if the app already uses them.
 - Provider chain (cfg.provider): TooltipProvider > AppMotionProvider (motion LazyMotion strict, required by `m.*` components) > MemoryRouter (links use react-router). `MemoryRouter` is re-exported from entry.ts and excluded from cards.
+- Claude Design canvases run React 18 (18.3.1), but shared/ui uses React 19-only `useFormStatus` (Button, IconButton) and `<Context value>` providers (Tooltip, DialogLayer, PortalContainer); unpatched, a canvas artboard fails with `useFormStatus is not a function` / `d is not a function`. `react18-compat.ts` patches the page's `window.React` / `window.ReactDOM` and must stay the first import in entry.ts (the converter's react-dom shim copies `window.ReactDOM` when first required). It is a no-op on React 19, so the system's own previews are unaffected. A new React 19-only API in shared/ui needs a matching patch there.
 - Fonts: system font stacks only (no webfonts by design). `Cascadia Mono`/`Roboto Mono` are fallbacks in `--font-momo-data`; suppressed via `runtimeFontPrefixes`.
 
 ## Authoring previews

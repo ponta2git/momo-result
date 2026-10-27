@@ -1,4 +1,7 @@
 // Public surface synced to Claude Design (window.MomoUI). Keep to app-agnostic shared/ui parts.
+// Must stay first: it patches the page's React before any component module reads it.
+import "./react18-compat";
+
 export { MemoryRouter } from "react-router-dom";
 
 export { ActionLink } from "../src/shared/ui/actions/ActionLink";

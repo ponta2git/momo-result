@@ -90,6 +90,22 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
   && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "apiOpenApiCheck; stage"
 
+# System E2E session fixture. It reuses the Runtime's compiled API and staged libraries; the
+# default runtime target never copies these classes. Build with `--target e2e-session-fixture`.
+FROM api-builder AS e2e-session-fixture-builder
+COPY apps/api/src/e2e-fixture src/e2e-fixture
+RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
+  --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
+  --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
+  export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
+  && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "E2eFixture/packageBin" \
+  && set -- target/out/jvm/scala-*/momo-result-api/*-e2eFixture.jar \
+  && test "$#" -eq 1 && test -f "$1" \
+  && install -D -m 0644 "$1" /out/session-fixture.jar
+
+FROM scratch AS e2e-session-fixture
+COPY --from=e2e-session-fixture-builder /out/session-fixture.jar /session-fixture.jar
+
 FROM ${GO_IMAGE} AS runtime-tool-builder
 WORKDIR /workspace/apps/runtime
 COPY apps/runtime/go.mod apps/runtime/go.sum ./

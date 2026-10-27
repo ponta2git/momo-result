@@ -22,9 +22,12 @@ var usages = map[string]string{
 	"image-id-match":             "<expected-id> <actual-id>",
 	"file-digest-match":          "<file> <bare-sha256>",
 	"analysis-release-selection": "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
+	"e2e-artifact-selection":     "<producer-attempt> <artifact-id> <artifact-digest>",
+	"e2e-candidate":              "controlled-worker|session-fixture <artifact-directory> <run-id> <producer-attempt> <commit> <artifact-id> <artifact-digest> [<runtime-image-id> for session-fixture]",
 	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
 	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
 	"create-analysis-candidate":  "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
+	"create-e2e-candidate":       "--kind controlled-worker|session-fixture --artifact-dir DIR --run-id ID --run-attempt N --commit SHA [--runtime-image-id ID for session-fixture]",
 	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
 	"resolve-pushed-image":       "IMAGE_TAG < docker-repo-digests.json",
 	"resolve-deployment-run":     "REPOSITORY < github-run.json",
@@ -46,6 +49,7 @@ var argumentCounts = map[string]int{
 	"runtime-release-selection": 7, "worker-readiness": 4, "artifact-digest": 1,
 	"analysis-archive": 3, "image-id-match": 2,
 	"file-digest-match": 2, "analysis-release-selection": 5,
+	"e2e-artifact-selection": 3,
 }
 
 // Run preserves the validators' positional arguments and stdout contracts.
@@ -81,6 +85,10 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 		result, err = runtimeReleaseSelection(args)
 	case "analysis-release-selection":
 		err = analysisReleaseSelection(args)
+	case "e2e-artifact-selection":
+		err = e2eArtifactSelection(args[0], args[1], args[2])
+	case "e2e-candidate":
+		result, err = e2eCandidate(args)
 	case "postdeploy-evidence":
 		result, err = postdeployEvidence(args)
 	case "worker-readiness":
@@ -98,7 +106,7 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 		if !digestPattern.MatchString(args[0]) || !digestPattern.MatchString(args[1]) || args[0] != args[1] {
 			err = errors.New("The loaded image ID does not match the verified candidate image ID.")
 		}
-	case "create-http4s-patch", "create-runtime-candidate", "create-analysis-candidate", "create-runtime-deployment":
+	case "create-http4s-patch", "create-runtime-candidate", "create-analysis-candidate", "create-runtime-deployment", "create-e2e-candidate":
 		var output bytes.Buffer
 		err = create(command, args, &output, repoRoot)
 		result = output.String()

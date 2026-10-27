@@ -30,6 +30,24 @@ on:
       worker_run_attempt:
         required: true
         type: string
+      controlled_worker_artifact_id:
+        required: true
+        type: string
+      controlled_worker_artifact_digest:
+        required: true
+        type: string
+      controlled_worker_run_attempt:
+        required: true
+        type: string
+      # Built in the Runtime producer job, so it shares runtime_run_attempt.
+      session_fixture_artifact_id:
+        required: true
+        type: string
+      session_fixture_artifact_digest:
+        required: true
+        type: string
+  # Manual runs build every input in this job from the same Dockerfile targets and
+  # use the same runner checks; they never call the deploy workflow.
   workflow_dispatch:
 
 permissions:
@@ -91,15 +109,6 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter web exec playwright install --with-deps chromium
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: "25"
-          check-latest: true
-          cache: sbt
-      - name: Update Java certificate blocklist
-        run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
-      - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
       - name: Build structured CI tool
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/setup-ci-tool
@@ -115,6 +124,11 @@ jobs:
           WORKER_DIGEST: ${{ inputs.worker_metadata_digest }}
           WORKER_NAME: ${{ inputs.worker_metadata_name }}
           WORKER_ATTEMPT: ${{ inputs.worker_run_attempt }}
+          CONTROLLED_WORKER_ID: ${{ inputs.controlled_worker_artifact_id }}
+          CONTROLLED_WORKER_DIGEST: ${{ inputs.controlled_worker_artifact_digest }}
+          CONTROLLED_WORKER_ATTEMPT: ${{ inputs.controlled_worker_run_attempt }}
+          SESSION_FIXTURE_ID: ${{ inputs.session_fixture_artifact_id }}
+          SESSION_FIXTURE_DIGEST: ${{ inputs.session_fixture_artifact_digest }}
         run: |
           scripts/ci/ci-tool.sh runtime-release-selection \
             "${GITHUB_RUN_ID}" "${GITHUB_SHA}" "${RUNTIME_ATTEMPT}" \
@@ -122,6 +136,10 @@ jobs:
           scripts/ci/ci-tool.sh analysis-release-selection \
             "${GITHUB_RUN_ID}" "${WORKER_ATTEMPT}" "${WORKER_NAME}" \
             "${WORKER_ID}" "${WORKER_DIGEST}"
+          scripts/ci/ci-tool.sh e2e-artifact-selection \
+            "${CONTROLLED_WORKER_ATTEMPT}" "${CONTROLLED_WORKER_ID}" "${CONTROLLED_WORKER_DIGEST}"
+          scripts/ci/ci-tool.sh e2e-artifact-selection \
+            "${RUNTIME_ATTEMPT}" "${SESSION_FIXTURE_ID}" "${SESSION_FIXTURE_DIGEST}"
       - name: Download exact Runtime candidate
         if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -162,7 +180,33 @@ jobs:
           CANDIDATE_IMAGE: ${{ steps.worker.outputs.image_ref }}
           CANDIDATE_TAR_SHA: ${{ steps.worker.outputs.tar_sha256 }}
         run: scripts/ci/load-analysis-candidate.sh system-worker-image "${CANDIDATE_IMAGE}" "${CANDIDATE_TAR_SHA}"
+      - name: Download controlled E2E worker
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ inputs.controlled_worker_artifact_id }}
+          path: e2e-controlled-worker
+      - name: Download session fixture
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ inputs.session_fixture_artifact_id }}
+          path: e2e-session-fixture
+      - name: Verify and load System E2E test artifacts
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          CONTROLLED_WORKER_DIR: e2e-controlled-worker
+          CONTROLLED_WORKER_RUN_ATTEMPT: ${{ inputs.controlled_worker_run_attempt }}
+          CONTROLLED_WORKER_ARTIFACT_ID: ${{ inputs.controlled_worker_artifact_id }}
+          CONTROLLED_WORKER_ARTIFACT_DIGEST: ${{ inputs.controlled_worker_artifact_digest }}
+          SESSION_FIXTURE_DIR: e2e-session-fixture
+          SESSION_FIXTURE_RUN_ATTEMPT: ${{ inputs.runtime_run_attempt }}
+          SESSION_FIXTURE_ARTIFACT_ID: ${{ inputs.session_fixture_artifact_id }}
+          SESSION_FIXTURE_ARTIFACT_DIGEST: ${{ inputs.session_fixture_artifact_digest }}
+          RUNTIME_IMAGE: ${{ inputs.runtime_image_ref }}
+        run: scripts/ci/load-e2e-artifacts.sh >> "${GITHUB_ENV}"
       - name: Setup Docker Buildx
+        if: github.event_name == 'workflow_dispatch'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build manual Runtime candidate
         if: github.event_name == 'workflow_dispatch'
@@ -176,6 +220,22 @@ jobs:
           tags: momo-system-runtime:manual
           cache-from: type=gha,scope=momo-result-runtime-v1
           cache-to: type=gha,mode=max,scope=momo-result-runtime-v1,ignore-error=true
+      - name: Build manual session fixture
+        if: github.event_name == 'workflow_dispatch'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          context: .
+          target: e2e-session-fixture
+          outputs: type=local,dest=e2e-session-fixture
+          cache-from: type=gha,scope=momo-result-runtime-v1
+      - name: Bind manual session fixture to the manual Runtime
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          node scripts/e2e/record-session-fixture.mts e2e-session-fixture \
+            "$(docker image inspect momo-system-runtime:manual --format '{{.Id}}')"
       - name: Build manual Worker candidate
         if: github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -189,7 +249,8 @@ jobs:
           tags: momo-system-worker:manual
           cache-from: type=gha,scope=momo-result-analysis-v1
           cache-to: type=gha,mode=max,scope=momo-result-analysis-v1,ignore-error=true
-      - name: Build controlled Worker for fault and notification contracts
+      - name: Build manual controlled Worker
+        if: github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
           DOCKER_BUILD_RECORD_UPLOAD: "false"
@@ -199,7 +260,7 @@ jobs:
           file: apps/processing-worker/Dockerfile
           target: e2e-test
           load: true
-          tags: momo-system-controlled-worker:test
+          tags: momo-system-controlled-worker:manual
           cache-from: |
             type=gha,scope=momo-result-ocr-e2e-v1
             type=gha,scope=momo-result-analysis-v1
@@ -210,11 +271,13 @@ jobs:
           CANDIDATE_WORKER: ${{ steps.worker.outputs.image_ref }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]; then
-            printf 'MOMO_E2E_RUNTIME_IMAGE=momo-system-runtime:manual\nMOMO_E2E_WORKER_IMAGE=momo-system-worker:manual\n' >> "${GITHUB_ENV}"
+            printf 'MOMO_E2E_RUNTIME_IMAGE=momo-system-runtime:manual\nMOMO_E2E_WORKER_IMAGE=momo-system-worker:manual\n'
+            printf 'MOMO_E2E_CONTROLLED_WORKER_IMAGE=momo-system-controlled-worker:manual\n'
+            printf 'MOMO_E2E_SESSION_FIXTURE_DIR=%s/e2e-session-fixture\n' "${GITHUB_WORKSPACE}"
           else
-            printf 'MOMO_E2E_RUNTIME_IMAGE=%s\nMOMO_E2E_WORKER_IMAGE=%s\n' "${CANDIDATE_RUNTIME}" "${CANDIDATE_WORKER}" >> "${GITHUB_ENV}"
-          fi
-          printf 'MOMO_E2E_CONTROLLED_WORKER_IMAGE=momo-system-controlled-worker:test\n' >> "${GITHUB_ENV}"
+            # The controlled Worker and session fixture were selected by the verified load step.
+            printf 'MOMO_E2E_RUNTIME_IMAGE=%s\nMOMO_E2E_WORKER_IMAGE=%s\n' "${CANDIDATE_RUNTIME}" "${CANDIDATE_WORKER}"
+          fi >> "${GITHUB_ENV}"
       - name: Verify real assembled user journeys
         env:
           MOMO_DB_MIGRATIONS_DIR: ${{ github.workspace }}/_deps/momo-db/drizzle

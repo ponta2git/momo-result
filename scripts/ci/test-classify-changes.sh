@@ -159,7 +159,7 @@ assert_case analysis-production-workflow \
   "$(expected workflow actionlint)" \
   .github/workflows/analysis-production.yml
 assert_case processing-worker-workflow \
-  "$(expected analysis analysis_image workflow actionlint)" \
+  "$(expected system_e2e analysis analysis_image workflow actionlint)" \
   .github/workflows/processing-worker.yml
 assert_case processing-worker-script \
   "$(expected analysis analysis_image workflow policy_scripts)" \
@@ -187,7 +187,7 @@ assert_case runtime-release-workflow \
   "$(expected workflow actionlint)" \
   .github/workflows/runtime-release.yml
 assert_case deploy-workflow \
-  "$(expected runtime workflow actionlint)" \
+  "$(expected system_e2e runtime workflow actionlint)" \
   .github/workflows/deploy.yml
 assert_case shared-schema "${all}" docs/schemas/series-analysis-v1.json
 assert_case orchestrator "${orchestrator}" .github/workflows/pr.yml
@@ -231,4 +231,12 @@ assert_case ui-browser-test "${web_only}" apps/web/e2e/ui/design-system.spec.ts
 assert_case ui-browser-config "${web_only}" apps/web/playwright.ui.config.ts
 assert_case system-browser-test "$(expected web system_e2e)" apps/web/e2e/system/records.spec.ts
 assert_case recovery-browser-test "$(expected web system_e2e)" apps/web/e2e/recovery/ocr.spec.ts
-assert_case system-session-fixture "$(expected api system_e2e)" apps/api/src/test/scala/momo/api/e2e/SessionFixture.scala
+assert_case system-session-fixture "${api_runtime}" apps/api/src/e2e-fixture/scala/momo/api/e2e/SessionFixture.scala
+assert_case e2e-artifact-loader "$(expected system_e2e workflow policy_scripts)" scripts/ci/load-e2e-artifacts.sh
+assert_case e2e-artifact-loader-test "${policy_only}" scripts/ci/test-load-e2e-artifacts.sh
+assert_case e2e-artifact-validator "$(expected system_e2e workflow go_tools policy_scripts)" \
+  scripts/tools/internal/cievidence/e2e.go
+assert_case e2e-artifact-validator-test "$(expected workflow go_tools policy_scripts)" \
+  scripts/tools/internal/cievidence/e2e_test.go
+assert_case e2e-local-preparation "$(expected web analysis analysis_image system_e2e)" scripts/e2e/prepare.mts
+assert_case e2e-fixture-contract-test "$(expected web analysis analysis_image)" scripts/e2e/session-fixture.test.mts

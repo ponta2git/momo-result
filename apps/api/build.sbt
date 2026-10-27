@@ -23,6 +23,9 @@ addCommandAlias("apiCanonicalDbQuality", "CanonicalDbTest / testFull")
 lazy val apiOpenApi = taskKey[File]("Generate OpenAPI from Tapir endpoint definitions")
 lazy val apiOpenApiCheck = taskKey[Unit]("Check that openapi.yaml matches generated Tapir output")
 lazy val OpenApi = config("openapi").hide.extend(Compile)
+// System E2E session fixture: production classes plus one entry point, without test frameworks.
+// The runtime image supplies the main classes and libraries; only this config's JAR is shipped.
+lazy val E2eFixture = config("e2eFixture").hide.extend(Compile)
 lazy val DbTest = config("dbTest").hide.extend(Test)
 lazy val CanonicalDbTest = config("canonicalDbTest").hide.extend(Test)
 lazy val R2Test = config("r2Test").hide.extend(Test)
@@ -98,13 +101,18 @@ lazy val sharedScalacOptions = Seq(
 )
 
 lazy val root = (project in file("."))
-  .configs(OpenApi, DbTest, CanonicalDbTest, R2Test)
+  .configs(OpenApi, E2eFixture, DbTest, CanonicalDbTest, R2Test)
   .enablePlugins(JavaAppPackaging)
   .settings(
     inConfig(OpenApi)(Defaults.compileSettings),
     inConfig(OpenApi)(sbt.plugins.SemanticdbPlugin.configurationSettings),
     org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(OpenApi),
     scalafixConfigSettings(OpenApi),
+    inConfig(E2eFixture)(Defaults.compileSettings),
+    inConfig(E2eFixture)(sbt.plugins.SemanticdbPlugin.configurationSettings),
+    org.scalafmt.sbt.ScalafmtPlugin.scalafmtConfigSettings(E2eFixture),
+    scalafixConfigSettings(E2eFixture),
+    E2eFixture / sourceDirectory := sourceDirectory.value / "e2e-fixture",
     inConfig(DbTest)(serviceTestSettings("DbIntegration")),
     inConfig(CanonicalDbTest)(serviceTestSettings("CanonicalDbIntegration")),
     inConfig(R2Test)(serviceTestSettings("R2Integration")),
@@ -115,6 +123,7 @@ lazy val root = (project in file("."))
     DbTest / envVars += "MOMO_API_IDENTITY_SCHEMA" -> "legacy",
     CanonicalDbTest / envVars += "MOMO_API_IDENTITY_SCHEMA" -> "canonical",
     OpenApi / compile := Def.uncached((OpenApi / compile).dependsOn(Compile / compile).value),
+    E2eFixture / compile := Def.uncached((E2eFixture / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
     organization := "momo",
     scalacOptions ++= sharedScalacOptions,

@@ -129,14 +129,30 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
 # Compile E2E tests directly from the shared source and native dependencies, without building
 # production release binaries or collecting their runtime libraries. The default target below
 # remains the production runtime and never contains fixture controls or a test executable.
-FROM source AS e2e-test
+FROM source AS e2e-test-builder
 COPY docs/schemas /workspace/docs/schemas
 COPY apps/processing-worker/testdata /workspace/apps/processing-worker/testdata
 RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
   --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
   --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
   cargo test --locked --lib --no-run --message-format=json > /tmp/momo-test-build.json \
-  && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/usr/local/bin/mom24-worker-test')"
+  && install -d -m 0755 /tmp/e2e-root/usr/local/bin \
+  && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/tmp/e2e-root/usr/local/bin/mom24-worker-test')" \
+  && strip --strip-debug /tmp/e2e-root/usr/local/bin/mom24-worker-test \
+  && lddtree -l /tmp/e2e-root/usr/local/bin/mom24-worker-test > /tmp/e2e-libraries \
+  && while IFS= read -r library; do \
+    case "${library}" in \
+      /lib/*|/usr/lib/*|/opt/tesseract/lib/*) cp -L --parents "${library}" /tmp/e2e-root || exit 1 ;; \
+    esac; \
+  done < /tmp/e2e-libraries \
+  && cp -R --parents /workspace/docs/schemas /workspace/apps/processing-worker/testdata /tmp/e2e-root
+
+# System E2E transfers this image between jobs. Keep only the test executable, its dynamic
+# libraries, and the checked-in inputs the tests resolve from the source tree; the Rust
+# toolchain and native build tree are not needed to run it.
+FROM ${RUNTIME_IMAGE} AS e2e-test
+ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
+COPY --from=e2e-test-builder /tmp/e2e-root/ /
 ENTRYPOINT ["/usr/local/bin/mom24-worker-test"]
 
 FROM ${RUNTIME_IMAGE} AS runtime

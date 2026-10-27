@@ -48,6 +48,18 @@ for invalid in skipped cancelled failure; do
     exit 1
   fi
 done
+# The E2E artifacts are produced inside the runtime and analysis workflows; a
+# failed, cancelled, or skipped producer cannot leave the PR gate green.
+for producer in ANALYSIS RUNTIME; do
+  for invalid in skipped cancelled failure; do
+    if (export SYSTEM_E2E_EXPECTED=true SYSTEM_E2E_RESULT=success ANALYSIS_EXPECTED=true \
+      ANALYSIS_RESULT=success RUNTIME_EXPECTED=true RUNTIME_RESULT=success "${producer}_RESULT=${invalid}"
+      run_checker >/dev/null 2>&1); then
+      echo "PR gate accepted a ${invalid} ${producer} producer for System E2E." >&2
+      exit 1
+    fi
+  done
+done
 if SYSTEM_E2E_EXPECTED=false SYSTEM_E2E_RESULT=success run_checker >/dev/null 2>&1; then
   echo "OCR notification gate accepted an unexpected run." >&2
   exit 1

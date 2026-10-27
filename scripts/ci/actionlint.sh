@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# actionlint silently skips shell analysis when ShellCheck is unavailable.
+command -v shellcheck >/dev/null 2>&1 || {
+  echo "shellcheck was not found. Install shellcheck or add it to PATH." >&2
+  exit 127
+}
+
 if [[ -n "${ACTIONLINT_BIN:-}" ]]; then
   [[ -x "${ACTIONLINT_BIN}" ]] || {
     echo "ACTIONLINT_BIN is not executable: ${ACTIONLINT_BIN}" >&2

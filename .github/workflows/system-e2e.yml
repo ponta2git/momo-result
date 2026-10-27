@@ -271,13 +271,13 @@ jobs:
           CANDIDATE_WORKER: ${{ steps.worker.outputs.image_ref }}
         run: |
           if [[ "${GITHUB_EVENT_NAME}" == workflow_dispatch ]]; then
-            printf 'MOMO_E2E_RUNTIME_IMAGE=momo-system-runtime:manual\nMOMO_E2E_WORKER_IMAGE=momo-system-worker:manual\n' >> "${GITHUB_ENV}"
-            printf 'MOMO_E2E_CONTROLLED_WORKER_IMAGE=momo-system-controlled-worker:manual\n' >> "${GITHUB_ENV}"
-            printf 'MOMO_E2E_SESSION_FIXTURE_DIR=%s/e2e-session-fixture\n' "${GITHUB_WORKSPACE}" >> "${GITHUB_ENV}"
+            printf 'MOMO_E2E_RUNTIME_IMAGE=momo-system-runtime:manual\nMOMO_E2E_WORKER_IMAGE=momo-system-worker:manual\n'
+            printf 'MOMO_E2E_CONTROLLED_WORKER_IMAGE=momo-system-controlled-worker:manual\n'
+            printf 'MOMO_E2E_SESSION_FIXTURE_DIR=%s/e2e-session-fixture\n' "${GITHUB_WORKSPACE}"
           else
             # The controlled Worker and session fixture were selected by the verified load step.
-            printf 'MOMO_E2E_RUNTIME_IMAGE=%s\nMOMO_E2E_WORKER_IMAGE=%s\n' "${CANDIDATE_RUNTIME}" "${CANDIDATE_WORKER}" >> "${GITHUB_ENV}"
-          fi
+            printf 'MOMO_E2E_RUNTIME_IMAGE=%s\nMOMO_E2E_WORKER_IMAGE=%s\n' "${CANDIDATE_RUNTIME}" "${CANDIDATE_WORKER}"
+          fi >> "${GITHUB_ENV}"
       - name: Verify real assembled user journeys
         env:
           MOMO_DB_MIGRATIONS_DIR: ${{ github.workspace }}/_deps/momo-db/drizzle

@@ -9,6 +9,7 @@
 - local secret は追跡外の env file、production / CI secret は各 secret store で管理し、必要な名前だけを `.env.example` に置く。
 - API / worker の env の読込元は、実際の起動経路で確認する。worker container には worker が使う secret だけを渡す。
 - 隔離 test の既定 migration source は共通 resolver が `.momo-db-ref` に固定した `momo-db` commit から解決する。checkout の HEAD はその commit と異なってよい。固定 revision の archive や意図した schema 実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を報告で区別する。判定の現在値は `scripts/ci/resolve-momo-db-migrations.sh` を正本とする。
+- API は `.http4s-ref` に固定した http4s fork で build・test する。ローカルでは root で `scripts/ci/build-http4s-patch.sh` を実行し、fork を `~/.ivy2/local` へ publish して版を `_deps/http4s-patch` に記録する。`apps/api/build.sbt` はこの記録か `MOMO_HTTP4S_PATCHED_VERSION` を使い、未準備や固定 revision との不一致では upstream へ fallback せず依存解決の前に失敗する。ref を更新したら再実行し、sbt server を再起動する。
 - integration / E2E は普段使いの DB、bucket と分離する。
 - Web / runtime E2E の fresh DB bootstrap は `web-e2e` profile で現行の分析公開契約を初期化する。migration だけの baseline と区別し、既存 DB の正式な promotion や本番切替とは別の手順として扱う。
 

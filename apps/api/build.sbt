@@ -44,17 +44,40 @@ def serviceTestSettings(tag: String): Seq[Def.Setting[?]] = Defaults.testSetting
 lazy val nettyVersion = "4.2.18.Final"
 lazy val http4sVersion = "0.23.37"
 lazy val http4sPatchedVersion =
+  settingKey[Either[String, String]]("Pinned http4s fork version, or why it is unavailable")
+lazy val http4sPatchCheck =
+  taskKey[Unit]("Fail before dependency resolution when the pinned http4s fork is unavailable")
+// The API's HTTP/2 behavior and tests depend on the fork pinned by `.http4s-ref`; never fall back
+// to upstream silently. CI and the Dockerfile pass the version; local builds read the record that
+// scripts/ci/build-http4s-patch.sh writes next to its ~/.ivy2/local publication.
+def resolveHttp4sPatchedVersion(repoRoot: File): Either[String, String] = {
+  def read(file: File): Option[String] =
+    if (file.isFile) Some(IO.read(file).trim).filter(_.nonEmpty) else None
+  val patchDir = repoRoot / "_deps" / "http4s-patch"
+  val setup = "Run scripts/ci/build-http4s-patch.sh from the repository root (or set " +
+    "MOMO_HTTP4S_PATCHED_VERSION to the published fork version), then restart sbt " +
+    "(`sbt --server --batch shutdown`)."
   sys.props
     .get("momo.http4s.patched.version")
     .orElse(sys.env.get("MOMO_HTTP4S_PATCHED_VERSION"))
-    .filter(_.nonEmpty)
-lazy val http4sEmberVersion = http4sPatchedVersion.getOrElse(http4sVersion)
+    .filter(_.nonEmpty) match {
+    case Some(version) => Right(version)
+    case None =>
+      val ref = read(repoRoot / ".http4s-ref")
+      (ref, read(patchDir / "source-sha.txt"), read(patchDir / "version.txt")) match {
+        case (Some(pinned), Some(built), Some(version)) if pinned == built => Right(version)
+        case (Some(pinned), Some(built), _) =>
+          Left(s"_deps/http4s-patch was built from $built, but .http4s-ref pins $pinned. $setup")
+        case _ => Left(s"The pinned http4s fork from .http4s-ref is not prepared. $setup")
+      }
+  }
+}
 // Keep the reviewed http4s release and fork together even when integrations upgrade transitively.
-lazy val http4sOverrides = Seq(
-  "org.http4s" %% "http4s-core" % http4sEmberVersion,
-  "org.http4s" %% "http4s-server" % http4sEmberVersion,
-  "org.http4s" %% "http4s-ember-core" % http4sEmberVersion,
-  "org.http4s" %% "http4s-ember-server" % http4sEmberVersion,
+def http4sOverrides(emberVersion: String) = Seq(
+  "org.http4s" %% "http4s-core" % emberVersion,
+  "org.http4s" %% "http4s-server" % emberVersion,
+  "org.http4s" %% "http4s-ember-core" % emberVersion,
+  "org.http4s" %% "http4s-ember-server" % emberVersion,
   "org.http4s" %% "http4s-circe" % http4sVersion,
   "org.http4s" %% "http4s-jawn" % http4sVersion,
 )
@@ -126,6 +149,11 @@ lazy val root = (project in file("."))
     E2eFixture / compile := Def.uncached((E2eFixture / compile).dependsOn(Compile / compile).value),
     name := "momo-result-api",
     organization := "momo",
+    http4sPatchedVersion := resolveHttp4sPatchedVersion(baseDirectory.value / ".." / ".."),
+    http4sPatchCheck := Def.uncached {
+      http4sPatchedVersion.value.swap.foreach(message => throw new MessageOnlyException(message))
+    },
+    update := Def.uncached(update.dependsOn(http4sPatchCheck).value),
     scalacOptions ++= sharedScalacOptions,
     Compile / scalacOptions ++= {
       // Scala 3.9 skips oversized schema initializers to avoid the JVM's 64 KiB method limit.
@@ -235,7 +263,8 @@ lazy val root = (project in file("."))
         "software.amazon.awssdk" % "url-connection-client" % awsSdkVersion,
         "is.cir" %% "ciris" % cirisVersion,
         "org.typelevel" %% "log4cats-slf4j" % log4catsVersion,
-        "org.http4s" %% "http4s-ember-server" % http4sEmberVersion,
+        "org.http4s" %% "http4s-ember-server" %
+          http4sPatchedVersion.value.getOrElse(http4sVersion),
         "org.http4s" %% "http4s-circe" % http4sVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirVersion,
         "com.softwaremill.sttp.tapir" %% "tapir-json-circe" % tapirVersion,
@@ -276,7 +305,7 @@ lazy val root = (project in file("."))
         "org.postgresql" % "postgresql" % "42.7.13",
         "tools.jackson.core" % "jackson-core" % jacksonVersion,
         "tools.jackson.core" % "jackson-databind" % jacksonVersion,
-      ) ++ http4sOverrides
+      ) ++ http4sOverrides(http4sPatchedVersion.value.getOrElse(http4sVersion))
     },
     apiOpenApi := Def.uncached {
       val converter = fileConverter.value

@@ -70,7 +70,11 @@ object HeldEventListCodec:
         AppError.ValidationFailed("from must be on or before to."),
       )
       minMatchCount <- params.minMatchCount.traverse(value =>
-        Either.cond(value >= 1, value, AppError.ValidationFailed("minMatchCount must be 1 or greater."))
+        Either.cond(
+          value >= 1,
+          value,
+          AppError.ValidationFailed("minMatchCount must be 1 or greater.")
+        )
       )
       noteQuery <- MatchListCodec.parseNoteQuery(params.q)
       metric <- parseMetric(params)

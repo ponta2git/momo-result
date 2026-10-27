@@ -280,14 +280,37 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
       _ <- create(confirm("thirds-3", thirds, 3, (2, 1, 4, 3)))
       _ <- create(confirm("fourths-1", fourths, 1, (4, 1, 2, 3)))
       _ <- create(confirm("fourths-2", fourths, 2, (4, 3, 2, 1)))
-      listed <- page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(1, 10))
+      listed <-
+        page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(1, 10))
       // Unrounded 1.666... < 1.67 and 1.333... > 1.33: only the rounded value satisfies both.
-      roundedUp <- ids(metric(HeldEventListMetric.AverageRank, "1.67", MatchListRecordRange.Gte, Some("member_ponta")))
-      roundedDown <- ids(metric(HeldEventListMetric.AverageRank, "1.33", MatchListRecordRange.Lte, Some("member_akane_mami")))
-      anyTwoFourths <- ids(metric(HeldEventListMetric.Rank4Count, "2", MatchListRecordRange.Gte, None))
-      euWins <- ids(metric(HeldEventListMetric.Rank1Count, "1", MatchListRecordRange.Gte, Some("member_eu")))
-      noWinsForPonta <- ids(metric(HeldEventListMetric.Rank1Count, "0", MatchListRecordRange.Lte, Some("member_ponta")))
-      anyNoSecond <- ids(metric(HeldEventListMetric.Rank2Count, "0", MatchListRecordRange.Lte, None))
+      roundedUp <- ids(metric(
+        HeldEventListMetric.AverageRank,
+        "1.67",
+        MatchListRecordRange.Gte,
+        Some("member_ponta")
+      ))
+      roundedDown <- ids(metric(
+        HeldEventListMetric.AverageRank,
+        "1.33",
+        MatchListRecordRange.Lte,
+        Some("member_akane_mami")
+      ))
+      anyTwoFourths <-
+        ids(metric(HeldEventListMetric.Rank4Count, "2", MatchListRecordRange.Gte, None))
+      euWins <- ids(metric(
+        HeldEventListMetric.Rank1Count,
+        "1",
+        MatchListRecordRange.Gte,
+        Some("member_eu")
+      ))
+      noWinsForPonta <- ids(metric(
+        HeldEventListMetric.Rank1Count,
+        "0",
+        MatchListRecordRange.Lte,
+        Some("member_ponta")
+      ))
+      anyNoSecond <-
+        ids(metric(HeldEventListMetric.Rank2Count, "0", MatchListRecordRange.Lte, None))
     yield
       val results = listed.page.items.map(item => item.event.id -> item.playerResults).toMap
       assertEquals(
@@ -320,9 +343,13 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
       tieUnderscore <- event("held_tie__", tie)
       _ <- create(withNote(plain("older-1", older, 1), "memo"))
       descending <- (1 to 4).toList
-        .traverse(n => page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(n, 1)))
+        .traverse(n =>
+          page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(n, 1))
+        )
       ascending <- (1 to 4).toList
-        .traverse(n => page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldAsc, PageRequest(n, 1)))
+        .traverse(n =>
+          page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldAsc, PageRequest(n, 1))
+        )
       filtered <- page(
         HeldEventListSearchCriteria(noteQuery = Some("memo")),
         HeldEventListSort.HeldAsc,

@@ -24,6 +24,7 @@ object HeldEventListMetric:
 
   val AverageRankMinimum: BigDecimal = BigDecimal(1)
   val AverageRankMaximum: BigDecimal = BigDecimal(4)
+
   /** Averages compare after rounding to this scale, matching the displayed value. */
   val AverageRankScale = 2
 

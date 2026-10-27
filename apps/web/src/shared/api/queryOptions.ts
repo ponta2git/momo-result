@@ -60,7 +60,18 @@ function normalizeHeldEventsQuery(query: ListHeldEventsQuery): ListHeldEventsQue
     ...(query.limit === undefined ? {} : { limit: query.limit }),
     ...(query.page === undefined ? {} : { page: query.page }),
     ...(query.pageSize === undefined ? {} : { pageSize: query.pageSize }),
+    ...(query.sort ? { sort: query.sort } : {}),
+    ...(query.gameTitleId ? { gameTitleId: query.gameTitleId } : {}),
+    ...(query.seasonMasterId ? { seasonMasterId: query.seasonMasterId } : {}),
+    ...(query.mapMasterId ? { mapMasterId: query.mapMasterId } : {}),
+    ...(query.from ? { from: query.from } : {}),
+    ...(query.to ? { to: query.to } : {}),
+    ...(query.minMatchCount === undefined ? {} : { minMatchCount: query.minMatchCount }),
     ...(normalizedQ ? { q: normalizedQ } : {}),
+    ...(query.memberId ? { memberId: query.memberId } : {}),
+    ...(query.metric ? { metric: query.metric } : {}),
+    ...(query.metricValue ? { metricValue: query.metricValue } : {}),
+    ...(query.metricRange ? { metricRange: query.metricRange } : {}),
   };
 }
 

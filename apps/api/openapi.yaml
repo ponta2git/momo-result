@@ -1036,14 +1036,6 @@
             }
           },
           {
-            "name" : "q",
-            "in" : "query",
-            "required" : false,
-            "schema" : {
-              "type" : "string"
-            }
-          },
-          {
             "name" : "limit",
             "in" : "query",
             "description" : "1..100; defaults to 20.",
@@ -1072,6 +1064,115 @@
               "type" : "integer",
               "format" : "int32"
             }
+          },
+          {
+            "name" : "sort",
+            "in" : "query",
+            "description" : "held_desc (default) or held_asc. Orders by held time, then held event ID, both in the chosen direction.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "gameTitleId",
+            "in" : "query",
+            "description" : "Game title ID; one confirmed match must also satisfy seasonMasterId and mapMasterId. Evaluated over the held event's confirmed matches only.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "seasonMasterId",
+            "in" : "query",
+            "description" : "Season master ID. Evaluated over the held event's confirmed matches only.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "mapMasterId",
+            "in" : "query",
+            "description" : "Map master ID. Evaluated over the held event's confirmed matches only.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "from",
+            "in" : "query",
+            "description" : "Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "to",
+            "in" : "query",
+            "description" : "Inclusive held date (YYYY-MM-DD, Asia/Tokyo).",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "minMatchCount",
+            "in" : "query",
+            "description" : "1 or greater; the held event has at least this many confirmed matches.",
+            "required" : false,
+            "schema" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          {
+            "name" : "q",
+            "in" : "query",
+            "description" : "Case-insensitive literal substring of a match note; trimmed, at most 50 characters, blank means absent. Items then carry noteMatch. Evaluated over the held event's confirmed matches only.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "memberId",
+            "in" : "query",
+            "description" : "Limits the metric condition to this player; requires metric. Without it any player matches.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "metric",
+            "in" : "query",
+            "description" : "average_rank, rank1_count, rank2_count, rank3_count, or rank4_count; requires metricValue. Events without a confirmed match never satisfy it. Evaluated over the held event's confirmed matches only.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "metricValue",
+            "in" : "query",
+            "description" : "Compared value; requires metric. average_rank: 1.00 to 4.00 with at most 2 decimal places, compared with the average rounded to 2 decimals. Rank counts: integer 0 or greater.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "metricRange",
+            "in" : "query",
+            "description" : "gte (default) or lte; requires metric.",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
           }
         ],
         "responses" : {
@@ -1086,7 +1187,7 @@
             }
           },
           "400" : {
-            "description" : "Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize",
+            "description" : "Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize, Invalid value for: query parameter minMatchCount",
             "content" : {
               "text/plain" : {
                 "schema" : {
@@ -7762,6 +7863,79 @@
           }
         }
       },
+      "HeldEventListItemResponse" : {
+        "title" : "HeldEventListItemResponse",
+        "type" : "object",
+        "required" : [
+          "id",
+          "heldAt",
+          "matchCount",
+          "draftCount",
+          "nextMatchNo"
+        ],
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "heldAt" : {
+            "type" : "string"
+          },
+          "matchCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "draftCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nextMatchNo" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "scopes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventScopeResponse"
+            }
+          },
+          "publicId" : {
+            "type" : "string"
+          },
+          "playerResults" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/HeldEventListPlayerResultResponse"
+            }
+          },
+          "noteMatch" : {
+            "$ref" : "#/components/schemas/HeldEventNoteMatchResponse"
+          }
+        }
+      },
+      "HeldEventListPlayerResultResponse" : {
+        "title" : "HeldEventListPlayerResultResponse",
+        "type" : "object",
+        "required" : [
+          "memberId",
+          "averageRank"
+        ],
+        "properties" : {
+          "memberId" : {
+            "type" : "string"
+          },
+          "averageRank" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "rankCounts" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          }
+        }
+      },
       "HeldEventListResponse" : {
         "title" : "HeldEventListResponse",
         "type" : "object",
@@ -7773,7 +7947,7 @@
           "items" : {
             "type" : "array",
             "items" : {
-              "$ref" : "#/components/schemas/HeldEventResponse"
+              "$ref" : "#/components/schemas/HeldEventListItemResponse"
             }
           },
           "pagination" : {
@@ -7782,6 +7956,9 @@
           "totalMatchCount" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "latestHeldEventId" : {
+            "type" : "string"
           }
         }
       },
@@ -7852,6 +8029,32 @@
           },
           "next" : {
             "$ref" : "#/components/schemas/AdjacentHeldEventResponse"
+          }
+        }
+      },
+      "HeldEventNoteMatchResponse" : {
+        "title" : "HeldEventNoteMatchResponse",
+        "type" : "object",
+        "required" : [
+          "matchId",
+          "matchNoInEvent",
+          "noteBody",
+          "otherMatchCount"
+        ],
+        "properties" : {
+          "matchId" : {
+            "type" : "string"
+          },
+          "matchNoInEvent" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "noteBody" : {
+            "type" : "string"
+          },
+          "otherMatchCount" : {
+            "type" : "integer",
+            "format" : "int32"
           }
         }
       },

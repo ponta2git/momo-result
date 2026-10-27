@@ -15,16 +15,22 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/detail/HeldEventDetailPage";
 import { HeldEventsPage } from "@/features/heldEvents/list/HeldEventsPage";
+import type { HeldEventListItemResponse, HeldEventListResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installMatchMediaController } from "@/test/doubles/dom";
 import type { MatchMediaController } from "@/test/doubles/dom";
-import { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories";
+import {
+  makeHeldEventDetailResponse,
+  makeHeldEventListItem,
+  makeHeldEventResponse,
+} from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
+import { selectOption } from "@/test/selectOption";
 
 setupMsw();
 
@@ -55,6 +61,35 @@ function renderPage(path = "/held-events", realDetails = false) {
   );
 }
 
+function listResponse(
+  items: HeldEventListItemResponse[],
+  {
+    latestHeldEventId = items[0]?.id,
+    pagination = {},
+  }: {
+    latestHeldEventId?: string | undefined;
+    pagination?: Partial<HeldEventListResponse["pagination"]>;
+  } = {},
+): HeldEventListResponse {
+  return {
+    items,
+    ...(latestHeldEventId ? { latestHeldEventId } : {}),
+    pagination: {
+      hasNextPage: false,
+      hasPreviousPage: false,
+      page: 1,
+      pageSize: 10,
+      totalItems: items.length,
+      totalPages: items.length === 0 ? 0 : 1,
+      ...pagination,
+    },
+    totalMatchCount: items.reduce((sum, item) => sum + item.matchCount, 0),
+  };
+}
+
+const location = () => screen.getByLabelText("current location");
+const listRegion = () => screen.getByRole("region", { name: "開催の一覧" });
+
 let matchMedia: MatchMediaController | undefined;
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
@@ -70,29 +105,71 @@ describe("HeldEventsPage", () => {
     matchMedia = undefined;
   });
 
-  it("renders held-event status and related links", async () => {
+  it("reads each event's identity, counts, standings and actions from one row", async () => {
     matchMedia = installMatchMediaController(true);
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json(
+          listResponse(
+            [
+              makeHeldEventListItem({
+                averageRanks: [2.5, 1.25, 2.5, 3.75],
+                draftCount: 1,
+                heldAt: "2026-02-02T10:00:00.000Z",
+                id: "held-played",
+                matchCount: 4,
+              }),
+              makeHeldEventListItem({ heldAt: "2026-01-02T10:00:00.000Z", id: "held-empty" }),
+            ],
+            { latestHeldEventId: "held-played" },
+          ),
+        ),
+      ),
+    );
     renderPage();
 
-    expect(await screen.findByRole("region", { name: "開催履歴" })).toBeInTheDocument();
-    expect(await screen.findByText("最新")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "開催履歴" })).toBeInTheDocument();
-    expect(screen.getByText("確定済み")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "結果" })).toBeInTheDocument();
-    expect(screen.getByText("0件")).toBeInTheDocument();
-    expect(screen.queryByText("held-1")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "開催を作成" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
-      "href",
-      "/held-events/held-1",
-    );
+    const table = await screen.findByRole("table", { name: "開催の一覧" });
     expect(
-      screen.queryByRole("link", { name: /試合検索で見る|の試合を検索$/u }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /をCSV出力$/u })).toHaveAttribute(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual(["開催", "試合", "開催平均順位", "操作"]);
+    const [played, empty] = within(table).getAllByRole("row").slice(1);
+    const playedRow = within(played!);
+    expect(playedRow.getByText("最新")).toBeInTheDocument();
+    expect(playedRow.getByRole("link", { name: "2026/02/02 19:00の開催詳細" })).toHaveAttribute(
       "href",
-      "/exports?heldEventId=held-1&format=csv",
+      "/held-events/held-played",
     );
+    expect(playedRow.getByText("4試合")).toBeInTheDocument();
+    expect(playedRow.getByText("下書き 1件")).toBeInTheDocument();
+    expect(
+      within(playedRow.getByRole("list", { name: "開催平均順位" }))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["1位ぽんた1.25", "2位いーゆー2.50", "2位あかねまみ2.50", "4位おーたか3.75"]);
+    expect(playedRow.getByRole("link", { name: /の開催にOCR取り込み$/u })).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-played",
+    );
+    expect(playedRow.getByRole("link", { name: /をCSV出力$/u })).toHaveAttribute(
+      "href",
+      "/exports?heldEventId=held-played&format=csv",
+    );
+    expect(playedRow.queryByRole("button", { name: /を削除$/u })).not.toBeInTheDocument();
+
+    const emptyRow = within(empty!);
+    expect(emptyRow.queryByText("最新")).not.toBeInTheDocument();
+    expect(emptyRow.getByText("試合なし")).toBeInTheDocument();
+    expect(emptyRow.getByText("確定した試合はまだありません")).toBeInTheDocument();
+    expect(emptyRow.queryByRole("link", { name: /OCR取り込み/u })).not.toBeInTheDocument();
+    expect(emptyRow.getByRole("button", { name: "2026/01/02 19:00を削除" })).toBeEnabled();
+
+    // Two events fit on one page, so the toolbar owns the count instead of pagination.
+    expect(within(listRegion()).getByText("2開催")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "ページネーション" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開催を作成" })).toBeInTheDocument();
+    expect(screen.queryByText("held-played")).not.toBeInTheDocument();
   });
 
   it("shows every series and season in its held-event row, including a partly configured draft", async () => {
@@ -133,25 +210,30 @@ describe("HeldEventsPage", () => {
     expect(screen.getAllByRole("list", { name: "開催のシリーズ・シーズン" })).toHaveLength(1);
   });
 
-  it("starts OCR from only the latest held event", async () => {
+  it("starts OCR from only the overall latest held event, whatever the sort", async () => {
     server.use(
       http.get("/api/held-events", () =>
-        HttpResponse.json({
-          items: [
-            makeHeldEventResponse({
-              heldAt: "2026-02-02T03:04:00.000Z",
-              id: "held-newest",
-            }),
-            makeHeldEventResponse({
-              heldAt: "2026-01-02T03:04:00.000Z",
-              id: "held-older",
-            }),
-          ],
-        }),
+        HttpResponse.json(
+          listResponse(
+            [
+              makeHeldEventListItem({
+                heldAt: "2026-01-02T03:04:00.000Z",
+                id: "held-older",
+              }),
+              makeHeldEventListItem({
+                heldAt: "2026-02-02T03:04:00.000Z",
+                id: "held-newest",
+              }),
+            ],
+            { latestHeldEventId: "held-newest" },
+          ),
+        ),
       ),
     );
 
-    renderPage("/held-events?pageSize=25");
+    renderPage("/held-events?sort=held_asc&pageSize=25");
+
+    expect(await screen.findAllByText("最新")).toHaveLength(1);
 
     const ocrLink = await screen.findByRole("link", { name: /の開催にOCR取り込み$/u });
     expect(ocrLink).toHaveAttribute("href", "/ocr/new?heldEventId=held-newest");
@@ -228,7 +310,7 @@ describe("HeldEventsPage", () => {
     renderPage();
 
     const detailLink = await screen.findByRole("link", { name: /の開催詳細$/u });
-    await user.click(screen.getByRole("button", { name: "更新" }));
+    await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
 
     const surface = screen.getByRole("region", { name: "開催履歴" });
     expect(await within(surface).findByText("開催履歴を更新できませんでした")).toBeInTheDocument();
@@ -361,11 +443,11 @@ describe("HeldEventsPage", () => {
 
   it("keeps the current list and pager stable while the next page loads", async () => {
     const secondPageGate = createDeferred();
-    const firstPageEvent = makeHeldEventResponse({
+    const firstPageEvent = makeHeldEventListItem({
       heldAt: "2026-01-02T03:04:00.000Z",
       id: "held-page-1",
     });
-    const secondPageEvent = makeHeldEventResponse({
+    const secondPageEvent = makeHeldEventListItem({
       heldAt: "2025-12-02T03:04:00.000Z",
       id: "held-page-2",
     });
@@ -377,6 +459,7 @@ describe("HeldEventsPage", () => {
         }
         return HttpResponse.json({
           items: [page === 2 ? secondPageEvent : firstPageEvent],
+          latestHeldEventId: firstPageEvent.id,
           pagination: {
             hasNextPage: page === 1,
             hasPreviousPage: page === 2,
@@ -396,9 +479,11 @@ describe("HeldEventsPage", () => {
     expect(firstPageLink).toHaveAttribute("href", "/held-events/held-page-1");
     await user.click(screen.getByRole("button", { name: "次のページへ" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "更新中…" })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "一覧を更新中" })).toBeDisabled(),
+    );
     const ledger = screen.getByRole("region", { name: "開催履歴" });
-    expect(within(ledger).queryByRole("status")).not.toBeInTheDocument();
+    expect(within(ledger).getByRole("status")).toHaveTextContent("一覧を更新中");
     expect(within(ledger).queryByLabelText("開催履歴を読み込み中")).not.toBeInTheDocument();
     const disabledDetail = within(ledger).getByRole("link", { name: /の開催詳細$/u });
     expect(disabledDetail).toHaveAttribute("aria-disabled", "true");
@@ -423,7 +508,7 @@ describe("HeldEventsPage", () => {
       ),
     );
     expect(screen.getByRole("region", { name: "開催履歴" })).not.toHaveAttribute("aria-busy");
-    expect(within(ledger).queryByRole("status")).not.toBeInTheDocument();
+    expect(within(ledger).getByRole("status")).toBeEmptyDOMElement();
     expect(screen.queryByText("最新")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /の開催にOCR取り込み$/u })).not.toBeInTheDocument();
     expect(screen.getByText("2／2")).toBeInTheDocument();
@@ -706,7 +791,9 @@ describe("HeldEventsPage", () => {
     expect(router.state.location.pathname).toBe("/held-events");
     await act(async () => gate.resolve());
     await screen.findByText("開催履歴はまだありません");
-    await waitFor(() => expect(screen.getByRole("button", { name: "更新" })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "最新情報に更新" })).toBeEnabled(),
+    );
     expect(router.state.location.pathname).toBe("/held-events");
     await act(async () => router.navigate(-1));
     expect(router.state.location.pathname).toBe("/matches");
@@ -740,7 +827,7 @@ describe("HeldEventsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("1件")).toBeInTheDocument();
+    expect(await screen.findByText("下書き 1件")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /を削除$/u })).not.toBeInTheDocument();
   });
 
@@ -783,5 +870,197 @@ describe("HeldEventsPage", () => {
     await waitFor(() => expect(screen.queryByText("開催を削除しますか？")).not.toBeInTheDocument());
     expect(screen.queryByText("held event has match drafts.")).not.toBeInTheDocument();
     expect(screen.queryByText("操作に失敗しました")).not.toBeInTheDocument();
+  });
+
+  it("searches from the URL and marks the matched memo and the conditioned member", async () => {
+    matchMedia = installMatchMediaController(true);
+    const requests: URLSearchParams[] = [];
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        requests.push(new URL(request.url).searchParams);
+        return HttpResponse.json(
+          listResponse(
+            [
+              makeHeldEventListItem({
+                averageRanks: [3, 1.5, 2, 3.5],
+                id: "held-noted",
+                matchCount: 3,
+                noteMatch: {
+                  matchId: "match-2",
+                  matchNoInEvent: 2,
+                  noteBody: "終盤にキングボンビーが付いた",
+                  otherMatchCount: 1,
+                },
+              }),
+            ],
+            { latestHeldEventId: "held-other" },
+          ),
+        );
+      }),
+    );
+    renderPage(
+      "/held-events?q=%E3%83%9C%E3%83%B3%E3%83%93%E3%83%BC&memberId=member_ponta&metric=average_rank&metricValue=2&metricRange=lte",
+    );
+
+    const table = await screen.findByRole("table", { name: "開催の一覧" });
+    expect(Object.fromEntries(requests.at(-1)!)).toEqual({
+      memberId: "member_ponta",
+      metric: "average_rank",
+      metricRange: "lte",
+      metricValue: "2",
+      page: "1",
+      pageSize: "10",
+      q: "ボンビー",
+    });
+    expect(within(table).getByRole("columnheader", { name: "メモの一致" })).toBeInTheDocument();
+    expect(within(table).getByText(/^第2試合 ·$/u)).toBeInTheDocument();
+    expect(table.querySelector("mark")).toHaveTextContent("ボンビー");
+    expect(within(table).getByText("ほか1試合のメモにも一致")).toBeInTheDocument();
+    // Only the member named by the average-rank condition is emphasized.
+    expect(table.querySelectorAll("strong")).toHaveLength(1);
+    expect(table.querySelector("strong")).toHaveTextContent("1.5");
+    expect(within(table).queryByText("最新")).not.toBeInTheDocument();
+    expect(within(table).queryByRole("link", { name: /OCR取り込み/u })).not.toBeInTheDocument();
+    // Visible controls own title / season / map; chips repeat only the detail conditions.
+    expect(
+      within(screen.getByRole("list", { name: "適用中の条件" }))
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["メモ「ボンビー」", "ぽんた の開催平均順位 2.00以下"]);
+    expect(screen.getByRole("button", { name: /詳細条件/u })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("returns to the first page when a condition changes and removes one condition by its chip", async () => {
+    matchMedia = installMatchMediaController(true);
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const page = Number(new URL(request.url).searchParams.get("page") ?? "1");
+        return HttpResponse.json(
+          listResponse([makeHeldEventListItem({ id: `held-page-${page}`, matchCount: 1 })], {
+            pagination: { page, totalItems: 15, totalPages: 2 },
+          }),
+        );
+      }),
+    );
+    renderPage("/held-events?minMatchCount=2&page=2");
+
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-page-2",
+    );
+    await selectOption(user, screen.getByLabelText("並び順"), "held_asc");
+    await waitFor(() =>
+      expect(location()).toHaveTextContent(/^\/held-events\?minMatchCount=2&sort=held_asc$/u),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "確定試合数 2試合以上 を解除" }));
+    await waitFor(() => expect(location()).toHaveTextContent(/^\/held-events\?sort=held_asc$/u));
+    expect(screen.queryByRole("list", { name: "適用中の条件" })).not.toBeInTheDocument();
+  });
+
+  it("offers clearing conditions when no held event matches, keeping the sort", async () => {
+    matchMedia = installMatchMediaController(true);
+    server.use(
+      http.get("/api/held-events", ({ request }) => {
+        const filtered = new URL(request.url).searchParams.has("minMatchCount");
+        return HttpResponse.json(
+          listResponse(filtered ? [] : [makeHeldEventListItem({ id: "held-any" })], {
+            latestHeldEventId: "held-any",
+          }),
+        );
+      }),
+    );
+    renderPage("/held-events?minMatchCount=3&sort=held_asc");
+
+    expect(await screen.findByText("条件に合う開催はありません")).toBeInTheDocument();
+    expect(screen.queryByText("開催履歴はまだありません")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開催を作成" })).toBeInTheDocument();
+
+    await user.click(within(listRegion()).getByRole("button", { name: "条件をすべて解除" }));
+    await waitFor(() => expect(location()).toHaveTextContent(/^\/held-events\?sort=held_asc$/u));
+    expect(await screen.findByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+      "href",
+      "/held-events/held-any",
+    );
+  });
+
+  describe("on a narrow screen", () => {
+    it("edits every condition in the sheet and searches only when applied", async () => {
+      matchMedia = installMatchMediaController(false);
+      const requests: URLSearchParams[] = [];
+      const appliedSearch = createDeferred();
+      server.use(
+        http.get("/api/held-events", async ({ request }) => {
+          const params = new URL(request.url).searchParams;
+          requests.push(params);
+          const applied = params.get("metric") === "rank1_count";
+          if (applied) await appliedSearch.promise;
+          return HttpResponse.json(
+            listResponse([
+              makeHeldEventListItem({
+                averageRanks: [1, 2, 3, 4],
+                heldAt: applied ? "2026-02-01T10:00:00.000Z" : "2026-01-01T10:00:00.000Z",
+                id: applied ? "held-applied" : "held-initial",
+                matchCount: 2,
+              }),
+            ]),
+          );
+        }),
+      );
+      renderPage("/held-events?minMatchCount=2");
+
+      const firstLink = await screen.findByRole("link", { name: /の開催詳細$/u });
+      expect(firstLink).toHaveAttribute("href", "/held-events/held-initial");
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      expect(
+        within(screen.getByRole("list", { name: "開催の一覧" })).getByRole("list", {
+          name: "開催平均順位",
+        }),
+      ).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "検索条件（1）" }));
+      const dialog = await screen.findByRole("dialog", { name: "検索条件" });
+      expect(within(dialog).getByLabelText("確定試合数")).toHaveTextContent("2試合以上");
+
+      await selectOption(user, within(dialog).getByLabelText("指標"), "rank1_count");
+      const value = within(dialog).getByLabelText("値");
+      await user.type(value, "1.5");
+      expect(within(dialog).getByRole("button", { name: "この条件で検索" })).toBeDisabled();
+      await user.clear(value);
+      await user.type(value, "2");
+      const requestsBeforeApply = requests.length;
+      expect(location()).toHaveTextContent(/^\/held-events\?minMatchCount=2$/u);
+
+      await user.click(within(dialog).getByRole("button", { name: "この条件で検索" }));
+
+      await waitFor(() =>
+        expect(location()).toHaveTextContent(
+          /^\/held-events\?minMatchCount=2&metric=rank1_count&metricValue=2$/u,
+        ),
+      );
+      expect(requests.slice(0, requestsBeforeApply).every((params) => !params.has("metric"))).toBe(
+        true,
+      );
+      // Retained rows of the previous search stay visible but cannot be acted on.
+      await waitFor(() =>
+        expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+          "aria-disabled",
+          "true",
+        ),
+      );
+      appliedSearch.resolve();
+      await waitFor(() =>
+        expect(screen.getByRole("link", { name: /の開催詳細$/u })).toHaveAttribute(
+          "href",
+          "/held-events/held-applied",
+        ),
+      );
+      expect(screen.getByRole("button", { name: "検索条件（2）" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "誰か の1位の回数 2回以上 を解除" }),
+      ).toBeInTheDocument();
+    });
   });
 });

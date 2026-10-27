@@ -102,12 +102,12 @@ object MatchListCodec:
       record <- parseRecord(params)
     yield MatchListSearchCriteria(mapMasterId, from, to, noteQuery, record)
 
-  private def parseDate(field: String, raw: String): Either[AppError, LocalDate] =
+  private[codec] def parseDate(field: String, raw: String): Either[AppError, LocalDate] =
     val invalid = AppError.ValidationFailed(s"$field must be a date in YYYY-MM-DD format.")
     if IsoDate.matches(raw) then Try(LocalDate.parse(raw)).toEither.leftMap(_ => invalid)
     else Left(invalid)
 
-  private def parseNoteQuery(raw: Option[String]): Either[AppError, Option[String]] =
+  private[codec] def parseNoteQuery(raw: Option[String]): Either[AppError, Option[String]] =
     raw.map(_.dropWhile(isQueryWhitespace).reverse.dropWhile(isQueryWhitespace).reverse)
       .filter(_.nonEmpty).traverse { query =>
         if query.codePointCount(0, query.length) > MatchListSearchCriteria.NoteQueryMaxCodePoints

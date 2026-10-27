@@ -3,17 +3,11 @@ import type {
   MatchListFilterCandidates,
   MatchListRecord,
   MatchListRecordCondition,
-  MatchListRecordRange,
   MatchListSearch,
-  MatchListSort,
 } from "@/features/matches/list/matchListTypes";
-import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
+import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
-
-export const matchListSortOptions: Array<{ label: string; value: MatchListSort }> = [
-  { label: "開催が新しい順", value: "held_desc" },
-  { label: "開催が古い順", value: "held_asc" },
-];
+import { describeSearchPeriod, describeSearchScope } from "@/shared/matches/matchSearchConditions";
 
 const recordNames: Record<MatchListRecord, string> = {
   destination: "目的地",
@@ -41,21 +35,6 @@ export const matchListRecordOptions = Object.keys(recordNames)
     value,
   }));
 
-export const matchListRangeOptions: Array<{ label: string; value: MatchListRecordRange }> = [
-  { label: "以上", value: "gte" },
-  { label: "以下", value: "lte" },
-];
-
-export const matchListAnyMemberLabel = "4人のうち誰か";
-
-export const matchListMemberOptions = [
-  { label: matchListAnyMemberLabel, value: "" },
-  ...canonicalResultMembers.map((member) => ({
-    label: member.displayName,
-    value: member.memberId,
-  })),
-];
-
 /** Incidents are non-negative counts; money is an integer amount in 万円. */
 export function parseMatchListRecordValue(
   record: MatchListRecord,
@@ -73,18 +52,6 @@ export function isCompleteMatchListRecord(
     condition.record !== "" &&
     parseMatchListRecordValue(condition.record, condition.value) !== undefined
   );
-}
-
-export function isMatchListDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-export function matchListPeriodError(from: string, to: string): string | undefined {
-  return from && to && isMatchListDate(from) && isMatchListDate(to) && from > to
-    ? "終了日は開始日以降にしてください。"
-    : undefined;
 }
 
 export function matchListRecordError(condition: MatchListRecordCondition): string | undefined {
@@ -113,17 +80,6 @@ export function describeMatchListRecord(condition: MatchListRecordCondition): st
   return `${member} の ${recordNames[condition.record]} ${amount}${range}`;
 }
 
-function formatPeriodDate(value: string): string {
-  return value.replaceAll("-", "/");
-}
-
-function describePeriod(from: string, to: string): string | undefined {
-  if (from && to) return `期間 ${formatPeriodDate(from)}〜${formatPeriodDate(to)}`;
-  if (from) return `期間 ${formatPeriodDate(from)}以降`;
-  if (to) return `期間 ${formatPeriodDate(to)}以前`;
-  return undefined;
-}
-
 export type MatchListConditionScope = "all" | "details";
 
 /**
@@ -135,25 +91,12 @@ export function describeMatchListConditions(
   search: MatchListSearch,
   scope: MatchListConditionScope,
 ): MatchListAppliedCondition[] {
-  const gameTitle = candidates.gameTitles.find((item) => item.id === search.gameTitleId);
-  const season = candidates.seasons.find((item) => item.id === search.seasonMasterId);
-  const map = candidates.maps.find((item) => item.id === search.mapMasterId);
   const heldEvent = candidates.heldEvents.find((item) => item.id === search.heldEventId);
-  const period = describePeriod(search.from, search.to);
+  const period = describeSearchPeriod(search.from, search.to);
   const record = describeMatchListRecord(search.record);
 
-  const primary: Array<MatchListAppliedCondition | undefined> =
-    scope === "all"
-      ? [
-          search.gameTitleId
-            ? { key: "gameTitle", label: `作品 ${gameTitle?.name ?? "選択中"}` }
-            : undefined,
-          search.seasonMasterId
-            ? { key: "season", label: `シーズン ${season?.name ?? "選択中"}` }
-            : undefined,
-          search.mapMasterId ? { key: "map", label: `マップ ${map?.name ?? "選択中"}` } : undefined,
-        ]
-      : [];
+  const primary: MatchListAppliedCondition[] =
+    scope === "all" ? describeSearchScope(candidates, search) : [];
 
   return [
     ...primary,

@@ -2,24 +2,21 @@ import { useState } from "react";
 
 import {
   MatchListHeldEventField,
-  MatchListMemoField,
-  MatchListPeriodFields,
   MatchListRecordFields,
-  MatchListScopeFields,
 } from "@/features/matches/list/MatchListConditionFields";
-import {
-  matchListPeriodError,
-  matchListRecordError,
-} from "@/features/matches/list/matchListConditions";
-import {
-  hasMatchListConditions,
-  normalizeMatchListMemoQuery,
-} from "@/features/matches/list/matchListSearchParams";
+import { matchListRecordError } from "@/features/matches/list/matchListConditions";
+import { hasMatchListConditions } from "@/features/matches/list/matchListSearchParams";
 import { clearMatchListConditions } from "@/features/matches/list/matchListSelection";
 import type {
   MatchListFilterCandidates,
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
+import { normalizeMatchNoteQuery, searchPeriodError } from "@/shared/matches/matchSearchConditions";
+import {
+  MatchNoteQueryField,
+  MatchSearchScopeFields,
+  SearchPeriodFields,
+} from "@/shared/matches/MatchSearchFields";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 
@@ -47,7 +44,7 @@ export function MatchListSearchSheet({
   const draft = session.open === open ? session.draft : search;
   const setDraft = (next: MatchListSearch) => setSession({ draft: next, open });
   const invalid =
-    matchListPeriodError(draft.from, draft.to) !== undefined ||
+    searchPeriodError(draft.from, draft.to) !== undefined ||
     matchListRecordError(draft.record) !== undefined;
 
   return (
@@ -77,7 +74,7 @@ export function MatchListSearchSheet({
         onSubmit={(event) => {
           event.preventDefault();
           if (invalid) return;
-          onApply({ ...draft, q: normalizeMatchListMemoQuery(draft.q) });
+          onApply({ ...draft, q: normalizeMatchNoteQuery(draft.q) });
         }}
       >
         <SearchSheetFields candidates={candidates} draft={draft} onChange={setDraft} />
@@ -100,7 +97,7 @@ function SearchSheetFields({
   return (
     <>
       <div className="grid grid-cols-2 gap-3 [&>*:first-child]:col-span-2 [&>*:last-child]:col-span-2">
-        <MatchListScopeFields
+        <MatchSearchScopeFields
           candidates={candidates}
           gameTitleId={draft.gameTitleId}
           mapMasterId={draft.mapMasterId}
@@ -124,13 +121,13 @@ function SearchSheetFields({
         value={draft.heldEventId}
         onChange={(heldEventId) => patch({ heldEventId })}
       />
-      <MatchListPeriodFields
+      <SearchPeriodFields
         from={draft.from}
         layout="grid"
         to={draft.to}
         onChange={(period) => patch(period)}
       />
-      <MatchListMemoField value={draft.q} onChange={(q) => patch({ q })} />
+      <MatchNoteQueryField value={draft.q} onChange={(q) => patch({ q })} />
       <MatchListRecordFields
         layout="grid"
         value={draft.record}

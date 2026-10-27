@@ -3,22 +3,22 @@ import { useState } from "react";
 
 import {
   MatchListHeldEventField,
-  MatchListMemoField,
-  MatchListPeriodFields,
   MatchListRecordFields,
-  MatchListScopeFields,
 } from "@/features/matches/list/MatchListConditionFields";
-import {
-  isCompleteMatchListRecord,
-  matchListPeriodError,
-} from "@/features/matches/list/matchListConditions";
-import { normalizeMatchListMemoQuery } from "@/features/matches/list/matchListSearchParams";
+import { isCompleteMatchListRecord } from "@/features/matches/list/matchListConditions";
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
   MatchListRecordCondition,
   MatchListSearch,
 } from "@/features/matches/list/matchListTypes";
+import { useCommittedDraft } from "@/shared/lib/useCommittedDraft";
+import { normalizeMatchNoteQuery, searchPeriodError } from "@/shared/matches/matchSearchConditions";
+import {
+  MatchNoteQueryField,
+  MatchSearchScopeFields,
+  SearchPeriodFields,
+} from "@/shared/matches/MatchSearchFields";
 import { Button } from "@/shared/ui/actions/Button";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
 
@@ -29,20 +29,6 @@ type MatchesFilterBarProps = {
   pending?: boolean | undefined;
   search: MatchListSearch;
 };
-
-/**
- * Keeps an editable copy of a URL-owned value. A new committed value (chip removal, back/forward)
- * replaces the copy without remounting the input, so focus stays where the reader left it.
- */
-function useCommittedDraft<T>(committed: T, signature: (value: T) => string) {
-  const [state, setState] = useState({ committedKey: signature(committed), draft: committed });
-  const committedKey = signature(committed);
-  if (state.committedKey !== committedKey) {
-    setState({ committedKey, draft: committed });
-  }
-  const draft = state.committedKey === committedKey ? state.draft : committed;
-  return [draft, (next: T) => setState({ committedKey, draft: next })] as const;
-}
 
 const recordSignature = (condition: MatchListRecordCondition) => JSON.stringify(condition);
 
@@ -68,7 +54,7 @@ export function MatchesFilterBar({
   const [record, setRecord] = useCommittedDraft(search.record, recordSignature);
 
   const commitMemo = () => {
-    const q = normalizeMatchListMemoQuery(memo);
+    const q = normalizeMatchNoteQuery(memo);
     if (q !== search.q) actions.onChange({ kind: "memo", q });
   };
   const commitRecord = (condition: MatchListRecordCondition) => {
@@ -96,19 +82,19 @@ export function MatchesFilterBar({
                   onChange={(heldEventId) => actions.onChange({ kind: "heldEvent", heldEventId })}
                 />
               </div>
-              <MatchListPeriodFields
+              <SearchPeriodFields
                 from={period.from}
                 to={period.to}
                 onChange={(next) => {
                   setPeriod(next);
-                  if (!matchListPeriodError(next.from, next.to)) {
+                  if (!searchPeriodError(next.from, next.to)) {
                     actions.onChange({ kind: "period", ...next });
                   }
                 }}
               />
             </div>
             <div className="w-full max-w-[34rem] min-w-0">
-              <MatchListMemoField value={memo} onChange={setMemo} onCommit={commitMemo} />
+              <MatchNoteQueryField value={memo} onChange={setMemo} onCommit={commitMemo} />
             </div>
             <MatchListRecordFields value={record} onChange={setRecord} onCommit={commitRecord} />
           </div>
@@ -124,7 +110,7 @@ export function MatchesFilterBar({
       }}
       primary={
         <div className="grid min-w-0 grid-cols-4 items-start gap-4">
-          <MatchListScopeFields
+          <MatchSearchScopeFields
             candidates={candidates}
             gameTitleId={search.gameTitleId}
             mapMasterId={search.mapMasterId}

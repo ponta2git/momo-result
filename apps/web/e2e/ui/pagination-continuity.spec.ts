@@ -18,6 +18,7 @@ const heldEvents: Array<components["schemas"]["HeldEventSummaryResponse"]> = Arr
 );
 const firstHeldEvent = heldEvents[0];
 if (!firstHeldEvent) throw new Error("pagination continuity requires a held-event fixture");
+const latestHeldEventId = firstHeldEvent.id;
 
 async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Promise<void> {
   await page.route(/\/api\/held-events(?:\?.*)?$/u, async (route) => {
@@ -29,6 +30,7 @@ async function installHeldEventDirectory(page: Page, pageTwoGate: Deferred): Pro
     await route.fulfill({
       json: {
         items: heldEvents.slice(offset, offset + pageSize),
+        latestHeldEventId,
         pagination: {
           hasNextPage: pageNumber * pageSize < heldEvents.length,
           hasPreviousPage: pageNumber > 1,
@@ -91,8 +93,8 @@ test("keeps held-event rows visible and blocks stale actions while the next page
   await expect(visibleEventLink).toBeVisible();
 
   await nextPage.click();
-  await expect(history.getByRole("button", { name: "更新中…", exact: true })).toBeDisabled();
-  await expect(history.getByRole("status")).toHaveCount(0);
+  await expect(history.getByRole("button", { name: "一覧を更新中", exact: true })).toBeDisabled();
+  await expect(history.getByRole("status")).toHaveText("一覧を更新中");
   await expect(history.getByLabel("開催履歴を読み込み中")).toHaveCount(0);
   await expect(visibleEventLink).toBeVisible();
   await expect(visibleEventLink).toHaveAttribute("aria-disabled", "true");
@@ -102,11 +104,11 @@ test("keeps held-event rows visible and blocks stale actions while the next page
 
   pageTwoGate.resolve();
   await expect(page.getByText("2／5")).toBeVisible();
-  await expect(history.getByRole("button", { name: "更新", exact: true })).toBeEnabled();
+  await expect(history.getByRole("button", { name: "最新情報に更新", exact: true })).toBeEnabled();
   await expect(visibleEventLink).toHaveAttribute("href", "/held-events/held-continuity-11");
   await expect(nextPage).toBeEnabled();
   await expect(nextPage).toBeFocused();
-  await expect(history.getByRole("status")).toHaveCount(0);
+  await expect(history.getByRole("status")).toHaveText("");
 });
 
 test("keeps export choices usable and restores paging focus on mobile", async ({ page }) => {

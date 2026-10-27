@@ -10,5 +10,10 @@ export type {
   PlayerResultResponse,
   IncidentCountsResponse,
 } from "@/test/factories/matchDetail";
-export { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories/heldEvents";
+export {
+  makeHeldEventDetailResponse,
+  makeHeldEventListItem,
+  makeHeldEventListPlayerResults,
+  makeHeldEventResponse,
+} from "@/test/factories/heldEvents";
 export { makeMatchDraftSourceImageResponses } from "@/test/factories/sourceImages";

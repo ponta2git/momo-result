@@ -1,47 +1,72 @@
-import { useCallback, useEffect, useMemo } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
 
-import {
-  changeHeldEventsPagination,
-  heldEventsPaginationParams,
-  readHeldEventsPagination,
-} from "@/features/heldEvents/list/heldEventsListPresentation";
-import type { HeldEventsPagination } from "@/features/heldEvents/list/heldEventsListPresentation";
+import type {
+  HeldEventListFilterActions,
+  HeldEventListFilterCandidates,
+  HeldEventListSearch,
+} from "@/features/heldEvents/list/heldEventListTypes";
+import { useHeldEventListSelection } from "@/features/heldEvents/list/useHeldEventListSelection";
 import { useHeldEventsListResource } from "@/features/heldEvents/list/useHeldEventsListResource";
+import type { HeldEventsListResource } from "@/features/heldEvents/list/useHeldEventsListResource";
+import type { PaginationState } from "@/shared/lib/pagination";
 
-/** Owns list navigation and its read snapshot, including server-confirmed page correction. */
-export function useHeldEventsList() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const requested = useMemo(() => readHeldEventsPagination(searchParams), [searchParams]);
-  const resource = useHeldEventsListResource(requested, searchParams.toString());
-  const updatePagination = useCallback(
-    (next: HeldEventsPagination) => {
-      void navigate({ search: heldEventsPaginationParams(next).toString(), hash: location.hash });
-    },
-    [location.hash, navigate],
-  );
+export type HeldEventsListView = {
+  filters: {
+    actions: HeldEventListFilterActions;
+    candidates: HeldEventListFilterCandidates;
+    hasConditions: boolean;
+    loadFailed: boolean;
+    pending: boolean;
+    refresh: { pending: boolean; run: () => void };
+    search: HeldEventListSearch;
+  };
+  list: Omit<HeldEventsListResource["list"], "pagination"> & {
+    pagination:
+      | {
+          changePage: (page: number) => void;
+          changePageSize: (pageSize: number) => void;
+          value: PaginationState;
+        }
+      | undefined;
+  };
+  refresh: HeldEventsListResource["refresh"];
+};
+
+/** Composes URL selection, the list read, and server-confirmed page correction. */
+export function useHeldEventsList(): HeldEventsListView {
+  const selection = useHeldEventListSelection();
+  const resource = useHeldEventsListResource({
+    currentSearch: selection.current,
+    deferredSearch: selection.deferred,
+    locationSettling: selection.settling,
+  });
+  const { change } = selection;
   const { correctionPage } = resource;
   useEffect(() => {
-    if (correctionPage !== undefined) {
-      updatePagination({ ...requested, page: correctionPage });
-    }
-  }, [correctionPage, requested, updatePagination]);
-  const updatePage = useCallback(
-    (page: number) =>
-      updatePagination(changeHeldEventsPagination(requested, { kind: "page", page })),
-    [requested, updatePagination],
-  );
-  const updatePageSize = useCallback(
-    (pageSize: number) =>
-      updatePagination(changeHeldEventsPagination(requested, { kind: "pageSize", pageSize })),
-    [requested, updatePagination],
-  );
+    if (correctionPage !== undefined) change({ kind: "page", page: correctionPage });
+  }, [change, correctionPage]);
+
+  const paginationValue = resource.list.pagination;
   return {
-    snapshot: resource.snapshot,
+    filters: {
+      actions: { onChange: change, onClear: selection.clear },
+      candidates: resource.filters.candidates,
+      hasConditions: selection.hasConditions,
+      loadFailed: resource.filters.loadFailed,
+      pending: resource.list.scopeChanging,
+      refresh: resource.filters.refresh,
+      search: selection.current,
+    },
+    list: {
+      ...resource.list,
+      pagination: paginationValue
+        ? {
+            changePage: (page: number) => change({ kind: "page", page }),
+            changePageSize: (pageSize: number) => change({ kind: "pageSize", pageSize }),
+            value: paginationValue,
+          }
+        : undefined,
+    },
     refresh: resource.refresh,
-    updatePage,
-    updatePageSize,
-  } as const;
+  };
 }

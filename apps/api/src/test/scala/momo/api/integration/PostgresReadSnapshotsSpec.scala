@@ -12,7 +12,13 @@ import momo.api.adapters.postgres.{
 }
 import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.ids.{GameTitleId, HeldEventId}
-import momo.api.domain.{GameTitle, HeldEvent, PageRequest}
+import momo.api.domain.{
+  GameTitle,
+  HeldEvent,
+  HeldEventListSearchCriteria,
+  HeldEventListSort,
+  PageRequest
+}
 
 final class PostgresReadSnapshotsSpec extends IntegrationSuite:
   private val now = Instant.parse("2026-09-01T00:00:00Z")
@@ -24,7 +30,11 @@ final class PostgresReadSnapshotsSpec extends IntegrationSuite:
       _ <- PostgresHeldEventsRepository[IO](transactor).create(earlier)
       _ <- PostgresHeldEventsRepository[IO](transactor).create(later)
       page <- assertReadSnapshot(xa =>
-        PostgresHeldEventListReadModel[IO](xa).list(None, PageRequest(1, 1)).map(_.page)
+        PostgresHeldEventListReadModel[IO](xa).list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(1, 1)
+        ).map(_.page)
       )
     yield
       assertEquals(page.totalItems, 2)

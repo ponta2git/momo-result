@@ -10,8 +10,8 @@ import {
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
-  buildHeldEventListSearchParams,
   hasHeldEventListConditions,
+  heldEventListSearchSignature,
   parseHeldEventListSearchParams,
 } from "@/features/heldEvents/list/heldEventListSearchParams";
 import {
@@ -29,10 +29,6 @@ export type HeldEventListSelection = {
   hasConditions: boolean;
   settling: boolean;
 };
-
-export function heldEventListSearchSignature(search: HeldEventListSearch): string {
-  return buildHeldEventListSearchParams(search).toString();
-}
 
 /** Owns parsing, canonical serialization, optimistic display, and updates for the list URL. */
 export function useHeldEventListSelection(): HeldEventListSelection {
@@ -55,10 +51,12 @@ export function useHeldEventListSelection(): HeldEventListSelection {
 
   const navigateToSearch = useCallback(
     (nextSearch: HeldEventListSearch) => {
+      const nextSignature = heldEventListSearchSignature(nextSearch);
+      if (nextSignature === heldEventListSearchSignature(latestSearchRef.current)) return;
       latestSearchRef.current = nextSearch;
       startTransition(async () => {
         setOptimisticSearch(nextSearch);
-        await navigate({ search: heldEventListSearchSignature(nextSearch), hash });
+        await navigate({ search: nextSignature, hash });
       });
     },
     [hash, navigate, setOptimisticSearch],

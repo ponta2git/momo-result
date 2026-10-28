@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { buildHeldEventListApiQuery } from "@/features/heldEvents/list/heldEventListQuery";
+import { heldEventListSearchSignature } from "@/features/heldEvents/list/heldEventListSearchParams";
 import type {
   HeldEventListFilterCandidates,
   HeldEventListSearch,
@@ -12,7 +13,6 @@ import {
   toHeldEventListRows,
 } from "@/features/heldEvents/list/heldEventsListPresentation";
 import type { HeldEventListRowView } from "@/features/heldEvents/list/heldEventsListPresentation";
-import { heldEventListSearchSignature } from "@/features/heldEvents/list/useHeldEventListSelection";
 import {
   isInitialQueryLoading,
   shouldShowBlockingQueryError,

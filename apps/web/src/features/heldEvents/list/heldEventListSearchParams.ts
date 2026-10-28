@@ -104,6 +104,10 @@ export function buildHeldEventListSearchParams(search: HeldEventListSearch): URL
   return params;
 }
 
+export function heldEventListSearchSignature(search: HeldEventListSearch): string {
+  return buildHeldEventListSearchParams(search).toString();
+}
+
 /** Conditions narrow the result set; sort and paging do not. */
 export function hasHeldEventListConditions(search: HeldEventListSearch): boolean {
   return (

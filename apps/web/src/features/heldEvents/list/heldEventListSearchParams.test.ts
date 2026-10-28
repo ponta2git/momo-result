@@ -7,6 +7,7 @@ import {
   defaultHeldEventListSearch,
   emptyHeldEventListMetricCondition,
   hasHeldEventListConditions,
+  heldEventListSearchSignature,
   parseHeldEventListSearchParams,
 } from "@/features/heldEvents/list/heldEventListSearchParams";
 
@@ -74,6 +75,32 @@ describe("heldEventListSearchParams", () => {
       range: "gte",
       value: "3",
     });
+  });
+
+  it("shares one URL and request for equivalent average-rank values", () => {
+    const searches = ["2", "2.0", "2.00"].map((value) => ({
+      ...defaultHeldEventListSearch,
+      metric: {
+        memberId: "",
+        metric: "average_rank" as const,
+        range: "gte" as const,
+        value,
+      },
+    }));
+
+    for (const search of searches) {
+      expect(heldEventListSearchSignature(search)).toBe("metric=average_rank&metricValue=2");
+      expect(buildHeldEventListApiQuery(search)).toEqual({
+        metric: "average_rank",
+        metricRange: "gte",
+        metricValue: "2",
+        page: 1,
+        pageSize: 10,
+      });
+      expect(
+        parseHeldEventListSearchParams(buildHeldEventListSearchParams(search)).metric.value,
+      ).toBe("2");
+    }
   });
 
   it("drops memo queries above the API bound", () => {

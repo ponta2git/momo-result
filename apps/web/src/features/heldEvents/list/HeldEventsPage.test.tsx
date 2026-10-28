@@ -988,6 +988,29 @@ describe("HeldEventsPage", () => {
   });
 
   describe("on a narrow screen", () => {
+    it("clears an invalid metric draft and resumes searching without the condition", async () => {
+      matchMedia = installMatchMediaController(false);
+      renderPage("/held-events?metric=rank1_count&metricValue=2");
+
+      await user.click(await screen.findByRole("button", { name: "検索条件（1）" }));
+      const dialog = await screen.findByRole("dialog", { name: "検索条件" });
+      const value = within(dialog).getByLabelText("値");
+      await user.clear(value);
+      await user.type(value, "1.5");
+      const submit = within(dialog).getByRole("button", { name: "この条件で検索" });
+      expect(submit).toBeDisabled();
+      const clear = within(dialog).getByRole("button", { name: "条件をすべて解除" });
+      expect(clear).toBeEnabled();
+
+      await user.click(clear);
+      expect(value).toHaveValue("");
+      expect(submit).toBeEnabled();
+      await user.click(submit);
+
+      await waitFor(() => expect(location()).toHaveTextContent(/^\/held-events$/u));
+      expect(screen.queryByRole("list", { name: "適用中の条件" })).not.toBeInTheDocument();
+    });
+
     it("edits every condition in the sheet and searches only when applied", async () => {
       matchMedia = installMatchMediaController(false);
       const requests: URLSearchParams[] = [];

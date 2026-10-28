@@ -52,7 +52,7 @@ export function parseHeldEventListMetricValue(
   if (metric === "average_rank") {
     if (!/^\d(?:\.\d{1,2})?$/u.test(trimmed)) return undefined;
     const average = Number(trimmed);
-    return average >= 1 && average <= 4 ? trimmed : undefined;
+    return average >= 1 && average <= 4 ? String(average) : undefined;
   }
   return /^\d{1,9}$/u.test(trimmed) ? String(Number(trimmed)) : undefined;
 }

@@ -43,13 +43,19 @@ export function HeldEventListSearchSheet({
   const invalid =
     searchPeriodError(draft.from, draft.to) !== undefined ||
     heldEventListMetricError(draft.metric) !== undefined;
+  // A partly edited or invalid metric is still input the reader needs to be able to discard.
+  const canClear =
+    hasHeldEventListConditions(draft) ||
+    draft.metric.metric !== "" ||
+    draft.metric.memberId !== "" ||
+    draft.metric.value !== "";
 
   return (
     <Dialog
       footer={
         <DialogFooter>
           <Button
-            disabled={!hasHeldEventListConditions(draft)}
+            disabled={!canClear}
             size="sm"
             variant="quiet"
             onClick={() => setDraft(clearHeldEventListConditions(draft))}

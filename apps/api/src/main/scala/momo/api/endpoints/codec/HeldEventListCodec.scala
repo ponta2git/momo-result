@@ -62,13 +62,7 @@ object HeldEventListCodec:
       seasonMasterId <- BoundaryId
         .optional("seasonMasterId", params.seasonMasterId)(SeasonMasterId.fromString)
       mapMasterId <- BoundaryId.optional("mapMasterId", params.mapMasterId)(MapMasterId.fromString)
-      from <- params.from.traverse(MatchListCodec.parseDate("from", _))
-      to <- params.to.traverse(MatchListCodec.parseDate("to", _))
-      _ <- Either.cond(
-        (from, to).tupled.forall { case (start, end) => !start.isAfter(end) },
-        (),
-        AppError.ValidationFailed("from must be on or before to."),
-      )
+      (from, to) <- ListSearchCodec.parseDateRange(params.from, params.to)
       minMatchCount <- params.minMatchCount.traverse(value =>
         Either.cond(
           value >= 1,
@@ -76,7 +70,7 @@ object HeldEventListCodec:
           AppError.ValidationFailed("minMatchCount must be 1 or greater.")
         )
       )
-      noteQuery <- MatchListCodec.parseNoteQuery(params.q)
+      noteQuery <- ListSearchCodec.parseNoteQuery(params.q)
       metric <- parseMetric(params)
     yield HeldEventListSearchCriteria(
       gameTitleId = gameTitleId,

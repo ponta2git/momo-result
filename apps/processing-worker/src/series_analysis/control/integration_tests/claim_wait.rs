@@ -150,6 +150,7 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
     assert_eq!(row.try_get::<_, i32>(1)?, 1);
     reset_queued_job(&client).await?;
     cleanup_database(&client).await?;
+    super::finalization::verify(&database_url, &client).await?;
     Ok(())
 }
 

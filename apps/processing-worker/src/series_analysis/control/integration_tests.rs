@@ -36,6 +36,7 @@ type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 mod achievements;
 mod claim_wait;
 mod fencing;
+mod finalization;
 mod heartbeat;
 mod notifications;
 mod radar;

@@ -74,6 +74,7 @@ const EXPIRED_ANALYSIS_WORKER_ID: &str = "c2-smoke-analysis-recovery-worker";
 const EXPIRED_ANALYSIS_FENCE: i64 = 2_000_001;
 
 mod claim_shutdown;
+mod finalization;
 
 struct Fixture {
     job_id: &'static str,
@@ -94,6 +95,7 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
     verify_stale_maintenance(&mut primary).await?;
     prepare_database(&primary).await?;
     claim_shutdown::verify(&database_url, &primary).await?;
+    finalization::verify(&database_url, &mut primary).await?;
     prepare_database(&primary).await?;
     for fixture in [
         &TAKEOVER,

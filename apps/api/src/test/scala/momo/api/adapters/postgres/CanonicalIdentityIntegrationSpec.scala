@@ -783,6 +783,55 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       )
       assertEquals(document(detail).hcursor.downField("afterBasis").focus, Some(fixture("basis")))
 
+  test("canonical source-image scans page by wire aliases within a fixed cutoff"):
+    val updatedAt = now.minusSeconds(60)
+    val first = ImageId.unsafeFromString("canonical-source-a")
+    val second = ImageId.unsafeFromString("canonical-source-b")
+    val newer = ImageId.unsafeFromString("canonical-source-c")
+    val owner = canonical(Entity.Accounts, account.value)
+    val repository = PostgresSourceImagesRepository[IO](transactor, identities)
+    // Storage UUID order is intentionally opposite the public alias order.
+    val rows = List(
+      (UUID.fromString("00000000-0000-4000-8000-000000000003"), first, updatedAt),
+      (UUID.fromString("00000000-0000-4000-8000-000000000002"), second, updatedAt),
+      (UUID.fromString("00000000-0000-4000-8000-000000000001"), newer, now.plusSeconds(1)),
+    )
+
+    def assertPages(
+        load: Option[SourceImageScanCursor] => IO[List[SourceImageRecord]]
+    ): IO[Unit] =
+      for
+        firstPage <- load(None)
+        _ = assertEquals(firstPage.map(row => row.id -> row.updatedAt), List(first -> updatedAt))
+        secondPage <- load(firstPage.lastOption.map(row =>
+          SourceImageScanCursor(row.updatedAt, row.id)
+        ))
+        _ = assertEquals(secondPage.map(row => row.id -> row.updatedAt), List(second -> updatedAt))
+        finished <- load(secondPage.lastOption.map(row =>
+          SourceImageScanCursor(row.updatedAt, row.id)
+        ))
+      yield assertEquals(finished, Nil)
+
+    for
+      _ <- rows.traverse_ { case (id, alias, at) =>
+        sql"""
+          INSERT INTO source_images (
+            id, legacy_id, owner_account_id, object_key, idempotency_key_hash, status,
+            media_type, byte_length, sha256_hex, width, height, created_at, updated_at
+          ) VALUES (
+            $id, ${alias.value}, $owner, ${s"source-images/${alias.value}.png"},
+            md5(${alias.value}) || md5(${alias.value}), 'RESERVED',
+            'image/png', 128, repeat('b', 64), 1, 1, $at, $at
+          )
+        """.update.run.transact(transactor)
+      }
+      _ <- assertPages(after => repository.reconciliationCandidates(now, 1, after))
+      _ <- rows.traverse_ { case (_, alias, at) =>
+        repository.markAvailable(alias, None, at).map(marked => assert(marked))
+      }
+      _ <- assertPages(after => repository.orphanCandidates(now, 1, after))
+    yield ()
+
   test(
     "canonical OCR admission preserves opaque image IDs and retained draft-job pairs through cancellation"
   ):

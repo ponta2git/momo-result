@@ -1,9 +1,10 @@
 import { Download } from "lucide-react";
-import { Fragment, memo } from "react";
+import { memo } from "react";
 import { Link } from "react-router-dom";
 
 import { formatCompactDateTime } from "@/features/matches/list/matchListFormat";
 import type { MatchListItemView } from "@/features/matches/list/matchListTypes";
+import { MatchNoteExcerpt } from "@/shared/matches/MatchNoteExcerpt";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
@@ -12,56 +13,6 @@ import { contentText } from "@/shared/ui/typography";
 
 const titleLinkClass =
   "underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current";
-
-/** Splits on the searched words, ignoring case, so each occurrence can be marked. */
-function splitMemoHighlights(text: string, query: string) {
-  if (!query) return [{ match: false, text }];
-  // Match against the original text: lowercasing can change Unicode string lengths.
-  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu");
-  const parts: Array<{ match: boolean; text: string }> = [];
-  let start = 0;
-  for (const match of text.matchAll(pattern)) {
-    const index = match.index;
-    if (index > start) parts.push({ match: false, text: text.slice(start, index) });
-    parts.push({ match: true, text: match[0] });
-    start = index + match[0].length;
-  }
-  if (start < text.length) parts.push({ match: false, text: text.slice(start) });
-  return parts;
-}
-
-function MemoText({
-  compact = false,
-  memoQuery,
-  text,
-}: {
-  compact?: boolean;
-  memoQuery: string;
-  text: string;
-}) {
-  return (
-    <p
-      className={cn(
-        compact ? contentText.supporting : contentText.body,
-        "line-clamp-2 whitespace-pre-line text-pretty",
-      )}
-    >
-      {splitMemoHighlights(text, memoQuery).map((part, index) => (
-        // Parts never reorder for one text; the index is stable.
-        // oxlint-disable-next-line react/no-array-index-key
-        <Fragment key={index}>
-          {part.match ? (
-            <mark className="rounded-xs bg-[var(--color-search-match-surface)] px-0.5 text-[var(--color-text-primary)]">
-              {part.text}
-            </mark>
-          ) : (
-            part.text
-          )}
-        </Fragment>
-      ))}
-    </p>
-  );
-}
 
 function MatchTitle({ item }: { item: MatchListItemView }) {
   return (
@@ -142,7 +93,7 @@ export const MatchesTable = memo(function MatchesTable({
           key: "memo",
           renderCell: (item) =>
             item.noteBody ? (
-              <MemoText memoQuery={memoQuery} text={item.noteBody} />
+              <MatchNoteExcerpt memoQuery={memoQuery} text={item.noteBody} />
             ) : (
               <span className={contentText.supporting}>
                 <span aria-hidden="true">—</span>
@@ -192,7 +143,7 @@ export const MatchListCompactRows = memo(function MatchListCompactRows({
           <RankList compact item={item} />
           <div className="flex min-w-0 items-end justify-between gap-2">
             {item.noteBody ? (
-              <MemoText compact memoQuery={memoQuery} text={item.noteBody} />
+              <MatchNoteExcerpt compact memoQuery={memoQuery} text={item.noteBody} />
             ) : (
               <span />
             )}

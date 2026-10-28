@@ -1,15 +1,18 @@
 import {
   isCompleteMatchListRecord,
-  isMatchListDate,
   isMatchListRecord,
 } from "@/features/matches/list/matchListConditions";
 import type {
   MatchListRecordCondition,
   MatchListSearch,
-  MatchListSort,
 } from "@/features/matches/list/matchListTypes";
 import { isFixedMemberId } from "@/shared/domain/members";
 import { parsePositiveIntSearchParam, trimSearchParam } from "@/shared/lib/searchParams";
+import {
+  parseHeldOrderSort,
+  parseMatchNoteQuery,
+  parseSearchPeriod,
+} from "@/shared/matches/matchSearchConditions";
 
 export const emptyMatchListRecordCondition: MatchListRecordCondition = {
   memberId: "",
@@ -32,31 +35,9 @@ export const defaultMatchListSearch: MatchListSearch = {
   to: "",
 };
 
-/** The API rejects longer memo queries; the input enforces the same bound. */
-export const matchListMemoQueryMaxLength = 50;
-
 export const matchListPageSizeOptions = [25, 50, 100] as const;
 
 const pageSizeOptions = new Set<number>(matchListPageSizeOptions);
-const sortOptions = new Set<MatchListSort>(["held_desc", "held_asc"]);
-export function normalizeMatchListMemoQuery(value: string): string {
-  return value.trim();
-}
-
-function parseMemoQuery(value: string | null): string {
-  const q = normalizeMatchListMemoQuery(value ?? "");
-  return [...q].length <= matchListMemoQueryMaxLength ? q : "";
-}
-
-function parsePeriod(searchParams: URLSearchParams): { from: string; to: string } {
-  const from = searchParams.get("from") ?? "";
-  const to = searchParams.get("to") ?? "";
-  const validFrom = isMatchListDate(from) ? from : "";
-  const validTo = isMatchListDate(to) ? to : "";
-  return validFrom && validTo && validFrom > validTo
-    ? { from: "", to: "" }
-    : { from: validFrom, to: validTo };
-}
 
 function parseRecord(searchParams: URLSearchParams): MatchListRecordCondition {
   const record = searchParams.get("record") ?? "";
@@ -74,7 +55,6 @@ function parseRecord(searchParams: URLSearchParams): MatchListRecordCondition {
 }
 
 export function parseMatchListSearchParams(searchParams: URLSearchParams): MatchListSearch {
-  const sort = searchParams.get("sort");
   const pageSize = parsePositiveIntSearchParam(
     searchParams.get("pageSize"),
     defaultMatchListSearch.pageSize,
@@ -82,18 +62,15 @@ export function parseMatchListSearchParams(searchParams: URLSearchParams): Match
 
   return {
     cursor: parseCursor(searchParams.get("cursor")),
-    ...parsePeriod(searchParams),
+    ...parseSearchPeriod(searchParams),
     gameTitleId: trimSearchParam(searchParams.get("gameTitleId")) ?? "",
     heldEventId: trimSearchParam(searchParams.get("heldEventId")) ?? "",
     mapMasterId: trimSearchParam(searchParams.get("mapMasterId")) ?? "",
     pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultMatchListSearch.pageSize,
-    q: parseMemoQuery(searchParams.get("q")),
+    q: parseMatchNoteQuery(searchParams.get("q")),
     record: parseRecord(searchParams),
     seasonMasterId: trimSearchParam(searchParams.get("seasonMasterId")) ?? "",
-    sort:
-      sort && sortOptions.has(sort as MatchListSort)
-        ? (sort as MatchListSort)
-        : defaultMatchListSearch.sort,
+    sort: parseHeldOrderSort(searchParams.get("sort")),
   };
 }
 

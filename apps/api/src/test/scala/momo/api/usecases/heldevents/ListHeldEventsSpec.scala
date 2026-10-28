@@ -17,6 +17,8 @@ import momo.api.domain.ids.*
 import momo.api.domain.{
   GameTitle,
   HeldEvent,
+  HeldEventListSearchCriteria,
+  HeldEventListSort,
   MatchDraft,
   MatchDraftCommon,
   MatchDraftStatus,
@@ -74,7 +76,13 @@ final class ListHeldEventsSpec extends CatsEffectSuite:
       _ <- drafts.create(activeDraft(1, None, None))
       result <-
         ListHeldEvents[IO](InMemoryHeldEventListReadModel(events, matches, drafts, titles, seasons))
-          .run(None, None, None, None)
+          .run(ListHeldEventsCommand(
+            limit = None,
+            page = None,
+            pageSize = None,
+            sort = HeldEventListSort.HeldDesc,
+            search = HeldEventListSearchCriteria.empty,
+          ))
     yield result match
       case Left(error) => fail(s"unexpected error: $error")
       case Right(result) =>

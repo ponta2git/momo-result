@@ -5,7 +5,7 @@ import cats.syntax.all.*
 import cats.{Functor, Monad}
 
 import momo.api.domain.ids.HeldEventId
-import momo.api.domain.{HeldEvent, RecordNavigationOrder}
+import momo.api.domain.{HeldEvent, HeldEventListSort, RecordNavigationOrder}
 import momo.api.errors.AppError
 import momo.api.repositories.{
   HeldEventDeletionRepository,
@@ -54,16 +54,14 @@ final class InMemoryHeldEventDeletionRepository[F[_]: Monad](
     }
 
 object InMemoryHeldEventsRepository:
-  private[adapters] def filterAndSort(
+  private[adapters] def sorted(
       events: Iterable[HeldEvent],
-      query: Option[String],
+      sort: HeldEventListSort,
   ): List[HeldEvent] =
-    val filtered = query match
-      case Some(q) if q.trim.nonEmpty =>
-        val lower = q.toLowerCase
-        events.filter(e => e.id.value.toLowerCase.contains(lower))
-      case _ => events
-    filtered.toList.sorted(using RecordNavigationOrder.heldEvents).reverse
+    val ascending = events.toList.sorted(using RecordNavigationOrder.heldEvents)
+    sort match
+      case HeldEventListSort.HeldDesc => ascending.reverse
+      case HeldEventListSort.HeldAsc => ascending
 
   def create[F[_]: Sync]: F[InMemoryHeldEventsRepository[F]] = Ref
     .of[F, Map[HeldEventId, HeldEvent]](Map.empty).map(new InMemoryHeldEventsRepository(_))

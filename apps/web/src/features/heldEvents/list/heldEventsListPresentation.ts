@@ -1,158 +1,154 @@
+import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
+import { canDeleteHeldEvent } from "@/features/heldEvents/list/heldEventActions";
 import type {
   HeldEventCreateForm,
   HeldEventDeleteConfirmation,
 } from "@/features/heldEvents/list/heldEventActions";
-import type { HeldEventListResponse, HeldEventResponse } from "@/shared/api/heldEvents";
-import { parsePositiveIntSearchParam } from "@/shared/lib/searchParams";
+import type {
+  HeldEventListItemResponse,
+  HeldEventListPlayerResultResponse,
+  HeldEventListResponse,
+} from "@/shared/api/heldEvents";
+import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
+import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
+import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 
-export type HeldEventListItem = Readonly<Omit<HeldEventResponse, "scopes">> & {
-  readonly scopes?: ReadonlyArray<Readonly<NonNullable<HeldEventResponse["scopes"]>[number]>>;
+export type HeldEventStanding = {
+  readonly averageLabel: string;
+  readonly displayName: string;
+  readonly memberId: string;
+  readonly standing: number;
 };
 
-export const emptyHeldEvents: readonly HeldEventListItem[] = [];
-export const heldEventPageSizeOptions = [10, 25, 50] as const;
-const defaultPagination = { page: 1, pageSize: 10 };
-const pageSizeOptions = new Set<number>(heldEventPageSizeOptions);
+export type HeldEventListRowView = {
+  readonly deletable: boolean;
+  readonly detailHref: string;
+  readonly draftCount: number;
+  readonly exportHref: string;
+  readonly heldAt: string;
+  readonly heldAtLabel: string;
+  readonly id: string;
+  /** Only the overall latest event, whatever the filters, sort or page. */
+  readonly latest: boolean;
+  readonly matchCount: number;
+  readonly noteMatch?:
+    | {
+        readonly matchNoLabel: string;
+        readonly noteBody: string;
+        readonly otherMatchCount: number;
+      }
+    | undefined;
+  readonly ocrHref?: string | undefined;
+  readonly scopes: ReadonlyArray<{ readonly key: string; readonly label: string }>;
+  readonly standings: readonly HeldEventStanding[];
+};
 
-export type HeldEventsPagination = { readonly page: number; readonly pageSize: number };
+/**
+ * Orders the four players by the event's average rank. Equal averages share the standing and keep
+ * the canonical member order, so the ledger's identity order survives inside a tie.
+ */
+/** Rows compare averages across events, so every value keeps two decimals and aligns. */
+function formatListAverageRank(averageRank: number): string {
+  return averageRank.toLocaleString("ja-JP", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
 
-export function readHeldEventsPagination(params: URLSearchParams): HeldEventsPagination {
-  const pageSize = parsePositiveIntSearchParam(params.get("pageSize"), defaultPagination.pageSize);
+export function heldEventStandings(
+  results: ReadonlyArray<Readonly<HeldEventListPlayerResultResponse>>,
+): HeldEventStanding[] {
+  const ordered = orderFixedMembers(results).toSorted(
+    (left, right) => left.averageRank - right.averageRank,
+  );
+  return ordered.map((result) => ({
+    averageLabel: formatListAverageRank(result.averageRank),
+    displayName: memberDisplayName(result.memberId),
+    memberId: result.memberId,
+    standing: 1 + ordered.filter((other) => other.averageRank < result.averageRank).length,
+  }));
+}
+
+function scopeLabel(scope: NonNullable<HeldEventListItemResponse["scopes"]>[number]): string {
+  const title = scope.gameTitleName ?? (scope.gameTitleId ? "作品名未取得" : "作品未設定");
+  const season = scope.seasonName ?? (scope.seasonMasterId ? "シーズン名未取得" : "シーズン未設定");
+  return `${title}・${season}`;
+}
+
+export function toHeldEventListRows(
+  items: ReadonlyArray<Readonly<HeldEventListItemResponse>>,
+  latestHeldEventId: string | undefined,
+): HeldEventListRowView[] {
+  return items.map((item) => {
+    const latest = latestHeldEventId !== undefined && item.id === latestHeldEventId;
+    const noteMatch = item.noteMatch;
+    return {
+      deletable: canDeleteHeldEvent(item),
+      detailHref: heldEventDetailHref(item.id, item.publicId),
+      draftCount: item.draftCount,
+      exportHref: `/exports?heldEventId=${encodeURIComponent(item.id)}&format=csv`,
+      heldAt: item.heldAt,
+      heldAtLabel: formatDateTimeLong(item.heldAt),
+      id: item.id,
+      latest,
+      matchCount: item.matchCount,
+      noteMatch: noteMatch
+        ? {
+            matchNoLabel: formatMatchNoInEvent(noteMatch.matchNoInEvent),
+            noteBody: noteMatch.noteBody,
+            otherMatchCount: noteMatch.otherMatchCount,
+          }
+        : undefined,
+      ocrHref: latest ? heldEventOcrCaptureHref(item.id) : undefined,
+      scopes: (item.scopes ?? []).map((scope) => ({
+        key: `${scope.gameTitleId ?? ""}:${scope.seasonMasterId ?? ""}`,
+        label: scopeLabel(scope),
+      })),
+      standings: heldEventStandings(item.playerResults ?? []),
+    };
+  });
+}
+
+/** Only a confirmed page of the requested search may correct an out-of-range page. */
+export function heldEventsPageCorrection(
+  requestedPage: number,
+  pagination: HeldEventListResponse["pagination"] | undefined,
+  confirmed: boolean,
+): number | undefined {
+  if (!pagination || !confirmed) return undefined;
+  const lastPage = Math.max(pagination.totalPages, 1);
+  return requestedPage > lastPage ? lastPage : undefined;
+}
+
+/** Relates the requested search to the retained read before exposing rows or actions. */
+export function resolveHeldEventListDisplayState({
+  locationSettling,
+  list,
+}: {
+  locationSettling: boolean;
+  list: { available: boolean; fromPreviousSelection: boolean; refreshing: boolean };
+}) {
+  const scopeChanging = locationSettling || list.fromPreviousSelection;
   return {
-    page: parsePositiveIntSearchParam(params.get("page"), defaultPagination.page),
-    pageSize: pageSizeOptions.has(pageSize) ? pageSize : defaultPagination.pageSize,
+    scopeChanging,
+    sameScopeRefreshing: !scopeChanging && list.refreshing,
+    updating:
+      locationSettling || ((list.fromPreviousSelection || list.available) && list.refreshing),
   };
 }
 
-export function heldEventsPaginationParams(next: HeldEventsPagination): URLSearchParams {
-  const params = new URLSearchParams();
-  if (next.page !== defaultPagination.page) params.set("page", String(next.page));
-  if (next.pageSize !== defaultPagination.pageSize) params.set("pageSize", String(next.pageSize));
-  return params;
-}
-
-export function changeHeldEventsPagination(
-  current: HeldEventsPagination,
-  change: { kind: "page"; page: number } | { kind: "pageSize"; pageSize: number },
-): HeldEventsPagination {
-  return change.kind === "page"
-    ? { ...current, page: change.page }
-    : { page: 1, pageSize: change.pageSize };
-}
-
-export function heldEventsPageCorrection(
-  requested: HeldEventsPagination,
-  pagination: HeldEventListResponse["pagination"] | undefined,
-  placeholder: boolean,
-): number | undefined {
-  if (!pagination || placeholder) return undefined;
-  const lastPage = Math.max(pagination.totalPages, 1);
-  return requested.page > lastPage ? lastPage : undefined;
-}
-
-export type HeldEventsListRefresh = {
-  readonly pending: boolean;
-  readonly run: () => void;
-};
-
-export type HeldEventsListSnapshot =
-  | { readonly kind: "loading" }
-  | { readonly kind: "loadFailed" }
-  | {
-      readonly freshness: "current" | "stale";
-      readonly kind: "ready";
-      readonly page: number;
-      readonly pageSize: number;
-      readonly pagination: Readonly<HeldEventListResponse["pagination"]> | undefined;
-      readonly rows: readonly HeldEventListItem[];
-      readonly scopeChanging: boolean;
-    };
-
-export type HeldEventsListActions = {
-  readonly onPageChange: (page: number) => void;
-  readonly onPageSizeChange: (pageSize: number) => void;
-  readonly onRequestDelete: (event: Readonly<Pick<HeldEventResponse, "id" | "heldAt">>) => void;
-};
-
-export type HeldEventsListView =
-  | { readonly kind: "loading"; readonly refresh: HeldEventsListRefresh }
-  | { readonly kind: "loadFailed"; readonly refresh: HeldEventsListRefresh }
-  | (Extract<HeldEventsListSnapshot, { kind: "ready" }> &
-      HeldEventsListActions & {
-        readonly deleteDisabled: boolean;
-        readonly firstRowIsLatest: boolean;
-        readonly refresh: HeldEventsListRefresh;
-      });
-
-export function buildHeldEventsListSnapshot({
-  requested,
-  data,
-  initialLoading,
-  loadFailed,
-  stale,
-  placeholder,
-  fetching,
-  correctionPage,
-}: {
-  requested: HeldEventsPagination;
-  data: HeldEventListResponse | undefined;
-  initialLoading: boolean;
-  loadFailed: boolean;
-  stale: boolean;
-  placeholder: boolean;
-  fetching: boolean;
-  correctionPage: number | undefined;
-}): HeldEventsListSnapshot {
-  if ((initialLoading && !loadFailed) || correctionPage !== undefined) return { kind: "loading" };
-  if (loadFailed) return { kind: "loadFailed" };
-  return {
-    kind: "ready",
-    freshness: stale ? "stale" : "current",
-    page: data?.pagination?.page ?? requested.page,
-    pageSize: data?.pagination?.pageSize ?? requested.pageSize,
-    pagination: data?.pagination,
-    rows: data?.items ?? emptyHeldEvents,
-    scopeChanging: placeholder && fetching,
-  } as const;
-}
-
-export function buildHeldEventsListView(
-  snapshot: HeldEventsListSnapshot,
-  refresh: HeldEventsListRefresh,
-  actions: HeldEventsListActions,
-  deletePending: boolean,
-): HeldEventsListView {
-  return snapshot.kind === "ready"
-    ? {
-        ...snapshot,
-        ...actions,
-        refresh,
-        deleteDisabled: deletePending || snapshot.freshness === "stale" || snapshot.scopeChanging,
-        firstRowIsLatest: snapshot.page === 1,
-      }
-    : { ...snapshot, refresh };
-}
-
 export function buildHeldEventsActionView({
-  list,
   create,
   deleteDialog,
-  refresh,
   errorMessage,
 }: {
-  list: HeldEventsListView;
   create: HeldEventCreateForm;
   deleteDialog: HeldEventDeleteConfirmation;
-  refresh: HeldEventsListRefresh;
   errorMessage: string;
 }) {
-  const dialogPending = create.pending || deleteDialog.pending;
   return {
-    dialogPending,
-    refreshDisabled: refresh.pending || dialogPending,
-    refreshPending:
-      refresh.pending && !dialogPending && list.kind === "ready" && list.freshness === "current",
-    showCreate: list.kind === "ready" && list.rows.length > 0,
+    dialogPending: create.pending || deleteDialog.pending,
     errorMessage: !create.open && !deleteDialog.target ? errorMessage : "",
   } as const;
 }

@@ -1,23 +1,24 @@
 import { X } from "lucide-react";
 
-import type {
-  MatchListAppliedCondition,
-  MatchListConditionKey,
-} from "@/features/matches/list/matchListTypes";
 import { Button } from "@/shared/ui/actions/Button";
 
-type MatchListConditionChipsProps = {
-  conditions: MatchListAppliedCondition[];
+export type AppliedCondition<Key extends string> = {
+  key: Key;
+  label: string;
+};
+
+type AppliedConditionChipsProps<Key extends string> = {
+  conditions: ReadonlyArray<AppliedCondition<Key>>;
   disabled?: boolean | undefined;
-  onRemove: (condition: MatchListConditionKey) => void;
+  onRemove: (condition: Key) => void;
 };
 
 /** Each applied condition is one removable chip, so the current scope reads in one line. */
-export function MatchListConditionChips({
+export function AppliedConditionChips<Key extends string>({
   conditions,
   disabled = false,
   onRemove,
-}: MatchListConditionChipsProps) {
+}: AppliedConditionChipsProps<Key>) {
   if (conditions.length === 0) return null;
   return (
     <ul aria-label="適用中の条件" className="flex min-w-0 flex-wrap gap-1.5">

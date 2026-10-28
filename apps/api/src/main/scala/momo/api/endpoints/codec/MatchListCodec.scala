@@ -1,11 +1,5 @@
 package momo.api.endpoints.codec
 
-import java.time.LocalDate
-
-import scala.util.Try
-
-import cats.syntax.all.*
-
 import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchListKindFilter,
@@ -21,8 +15,6 @@ import momo.api.usecases.matches.ListMatchesCommand
 
 /** Query-parameter ↔ command conversion for `MatchesEndpoints.list`. */
 object MatchListCodec:
-  private val IsoDate = "[0-9]{4}-[0-9]{2}-[0-9]{2}".r
-
   final case class SearchParams(
       mapMasterId: Option[String],
       from: Option[String],
@@ -91,39 +83,10 @@ object MatchListCodec:
   private def parseSearch(params: SearchParams): Either[AppError, MatchListSearchCriteria] =
     for
       mapMasterId <- BoundaryId.optional("mapMasterId", params.mapMasterId)(MapMasterId.fromString)
-      from <- params.from.traverse(parseDate("from", _))
-      to <- params.to.traverse(parseDate("to", _))
-      _ <- Either.cond(
-        (from, to).tupled.forall { case (start, end) => !start.isAfter(end) },
-        (),
-        AppError.ValidationFailed("from must be on or before to."),
-      )
-      noteQuery <- parseNoteQuery(params.q)
+      (from, to) <- ListSearchCodec.parseDateRange(params.from, params.to)
+      noteQuery <- ListSearchCodec.parseNoteQuery(params.q)
       record <- parseRecord(params)
     yield MatchListSearchCriteria(mapMasterId, from, to, noteQuery, record)
-
-  private def parseDate(field: String, raw: String): Either[AppError, LocalDate] =
-    val invalid = AppError.ValidationFailed(s"$field must be a date in YYYY-MM-DD format.")
-    if IsoDate.matches(raw) then Try(LocalDate.parse(raw)).toEither.leftMap(_ => invalid)
-    else Left(invalid)
-
-  private def parseNoteQuery(raw: Option[String]): Either[AppError, Option[String]] =
-    raw.map(_.dropWhile(isQueryWhitespace).reverse.dropWhile(isQueryWhitespace).reverse)
-      .filter(_.nonEmpty).traverse { query =>
-        if query.codePointCount(0, query.length) > MatchListSearchCriteria.NoteQueryMaxCodePoints
-        then
-          Left(AppError.ValidationFailed(
-            s"q must be at most ${MatchListSearchCriteria.NoteQueryMaxCodePoints} characters."
-          ))
-        else if query.exists(Character.isISOControl) then
-          Left(AppError.ValidationFailed("q must not contain control characters."))
-        else Right(query)
-      }
-
-  // Match the browser's String.trim, including full-width spaces, NBSP and BOM.
-  private def isQueryWhitespace(character: Char): Boolean =
-    Character.isSpaceChar(character) || (character >= '\t' && character <= '\r') ||
-      character == '\ufeff'
 
   private def parseRecord(
       params: SearchParams

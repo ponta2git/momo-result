@@ -92,12 +92,14 @@ final case class MatchListSearchCriteria(
     record: Option[MatchListRecordCriterion] = None,
 ) derives CanEqual:
   def isEmpty: Boolean = this == MatchListSearchCriteria.empty
-  def heldFromInclusive: Option[Instant] = from
-    .map(_.atStartOfDay(MatchListSearchCriteria.Zone).toInstant)
-  def heldToExclusive: Option[Instant] = to
-    .map(_.plusDays(1).atStartOfDay(MatchListSearchCriteria.Zone).toInstant)
+  def heldFromInclusive: Option[Instant] = from.map(MatchListSearchCriteria.dayStart)
+  def heldToExclusive: Option[Instant] =
+    to.map(day => MatchListSearchCriteria.dayStart(day.plusDays(1)))
 
 object MatchListSearchCriteria:
   val empty: MatchListSearchCriteria = MatchListSearchCriteria()
   val NoteQueryMaxCodePoints = 50
   private val Zone: ZoneId = ZoneId.of("Asia/Tokyo")
+
+  /** Start of an Asia/Tokyo calendar day; shared by every held-date search. */
+  private[domain] def dayStart(day: LocalDate): Instant = day.atStartOfDay(Zone).toInstant

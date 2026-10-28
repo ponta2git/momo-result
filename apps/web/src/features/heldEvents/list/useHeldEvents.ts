@@ -1,37 +1,34 @@
-import {
-  buildHeldEventsListView,
-  buildHeldEventsActionView,
-} from "@/features/heldEvents/list/heldEventsListPresentation";
+import { buildHeldEventsActionView } from "@/features/heldEvents/list/heldEventsListPresentation";
 import { useHeldEventActions } from "@/features/heldEvents/list/useHeldEventActions";
 import { useHeldEventsList } from "@/features/heldEvents/list/useHeldEventsList";
 
-/** Composes list navigation/read state and held-event creation and deletion into one screen. */
+/** Composes the searchable list and held-event creation and deletion into one screen. */
 export function useHeldEvents() {
   const directory = useHeldEventsList();
   const actions = useHeldEventActions();
-  const list = buildHeldEventsListView(
-    directory.snapshot,
-    directory.refresh,
-    {
-      onPageChange: directory.updatePage,
-      onPageSizeChange: directory.updatePageSize,
-      onRequestDelete: actions.requestDelete,
-    },
-    actions.deleteDialog.pending,
-  );
-  return {
+  const actionView = buildHeldEventsActionView({
     create: actions.create,
     deleteDialog: actions.deleteDialog,
-    list,
-    actionView: buildHeldEventsActionView({
-      list,
-      create: actions.create,
-      deleteDialog: actions.deleteDialog,
-      refresh: directory.refresh,
-      errorMessage: actions.errorMessage,
-    }),
+    errorMessage: actions.errorMessage,
+  });
+  const { list } = directory;
+  return {
+    actionView,
+    create: actions.create,
+    deleteDialog: actions.deleteDialog,
+    filters: directory.filters,
+    list: {
+      ...list,
+      // Deleting needs a current row: not one retained from another search or a failed refresh.
+      deleteDisabled: actions.deleteDialog.pending || list.stale || list.scopeChanging,
+      onRequestDelete: actions.requestDelete,
+    },
     navigationGuard: actions.navigationGuard,
     openCreate: actions.openCreate,
-    refresh: directory.refresh,
+    refresh: {
+      disabled: directory.refresh.pending || actionView.dialogPending,
+      pending: directory.refresh.pending,
+      run: directory.refresh.run,
+    },
   } as const;
 }

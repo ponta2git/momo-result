@@ -522,7 +522,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- heldEvents.create(later)
       _ <- heldEvents.create(supplementary)
       all <- ordered.traverse(event => details.find(event.id))
-      list <- reader.list(None, PageRequest(1, 10))
+      list <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 10)
+      )
     yield
       assertEquals(single.map(_.navigation), Some(RecordNavigation(None, None)))
       all.zipWithIndex.foreach { case (detail, index) =>
@@ -563,13 +567,37 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           ('held-list-cancelled', $heldEventId, 99, 'cancelled', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now),
           ('held-list-confirmed', $heldEventId, 100, 'confirmed', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now)
       """.update.run.transact(transactor)
-      latest <- reader.list(None, PageRequest(1, 1))
-      empty <- reader.list(None, PageRequest(2, 1))
-      beyond <- reader.list(None, PageRequest(4, 1))
-      filtered <- reader.list(Some(" HELD_2026 "), PageRequest(1, 20))
-      missing <- reader.list(Some("absent"), PageRequest(1, 20))
+      latest <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 1)
+      )
+      empty <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(2, 1)
+      )
+      beyond <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(4, 1)
+      )
+      filtered <- reader.list(
+        HeldEventListSearchCriteria(gameTitleId = Some(gameTitleId)),
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 20),
+      )
+      missing <- reader.list(
+        HeldEventListSearchCriteria(noteQuery = Some("absent")),
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 20),
+      )
       snapshot <- (for
-        result <- PostgresHeldEventList.list(None, PageRequest(3, 1))
+        result <- PostgresHeldEventList.list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(3, 1)
+        )
         isolation <- sql"SHOW transaction_isolation".query[String].unique
         readOnly <- sql"SHOW transaction_read_only".query[String].unique
       yield (result, isolation, readOnly)).transact(transactor)
@@ -787,7 +815,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       tiedSelection <- matchExports.project(MatchExportsRepository.Selection(limit = 1))
       rejectedDetail <- PostgresHeldEventDetailReadModel[IO](transactor).find(heldEventId).attempt
       rejectedEvents <- PostgresHeldEventListReadModel[IO](transactor)
-        .list(None, PageRequest(1, 20)).attempt
+        .list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(1, 20)
+        ).attempt
       rejectedMatches <- PostgresMatchListReadModel[IO](transactor)
         .list(MatchListReadModel.Filter(heldEventId = Some(heldEventId))).attempt
       acceptedMatches <- PostgresMatchListReadModel[IO](transactor)

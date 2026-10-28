@@ -31,7 +31,6 @@ import momo.api.repositories.{
   SeasonMastersRepository
 }
 import momo.api.usecases.common.{MatchReferenceValidation, ReferenceNormalization}
-import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.syntax.UseCaseSyntax.*
 
 final case class MatchDraftRefs(
@@ -60,7 +59,6 @@ final class ConfirmMatch[F[_]: Monad](
     matches: MatchesRepository[F],
     matchDrafts: MatchDraftsRepository[F],
     confirmations: MatchConfirmationRepository[F],
-    sourceImageRetention: PurgeSourceImages[F],
     gameTitles: GameTitlesRepository[F],
     mapMasters: MapMastersRepository[F],
     seasonMasters: SeasonMastersRepository[F],
@@ -144,9 +142,6 @@ final class ConfirmMatch[F[_]: Monad](
         case MatchConfirmationResult.DraftSnapshotMismatch =>
           Left(AppError.Conflict("Failed to confirm match from the draft."))
     )
-    _ <- maybeDraft match
-      case None => EitherT.rightT[F, AppError](())
-      case Some(draft) => EitherT.liftF(sourceImageRetention.runBestEffort(draft.id, createdAt))
   yield record).value
 
 object ConfirmMatch:

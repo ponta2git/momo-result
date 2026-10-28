@@ -7,7 +7,6 @@ import momo.api.config.AppConfig
 import momo.api.http.HttpRoutes
 import momo.api.repositories.EntityReferenceResolver
 import momo.api.usecases.exports.ExportMatches
-import momo.api.usecases.matchdrafts.PurgeSourceImages
 import momo.api.usecases.ocr.OcrSubmissions
 
 private[bootstrap] object HttpUseCaseWiring:
@@ -24,7 +23,6 @@ private[bootstrap] object HttpUseCaseWiring:
 
     val references = identityReferences.getOrElse(EntityReferenceResolver.preserve[F])
     val submissions = OcrSubmissions[F](ocrSubmissions, now, Some(references))
-    val retention = PurgeSourceImages[F](matchDrafts, imageStorage)
     HttpRoutes.UseCases(
       upload = OcrUseCaseWiring.upload(imageStorage, imageStorageAdmission, submissions),
       ocr = OcrUseCaseWiring.jobs(
@@ -71,7 +69,6 @@ private[bootstrap] object HttpUseCaseWiring:
         notes = matchNotes,
         drafts = matchDrafts,
         confirmations = matchConfirmation,
-        retention = retention,
         gameTitles = gameTitles,
         maps = mapMasters,
         seasons = seasonMasters,

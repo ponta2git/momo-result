@@ -31,6 +31,12 @@ import momo.api.domain.{
 import momo.api.repositories.HeldEventListReadModel
 
 object PostgresHeldEventList:
+  private final case class PageTotals(
+      totalItems: Int,
+      totalMatchCount: Int,
+      latestHeldEventId: Option[HeldEventId],
+  )
+
   private final case class ScopeStats(
       heldEventId: HeldEventId,
       confirmed: Boolean,
@@ -105,13 +111,12 @@ object PostgresHeldEventList:
       WHERE m.held_event_id = he.id""" ++ member.getOrElse(Fragment.empty) ++
       fr"GROUP BY mp.member_id HAVING" ++ aggregate ++ comparison ++ fr"${criterion.value})"
 
-  private def ordering(alias: String, sort: HeldEventListSort)(using
-      ids: PostgresIdentities): Fragment =
+  private def ordering(startAt: Fragment, id: Fragment, sort: HeldEventListSort): Fragment =
     val direction = sort match
       case HeldEventListSort.HeldDesc => fr"DESC"
       case HeldEventListSort.HeldAsc => fr"ASC"
-    fr"ORDER BY" ++ Fragment.const(s"$alias.start_at") ++ direction ++ fr"," ++
-      ids.wireId(alias) ++ fr"""COLLATE "C"""" ++ direction
+    fr"ORDER BY" ++ startAt ++ direction ++ fr"," ++
+      id ++ fr"""COLLATE "C"""" ++ direction
 
   def list(search: HeldEventListSearchCriteria, sort: HeldEventListSort, page: PageRequest)(using
       identities: PostgresIdentities): ConnectionIO[HeldEventListPage] =
@@ -126,18 +131,31 @@ object PostgresHeldEventList:
     val where = fragments.whereAndOpt(searchConditions(search))
     // The latest event ignores the search so the Web can mark the true newest row on any page.
     val latest = fr"(SELECT" ++ ids.wireId("latest") ++ fr"FROM held_events latest" ++
-      ordering("latest", HeldEventListSort.HeldDesc) ++ fr"LIMIT 1)"
-    val totals = fr"WITH filtered AS (SELECT he.id FROM held_events he" ++ where ++
-      fr""") SELECT (SELECT COUNT(*)::int FROM filtered),
-        (SELECT COUNT(*)::int FROM matches m WHERE m.held_event_id IN (SELECT id FROM filtered)),
-      """ ++ latest
+      ordering(fr"latest.start_at", ids.wireId("latest"), HeldEventListSort.HeldDesc) ++
+      fr"LIMIT 1)"
+    val totals =
+      fr"""SELECT (SELECT COUNT(*)::int FROM filtered) AS total_items,
+        (SELECT COUNT(*)::int FROM matches m WHERE m.held_event_id IN (SELECT id FROM filtered))
+          AS total_match_count,
+      """ ++ latest ++ fr"AS latest_held_event_id"
+    val selected =
+      fr"SELECT ${ids.wireId("he")} AS id, he.start_at," ++
+        publicIds.column(fr"he.public_id") ++ fr"""AS public_id
+        FROM held_events he JOIN filtered ON filtered.id = he.id""" ++
+        ordering(fr"he.start_at", ids.wireId("he"), sort) ++
+        fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
+    // Reuse expensive note/metric predicates for both totals and pagination. The left join
+    // retains totals even when no event matches or the requested page is past the last one.
+    val selection = fr"WITH filtered AS MATERIALIZED (SELECT he.id FROM held_events he" ++ where ++
+      fr""") SELECT totals.total_items, totals.total_match_count, totals.latest_held_event_id,
+        selected.id, selected.start_at, selected.public_id
+        FROM (""" ++ totals ++ fr") totals LEFT JOIN (" ++ selected ++ fr") selected ON TRUE" ++
+      ordering(fr"selected.start_at", fr"selected.id", sort)
     for
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
-      counts <- totals.query[(Int, Int, Option[HeldEventId])].unique
-      events <-
-      (fr"SELECT ${ids.wireId("he")}, he.start_at," ++ publicIds.column(fr"he.public_id") ++
-        fr"FROM held_events he" ++ where ++ ordering("he", sort) ++
-        fr"LIMIT ${page.pageSize} OFFSET ${page.offset}").query[HeldEvent].to[List]
+      rows <- selection.query[(PageTotals, Option[HeldEvent])].nel
+      counts = rows.head._1
+      events = rows.toList.flatMap(_._2)
       eventIds = events.map(_.id)
       stats <- scopeStats(eventIds)
       players <- playerResults(eventIds)
@@ -158,7 +176,11 @@ object PostgresHeldEventList:
           noteByEvent.get(event.id),
         )
       }
-    yield HeldEventListPage(PagedResult(items, page, counts._1), counts._2, counts._3)
+    yield HeldEventListPage(
+      PagedResult(items, page, counts.totalItems),
+      counts.totalMatchCount,
+      counts.latestHeldEventId,
+    )
 
   private def scopeStats(eventIds: List[HeldEventId])(using
       ids: PostgresIdentities): ConnectionIO[List[ScopeStats]] =

@@ -141,6 +141,14 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
     ))
   )
 
+  test("returns an empty page and totals when there are no held events"):
+    page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(1, 10))
+      .map { result =>
+        assertEquals(result.page.items, Nil)
+        assertEquals((result.page.totalItems, result.totalMatchCount), (0, 0))
+        assertEquals(result.latestHeldEventId, None)
+      }
+
   test("matches title, season and map on one confirmed match and ignores drafts"):
     for
       _ <- seedMasters
@@ -222,6 +230,11 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
         PageRequest(2, 1),
       )
       all <- page(HeldEventListSearchCriteria.empty, HeldEventListSort.HeldDesc, PageRequest(1, 10))
+      beyondLast <- page(
+        HeldEventListSearchCriteria(minMatchCount = Some(1)),
+        HeldEventListSort.HeldDesc,
+        PageRequest(3, 1),
+      )
     yield
       assertEquals(atLeastTwo.page.items.map(_.event.id), List(two))
       assertEquals((atLeastTwo.page.totalItems, atLeastTwo.totalMatchCount), (1, 2))
@@ -229,6 +242,9 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
       assertEquals((atLeastOne.page.totalItems, atLeastOne.totalMatchCount), (2, 3))
       assertEquals((all.page.totalItems, all.totalMatchCount), (3, 3))
       assert(all.page.items.forall(_.noteMatch.isEmpty))
+      assertEquals(beyondLast.page.items, Nil)
+      assertEquals((beyondLast.page.totalItems, beyondLast.totalMatchCount), (2, 3))
+      assertEquals(beyondLast.latestHeldEventId, Some(two))
 
   test("searches notes literally and returns the first hit with the other hit count"):
     for
@@ -374,6 +390,7 @@ final class PostgresHeldEventListReadModelSpec extends IntegrationSuite:
       assertEquals(filtered.page.items.map(_.event.id), List(older))
       assertEquals(filtered.latestHeldEventId, Some(tieB))
       assertEquals((none.page.totalItems, none.totalMatchCount), (0, 0))
+      assertEquals(none.page.items, Nil)
       assertEquals(none.latestHeldEventId, Some(tieB))
       assertEquals(snapshot._1.latestHeldEventId, Some(tieB))
       assertEquals(snapshot._2, "repeatable read")

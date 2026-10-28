@@ -141,12 +141,13 @@ object PostgresHeldEventList:
     val selected =
       fr"SELECT ${ids.wireId("he")} AS id, he.start_at," ++
         publicIds.column(fr"he.public_id") ++ fr"""AS public_id
-        FROM held_events he JOIN filtered ON filtered.id = he.id""" ++
+        FROM held_events he""" ++ where ++
         ordering(fr"he.start_at", ids.wireId("he"), sort) ++
         fr"LIMIT ${page.pageSize} OFFSET ${page.offset}"
-    // Reuse expensive note/metric predicates for both totals and pagination. The left join
-    // retains totals even when no event matches or the requested page is past the last one.
-    val selection = fr"WITH filtered AS MATERIALIZED (SELECT he.id FROM held_events he" ++ where ++
+    // Fetch totals and the page in one round trip. Read the page directly so PostgreSQL can
+    // use the navigation index with LIMIT instead of joining and sorting all filtered events.
+    // The left join retains totals when no event matches or the page is past the last one.
+    val selection = fr"WITH filtered AS (SELECT he.id FROM held_events he" ++ where ++
       fr""") SELECT totals.total_items, totals.total_match_count, totals.latest_held_event_id,
         selected.id, selected.start_at, selected.public_id
         FROM (""" ++ totals ++ fr") totals LEFT JOIN (" ++ selected ++ fr") selected ON TRUE" ++

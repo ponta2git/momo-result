@@ -34,6 +34,7 @@ export { showToast } from "../src/shared/ui/feedback/Toast";
 export { ToastHost } from "../src/shared/ui/feedback/ToastHost";
 export { Tooltip, TooltipProvider } from "../src/shared/ui/feedback/Tooltip";
 
+export { AppliedConditionChips } from "../src/shared/ui/forms/AppliedConditionChips";
 export { CheckboxField } from "../src/shared/ui/forms/CheckboxField";
 export { ChoiceList } from "../src/shared/ui/forms/ChoiceList";
 export { ChoicePickerDialogField } from "../src/shared/ui/forms/ChoicePickerDialogField";

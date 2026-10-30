@@ -54,7 +54,8 @@ for required_build_dependency in \
   $'dep\tgolang.org/x/crypto\tv0.57.0\t' \
   $'dep\tgolang.org/x/net\tv0.60.0\t' \
   $'dep\tgolang.org/x/text\tv0.42.0\t' \
-  $'dep\tgoogle.golang.org/grpc\tv1.83.2\t'; do
+  $'dep\tgoogle.golang.org/grpc\tv1.83.2\t' \
+  $'dep\tgithub.com/go-jose/go-jose/v4\tv4.1.6\t'; do
   if ! grep -Fq -- "${required_build_dependency}" <<<"${caddy_build_info}"; then
     echo "Runtime Caddy build is missing a required patched dependency." >&2
     exit 1

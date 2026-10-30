@@ -10,6 +10,7 @@ ARG CADDY_X_CRYPTO_VERSION=v0.57.0
 ARG CADDY_X_NET_VERSION=v0.60.0
 ARG CADDY_X_TEXT_VERSION=v0.42.0
 ARG CADDY_GRPC_VERSION=v1.83.2
+ARG CADDY_GO_JOSE_VERSION=v4.1.6
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 FROM ${NODE_IMAGE} AS web-deps
@@ -122,6 +123,7 @@ ARG CADDY_X_CRYPTO_VERSION
 ARG CADDY_X_NET_VERSION
 ARG CADDY_X_TEXT_VERSION
 ARG CADDY_GRPC_VERSION
+ARG CADDY_GO_JOSE_VERSION
 WORKDIR /workspace/caddy
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   go mod download "github.com/caddyserver/caddy/v2@${CADDY_VERSION}" \
@@ -132,7 +134,8 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
     "golang.org/x/crypto@${CADDY_X_CRYPTO_VERSION}" \
     "golang.org/x/net@${CADDY_X_NET_VERSION}" \
     "golang.org/x/text@${CADDY_X_TEXT_VERSION}" \
-    "google.golang.org/grpc@${CADDY_GRPC_VERSION}"
+    "google.golang.org/grpc@${CADDY_GRPC_VERSION}" \
+    "github.com/go-jose/go-jose/v4@${CADDY_GO_JOSE_VERSION}"
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   go mod tidy
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
@@ -151,6 +154,9 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
   && go version -m /out/caddy | awk -v module="google.golang.org/grpc" \
     -v version="${CADDY_GRPC_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
+  && go version -m /out/caddy | awk -v module="github.com/go-jose/go-jose/v4" \
+    -v version="${CADDY_GO_JOSE_VERSION}" \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }'
 
 FROM ${JAVA_JRE_IMAGE} AS java-runtime

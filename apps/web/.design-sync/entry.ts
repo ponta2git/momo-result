@@ -1,4 +1,7 @@
 // Public surface synced to Claude Design (window.MomoUI). Keep to app-agnostic shared/ui parts.
+// Must stay first: it patches the page's React before any component module reads it.
+import "./react18-compat";
+
 export { MemoryRouter } from "react-router-dom";
 
 export { ActionLink } from "../src/shared/ui/actions/ActionLink";
@@ -31,6 +34,7 @@ export { showToast } from "../src/shared/ui/feedback/Toast";
 export { ToastHost } from "../src/shared/ui/feedback/ToastHost";
 export { Tooltip, TooltipProvider } from "../src/shared/ui/feedback/Tooltip";
 
+export { AppliedConditionChips } from "../src/shared/ui/forms/AppliedConditionChips";
 export { CheckboxField } from "../src/shared/ui/forms/CheckboxField";
 export { ChoiceList } from "../src/shared/ui/forms/ChoiceList";
 export { ChoicePickerDialogField } from "../src/shared/ui/forms/ChoicePickerDialogField";

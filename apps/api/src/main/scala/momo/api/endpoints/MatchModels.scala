@@ -7,6 +7,7 @@ import sttp.tapir.Schema
 
 import momo.api.domain.{
   HeldEvent,
+  HeldEventListItem,
   HeldEventScopeSummary,
   MatchListItem,
   MatchListSummary,
@@ -74,10 +75,71 @@ object HeldEventResponse:
     publicId = e.publicId.map(_.decimalString),
   )
 
+final case class HeldEventListPlayerResultResponse(
+    memberId: String,
+    averageRank: Double,
+    rankCounts: List[Int],
+) derives Codec.AsObject
+
+final case class HeldEventNoteMatchResponse(
+    matchId: String,
+    matchNoInEvent: Int,
+    noteBody: String,
+    otherMatchCount: Int,
+) derives Codec.AsObject
+
+/** List-only projection; `POST /api/held-events` keeps returning `HeldEventResponse`. */
+final case class HeldEventListItemResponse(
+    id: String,
+    heldAt: String,
+    matchCount: Int,
+    draftCount: Int,
+    nextMatchNo: Int,
+    scopes: List[HeldEventScopeResponse],
+    publicId: Option[String],
+    playerResults: List[HeldEventListPlayerResultResponse],
+    noteMatch: Option[HeldEventNoteMatchResponse],
+) derives Codec.AsObject
+
+object HeldEventListItemResponse:
+  def from(item: HeldEventListItem): HeldEventListItemResponse =
+    val event = HeldEventResponse.from(
+      item.event,
+      item.matchCount,
+      item.draftCount,
+      item.nextMatchNo,
+      item.scopes,
+    )
+    HeldEventListItemResponse(
+      id = event.id,
+      heldAt = event.heldAt,
+      matchCount = event.matchCount,
+      draftCount = event.draftCount,
+      nextMatchNo = event.nextMatchNo,
+      scopes = event.scopes,
+      publicId = event.publicId,
+      playerResults = item.playerResults.map(result =>
+        HeldEventListPlayerResultResponse(
+          memberId = result.memberId.value,
+          averageRank = result.averageRank.toDouble,
+          rankCounts = result.rankCounts,
+        )
+      ),
+      noteMatch = item.noteMatch.map(note =>
+        HeldEventNoteMatchResponse(
+          matchId = note.matchId.value,
+          matchNoInEvent = note.matchNoInEvent,
+          noteBody = note.noteBody,
+          otherMatchCount = note.otherMatchCount,
+        )
+      ),
+    )
+
 final case class HeldEventListResponse(
-    items: List[HeldEventResponse],
+    items: List[HeldEventListItemResponse],
     pagination: PaginationResponse,
     totalMatchCount: Int,
+    latestHeldEventId: Option[String],
 ) derives Codec.AsObject
 
 final case class CreateHeldEventRequest(heldAt: String) derives Codec.AsObject

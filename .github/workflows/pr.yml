@@ -130,6 +130,11 @@ jobs:
       worker_metadata_digest: ${{ needs.analysis.outputs.metadata_artifact_digest }}
       worker_metadata_name: ${{ needs.analysis.outputs.metadata_artifact_name }}
       worker_run_attempt: ${{ needs.analysis.outputs.producer_run_attempt }}
+      controlled_worker_artifact_id: ${{ needs.analysis.outputs.controlled_worker_artifact_id }}
+      controlled_worker_artifact_digest: ${{ needs.analysis.outputs.controlled_worker_artifact_digest }}
+      controlled_worker_run_attempt: ${{ needs.analysis.outputs.controlled_worker_run_attempt }}
+      session_fixture_artifact_id: ${{ needs.runtime.outputs.session_fixture_artifact_id }}
+      session_fixture_artifact_digest: ${{ needs.runtime.outputs.session_fixture_artifact_digest }}
 
   pr-ready:
     name: pr-ready

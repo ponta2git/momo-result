@@ -5,6 +5,7 @@ import java.time.Instant
 import scala.concurrent.duration.DurationInt
 
 import cats.effect.{Deferred, IO, Ref}
+import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
 
@@ -38,6 +39,12 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
   private val accountId = AccountId.unsafeFromString("account_ponta")
   private val bytes = TestImages.png1x1
   private val quota = SourceImageQuota(1000, Long.MaxValue)
+  private val config = SourceImageObjectReconcilerConfig(
+    staleStateAge = 1.minute,
+    orphanAge = 1.hour,
+    failedRecordRetention = 1.hour,
+    batchSize = 100,
+  )
 
   test("a stale RESERVED row with an intact object is recovered as AVAILABLE"):
     val candidate = reservation("source-reconcile-reserved", old)
@@ -47,7 +54,7 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
       _ <- repository.reserveWithinQuota(candidate, quota)
       put <- objects.put(candidate.objectKey, candidate.mediaType, bytes, candidate.sha256)
       _ = assert(put.isRight)
-      stats <- reconciler(repository, objects).runOnce
+      stats <- reconciler(repository, objects).flatMap(_.runOnce)
       stored <- repository.find(candidate.id)
     yield
       assertEquals(stats.recovered, 1)
@@ -67,7 +74,7 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
         SourceImageFailureCode.ObjectMissing,
         old,
       )
-      stats <- reconciler(repository, objects).runOnce
+      stats <- reconciler(repository, objects).flatMap(_.runOnce)
       missingRow <- repository.find(missing.id)
       purgedRow <- repository.find(purge.id)
     yield
@@ -91,7 +98,7 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
       _ <- repository.markAvailable(orphan.id, None, old)
       _ <- repository.markAvailable(pending.id, None, old)
       _ <- repository.beginDeleteUnreferenced(pending.id, old)
-      stats <- reconciler(repository, objects).runOnce
+      stats <- reconciler(repository, objects).flatMap(_.runOnce)
       orphanRow <- repository.find(orphan.id)
       pendingRow <- repository.find(pending.id)
       orphanExists <- objects.contains(orphan.objectKey)
@@ -103,19 +110,73 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
       assert(!orphanExists)
       assert(!pendingExists)
 
-  test("provider outages defer reconciliation without changing the DB state"):
-    val candidate = reservation("source-reconcile-deferred", old)
+  test("bounded sweeps pass a failing head, finish their fixed window, and retry from the start"):
+    val head = reservation("source-state-a", old)
+    val tail = reservation("source-state-b", old)
+    val newerState = reservation("source-state-c", now)
+    val orphanHead = reservation("source-orphan-a", old)
+    val orphanTail = reservation("source-orphan-b", old)
+    val newerOrphan = reservation("source-orphan-c", now)
     val repository = PostgresSourceImagesRepository[IO](transactor)
 
     for
       objects <- RecordingSourceImageObjectStorage.create
-      _ <- repository.reserveWithinQuota(candidate, quota)
+      _ <- List(head, tail, newerState, orphanHead, orphanTail, newerOrphan).traverse_ { candidate =>
+        repository.reserveWithinQuota(candidate, quota) *>
+          objects.put(candidate.objectKey, candidate.mediaType, bytes, candidate.sha256)
+      }
+      _ <- List(tail, newerState, orphanHead, orphanTail, newerOrphan).traverse_ { candidate =>
+        repository.markAvailable(candidate.id, None, candidate.now)
+      }
+      _ <- List(tail, newerState).traverse_ { candidate =>
+        repository.beginDeleteUnreferenced(candidate.id, candidate.now)
+      }
+      clock <- Ref.of[IO, Instant](now)
+      sweep <- SourceImageObjectReconciler.create[IO](
+        repository,
+        objects,
+        config.copy(batchSize = 1),
+        clock.get,
+      )
       _ <- objects.failNextGet(SourceImageObjectFailure.Unavailable)
-      stats <- reconciler(repository, objects).runOnce
-      stored <- repository.find(candidate.id)
+      first <- sweep.runOnce
+      firstHead <- repository.find(head.id)
+      firstOrphan <- repository.find(orphanHead.id)
+      untouchedOrphan <- repository.find(orphanTail.id)
+      _ <- clock.set(now.plusSeconds(7200))
+      // Keep the outage armed while the next page progresses; the next GET is the head on run 3.
+      _ <- objects.failNextGet(SourceImageObjectFailure.Unavailable)
+      second <- sweep.runOnce
+      secondTail <- repository.find(tail.id)
+      secondOrphan <- repository.find(orphanTail.id)
+      waitingState <- repository.find(newerState.id)
+      waitingOrphan <- repository.find(newerOrphan.id)
+      third <- sweep.runOnce
+      retriedHead <- repository.find(head.id)
+      admittedOrphan <- repository.find(newerOrphan.id)
+      fourth <- sweep.runOnce
+      admittedState <- repository.find(newerState.id)
+      recovered <- sweep.runOnce
+      recoveredHead <- repository.find(head.id)
     yield
-      assertEquals(stats.deferred, 1)
-      assertEquals(stored.map(_.status), Some(SourceImageStatus.Reserved))
+      assertEquals(first.deferred, 1)
+      assertEquals(first.deleted, 1)
+      assertEquals(firstHead.map(_.status), Some(SourceImageStatus.Reserved))
+      assertEquals(firstOrphan.map(_.status), Some(SourceImageStatus.Deleted))
+      assertEquals(untouchedOrphan.map(_.status), Some(SourceImageStatus.Available))
+      assertEquals(second.deleted, 2)
+      assertEquals(secondTail.map(_.status), Some(SourceImageStatus.Deleted))
+      assertEquals(secondOrphan.map(_.status), Some(SourceImageStatus.Deleted))
+      assertEquals(waitingState.map(_.status), Some(SourceImageStatus.DeletePending))
+      assertEquals(waitingOrphan.map(_.status), Some(SourceImageStatus.Available))
+      assertEquals(third.deferred, 1)
+      assertEquals(third.deleted, 1)
+      assertEquals(retriedHead.map(_.status), Some(SourceImageStatus.Reserved))
+      assertEquals(admittedOrphan.map(_.status), Some(SourceImageStatus.Deleted))
+      assertEquals(fourth.deleted, 1)
+      assertEquals(admittedState.map(_.status), Some(SourceImageStatus.Deleted))
+      assertEquals(recovered.recovered, 1)
+      assertEquals(recoveredHead.map(_.status), Some(SourceImageStatus.Available))
 
   test("cancellation leaves an inaccessible object charged to quota until later reconciliation"):
     val candidate = reservation("source-cancel-reconcile", old)
@@ -147,11 +208,11 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
       retained <- objects.contains(candidate.objectKey)
       blocked <- repository.reserveWithinQuota(next, singleImageQuota)
       _ <- objects.failNextDelete(SourceImageObjectFailure.Unavailable)
-      deferred <- reconciler(repository, objects).runOnce
+      deferred <- reconciler(repository, objects).flatMap(_.runOnce)
       afterFailure <- repository.find(candidate.id)
       retainedAfterFailure <- objects.contains(candidate.objectKey)
       restartedRepository = PostgresSourceImagesRepository[IO](transactor)
-      recovered <- reconciler(restartedRepository, objects).runOnce
+      recovered <- reconciler(restartedRepository, objects).flatMap(_.runOnce)
       deleted <- restartedRepository.find(candidate.id)
       remains <- objects.contains(candidate.objectKey)
       admitted <- restartedRepository.reserveWithinQuota(next, singleImageQuota)
@@ -195,7 +256,7 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
       releaseInspection <- Deferred[IO, Unit]
       firstGet <- Ref.of[IO, Boolean](true)
       gated = gateAfterFirstGet(objects, inspected, releaseInspection, firstGet)
-      reconciliation <- reconciler(repository, gated).runOnce.start
+      reconciliation <- reconciler(repository, gated).flatMap(_.runOnce).start
       _ <- inspected.get
       store = momo.api.adapters.storage.objectstore.ObjectBackedImageStore[IO](
         repository,
@@ -226,15 +287,10 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
   private def reconciler(
       repository: SourceImagesRepository[IO],
       objects: SourceImageObjectStorage[IO],
-  ): SourceImageObjectReconciler[IO] = SourceImageObjectReconciler[IO](
+  ): IO[SourceImageObjectReconciler[IO]] = SourceImageObjectReconciler.create[IO](
     repository,
     objects,
-    SourceImageObjectReconcilerConfig(
-      staleStateAge = 1.minute,
-      orphanAge = 1.hour,
-      failedRecordRetention = 1.hour,
-      batchSize = 100,
-    ),
+    config,
     IO.pure(now),
   )
 

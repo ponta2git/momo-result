@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Design-sync notes and previews name classes; only app sources may generate utilities. */
+@source not "../.design-sync";
 
 @custom-variant short-viewport (@media (max-height: 24rem));
 

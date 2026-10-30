@@ -4,10 +4,11 @@ import sttp.tapir.server.ServerEndpoint
 
 import momo.api.domain.PublicId
 import momo.api.domain.ids.HeldEventId
-import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec}
+import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec, HeldEventListCodec}
 import momo.api.endpoints.{
   DeleteHeldEventResponse,
   HeldEventDetailResponse,
+  HeldEventListItemResponse,
   HeldEventListResponse,
   HeldEventResponse,
   HeldEventSummaryResponse,
@@ -40,24 +41,30 @@ object HeldEventModule:
     val execution = context.execution
     List(
       SecuredEndpoint.readLogic(security, HeldEventsEndpoints.list) { _ => input =>
-        security.respond(listHeldEvents.run(
-          query = input.searchQuery,
+        execution.execute(HeldEventListCodec.toListCommand(
           limit = input.limit,
           page = input.page,
           pageSize = input.pageSize,
-        ))(result =>
+          sort = input.sort,
+          search = HeldEventListCodec.SearchParams(
+            gameTitleId = input.gameTitleId,
+            seasonMasterId = input.seasonMasterId,
+            mapMasterId = input.mapMasterId,
+            from = input.from,
+            to = input.to,
+            minMatchCount = input.minMatchCount,
+            q = input.q,
+            memberId = input.memberId,
+            metric = input.metric,
+            metricValue = input.metricValue,
+            metricRange = input.metricRange,
+          ),
+        ))(listHeldEvents.run)(result =>
           HeldEventListResponse(
-            items = result.page.items.map(item =>
-              HeldEventResponse.from(
-                item.event,
-                item.matchCount,
-                item.draftCount,
-                item.nextMatchNo,
-                item.scopes,
-              )
-            ),
+            items = result.page.items.map(HeldEventListItemResponse.from),
             pagination = PaginationResponse.from(result.page),
             totalMatchCount = result.totalMatchCount,
+            latestHeldEventId = result.latestHeldEventId.map(_.value),
           )
         )
       },

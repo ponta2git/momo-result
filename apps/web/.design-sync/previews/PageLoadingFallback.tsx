@@ -16,7 +16,3 @@ export const Detail = () => (
     loadingLabel="試合詳細を読み込み中"
   />
 );
-
-export const RecordList = () => (
-  <PageLoadingFallback kind="record-list" loadingLabel="開催履歴を読み込み中" width="standard" />
-);

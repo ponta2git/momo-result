@@ -10,7 +10,13 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.domain.ids.*
-import momo.api.domain.{GameTitle, HeldEvent, PageRequest}
+import momo.api.domain.{
+  GameTitle,
+  HeldEvent,
+  HeldEventListSearchCriteria,
+  HeldEventListSort,
+  PageRequest
+}
 import momo.api.integration.IntegrationSuite
 import momo.api.repositories.CachedReferenceRepositories
 import momo.api.testing.AppErrorAssertions.assertAppException
@@ -174,7 +180,11 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
           'scope_title_' || n, $now, $now FROM generate_series(1, ${maximum + 1}) n
       """.update.run.transact(transactor)
       rejected <- PostgresHeldEventListReadModel[IO](transactor)
-        .list(None, PageRequest(1, 1)).attempt
+        .list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(1, 1)
+        ).attempt
     yield assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
   }
 

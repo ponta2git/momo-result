@@ -21,20 +21,6 @@ object FixedClock:
     override def realTime: IO[FiniteDuration] = IO
       .pure(java.time.Duration.between(Instant.EPOCH, now).toNanos.nanos)
 
-final case class FailingDeleteImageStore(delegate: ImageStorage[IO], deleteError: Throwable)
-    extends ImageStorage[IO]:
-  override def save(
-      ownerAccountId: AccountId,
-      fileName: Option[String],
-      contentType: Option[String],
-      bytes: Array[Byte],
-  ): IO[Either[AppError, StoredImage]] = delegate.save(ownerAccountId, fileName, contentType, bytes)
-  override def find(imageId: ImageId): IO[Option[StoredImage]] = delegate.find(imageId)
-  override def readStream(image: StoredImage): Stream[IO, Byte] = delegate.readStream(image)
-  override def delete(imageId: ImageId): IO[Boolean] =
-    val _ = imageId
-    IO.raiseError(deleteError)
-
 final case class NoReadImageStore(image: StoredImage) extends ImageStorage[IO]:
   override def save(
       ownerAccountId: AccountId,

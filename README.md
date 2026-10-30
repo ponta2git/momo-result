@@ -34,6 +34,7 @@ cp .env.example .env   # 必要な値を設定
 pnpm dev               # API + Web を起動
 ```
 
+- API の build・test の前に `scripts/ci/build-http4s-patch.sh` で固定 http4s fork を準備します（[開発作業規約](docs/dev-rule.md#environment)）。
 - DB の起動と migration は `momo-db` checkout の scripts を使います。
 - Processing Worker は `pnpm dev` に含まれません。`apps/processing-worker/Dockerfile` から build した container で別に起動します。
 

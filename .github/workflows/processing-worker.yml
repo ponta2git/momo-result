@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       package_image:
-        description: Package the verified image as an immutable release candidate
+        description: Package the verified image as an immutable release candidate and the controlled E2E worker for System E2E
         required: false
         default: false
         type: boolean
@@ -26,6 +26,15 @@ on:
       producer_run_attempt:
         description: Run attempt that built and verified the candidate image
         value: ${{ jobs.runtime-image.outputs.producer_run_attempt }}
+      controlled_worker_artifact_digest:
+        description: Digest of the controlled E2E worker artifact
+        value: ${{ jobs.controlled-worker.outputs.artifact_digest }}
+      controlled_worker_artifact_id:
+        description: ID of the controlled E2E worker artifact
+        value: ${{ jobs.controlled-worker.outputs.artifact_id }}
+      controlled_worker_run_attempt:
+        description: Run attempt that built the controlled E2E worker
+        value: ${{ jobs.controlled-worker.outputs.run_attempt }}
 
 permissions:
   contents: read
@@ -302,3 +311,72 @@ jobs:
           path: ${{ env.ANALYSIS_METADATA_ARTIFACT_NAME }}/candidate.json
           if-no-files-found: error
           retention-days: 7
+
+  # System E2E consumes this test executable. Build it beside the production image instead of
+  # after it, so the E2E job only downloads, verifies, and loads it. It is never a release candidate.
+  controlled-worker:
+    name: Build and package controlled E2E worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: inputs.package_image
+    outputs:
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      run_attempt: ${{ steps.candidate.outputs.run_attempt }}
+    env:
+      ARTIFACT_DIR: e2e-controlled-worker
+      IMAGE_REF: momo-e2e-controlled-worker:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build controlled worker
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+          DOCKER_BUILD_SUMMARY: "false"
+        with:
+          context: .
+          file: apps/processing-worker/Dockerfile
+          target: e2e-test
+          load: true
+          tags: ${{ env.IMAGE_REF }}
+          cache-from: |
+            type=gha,scope=momo-result-ocr-e2e-v1
+            type=gha,scope=momo-result-analysis-v1
+          cache-to: type=gha,mode=max,scope=momo-result-ocr-e2e-v1,ignore-error=true
+        timeout-minutes: 20
+
+      - name: Save controlled worker
+        run: |
+          mkdir -p "${ARTIFACT_DIR}"
+          printf '%s\n' "${IMAGE_REF}" > "${ARTIFACT_DIR}/image-ref.txt"
+          docker image inspect "${IMAGE_REF}" --format '{{.Id}}' > "${ARTIFACT_DIR}/image-id.txt"
+          docker save "${IMAGE_REF}" | gzip -1 > "${ARTIFACT_DIR}/controlled-worker-image.tar.gz"
+          (cd "${ARTIFACT_DIR}" && sha256sum controlled-worker-image.tar.gz > image-tar.sha256)
+        timeout-minutes: 10
+
+      - name: Build structured CI tool
+        uses: ./.github/actions/setup-ci-tool
+
+      - name: Record controlled worker provenance
+        id: candidate
+        run: |
+          scripts/ci/ci-tool.sh create-e2e-candidate --kind controlled-worker \
+            --artifact-dir "${ARTIFACT_DIR}" --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --commit "${GITHUB_SHA}" > "${ARTIFACT_DIR}/candidate.json"
+          printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload controlled worker
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: e2e-controlled-worker-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ARTIFACT_DIR }}/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

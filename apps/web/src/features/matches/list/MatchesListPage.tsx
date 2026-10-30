@@ -2,7 +2,6 @@ import { Download, Filter, PencilLine, PenSquare, RefreshCw, ScanLine, Trophy } 
 import { useState } from "react";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
-import { MatchListConditionChips } from "@/features/matches/list/MatchListConditionChips";
 import { describeMatchListConditions } from "@/features/matches/list/matchListConditions";
 import { matchListExportLink } from "@/features/matches/list/matchListPresentation";
 import { MatchesTable, MatchListCompactRows } from "@/features/matches/list/MatchListRows";
@@ -22,6 +21,7 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { AppliedConditionChips } from "@/shared/ui/forms/AppliedConditionChips";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
@@ -205,7 +205,7 @@ export function MatchesListPage() {
                   )}
                 </div>
               </div>
-              <MatchListConditionChips
+              <AppliedConditionChips
                 conditions={chipConditions}
                 disabled={list.scopeChanging}
                 onRemove={removeCondition}

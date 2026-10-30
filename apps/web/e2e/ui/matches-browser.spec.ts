@@ -48,6 +48,8 @@ test("keeps the mobile search draft through layout changes and applies it only o
 
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe("ボンビー");
+  // "1試合" also matches the retained "第1試合" row; wait for the deferred list request itself.
+  await expect.poll(() => requests.at(-1)?.get("q")).toBe("ボンビー");
   await expect(list).toContainText("1試合");
   expect(Object.fromEntries(requests.at(-1) ?? [])).toMatchObject({
     ...Object.fromEntries(initialSearch),

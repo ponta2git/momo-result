@@ -1,13 +1,13 @@
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type {
-  GameTitleResponse,
-  MapMasterResponse,
-  SeasonMasterResponse,
-} from "@/shared/api/masters";
 import type { ListMatchesQuery, MatchSummaryResponse } from "@/shared/api/matches";
 import type { PaginationState } from "@/shared/lib/pagination";
+import type {
+  HeldOrderSort,
+  MatchSearchScopeCandidates,
+} from "@/shared/matches/matchSearchConditions";
+import type { AppliedCondition } from "@/shared/ui/forms/AppliedConditionChips";
 
-export type MatchListSort = "held_desc" | "held_asc";
+export type MatchListSort = HeldOrderSort;
 
 export type MatchListRecord = NonNullable<ListMatchesQuery["record"]>;
 
@@ -57,18 +57,14 @@ export type MatchListConditionKey =
   | "memo"
   | "record";
 
-export type MatchListAppliedCondition = {
-  key: MatchListConditionKey;
-  label: string;
-};
+export type MatchListAppliedCondition = AppliedCondition<MatchListConditionKey>;
 
 export type MatchListFilterActions = {
   onChange: (change: MatchListFilterChange) => void;
   onClear: () => void;
 };
 
-export type MatchListFilterCandidates = {
-  gameTitles: GameTitleResponse[];
+export type MatchListFilterCandidates = MatchSearchScopeCandidates & {
   heldEvents: HeldEventResponse[];
   heldEventPicker?: {
     error?: string | undefined;
@@ -79,8 +75,6 @@ export type MatchListFilterCandidates = {
     selectedHeldEvent?: HeldEventResponse | undefined;
     onPageChange: (page: number) => void;
   };
-  maps: MapMasterResponse[];
-  seasons: SeasonMasterResponse[];
 };
 
 export type MatchListItemView = {

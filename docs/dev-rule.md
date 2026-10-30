@@ -9,6 +9,7 @@
 - local secret は追跡外の env file、production / CI secret は各 secret store で管理し、必要な名前だけを `.env.example` に置く。
 - API / worker の env の読込元は、実際の起動経路で確認する。worker container には worker が使う secret だけを渡す。
 - 隔離 test の既定 migration source は共通 resolver が `.momo-db-ref` に固定した `momo-db` commit から解決する。checkout の HEAD はその commit と異なってよい。固定 revision の archive や意図した schema 実験は `MOMO_DB_MIGRATIONS_DIR` で明示し、検証した前提を報告で区別する。判定の現在値は `scripts/ci/resolve-momo-db-migrations.sh` を正本とする。
+- API は `.http4s-ref` に固定した http4s fork で build・test する。ローカルでは root で `scripts/ci/build-http4s-patch.sh` を実行し、fork を `~/.ivy2/local` へ publish して版を `_deps/http4s-patch` に記録する。`apps/api/build.sbt` はこの記録か `MOMO_HTTP4S_PATCHED_VERSION` を使い、未準備や固定 revision との不一致では upstream へ fallback せず依存解決の前に失敗する。ref を更新したら再実行し、sbt server を再起動する。
 - integration / E2E は普段使いの DB、bucket と分離する。
 - Web / runtime E2E の fresh DB bootstrap は `web-e2e` profile で現行の分析公開契約を初期化する。migration だけの baseline と区別し、既存 DB の正式な promotion や本番切替とは別の手順として扱う。
 
@@ -27,16 +28,16 @@ algorithm version の昇格、本番候補の build、backfill、credential rota
 
 ## E2E Suites
 
-全 suite は Node と、runner が使う Web の依存関係を用意する。UI・システム・回復 E2E は Playwright のブラウザを使い、システム・回復 E2E は JDK / sbt も使う。システム・回復 E2E と通知契約は Docker、host の `jq`、`.momo-db-ref` に適合する migration、依存を install・build 済みの `.summit-ref` に固定した Summit checkout を使う。既定の配置は `_deps/momo-db` / `_deps/summit`。各 checkout の package manager で必要な依存を準備し、migration の準備は [DB 規約](db-rule.md#ownership) に従う。migration は runner が新しい DB に適用する。
+全 suite は Node と、runner が使う Web の依存関係を用意する。UI・システム・回復 E2E は Playwright のブラウザを使う。システム・回復 E2E と通知契約は Docker、host の `jq`、`.momo-db-ref` に適合する migration、依存を install・build 済みの `.summit-ref` に固定した Summit checkout を使う。既定の配置は `_deps/momo-db` / `_deps/summit`。各 checkout の package manager で必要な依存を準備し、migration の準備は [DB 規約](db-rule.md#ownership) に従う。migration は runner が新しい DB に適用する。
 
 | suite | command | 検証対象 | 用意する image |
 | --- | --- | --- | --- |
 | UI E2E | `pnpm web:e2e:ui` | ビルド済み Web と明示した HTTP 応答だけでブラウザ操作を検証する | なし |
-| システム E2E | `pnpm e2e` | 実 Runtime / Worker を通す保存・OCR・分析・通知・権限と、記録操作の回復 | Runtime の production image を `MOMO_E2E_RUNTIME_IMAGE`、Worker の production image を `MOMO_E2E_WORKER_IMAGE` に指定 |
-| 回復 E2E | `pnpm e2e:recovery` | 制御 Worker を使う OCR の回復と、ブラウザを使わない通知結合契約 | Runtime の production image を `MOMO_E2E_RUNTIME_IMAGE`、Worker の `e2e-test` target を `MOMO_E2E_CONTROLLED_WORKER_IMAGE` に指定 |
+| システム E2E | `pnpm e2e` | 実 Runtime / Worker を通す保存・OCR・分析・通知・権限と、記録操作の回復 | Runtime の production image を `MOMO_E2E_RUNTIME_IMAGE`、Worker の production image を `MOMO_E2E_WORKER_IMAGE`、その Runtime に対応する session fixture を `MOMO_E2E_SESSION_FIXTURE_DIR` に指定 |
+| 回復 E2E | `pnpm e2e:recovery` | 制御 Worker を使う OCR の回復と、ブラウザを使わない通知結合契約 | Runtime の production image を `MOMO_E2E_RUNTIME_IMAGE`、Worker の `e2e-test` target を `MOMO_E2E_CONTROLLED_WORKER_IMAGE`、session fixture を `MOMO_E2E_SESSION_FIXTURE_DIR` に指定 |
 | 通知契約 | `pnpm test:notification-contract` | 独立 DB で分析通知 producer と固定 Summit consumer の上限・描画互換性 | Worker の `e2e-test` target を `MOMO_E2E_CONTROLLED_WORKER_IMAGE` に指定 |
 
-選んだ suite が使う image を用意し、runner は開始時に immutable image ID を確定する。CI は同じ runner と suite を実行する。各 suite の保証範囲は [テスト実行設計](test-architecture.md#web-の実行境界) を正本とする。
+ローカルでは `pnpm e2e:prepare` が作業ツリーから上記の image と session fixture（root `Dockerfile` の `e2e-session-fixture` target）を CI と同じ Dockerfile target で build し、指定する環境変数を `target/e2e/prepared.env` に書く。commit SHA による再利用はせず、変更は BuildKit の内容単位 cache で再 build される。runner は開始時に immutable image ID を確定し、session fixture がその Runtime image ID に対応しない場合は資源を作る前に失敗する。runner は build や sbt へ fallback しない。CI は同じ runner と suite を実行し、制御 Worker と session fixture は producer job で build した artifact を来歴検証してから渡す。各 suite の保証範囲は [テスト実行設計](test-architecture.md#web-の実行境界) を正本とする。
 
 手動の E2E 実確認は Playwright MCP を使う。`pnpm e2e --hold`（制御 Worker は `pnpm e2e:recovery --hold`）で同じ隔離環境を保持し、表示された private metadata の接続先と session fixture を使う。metadata、cookie、CSRF、環境ファイルは手元に留める。対象ケースを実行したら runner を中断して回収する。
 

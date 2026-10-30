@@ -39,6 +39,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 - `src` の Vitest は値変換と component / hook / MSW の証拠を扱う。app の route 接続と feature の resource lifecycle を区別し、後者の詳細は feature 側の suite に置く。
 - `e2e/ui` はビルド済み Web と制御した HTTP 応答で focus・描画・非同期遷移を検証し、未定義 API 通信を失敗させる。DB や Worker を起動せず、mock 応答を保存・生成・配送の証拠にしない。
 - `e2e/system` は production image の Web / API / Worker と実 DB・画像 storage・固定した通知 consumer を通す。session fixture は既存 SessionService で生成し、ブラウザは通常 cookie / CSRF を使う。OAuth provider の handshake と callback はこの fixture の保証範囲に含めない。
+- session fixture は Test とは別の sbt config に置き、Runtime の build で compile 済みの API を再利用する Dockerfile target で JAR だけを作る。runner は候補 Runtime image の JVM と staged library で各 suite の新しい DB に対して実行し、本番 image には fixture class を含めない。制御 Worker（`e2e-test` target）も E2E job の外で build する。producer は artifact と来歴を作り、CI は producer の run・attempt・commit・hash と Runtime image ID との対応を検証し、runner は検証済みの入力を実行して可変な隔離環境だけを所有・回収する。
 - `e2e/recovery` は制御 Worker を使い、受付応答の喪失や処理失敗から利用者が操作を続けられることを確認する。実 Worker と同じ job DB に同時起動しない。通知本文・全画像待ちなどの詳細は API を入口にする `e2e/contracts`、全体状態を変える上限 fixture は独立した通知契約 runner が所有する。
 - 各 suite の command、必要な image、環境変数は [開発作業規約の E2E Suites](dev-rule.md#e2e-suites) に従う。
 - `scripts:check` の Node test は build checker の誤検出・未検出、runner の中断と所有 process の回収、診断の機密保護を観測する pipeline-integrity evidence とし、Vitest / coverage と分離する。別 process を起動する runner test は L であり、browser の利用者 flow や実 DB の接続成功を保証しない。

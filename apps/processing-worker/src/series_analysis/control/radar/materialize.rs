@@ -86,8 +86,7 @@ pub(in crate::series_analysis::control) async fn materialize_next(
         tx.execute("UPDATE series_radar_operations SET job_id=(SELECT id FROM series_analysis_jobs WHERE legacy_id=$2),legacy_job_id=$2,updated_at=clock_timestamp() WHERE legacy_id=$1 AND status='pending' AND job_id IS NULL", &[&id,&job_id]).await?;
     } else {
         tx.execute("UPDATE series_analysis_job_requests SET assigned_job_id=(SELECT id FROM series_analysis_jobs WHERE legacy_id=$1),assigned_attempt_id=NULL,legacy_assigned_attempt_id=NULL WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) AND status='pending'", &[&job_id,&title]).await?;
-        tx.execute("UPDATE series_analysis_title_states SET pending_work=true,pending_forced_run_count=0,updated_at=clock_timestamp() WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&title]).await?;
-        tx.execute("UPDATE series_analysis_campaign_targets t SET status='expanded',updated_at=clock_timestamp() FROM series_analysis_job_requests r WHERE t.job_request_id=r.id AND r.assigned_job_id=(SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)", &[&job_id]).await?;
+        tx.execute("UPDATE series_analysis_title_states SET pending_work=true,updated_at=clock_timestamp() WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&title]).await?;
     }
     Ok(true)
 }

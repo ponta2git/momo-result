@@ -220,9 +220,9 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"SELECT pending_work FROM series_analysis_title_states WHERE game_title_id = $title"
           .query[Boolean].unique.transact(transactor)
       recovery <- sql"""
-        SELECT status, assigned_job_id, force_run FROM series_analysis_job_requests
+        SELECT status, assigned_job_id FROM series_analysis_job_requests
         WHERE game_title_id = $title
-      """.query[(String, Option[String], Boolean)].to[List].transact(transactor)
+      """.query[(String, Option[String])].to[List].transact(transactor)
     yield
       assertEquals(accepted, replay)
       assertEquals(accepted.map(_.status), Right("pending"))
@@ -233,7 +233,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
       assertEquals(withdrawn.map(_.status), Right("succeeded"))
       assertEquals(finalState, (None, None, 2L, None))
       assertEquals(original.toOption.flatMap(_.toOption).map(_.status), Some("withdrawn"))
-      assertEquals(recovery, List(("pending", None, false)))
+      assertEquals(recovery, List(("pending", None)))
       assert(pending)
 
   test("application and withdrawal explicitly rebind an already queued ordinary job"):

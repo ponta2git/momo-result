@@ -21,6 +21,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 - job / request writer は外部 I/O を transaction の外に置き、commit 後にだけ typed wake を返す。業務 transaction の確定は通知の成否から独立させる。
 - 分析の有効な algorithm / artifact schema / validation contract の組は release singleton を正本とする。作品作成は singleton を `FOR SHARE` で固定し、作品と title state を同じ transaction で明示保存する。新規作品の version は各 consumer の定数ではなく singleton から得る。
 - 分析成果物の current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
+- 分析 campaign target は未展開を `pending`、request へ展開済みで未終端のものを `expanded` とする。実行中かどうかは job / attempt と request の割当が所有し、target へ重複保存しない。手動要求の未充足と後続実行は保存済み request で判定する。
 - 分析の published artifact header と child resource は改変不能とし、consumer の検証に加えて DB の guard でも守る。この不変性は恒久の契約であり、移行の完了後も維持する。staging の作成・差し替え、attempt 保持 cleanup による許可済み provenance 変更、参照されない parent からの cascade cleanup を、公開内容の単独変更と区別する。DB の guard を別の仕組みへ置き換える場合は、[Contract Evidence](#contract-evidence) の publication の各経路を実 PostgreSQL で検証し、撤去順を決めてから行う。
 - 実績の定義・直接入力と移行の根拠・廃止履歴は `momo-db` に保存する。根拠は項目・プレーヤー・入力元ごとの現在の申告であり、取消時も保持する。編集版と申告の世代を分け、同じ申告の訂正は世代を維持し、取消後に別試合から新規入力するときは新しい世代にする。取消・訂正を反映した現在の申告を保持し、初達成は有効な根拠から決め直せるようにする。判断条件は [実績要求](requirements/player-achievements.md#3-入力と達成判定) に従う。
 - 自動実績の廃止履歴は、定義と4人の統合結果を持つ独立した業務 snapshot として保存する。手入力の下位項目を廃止するときは、その時点で補完元となる根拠 ID・世代だけを固定する。いずれも通常の分析 artifact 整理から独立して保持し、全編集履歴や有効項目の派生行は蓄積しない。
@@ -87,6 +88,7 @@ test の採用・維持・削除は [テスト・品質規約](test-rule.md#品�
 
 | 契約 | 内容 | 撤去条件 |
 | --- | --- | --- |
+| 分析の未使用状態・列の撤去 | `momo-db` の `0101` で target の `running` を `expanded` へ変換し、`0102` で旧状態と `pending_forced_run_count`・`force_run` を撤去する。旧 API の schema 検査と旧 Worker の write は新 schema に対応しないため、全 writer を停止し復元確認済み backup を揃えた上で、migration と対応する API・Worker を一括で切り替える。旧新 consumer は混在させず、再開前の切戻しは旧 DB と旧 consumer の組で行う。実際の適用は本番操作の承認対象とする | DB と全 consumer の切替が完了し、旧 schema への切戻しが不要になったことを確認する |
 | 通知用入力基準の導入 | 旧 writer を停止してから既存成果物を基準へ初期化し、対応する API・Worker へ切り替えて再開する。初期化後に基準を更新しない旧 Worker が公開すると、古い基準との差分を後続処理で再通知するため、この間の混在稼働を許容しない。切戻しも基準の整合性を保つ組合せで行う | 旧 Worker へ切り戻す可能性がなくなったことを確認する |
 | validation contract 導入後の rollback floor | rollback floor は、新 column と exact attestation を理解しつつ未移行 artifact も検証して読める transitional consumer とし、戻し先はここまでとする（導入前 binary へは戻さない） | 未移行 artifact が残らないことと、導入前 binary へ戻す経路を廃止したことを確認する |
 

@@ -10,7 +10,8 @@ use super::{
     capability::refresh_heartbeat,
     transaction::{
         bounded_transaction, duration_milliseconds, finish_attempt, fulfill_requests, lock_owned,
-        refresh_operation_projections, request_scheduler_wake, schedule_follow_up,
+        refresh_operation_projections, release_attempt_requests, request_scheduler_wake,
+        schedule_follow_up,
     },
 };
 
@@ -104,13 +105,7 @@ pub(crate) async fn supersede(
         &[&claim.game_title_id],
     )
     .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-             WHERE legacy_assigned_attempt_id = $1",
-            &[&claim.attempt_id],
-        )
-        .await?;
+    release_attempt_requests(&transaction, &claim.attempt_id).await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
 
@@ -232,21 +227,7 @@ pub(crate) async fn retry_transient_failure(
             &[&claim.game_title_id],
         )
         .await?;
-        transaction
-            .execute(
-                "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-                 WHERE legacy_assigned_attempt_id = $1",
-                &[&claim.attempt_id],
-            )
-            .await?;
-        transaction
-            .execute(
-                "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
-                 FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-                   AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
-                &[&claim.job_id],
-            )
-            .await?;
+        release_attempt_requests(&transaction, &claim.attempt_id).await?;
         request_scheduler_wake(&mut effects);
 
         transaction.commit().await?;
@@ -296,21 +277,7 @@ pub(crate) async fn requeue_interrupted(
         &[&claim.game_title_id],
     )
     .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-             WHERE legacy_assigned_attempt_id = $1",
-            &[&claim.attempt_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
-             FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-               AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
-            &[&claim.job_id],
-        )
-        .await?;
+    release_attempt_requests(&transaction, &claim.attempt_id).await?;
     let mut effects = TransactionEffects::empty();
     request_scheduler_wake(&mut effects);
 

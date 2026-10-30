@@ -5,7 +5,8 @@ use crate::job_lease::ExpiredJobLease;
 use super::{
     AttemptOutcome, ClaimedJob, ControlError, RequestOutcome, SafeFailureCode, TransactionEffects,
     transaction::{
-        fulfill_requests, refresh_operation_projections, request_scheduler_wake, schedule_follow_up,
+        fulfill_requests, refresh_operation_projections, release_attempt_requests,
+        request_scheduler_wake, schedule_follow_up,
     },
 };
 
@@ -170,21 +171,7 @@ async fn requeue_expired_job(
             &[&recovery_count, &job_id],
         )
         .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
-             WHERE legacy_assigned_attempt_id = $1",
-            &[&attempt_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_campaign_targets t SET status = 'expanded', updated_at = clock_timestamp()\x20\
-             FROM series_analysis_job_requests r WHERE t.job_request_id = r.id\x20\
-               AND r.assigned_job_id = (SELECT id FROM series_analysis_jobs WHERE legacy_id=$1)",
-            &[&job_id],
-        )
-        .await?;
+    release_attempt_requests(transaction, attempt_id).await?;
     request_scheduler_wake(effects);
     Ok(())
 }

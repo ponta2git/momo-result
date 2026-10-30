@@ -27,12 +27,12 @@ async fn real_postgres_radar_preparation_checks_current_source_and_preserves_pen
     add_record(&client).await?;
     client.execute(r"
         INSERT INTO series_analysis_job_requests (id, legacy_id, game_title_id, legacy_game_title_id, input_revision,
-                                                  algorithm_version, artifact_schema_version, validation_contract_id, trigger, force_run, status)
+                                                  algorithm_version, artifact_schema_version, validation_contract_id, trigger, status)
         SELECT pg_temp.fixture_uuid('series_analysis_job_requests', 'radar-waiting-normal'), 'radar-waiting-normal',
                series_analysis_title_states.game_title_id, (SELECT fixture_parent.legacy_id
                 FROM game_titles AS fixture_parent
                 WHERE fixture_parent.id = series_analysis_title_states.game_title_id), input_revision, algorithm_version,
-               artifact_schema_version, validation_contract_id, 'manual', FALSE, 'pending'
+               artifact_schema_version, validation_contract_id, 'manual', 'pending'
         FROM series_analysis_title_states
         WHERE (SELECT fixture_parent.legacy_id
                FROM game_titles AS fixture_parent

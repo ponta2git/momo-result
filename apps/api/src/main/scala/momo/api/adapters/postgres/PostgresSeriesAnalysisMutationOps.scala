@@ -144,7 +144,6 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           artifact_schema_version,
           validation_contract_id,
           trigger,
-          force_run,
           status,
           assigned_job_id
         ) VALUES (
@@ -155,7 +154,6 @@ private[postgres] object PostgresSeriesAnalysisMutationOps:
           ${desired.artifactSchemaVersion},
           ${desired.validationContractId},
           $trigger,
-          false,
           'pending',
           ${identities.lookup(Entity.AnalysisJobs, jobId)}
         )

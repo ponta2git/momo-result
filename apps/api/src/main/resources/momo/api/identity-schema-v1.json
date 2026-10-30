@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "sourceSnapshots": [
     "0083_snapshot.json",
-    "0100_snapshot.json"
+    "0102_snapshot.json"
   ],
   "optionalTables": [
     "worker_execution_slots"
@@ -7280,12 +7280,6 @@
       },
       {
         "table": "series_analysis_job_requests",
-        "column": "force_run",
-        "dataType": "boolean",
-        "notNull": true
-      },
-      {
-        "table": "series_analysis_job_requests",
         "column": "fulfilled_at",
         "dataType": "timestampwithtimezone",
         "notNull": false
@@ -8098,12 +8092,6 @@
         "table": "series_analysis_title_states",
         "column": "notification_baseline_state",
         "dataType": "text",
-        "notNull": true
-      },
-      {
-        "table": "series_analysis_title_states",
-        "column": "pending_forced_run_count",
-        "dataType": "integer",
         "notNull": true
       },
       {

@@ -1,52 +1,70 @@
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
-import type { GameTitleResponse, SeasonMasterResponse } from "@/shared/api/masters";
-import type { MatchSummaryResponse } from "@/shared/api/matches";
-import type { DraftStatusLabel, DraftStatusOrUnknown } from "@/shared/domain/draftStatus";
+import type { ListMatchesQuery, MatchSummaryResponse } from "@/shared/api/matches";
 import type { PaginationState } from "@/shared/lib/pagination";
+import type {
+  HeldOrderSort,
+  MatchSearchScopeCandidates,
+} from "@/shared/matches/matchSearchConditions";
+import type { AppliedCondition } from "@/shared/ui/forms/AppliedConditionChips";
 
-export type MatchListStatus = DraftStatusOrUnknown;
+export type MatchListSort = HeldOrderSort;
 
-export type MatchListKind = "match" | "match_draft";
+export type MatchListRecord = NonNullable<ListMatchesQuery["record"]>;
 
-export type MatchListStatusFilter =
-  | "all"
-  | "incomplete"
-  | "ocr_running"
-  | "pre_confirm"
-  | "needs_review"
-  | "confirmed";
+export type MatchListRecordRange = NonNullable<ListMatchesQuery["recordRange"]>;
 
-export type MatchListSort =
-  | "status_priority"
-  | "updated_desc"
-  | "held_desc"
-  | "held_asc"
-  | "match_no_asc";
+/** One "who / what / how much" condition; `memberId` empty means any of the four players. */
+export type MatchListRecordCondition = Readonly<{
+  memberId: string;
+  record: MatchListRecord | "";
+  range: MatchListRecordRange;
+  value: string;
+}>;
 
+/** URL-owned search. Text-like values keep the user's canonical string until the API query. */
 export type MatchListSearch = Readonly<{
+  cursor: string;
+  from: string;
   gameTitleId: string;
   heldEventId: string;
-  cursor: string;
+  mapMasterId: string;
   pageSize: number;
+  q: string;
+  record: MatchListRecordCondition;
   seasonMasterId: string;
   sort: MatchListSort;
-  status: MatchListStatusFilter;
+  to: string;
 }>;
 
 export type MatchListFilterChange =
-  | { kind: "status"; status: MatchListStatusFilter }
   | { kind: "sort"; sort: MatchListSort }
-  | { kind: "heldEvent"; heldEventId: string }
   | { kind: "gameTitle"; gameTitleId: string }
-  | { kind: "season"; seasonMasterId: string };
+  | { kind: "season"; seasonMasterId: string }
+  | { kind: "map"; mapMasterId: string }
+  | { kind: "heldEvent"; heldEventId: string }
+  | { kind: "period"; from: string; to: string }
+  | { kind: "memo"; q: string }
+  | { kind: "record"; record: MatchListRecordCondition }
+  | { kind: "conditions"; search: MatchListSearch }
+  | { kind: "removeCondition"; condition: MatchListConditionKey };
+
+export type MatchListConditionKey =
+  | "gameTitle"
+  | "season"
+  | "map"
+  | "heldEvent"
+  | "period"
+  | "memo"
+  | "record";
+
+export type MatchListAppliedCondition = AppliedCondition<MatchListConditionKey>;
 
 export type MatchListFilterActions = {
   onChange: (change: MatchListFilterChange) => void;
   onClear: () => void;
 };
 
-export type MatchListFilterCandidates = {
-  gameTitles: GameTitleResponse[];
+export type MatchListFilterCandidates = MatchSearchScopeCandidates & {
   heldEvents: HeldEventResponse[];
   heldEventPicker?: {
     error?: string | undefined;
@@ -57,68 +75,18 @@ export type MatchListFilterCandidates = {
     selectedHeldEvent?: HeldEventResponse | undefined;
     onPageChange: (page: number) => void;
   };
-  seasons: SeasonMasterResponse[];
-};
-
-export type MatchListFilterSelectionErrors = {
-  gameTitles?: string;
-  heldEvents?: string;
-  seasons?: string;
-};
-
-export type MatchListAction = {
-  disabled?: boolean;
-  draftStatusCheck?: {
-    draftId: string;
-  };
-  href?: string;
-  label: string;
-  variant?: "primary" | "quiet" | "secondary";
-};
-
-export type MatchListRowActions = {
-  draftErrors?: Readonly<Record<string, string>>;
-  checkingDraftIds?: ReadonlySet<string> | undefined;
-  disabled?: boolean;
-  onDraftStatusCheckAction: (action: MatchListAction) => void;
 };
 
 export type MatchListItemView = {
-  canCancelOcr: boolean;
-  createdAt: string;
-  detailHref?: string;
-  displayStatus: "confirmed" | "ocr" | "pre_confirm";
-  exportHref?: string;
-  gameTitleId?: string;
-  gameTitleName?: string;
-  hasWarnings: boolean;
-  hasNote?: boolean;
+  detailHref: string;
+  exportHref: string;
+  gameSeasonLabel: string;
   heldAt?: string;
-  heldEventId?: string;
   id: string;
-  kind: MatchListKind;
-  mapName?: string;
-  matchDraftId?: string;
-  matchId?: string;
-  matchNoInEvent?: number;
-  ownerName?: string;
-  primaryAction: MatchListAction;
+  mapName: string;
+  matchNoLabel: string;
+  noteBody?: string;
   ranks: Array<{ displayName: string; memberId: string; rank: number }>;
-  reviewHref?: string;
-  secondaryActions: MatchListAction[];
-  seasonMasterId?: string;
-  seasonName?: string;
-  status: MatchListStatus;
-  statusDescription?: string;
-  statusLabel: DraftStatusLabel;
-  updatedAt: string;
-};
-
-export type MatchListSummaryCounts = {
-  incompleteCount: number;
-  needsReviewCount: number;
-  ocrRunningCount: number;
-  preConfirmCount: number;
 };
 
 export type MatchListSourceItem = MatchSummaryResponse;

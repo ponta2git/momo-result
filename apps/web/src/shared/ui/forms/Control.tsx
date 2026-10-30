@@ -55,8 +55,8 @@ type TextareaMinHeight = "default" | "md" | "sm";
 
 const textareaMinHeightClass = {
   default: "",
-  md: "min-h-28",
-  sm: "min-h-24",
+  md: "min-h-28 pointer-fine:min-h-28",
+  sm: "min-h-24 pointer-fine:min-h-24",
 } as const satisfies Record<TextareaMinHeight, string>;
 
 export type TextareaControlProps = ControlPresentationProps & {

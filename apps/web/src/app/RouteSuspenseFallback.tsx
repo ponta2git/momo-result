@@ -72,7 +72,12 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
   }
   if (normalizedPathname === "/held-events") {
     return defineRoutePresentation({
-      kind: "record-list",
+      contentToolbar: {
+        actionSize: "sm",
+        actionSlots: 1,
+        actionWidths: ["standard"],
+      },
+      kind: "list",
       width: "standard",
     });
   }

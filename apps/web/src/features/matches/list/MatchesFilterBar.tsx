@@ -2,77 +2,102 @@ import { Filter } from "lucide-react";
 import { useState } from "react";
 
 import {
-  describeMatchListDetailFilters,
-  MatchesListFilters,
-} from "@/features/matches/list/MatchesListFilters";
-import { MatchesStatusFilter } from "@/features/matches/list/MatchesStatusFilter";
+  MatchListHeldEventField,
+  MatchListRecordFields,
+} from "@/features/matches/list/MatchListConditionFields";
+import { isCompleteMatchListRecord } from "@/features/matches/list/matchListConditions";
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
-  MatchListFilterSelectionErrors,
+  MatchListRecordCondition,
   MatchListSearch,
-  MatchListSort,
-  MatchListSummaryCounts,
 } from "@/features/matches/list/matchListTypes";
+import { useCommittedDraft } from "@/shared/lib/useCommittedDraft";
+import { normalizeMatchNoteQuery, searchPeriodError } from "@/shared/matches/matchSearchConditions";
+import {
+  MatchNoteQueryField,
+  MatchSearchScopeFields,
+  SearchPeriodFields,
+} from "@/shared/matches/MatchSearchFields";
 import { Button } from "@/shared/ui/actions/Button";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
-import { SelectField } from "@/shared/ui/forms/SelectField";
 
 type MatchesFilterBarProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
-  counts?: MatchListSummaryCounts | undefined;
-  onRetrySummary?: (() => void) | undefined;
+  hasConditions: boolean;
   pending?: boolean | undefined;
   search: MatchListSearch;
-  selectionErrors?: MatchListFilterSelectionErrors | undefined;
-  summaryError?: boolean | undefined;
-  summaryLoading?: boolean | undefined;
-  summaryMasked?: boolean | undefined;
-  summaryRetryPending?: boolean | undefined;
 };
 
-const sortOptions: Array<{ label: string; value: MatchListSort }> = [
-  { label: "開催が新しい順", value: "held_desc" },
-  { label: "開催が古い順", value: "held_asc" },
-  { label: "更新が新しい順", value: "updated_desc" },
-  { label: "未確定を優先", value: "status_priority" },
-  { label: "試合番号順", value: "match_no_asc" },
-];
+const recordSignature = (condition: MatchListRecordCondition) => JSON.stringify(condition);
 
 export function MatchesFilterBar({
   actions,
   candidates,
-  counts,
-  onRetrySummary,
+  hasConditions,
   pending = false,
   search,
-  selectionErrors,
-  summaryError = false,
-  summaryLoading = false,
-  summaryMasked = false,
-  summaryRetryPending = false,
 }: MatchesFilterBarProps) {
-  const detailLabels = describeMatchListDetailFilters(candidates, search);
-  const hasDetailFilters = detailLabels.length > 0;
-  const hasResettableFilters =
-    hasDetailFilters || search.status !== "all" || search.sort !== "held_desc";
-  const [detailOpen, setDetailOpen] = useState(hasDetailFilters);
+  const hasDetailConditions =
+    search.heldEventId !== "" ||
+    search.from !== "" ||
+    search.to !== "" ||
+    search.q !== "" ||
+    isCompleteMatchListRecord(search.record);
+  const [detailOpen, setDetailOpen] = useState(hasDetailConditions);
+  const [period, setPeriod] = useCommittedDraft(
+    { from: search.from, to: search.to },
+    (value) => `${value.from}~${value.to}`,
+  );
+  const [memo, setMemo] = useCommittedDraft(search.q, (value) => value);
+  const [record, setRecord] = useCommittedDraft(search.record, recordSignature);
+
+  const commitMemo = () => {
+    const q = normalizeMatchNoteQuery(memo);
+    if (q !== search.q) actions.onChange({ kind: "memo", q });
+  };
+  const commitRecord = (condition: MatchListRecordCondition) => {
+    const cleared = condition.record === "" && condition.value.trim() === "";
+    if (cleared && !isCompleteMatchListRecord(search.record)) return;
+    if (!cleared && !isCompleteMatchListRecord(condition)) return;
+    if (recordSignature(condition) !== recordSignature(search.record)) {
+      actions.onChange({ kind: "record", record: condition });
+    }
+  };
 
   return (
     <FilterBar
-      ariaLabel="試合の表示条件"
-      busy={pending || summaryLoading || summaryMasked}
+      ariaLabel="試合の検索条件"
+      busy={pending}
       details={{
-        align: "end",
-        columns: 3,
+        columns: 1,
         controls: (
-          <MatchesListFilters
-            actions={actions}
-            candidates={candidates}
-            search={search}
-            selectionErrors={selectionErrors}
-          />
+          <div className="grid min-w-0 gap-5">
+            <div className="flex min-w-0 flex-wrap items-start gap-4">
+              <div className="w-64 min-w-0">
+                <MatchListHeldEventField
+                  candidates={candidates}
+                  value={search.heldEventId}
+                  onChange={(heldEventId) => actions.onChange({ kind: "heldEvent", heldEventId })}
+                />
+              </div>
+              <SearchPeriodFields
+                from={period.from}
+                to={period.to}
+                onChange={(next) => {
+                  setPeriod(next);
+                  if (!searchPeriodError(next.from, next.to)) {
+                    actions.onChange({ kind: "period", ...next });
+                  }
+                }}
+              />
+            </div>
+            <div className="w-full max-w-[34rem] min-w-0">
+              <MatchNoteQueryField value={memo} onChange={setMemo} onCommit={commitMemo} />
+            </div>
+            <MatchListRecordFields value={record} onChange={setRecord} onCommit={commitRecord} />
+          </div>
         ),
         label: (
           <span className="inline-flex items-center gap-2">
@@ -82,41 +107,30 @@ export function MatchesFilterBar({
         ),
         onOpenChange: setDetailOpen,
         open: detailOpen,
-        summary: detailLabels.length > 0 ? detailLabels.join("・") : undefined,
       }}
       primary={
-        <div className="grid min-w-0 gap-4 md:grid-cols-2 md:items-start">
-          <MatchesStatusFilter
-            counts={counts}
-            currentStatus={search.status}
-            loading={summaryLoading}
-            masked={summaryMasked}
-            retryPending={summaryRetryPending}
-            unavailable={summaryError}
-            onRetry={onRetrySummary}
-            onSelectStatus={(status) => actions.onChange({ kind: "status", status })}
+        <div className="grid min-w-0 grid-cols-4 items-start gap-4">
+          <MatchSearchScopeFields
+            candidates={candidates}
+            gameTitleId={search.gameTitleId}
+            mapMasterId={search.mapMasterId}
+            seasonMasterId={search.seasonMasterId}
+            sort={search.sort}
+            onGameTitleChange={(gameTitleId) =>
+              actions.onChange({ kind: "gameTitle", gameTitleId })
+            }
+            onMapChange={(mapMasterId) => actions.onChange({ kind: "map", mapMasterId })}
+            onSeasonChange={(seasonMasterId) =>
+              actions.onChange({ kind: "season", seasonMasterId })
+            }
+            onSortChange={(sort) => actions.onChange({ kind: "sort", sort })}
           />
-          <div className="min-w-0">
-            <SelectField
-              label="並び順"
-              options={sortOptions}
-              value={search.sort}
-              onValueChange={(nextValue) =>
-                actions.onChange({ kind: "sort", sort: nextValue as MatchListSort })
-              }
-            />
-          </div>
         </div>
       }
       resetAction={
-        hasResettableFilters ? (
-          <Button
-            aria-label="確定状況・並び順・詳細条件を初期状態に戻す"
-            size="sm"
-            variant="quiet"
-            onClick={actions.onClear}
-          >
-            初期条件へ戻す
+        hasConditions ? (
+          <Button size="sm" variant="quiet" onClick={actions.onClear}>
+            条件をすべて解除
           </Button>
         ) : undefined
       }

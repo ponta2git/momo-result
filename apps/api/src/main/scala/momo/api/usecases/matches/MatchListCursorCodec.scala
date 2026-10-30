@@ -1,8 +1,8 @@
 package momo.api.usecases.matches
 
 import java.nio.charset.StandardCharsets
-import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.time.{Instant, LocalDate}
 import java.util.Base64
 
 import scala.util.Try
@@ -12,12 +12,21 @@ import io.circe.syntax.*
 import io.circe.{parser, Codec}
 
 import momo.api.domain.ids.*
-import momo.api.domain.{MatchListKindFilter, MatchListSort, MatchListStatusFilter}
+import momo.api.domain.{
+  MatchListKindFilter,
+  MatchListRecordCriterion,
+  MatchListRecordField,
+  MatchListRecordRange,
+  MatchListSearchCriteria,
+  MatchListSort,
+  MatchListStatusFilter
+}
 import momo.api.errors.AppError
 import momo.api.repositories.MatchListReadModel
 
 private[matches] object MatchListCursorCodec:
-  private val Version = 1
+  // Version 2 added search criteria to the scope and match numbers to the held-at sort key.
+  private val Version = 2
   private val MaxEncodedLength = 4096
   private val MaxDecodedLength = 3072
   private val MaxTextLength = 256
@@ -34,7 +43,15 @@ private[matches] object MatchListCursorCodec:
       kind: MatchListKindFilter,
       sort: MatchListSort,
       pageSize: Int,
+      search: MatchListSearchCriteria,
   ) derives CanEqual
+
+  private final case class WireRecord(
+      field: String,
+      value: Int,
+      range: String,
+      memberId: Option[String],
+  ) derives Codec.AsObject
 
   private final case class WireScope(
       accountId: String,
@@ -45,6 +62,11 @@ private[matches] object MatchListCursorCodec:
       kind: String,
       sort: String,
       pageSize: Int,
+      mapMasterId: Option[String],
+      from: Option[String],
+      to: Option[String],
+      q: Option[String],
+      record: Option[WireRecord],
   ) derives Codec.AsObject
 
   private final case class WirePosition(
@@ -78,6 +100,18 @@ private[matches] object MatchListCursorCodec:
         kind = scope.kind.wire,
         sort = scope.sort.wire,
         pageSize = scope.pageSize,
+        mapMasterId = scope.search.mapMasterId.map(_.value),
+        from = scope.search.from.map(_.toString),
+        to = scope.search.to.map(_.toString),
+        q = scope.search.noteQuery,
+        record = scope.search.record.map(record =>
+          WireRecord(
+            field = record.field.wire,
+            value = record.value,
+            range = record.range.wire,
+            memberId = record.memberId.map(_.value),
+          )
+        ),
       ),
       direction = cursor.direction match
         case MatchListReadModel.CursorDirection.After => "after"
@@ -142,6 +176,11 @@ private[matches] object MatchListCursorCodec:
       status <- MatchListStatusFilter.fromWire(wire.status).toRight(())
       kind <- MatchListKindFilter.fromWire(wire.kind).toRight(())
       sort <- MatchListSort.fromWire(wire.sort).toRight(())
+      mapMasterId <- wire.mapMasterId.traverse(parseId(MapMasterId.fromString))
+      from <- wire.from.traverse(parseDate)
+      to <- wire.to.traverse(parseDate)
+      q <- wire.q.traverse(validateText)
+      record <- wire.record.traverse(decodeRecord)
       // The expected scope was constructed only after ListPagination policy validation. Exact scope
       // equality below is the single source of truth for the upper bound as that policy evolves.
       _ <- Either.cond(wire.pageSize >= 1, (), ())
@@ -153,8 +192,19 @@ private[matches] object MatchListCursorCodec:
       status,
       kind,
       sort,
-      wire.pageSize
+      wire.pageSize,
+      MatchListSearchCriteria(mapMasterId, from, to, q, record),
     )
+
+  private def decodeRecord(wire: WireRecord): Either[Unit, MatchListRecordCriterion] =
+    for
+      field <- MatchListRecordField.fromWire(wire.field).toRight(())
+      range <- MatchListRecordRange.fromWire(wire.range).toRight(())
+      memberId <- wire.memberId.traverse(parseId(MemberId.fromString))
+    yield MatchListRecordCriterion(field, wire.value, range, memberId)
+
+  private def parseDate(value: String): Either[Unit, LocalDate] =
+    validateText(value).flatMap(text => Try(LocalDate.parse(text)).toEither.leftMap(_ => ()))
 
   private def decodePosition(wire: WirePosition): Either[Unit, MatchListReadModel.CursorPosition] =
     for

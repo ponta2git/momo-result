@@ -28,6 +28,7 @@ ARG TESSERACT_SHA256=9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616b
 ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
 ENV PATH="/opt/tesseract/bin:${PATH}"
 ENV PKG_CONFIG_PATH="/opt/tesseract/lib/pkgconfig"
+WORKDIR /tmp/runtime-libssl
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && apt-get install -y --no-install-recommends \
@@ -46,7 +47,13 @@ RUN apt-get update \
     openssl \
     pax-utils \
     pkg-config \
-  && rm -rf /var/lib/apt/lists/*
+  && mkdir -p /opt/runtime-libssl/var/lib/dpkg/status.d \
+  && apt-get download "libssl3=$(dpkg-query --show --showformat='${Version}' libssl3)" \
+  && dpkg-deb --extract ./*.deb /opt/runtime-libssl \
+  && dpkg-deb --field ./*.deb > /opt/runtime-libssl/var/lib/dpkg/status.d/libssl3 \
+  && dpkg-deb --control ./*.deb control \
+  && cp control/md5sums /opt/runtime-libssl/var/lib/dpkg/status.d/libssl3.md5sums \
+  && rm -rf /tmp/runtime-libssl /var/lib/apt/lists/*
 WORKDIR /tmp/tesseract-build
 RUN curl -fsSL -o /tmp/tesseract.tar.gz \
     "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/${TESSERACT_VERSION}.tar.gz" \
@@ -122,14 +129,30 @@ RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/regist
 # Compile E2E tests directly from the shared source and native dependencies, without building
 # production release binaries or collecting their runtime libraries. The default target below
 # remains the production runtime and never contains fixture controls or a test executable.
-FROM source AS e2e-test
+FROM source AS e2e-test-builder
 COPY docs/schemas /workspace/docs/schemas
 COPY apps/processing-worker/testdata /workspace/apps/processing-worker/testdata
 RUN --mount=type=cache,id=analysis-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
   --mount=type=cache,id=analysis-cargo-git,target=/usr/local/cargo/git,sharing=locked \
   --mount=type=cache,id=analysis-target,target=/workspace/apps/processing-worker/target,sharing=locked \
   cargo test --locked --lib --no-run --message-format=json > /tmp/momo-test-build.json \
-  && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/usr/local/bin/mom24-worker-test')"
+  && install -d -m 0755 /tmp/e2e-root/usr/local/bin \
+  && python3 -c "import json,pathlib,shutil; rows=[json.loads(line) for line in pathlib.Path('/tmp/momo-test-build.json').read_text().splitlines()]; executable=next(row['executable'] for row in rows if row.get('reason')=='compiler-artifact' and row.get('executable') and row['target']['name']=='momo_processing_worker'); shutil.copy2(executable,'/tmp/e2e-root/usr/local/bin/mom24-worker-test')" \
+  && strip --strip-debug /tmp/e2e-root/usr/local/bin/mom24-worker-test \
+  && lddtree -l /tmp/e2e-root/usr/local/bin/mom24-worker-test > /tmp/e2e-libraries \
+  && while IFS= read -r library; do \
+    case "${library}" in \
+      /lib/*|/usr/lib/*|/opt/tesseract/lib/*) cp -L --parents "${library}" /tmp/e2e-root || exit 1 ;; \
+    esac; \
+  done < /tmp/e2e-libraries \
+  && cp -R --parents /workspace/docs/schemas /workspace/apps/processing-worker/testdata /tmp/e2e-root
+
+# System E2E transfers this image between jobs. Keep only the test executable, its dynamic
+# libraries, and the checked-in inputs the tests resolve from the source tree; the Rust
+# toolchain and native build tree are not needed to run it.
+FROM ${RUNTIME_IMAGE} AS e2e-test
+ENV LD_LIBRARY_PATH="/opt/tesseract/lib"
+COPY --from=e2e-test-builder /tmp/e2e-root/ /
 ENTRYPOINT ["/usr/local/bin/mom24-worker-test"]
 
 FROM ${RUNTIME_IMAGE} AS runtime
@@ -146,6 +169,8 @@ COPY --from=diagnostics /etc/group /etc/group
 # supported toolbox surface enforceable while still allowing `fly ssh console` access.
 COPY --from=builder --chmod=0755 /bin/dash /momo-toolbox/sh
 COPY --from=builder /tmp/runtime-root/ /
+# Keep OpenSSL providers, engines, and Distroless package metadata consistent with the copied libraries.
+COPY --from=native-builder /opt/runtime-libssl/ /
 # Copy the parent last so the prepared child directory remains an archive entry whose 0700 mode and
 # service ownership cannot be replaced by the root-owned dynamic-library closure above. Copying the
 # empty directory's contents directly produced builder-dependent destination permissions because the

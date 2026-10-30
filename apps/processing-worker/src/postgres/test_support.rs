@@ -140,6 +140,10 @@ async fn relay_commit_fault(
     mut server: TcpStream,
     fault: CommitFault,
 ) -> io::Result<()> {
+    // Tag, length, and body use separate writes. Do not let Nagle and delayed ACKs add
+    // platform-dependent latency before the COMMIT fault this fixture is meant to inject.
+    client.set_nodelay(true)?;
+    server.set_nodelay(true)?;
     let (mut client_read, mut client_write) = client.split();
     let (mut server_read, mut server_write) = server.split();
     tokio::try_join!(

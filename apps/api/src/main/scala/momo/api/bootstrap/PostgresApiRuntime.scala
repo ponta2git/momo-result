@@ -338,7 +338,7 @@ private[bootstrap] object PostgresApiRuntime:
       reconcilerConfig: SourceImageObjectReconcilerConfig,
       diskUsage: F[Option[ImageDiskUsage]],
       admissionConfig: ImageStorageAdmission.Config,
-  ): Resource[F, RuntimeImageStorage[F]] = objects.map { objectStorage =>
+  ): Resource[F, RuntimeImageStorage[F]] = objects.evalMap { objectStorage =>
     val now = Clock[F].realTimeInstant
     val store = ObjectBackedImageStore[F](
       sourceImages,
@@ -347,15 +347,16 @@ private[bootstrap] object PostgresApiRuntime:
       now,
       admissionConfig.quota,
     )
-    val reconciler = SourceImageObjectReconciler[F](
+    SourceImageObjectReconciler.create[F](
       sourceImages,
       objectStorage,
       reconcilerConfig,
       now,
-    )
-    val maintenance = ObjectBackedImageMaintenance[F](reconciler, diskUsage)
-    val admission = ImageStorageAdmission.capacityOnly[F](maintenance, admissionConfig.capacity)
-    RuntimeImageStorage(store, admission, maintenance)
+    ).map { reconciler =>
+      val maintenance = ObjectBackedImageMaintenance[F](reconciler, diskUsage)
+      val admission = ImageStorageAdmission.capacityOnly[F](maintenance, admissionConfig.capacity)
+      RuntimeImageStorage(store, admission, maintenance)
+    }
   }
 
   private val LocalStaleStateAge = 60.seconds

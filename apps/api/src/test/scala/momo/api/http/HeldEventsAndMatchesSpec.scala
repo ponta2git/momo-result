@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
 import java.util.zip.ZipInputStream
 
 import cats.effect.IO
+import cats.syntax.all.*
 import io.circe.Json
 import org.http4s.circe.*
 import org.http4s.implicits.*
@@ -207,6 +208,84 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       assertEquals(jsonField[Boolean](pagination, "hasNextPage"), true)
   }
 
+  app.test("GET /api/held-events projects player results, note matches, and the latest event") {
+    httpApp =>
+      val swapped = List(
+        HttpRequestBodies.Matches.player("member_ponta", 1, 2),
+        HttpRequestBodies.Matches.player("member_akane_mami", 2, 1),
+        HttpRequestBodies.Matches.player("member_otaka", 3, 3),
+        HttpRequestBodies.Matches.player("member_eu", 4, 4),
+      )
+      def note(body: Json, text: String) = body
+        .deepMerge(Json.obj("noteBody" -> Json.fromString(text)))
+      def results(item: Json) = jsonField[List[Json]](item, "playerResults").map(result =>
+        (
+          jsonField[String](result, "memberId"),
+          jsonField[Double](result, "averageRank"),
+          jsonField[List[Int]](result, "rankCounts"),
+        )
+      )
+      for
+        older <- createEventAt(httpApp, "2024-01-01T00:00:00Z")
+        latest <- createEventAt(httpApp, "2024-01-02T00:00:00Z")
+        first <- httpApp
+          .run(writePost(uri"/api/matches", note(confirmBody(older, 1), "キングボンビー出現")))
+        second <- httpApp.run(writePost(
+          uri"/api/matches",
+          note(
+            HttpRequestBodies.Matches.confirmMatchWithPlayers(older, 2, swapped),
+            "またキングボンビー"
+          ),
+        ))
+        _ = assertEquals((first.status, second.status), (Status.Ok, Status.Ok))
+        firstMatchId <- first.as[Json].map(jsonField[String](_, "matchId"))
+        all <- httpApp.run(readGet(uri"/api/held-events")).flatMap(_.as[Json])
+        searched <- httpApp.run(readGet(
+          Uri.unsafeFromString("/api/held-events").withQueryParam("q", " キングボンビー ")
+            .withQueryParam("sort", "held_asc")
+        )).flatMap(_.as[Json])
+      yield
+        val items = jsonField[List[Json]](all, "items")
+        assertEquals(jsonField[String](all, "latestHeldEventId"), latest)
+        assertEquals(items.map(jsonField[String](_, "id")), List(latest, older))
+        assertEquals(results(items.head), Nil)
+        assertEquals(
+          results(items(1)),
+          List(
+            ("member_akane_mami", 1.5, List(1, 1, 0, 0)),
+            ("member_eu", 4.0, List(0, 0, 0, 2)),
+            ("member_otaka", 3.0, List(0, 0, 2, 0)),
+            ("member_ponta", 1.5, List(1, 1, 0, 0)),
+          ),
+        )
+        assert(items.forall(jsonField[Option[Json]](_, "noteMatch").isEmpty))
+        val hits = jsonField[List[Json]](searched, "items")
+        assertEquals(jsonField[String](searched, "latestHeldEventId"), latest)
+        assertEquals(hits.map(jsonField[String](_, "id")), List(older))
+        val noteMatch = jsonField[Json](hits.head, "noteMatch")
+        assertEquals(jsonField[String](noteMatch, "matchId"), firstMatchId)
+        assertEquals(jsonField[Int](noteMatch, "matchNoInEvent"), 1)
+        assertEquals(jsonField[String](noteMatch, "noteBody"), "キングボンビー出現")
+        assertEquals(jsonField[Int](noteMatch, "otherMatchCount"), 1)
+  }
+
+  app.test("GET /api/held-events rejects invalid search parameters with 422") { httpApp =>
+    val cases = List(
+      "sort=updated_desc" -> "sort",
+      "from=2026-05-02&to=2026-05-01" -> "from must be on or before to",
+      "minMatchCount=0" -> "minMatchCount",
+      "metric=rank1_count" -> "metricValue is required",
+      "memberId=member_ponta" -> "memberId requires metric",
+      "metric=average_rank&metricValue=4.01" -> "metricValue",
+      "metric=rank2_count&metricValue=-1" -> "metricValue",
+      s"q=${"a" * 51}" -> "q must be at most 50",
+    )
+    cases.traverse_ { case (query, detail) =>
+      httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events?$query")))
+        .flatMap(assertProblem(_, Status.UnprocessableContent, "VALIDATION_FAILED", detail))
+    }
+  }
+
   app.test("DELETE /api/held-events/:id deletes an empty held event") { httpApp =>
     for
       id <- createEvent(httpApp)
@@ -374,6 +453,10 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       _ <- assertProblem(statusRes, Status.UnprocessableContent, "VALIDATION_FAILED", "status")
       kindRes <- httpApp.run(readGet(uri"/api/matches?kind=unknown"))
       _ <- assertProblem(kindRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind")
+      searchRes <- httpApp.run(readGet(uri"/api/matches?kind=match_draft&q=memo"))
+      _ <- assertProblem(searchRes, Status.UnprocessableContent, "VALIDATION_FAILED", "kind=match")
+      rangeRes <- httpApp.run(readGet(uri"/api/matches?kind=match&from=2026-05-02&to=2026-05-01"))
+      _ <- assertProblem(rangeRes, Status.UnprocessableContent, "VALIDATION_FAILED", "from")
     yield ()
   }
 
@@ -454,6 +537,13 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
     assertEquals(response.status, Status.Ok)
     response.as[Json].map(jsonField[String](_, "id"))
   }
+
+  private def createEventAt(httpApp: org.http4s.HttpApp[IO], heldAt: String): IO[String] = httpApp
+    .run(writePost(uri"/api/held-events", HttpRequestBodies.Matches.createHeldEvent(heldAt)))
+    .flatMap { response =>
+      assertEquals(response.status, Status.Ok)
+      response.as[Json].map(jsonField[String](_, "id"))
+    }
 
   private def createMatchDraft(httpApp: org.http4s.HttpApp[IO]): IO[String] = httpApp
     .run(writePost(uri"/api/match-drafts", HttpRequestBodies.Matches.emptyMatchDraft))

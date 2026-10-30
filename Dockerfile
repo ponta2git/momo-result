@@ -10,6 +10,7 @@ ARG CADDY_X_CRYPTO_VERSION=v0.57.0
 ARG CADDY_X_NET_VERSION=v0.60.0
 ARG CADDY_X_TEXT_VERSION=v0.42.0
 ARG CADDY_GRPC_VERSION=v1.83.2
+ARG CADDY_GO_JOSE_VERSION=v4.1.6
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 
 FROM ${NODE_IMAGE} AS web-deps
@@ -90,6 +91,22 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
   && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "apiOpenApiCheck; stage"
 
+# System E2E session fixture. It reuses the Runtime's compiled API and staged libraries; the
+# default runtime target never copies these classes. Build with `--target e2e-session-fixture`.
+FROM api-builder AS e2e-session-fixture-builder
+COPY apps/api/src/e2e-fixture src/e2e-fixture
+RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
+  --mount=type=cache,id=coursier-cache,target=/root/.cache/coursier,sharing=locked \
+  --mount=type=cache,id=ivy-cache,target=/root/.ivy2/cache,sharing=locked \
+  export HTTP4S_PATCH_VERSION="$(cat /opt/http4s-patch/version.txt)" \
+  && sbt --server --batch "-Dmomo.http4s.patched.version=${HTTP4S_PATCH_VERSION}" "E2eFixture/packageBin" \
+  && set -- target/out/jvm/scala-*/momo-result-api/*-e2eFixture.jar \
+  && test "$#" -eq 1 && test -f "$1" \
+  && install -D -m 0644 "$1" /out/session-fixture.jar
+
+FROM scratch AS e2e-session-fixture
+COPY --from=e2e-session-fixture-builder /out/session-fixture.jar /session-fixture.jar
+
 FROM ${GO_IMAGE} AS runtime-tool-builder
 WORKDIR /workspace/apps/runtime
 COPY apps/runtime/go.mod apps/runtime/go.sum ./
@@ -106,6 +123,7 @@ ARG CADDY_X_CRYPTO_VERSION
 ARG CADDY_X_NET_VERSION
 ARG CADDY_X_TEXT_VERSION
 ARG CADDY_GRPC_VERSION
+ARG CADDY_GO_JOSE_VERSION
 WORKDIR /workspace/caddy
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   go mod download "github.com/caddyserver/caddy/v2@${CADDY_VERSION}" \
@@ -116,7 +134,8 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
     "golang.org/x/crypto@${CADDY_X_CRYPTO_VERSION}" \
     "golang.org/x/net@${CADDY_X_NET_VERSION}" \
     "golang.org/x/text@${CADDY_X_TEXT_VERSION}" \
-    "google.golang.org/grpc@${CADDY_GRPC_VERSION}"
+    "google.golang.org/grpc@${CADDY_GRPC_VERSION}" \
+    "github.com/go-jose/go-jose/v4@${CADDY_GO_JOSE_VERSION}"
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
   go mod tidy
 RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
@@ -135,6 +154,9 @@ RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
   && go version -m /out/caddy | awk -v module="google.golang.org/grpc" \
     -v version="${CADDY_GRPC_VERSION}" \
+    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
+  && go version -m /out/caddy | awk -v module="github.com/go-jose/go-jose/v4" \
+    -v version="${CADDY_GO_JOSE_VERSION}" \
     '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }'
 
 FROM ${JAVA_JRE_IMAGE} AS java-runtime

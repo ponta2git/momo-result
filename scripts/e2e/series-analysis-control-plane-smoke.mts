@@ -209,7 +209,11 @@ WHERE (SELECT fixture_parent.legacy_id
        FROM game_titles AS fixture_parent
        WHERE fixture_parent.id = series_analysis_jobs.game_title_id) = 'title-release-smoke-a'
   AND status = 'queued';`);
-      await smoke.sql(`UPDATE series_analysis_jobs
+      // Keep the expired lease, its attempt and the provenance read in one transaction.
+      // Otherwise the live worker may recover the lease before the fixture is complete or read.
+      const leaseProvenance = await smoke.sql(`\\set QUIET 1
+BEGIN;
+UPDATE series_analysis_jobs
 SET status = 'running'
   , started_at = clock_timestamp() - CAST('2 seconds' AS interval)
   , lease_owner = 'ci-expired-worker'
@@ -251,12 +255,14 @@ SELECT pg_temp.fixture_uuid('series_analysis_job_attempts', 'ci-expired-attempt'
      , 120000
      , clock_timestamp() - CAST('2 seconds' AS interval)
 FROM series_analysis_jobs
-WHERE series_analysis_jobs.legacy_id = '${lease_job}';`);
-      check(
-        (await smoke.sql(`SELECT job.validation_contract_id, job.lease_validation_contract_id, attempt.validation_contract_id
+WHERE series_analysis_jobs.legacy_id = '${lease_job}';
+SELECT job.validation_contract_id, job.lease_validation_contract_id, attempt.validation_contract_id
 FROM series_analysis_jobs AS job
      INNER JOIN series_analysis_job_attempts AS attempt ON attempt.legacy_id = job.legacy_lease_attempt_id
-WHERE job.legacy_id = '${lease_job}';`)) ===
+WHERE job.legacy_id = '${lease_job}';
+COMMIT;`);
+      check(
+        leaseProvenance ===
           [validation_contract_id, validation_contract_id, validation_contract_id].join("|"),
         "Expired lease fixture lost validation contract provenance.",
       );

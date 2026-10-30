@@ -15,6 +15,7 @@ import {
   LoginPage,
   loadAchievementsPage,
   loadDraftReviewPage,
+  loadDraftsPage,
   loadExportPage,
   loadHeldEventDetailPage,
   loadHeldEventsPage,
@@ -30,6 +31,7 @@ import {
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
 const DraftReviewPage = lazy(() => loadLazyModule(loadDraftReviewPage));
+const DraftsPage = lazy(() => loadLazyModule(loadDraftsPage));
 const AchievementsPage = lazy(() => loadLazyModule(loadAchievementsPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
@@ -77,6 +79,11 @@ export const appRoutes: RouteObject[] = [
             path: "matches",
             handle: { title: "試合一覧" },
             element: <MatchesListPage />,
+          },
+          {
+            path: "drafts",
+            handle: { title: "確定前の下書き" },
+            element: <DraftsPage />,
           },
           {
             path: "held-events",

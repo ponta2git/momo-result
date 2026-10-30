@@ -8,6 +8,7 @@ import momo.api.domain.ids.*
 import momo.api.domain.{
   MatchListItem,
   MatchListKindFilter,
+  MatchListSearchCriteria,
   MatchListSort,
   MatchListStatusFilter,
   MatchListSummary
@@ -25,6 +26,7 @@ final case class ListMatchesCommand(
     pageSize: Option[Int],
     cursor: Option[String],
     sort: MatchListSort,
+    search: MatchListSearchCriteria,
 )
 
 final case class ListMatchesPagination(
@@ -61,6 +63,7 @@ final class ListMatches[F[_]: Monad](repository: MatchListReadModel[F]):
       kind = command.kind,
       sort = command.sort,
       pageSize = pageSize,
+      search = command.search,
     )
     cursor <- EitherT.fromEither[F](command.cursor.traverse(MatchListCursorCodec.decode(_, scope)))
     items <- EitherT.liftF(repository.list(MatchListReadModel.Filter(
@@ -71,6 +74,7 @@ final class ListMatches[F[_]: Monad](repository: MatchListReadModel[F]):
       kind = command.kind,
       page = MatchListReadModel.CursorPageRequest(pageSize = pageSize, cursor = cursor),
       sort = command.sort,
+      search = command.search,
     )))
   yield ListMatchesResult(
     items = items.items,

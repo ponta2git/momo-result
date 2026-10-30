@@ -195,7 +195,7 @@ pub(crate) enum OcrControlError {
     InvalidConfiguration,
     #[error("OCR completion payload violates its bounded shape")]
     InvalidCompletion,
-    #[error("OCR success finalization exceeded its deadline")]
+    #[error("OCR finalization exceeded its deadline")]
     FinalizationTimeout,
 }
 
@@ -380,19 +380,27 @@ pub(crate) async fn finish_success(
     hints: &OcrHints,
     completion: &OcrDraftCompletion,
 ) -> Result<(), OcrControlError> {
+    finalize(
+        config,
+        finish_success_transaction(client, claim, config, hints, completion),
+    )
+    .await?;
+    super::submissions::wake(client).await;
+    Ok(())
+}
+
+async fn finalize(
+    config: &OcrControlConfig,
+    operation: impl Future<Output = Result<(), OcrControlError>>,
+) -> Result<(), OcrControlError> {
+    // SQL timeouts cannot bound an acknowledged request whose response never arrives.
+    // An uncertain COMMIT must return an error without issuing post-commit wake hints.
     let deadline = Instant::now()
         .checked_add(config.finalization_timeout)
         .ok_or(OcrControlError::NumericBound)?;
-    let result = timeout_at(
-        deadline,
-        finish_success_transaction(client, claim, config, hints, completion),
-    )
-    .await
-    .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?;
-    if result.is_ok() {
-        super::submissions::wake(client).await;
-    }
-    result
+    timeout_at(deadline, operation)
+        .await
+        .map_err(|_elapsed| OcrControlError::FinalizationTimeout)?
 }
 
 async fn finish_success_transaction(
@@ -467,6 +475,22 @@ pub(crate) async fn finish_failure(
     failure: OcrFailureCode,
     duration_milliseconds: i32,
 ) -> Result<(), OcrControlError> {
+    finalize(
+        config,
+        finish_failure_transaction(client, claim, config, failure, duration_milliseconds),
+    )
+    .await?;
+    super::submissions::wake(client).await;
+    Ok(())
+}
+
+async fn finish_failure_transaction(
+    client: &mut Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+    failure: OcrFailureCode,
+    duration_milliseconds: i32,
+) -> Result<(), OcrControlError> {
     if duration_milliseconds < 0 {
         return Err(OcrControlError::NumericBound);
     }
@@ -476,7 +500,6 @@ pub(crate) async fn finish_failure(
     sync_match_draft_status(&transaction, &claim.job_id).await?;
 
     transaction.commit().await?;
-    super::submissions::wake(client).await;
     Ok(())
 }
 
@@ -497,6 +520,17 @@ pub(crate) async fn requeue_interrupted(
 }
 
 async fn requeue(
+    client: &mut Client,
+    claim: &ClaimedOcrJob,
+    config: &OcrControlConfig,
+    failed: bool,
+) -> Result<(), OcrControlError> {
+    finalize(config, requeue_transaction(client, claim, config, failed)).await?;
+    super::submissions::wake(client).await;
+    Ok(())
+}
+
+async fn requeue_transaction(
     client: &mut Client,
     claim: &ClaimedOcrJob,
     config: &OcrControlConfig,
@@ -523,7 +557,6 @@ async fn requeue(
         sync_match_draft_status(&transaction, &claim.job_id).await?;
 
         transaction.commit().await?;
-        super::submissions::wake(client).await;
         return Ok(());
     }
     let retry_delay_milliseconds = duration_milliseconds(if failed {
@@ -558,7 +591,6 @@ async fn requeue(
     }
 
     transaction.commit().await?;
-    super::submissions::wake(client).await;
     Ok(())
 }
 

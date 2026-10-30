@@ -1394,12 +1394,35 @@ export interface components {
             seasonName?: string;
             mapName?: string;
         };
+        /** HeldEventListItemResponse */
+        HeldEventListItemResponse: {
+            id: string;
+            heldAt: string;
+            /** Format: int32 */
+            matchCount: number;
+            /** Format: int32 */
+            draftCount: number;
+            /** Format: int32 */
+            nextMatchNo: number;
+            scopes?: components["schemas"]["HeldEventScopeResponse"][];
+            publicId?: string;
+            playerResults?: components["schemas"]["HeldEventListPlayerResultResponse"][];
+            noteMatch?: components["schemas"]["HeldEventNoteMatchResponse"];
+        };
+        /** HeldEventListPlayerResultResponse */
+        HeldEventListPlayerResultResponse: {
+            memberId: string;
+            /** Format: double */
+            averageRank: number;
+            rankCounts?: number[];
+        };
         /** HeldEventListResponse */
         HeldEventListResponse: {
-            items?: components["schemas"]["HeldEventResponse"][];
+            items?: components["schemas"]["HeldEventListItemResponse"][];
             pagination: components["schemas"]["PaginationResponse"];
             /** Format: int32 */
             totalMatchCount: number;
+            latestHeldEventId?: string;
         };
         /** HeldEventMatchResponse */
         HeldEventMatchResponse: {
@@ -1422,6 +1445,15 @@ export interface components {
         HeldEventNavigationResponse: {
             previous?: components["schemas"]["AdjacentHeldEventResponse"];
             next?: components["schemas"]["AdjacentHeldEventResponse"];
+        };
+        /** HeldEventNoteMatchResponse */
+        HeldEventNoteMatchResponse: {
+            matchId: string;
+            /** Format: int32 */
+            matchNoInEvent: number;
+            noteBody: string;
+            /** Format: int32 */
+            otherMatchCount: number;
         };
         /** HeldEventPlayerResultResponse */
         HeldEventPlayerResultResponse: {
@@ -1704,6 +1736,7 @@ export interface components {
             mapName?: string;
             publicId?: string;
             heldEventPublicId?: string;
+            noteBody?: string;
         };
         /** MemberAliasListResponse */
         MemberAliasListResponse: {
@@ -8354,13 +8387,36 @@ export interface operations {
     "getApiHeld-events": {
         parameters: {
             query?: {
-                q?: string;
                 /** @description 1..100; defaults to 20. */
                 limit?: number;
                 /** @description 1-based page number; defaults to 1. */
                 page?: number;
                 /** @description 1..100; overrides limit when present. */
                 pageSize?: number;
+                /** @description held_desc (default) or held_asc. Orders by held time, then held event ID, both in the chosen direction. */
+                sort?: string;
+                /** @description Game title ID; one confirmed match must also satisfy seasonMasterId and mapMasterId. Evaluated over the held event's confirmed matches only. */
+                gameTitleId?: string;
+                /** @description Season master ID. Evaluated over the held event's confirmed matches only. */
+                seasonMasterId?: string;
+                /** @description Map master ID. Evaluated over the held event's confirmed matches only. */
+                mapMasterId?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to. */
+                from?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo). */
+                to?: string;
+                /** @description 1 or greater; the held event has at least this many confirmed matches. */
+                minMatchCount?: number;
+                /** @description Case-insensitive literal substring of a match note; trimmed, at most 50 characters, blank means absent. Items then carry noteMatch. Evaluated over the held event's confirmed matches only. */
+                q?: string;
+                /** @description Limits the metric condition to this player; requires metric. Without it any player matches. */
+                memberId?: string;
+                /** @description average_rank, rank1_count, rank2_count, rank3_count, or rank4_count; requires metricValue. Events without a confirmed match never satisfy it. Evaluated over the held event's confirmed matches only. */
+                metric?: string;
+                /** @description Compared value; requires metric. average_rank: 1.00 to 4.00 with at most 2 decimal places, compared with the average rounded to 2 decimals. Rank counts: integer 0 or greater. */
+                metricValue?: string;
+                /** @description gte (default) or lte; requires metric. */
+                metricRange?: string;
             };
             header?: {
                 "X-Momo-Account-Id"?: string;
@@ -8378,7 +8434,7 @@ export interface operations {
                     "application/json": components["schemas"]["HeldEventListResponse"];
                 };
             };
-            /** @description Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize */
+            /** @description Invalid value for: query parameter limit, Invalid value for: query parameter page, Invalid value for: query parameter pageSize, Invalid value for: query parameter minMatchCount */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8886,8 +8942,24 @@ export interface operations {
                 pageSize?: number;
                 /** @description Opaque cursor returned by this endpoint. Omit it to refresh the count snapshot. */
                 cursor?: string;
-                /** @description status_priority, updated_desc, held_desc, held_asc, or match_no_asc. */
+                /** @description status_priority, updated_desc, held_desc, held_asc, or match_no_asc. held_desc and held_asc order by held time, then match number ascending within the same held time. */
                 sort?: string;
+                /** @description Map master ID. Confirmed-match criterion; requires kind=match. */
+                mapMasterId?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo); must not be after to. Confirmed-match criterion; requires kind=match. */
+                from?: string;
+                /** @description Inclusive held date (YYYY-MM-DD, Asia/Tokyo). Confirmed-match criterion; requires kind=match. */
+                to?: string;
+                /** @description Case-insensitive literal substring of the match note; trimmed, at most 50 characters, blank means absent. Confirmed-match criterion; requires kind=match. */
+                q?: string;
+                /** @description Limits the record condition to this player; requires record. Without it any player matches. */
+                memberId?: string;
+                /** @description destination, plus_station, minus_station, card_station, card_shop, suri_no_ginji, total_assets, or revenue (万円); requires recordValue. Confirmed-match criterion; requires kind=match. */
+                record?: string;
+                /** @description Compared value; requires record. Incident counts must be 0 or greater and a missing count is 0. */
+                recordValue?: number;
+                /** @description gte (default) or lte; requires record. */
+                recordRange?: string;
             };
             header?: {
                 "X-Momo-Account-Id"?: string;
@@ -8905,7 +8977,7 @@ export interface operations {
                     "application/json": components["schemas"]["MatchListResponse"];
                 };
             };
-            /** @description Invalid value for: query parameter pageSize */
+            /** @description Invalid value for: query parameter pageSize, Invalid value for: query parameter recordValue */
             400: {
                 headers: {
                     [name: string]: unknown;

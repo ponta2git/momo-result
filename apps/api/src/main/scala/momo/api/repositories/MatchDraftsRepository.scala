@@ -20,12 +20,6 @@ trait MatchDraftsAlg[F0[_]]:
       ocrDraftId: OcrDraftId,
       updatedAt: Instant,
   ): F0[MatchDraftAttachmentResult]
-  def markSourceImagesRetention(
-      draftId: MatchDraftId,
-      retainedUntil: Option[Instant],
-      deletedAt: Option[Instant],
-      updatedAt: Instant,
-  ): F0[MatchDraftSourceImageRetentionResult]
 
 /** Usecase-facing facade: expected create rejections are values; unexpected failures remain in F. */
 trait MatchDraftsRepository[F[_]]:
@@ -40,12 +34,6 @@ trait MatchDraftsRepository[F[_]]:
       ocrDraftId: OcrDraftId,
       updatedAt: Instant,
   ): F[MatchDraftAttachmentResult]
-  def markSourceImagesRetention(
-      draftId: MatchDraftId,
-      retainedUntil: Option[Instant],
-      deletedAt: Option[Instant],
-      updatedAt: Instant,
-  ): F[MatchDraftSourceImageRetentionResult]
 
 enum MatchDraftUpdateResult derives CanEqual:
   case Updated
@@ -59,10 +47,6 @@ enum MatchDraftOcrFailureResult derives CanEqual:
 enum MatchDraftAttachmentResult derives CanEqual:
   case Attached
   case NotAttachable
-
-enum MatchDraftSourceImageRetentionResult derives CanEqual:
-  case Updated
-  case NotFound
 
 enum MatchDraftCancellationResult derives CanEqual:
   case Cancelled
@@ -101,12 +85,5 @@ object MatchDraftsRepository:
           updatedAt: Instant,
       ): F[MatchDraftAttachmentResult] =
         liftK(alg.attachOcrArtifacts(draftId, screenType, sourceImageId, ocrDraftId, updatedAt))
-      def markSourceImagesRetention(
-          draftId: MatchDraftId,
-          retainedUntil: Option[Instant],
-          deletedAt: Option[Instant],
-          updatedAt: Instant,
-      ): F[MatchDraftSourceImageRetentionResult] =
-        liftK(alg.markSourceImagesRetention(draftId, retainedUntil, deletedAt, updatedAt))
 
 end MatchDraftsRepository

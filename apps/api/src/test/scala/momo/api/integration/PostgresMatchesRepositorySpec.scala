@@ -2,6 +2,8 @@ package momo.api.integration
 
 import java.time.Instant
 
+import scala.concurrent.duration.DurationInt
+
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import doobie.Transactor
@@ -10,9 +12,16 @@ import doobie.postgres.implicits.*
 
 import momo.api.adapters.postgres.*
 import momo.api.adapters.postgres.PostgresMeta.given
+import momo.api.adapters.storage.local.LocalSourceImageObjectStorage
+import momo.api.adapters.storage.objectstore.{
+  ObjectBackedImageStore,
+  SourceImageObjectReconciler,
+  SourceImageObjectReconcilerConfig
+}
 import momo.api.domain.*
 import momo.api.domain.ids.*
 import momo.api.errors.AppError
+import momo.api.ports.storage.SourceImageObjectFailure
 import momo.api.repositories.contract.MatchConfirmationRepositoryContract
 import momo.api.repositories.contract.MatchConfirmationRepositoryContract.{
   Fixture as ConfirmationFixture,
@@ -22,10 +31,20 @@ import momo.api.repositories.{
   MatchConfirmationResult,
   MatchDraftConfirmation,
   MatchExportsRepository,
-  MatchListReadModel
+  MatchListReadModel,
+  SourceImageQuota,
+  SourceImageStatus
 }
-import momo.api.testing.AppErrorAssertions.assertAppException
-import momo.api.usecases.matches.{MatchDraftRefs, UpdateMatch, UpdateMatchCommand}
+import momo.api.testing.AppErrorAssertions.{assertAppError, assertAppException}
+import momo.api.testing.TestImages
+import momo.api.usecases.matchdrafts.{GetMatchDraftSourceImages, MatchDraftSourceImageKind}
+import momo.api.usecases.matches.{
+  ConfirmMatch,
+  ConfirmMatchCommand,
+  MatchDraftRefs,
+  UpdateMatch,
+  UpdateMatchCommand
+}
 import momo.api.usecases.testing.MatchFixtures
 
 final class PostgresMatchesRepositorySpec extends IntegrationSuite
@@ -522,7 +541,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- heldEvents.create(later)
       _ <- heldEvents.create(supplementary)
       all <- ordered.traverse(event => details.find(event.id))
-      list <- reader.list(None, PageRequest(1, 10))
+      list <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 10)
+      )
     yield
       assertEquals(single.map(_.navigation), Some(RecordNavigation(None, None)))
       all.zipWithIndex.foreach { case (detail, index) =>
@@ -563,13 +586,37 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           ('held-list-cancelled', $heldEventId, 99, 'cancelled', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now),
           ('held-list-confirmed', $heldEventId, 100, 'confirmed', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now)
       """.update.run.transact(transactor)
-      latest <- reader.list(None, PageRequest(1, 1))
-      empty <- reader.list(None, PageRequest(2, 1))
-      beyond <- reader.list(None, PageRequest(4, 1))
-      filtered <- reader.list(Some(" HELD_2026 "), PageRequest(1, 20))
-      missing <- reader.list(Some("absent"), PageRequest(1, 20))
+      latest <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 1)
+      )
+      empty <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(2, 1)
+      )
+      beyond <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(4, 1)
+      )
+      filtered <- reader.list(
+        HeldEventListSearchCriteria(gameTitleId = Some(gameTitleId)),
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 20),
+      )
+      missing <- reader.list(
+        HeldEventListSearchCriteria(noteQuery = Some("absent")),
+        HeldEventListSort.HeldDesc,
+        PageRequest(1, 20),
+      )
       snapshot <- (for
-        result <- PostgresHeldEventList.list(None, PageRequest(3, 1))
+        result <- PostgresHeldEventList.list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(3, 1)
+        )
         isolation <- sql"SHOW transaction_isolation".query[String].unique
         readOnly <- sql"SHOW transaction_read_only".query[String].unique
       yield (result, isolation, readOnly)).transact(transactor)
@@ -787,7 +834,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       tiedSelection <- matchExports.project(MatchExportsRepository.Selection(limit = 1))
       rejectedDetail <- PostgresHeldEventDetailReadModel[IO](transactor).find(heldEventId).attempt
       rejectedEvents <- PostgresHeldEventListReadModel[IO](transactor)
-        .list(None, PageRequest(1, 20)).attempt
+        .list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(1, 20)
+        ).attempt
       rejectedMatches <- PostgresMatchListReadModel[IO](transactor)
         .list(MatchListReadModel.Filter(heldEventId = Some(heldEventId))).attempt
       acceptedMatches <- PostgresMatchListReadModel[IO](transactor)
@@ -1127,32 +1178,97 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         (1L, true, 1L, "queued", "match_mutation", "pending", true),
       )
 
-  test("confirmation commits source-image deletion intent with the terminal draft"):
+  test("confirmation returns with inaccessible source images until reconciliation frees storage"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-source-intent")
     val imageId = ImageId.unsafeFromString("image-confirm-source-intent")
+    val nextImageId = ImageId.unsafeFromString("image-after-confirm-source-intent")
     val rec = sampleMatch("match_confirm_source_intent", 1)
     val confirmedAt = now.plusSeconds(2)
-    val snapshot = MatchDraftConfirmation(
-      draftId = draftId,
-      updatedAt = now,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
+    val command = ConfirmMatchCommand(
+      heldEventId = rec.heldEventId,
+      matchNoInEvent = rec.matchNoInEvent.value,
+      gameTitleId = rec.gameTitleId,
+      seasonMasterId = rec.seasonMasterId,
+      ownerMemberId = rec.ownerMemberId,
+      mapMasterId = rec.mapMasterId,
+      playedAt = rec.playedAt,
+      matchDraftId = Some(draftId),
+      draftRefs = MatchDraftRefs(None, None, None),
+      players = MatchFixtures.defaultPlayerInputs(MatchFixtures.DbMemberValues),
     )
-    for
-      _ <- seedPrereqs
-      _ <- insertSourceImage(imageId)
-      _ <- insertMatchDraft(draftId, now, Some(imageId))
-      confirmed <- confirmations.confirm(rec, Some(snapshot), confirmedAt)
-      lifecycle <- sql"""
-        SELECT d.source_images_deleted_at, s.status, s.delete_pending_at
-        FROM match_drafts d
-        JOIN source_images s ON s.id = d.total_assets_image_id
-        WHERE d.id = $draftId
-      """.query[(Option[Instant], String, Option[Instant])].unique.transact(transactor)
-    yield
-      assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
-      assertEquals(lifecycle, (Some(confirmedAt), "DELETE_PENDING", Some(confirmedAt)))
+    tempDirectory("momo-confirm-source-images").use { directory =>
+      val repository = PostgresSourceImagesRepository[IO](transactor)
+      val objects = LocalSourceImageObjectStorage[IO](directory)
+      val drafts = PostgresMatchDraftsRepository[IO](transactor)
+      val confirm = ConfirmMatch[IO](
+        heldEvents = heldEvents,
+        matches = matches,
+        matchDrafts = drafts,
+        confirmations = confirmations,
+        gameTitles = gameTitles,
+        mapMasters = mapMasters,
+        seasonMasters = seasonMasters,
+        now = IO.pure(confirmedAt),
+        nextId = IO.pure(rec.id),
+        allowedMemberIds = IO.pure(MatchFixtures.allowedMembers(MatchFixtures.DbMemberValues)),
+      )
+      for
+        _ <- seedPrereqs
+        uploadId <- IO.ref(imageId)
+        images = ObjectBackedImageStore[IO](
+          repository,
+          objects,
+          uploadId.get,
+          IO.pure(now),
+          SourceImageQuota(1, Long.MaxValue),
+        )
+        uploaded <- images.save(rec.createdByAccountId, None, Some("image/png"), TestImages.png1x1)
+        _ = assertEquals(uploaded.map(_.imageId), Right(imageId))
+        stored <- repository.find(imageId)
+        objectKey = stored.getOrElse(fail("uploaded source image was not persisted")).objectKey
+        _ <- insertMatchDraft(draftId, now, Some(imageId))
+        sources = GetMatchDraftSourceImages[IO](drafts, images)
+        visibleBefore <- sources.list(draftId)
+        confirmed <- confirm.run(command, rec.createdByAccountId, rec.createdByMemberId)
+        found <- matches.find(rec.id)
+        draft <- drafts.find(draftId)
+        pending <- repository.find(imageId)
+        visibleAfter <- sources.list(draftId)
+        binaryAfter <- sources.stream(draftId, MatchDraftSourceImageKind.TotalAssets, Some(imageId))
+        retained <- objects.head(objectKey)
+        _ <- uploadId.set(nextImageId)
+        blocked <- images.save(rec.createdByAccountId, None, Some("image/png"), TestImages.png1x1)
+        reconciler <- SourceImageObjectReconciler.create[IO](
+          repository,
+          objects,
+          SourceImageObjectReconcilerConfig(
+            staleStateAge = 1.minute,
+            orphanAge = 1.hour,
+            failedRecordRetention = 1.hour,
+            batchSize = 10,
+          ),
+          IO.pure(confirmedAt.plusSeconds(120)),
+        )
+        stats <- reconciler.runOnce
+        deleted <- repository.find(imageId)
+        remaining <- objects.head(objectKey)
+        accepted <- images.save(rec.createdByAccountId, None, Some("image/png"), TestImages.png1x1)
+      yield
+        assertEquals(visibleBefore.map(_.map(_.imageId)), Right(List(imageId)))
+        assertEquals(confirmed.map(_.id), Right(rec.id))
+        assertEquals(found.map(_.id), Some(rec.id))
+        assertEquals(draft.flatMap(_.sourceImagesDeletedAt), Some(confirmedAt))
+        assertEquals(pending.map(_.status), Some(SourceImageStatus.DeletePending))
+        assertEquals(pending.flatMap(_.deletePendingAt), Some(confirmedAt))
+        assertEquals(visibleAfter, Right(Nil))
+        assertAppError(binaryAfter, "NOT_FOUND", "source image")
+        assert(retained.isRight)
+        assertAppError(blocked, "TOO_MANY_REQUESTS", "unprocessed image uploads")
+        assertEquals(stats.deleted, 1)
+        assertEquals(deleted.map(_.status), Some(SourceImageStatus.Deleted))
+        assertEquals(remaining, Left(SourceImageObjectFailure.NotFound))
+        assertEquals(accepted.map(_.imageId), Right(nextImageId))
+    }
 
   test("delete removes the confirmed draft that produced the match"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-delete-confirmed")

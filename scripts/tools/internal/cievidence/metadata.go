@@ -47,6 +47,8 @@ func create(command string, args []string, out io.Writer, root string) error {
 		return candidate(command, args, out, root)
 	case "create-runtime-deployment":
 		return deployment(args, out, root)
+	case "create-e2e-candidate":
+		return createE2ECandidate(args, out)
 	default:
 		return flag.ErrHelp
 	}

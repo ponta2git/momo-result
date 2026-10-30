@@ -66,7 +66,9 @@ object MatchListProjection:
   def sortItems(items: List[MatchListItem], sort: MatchListSort): List[MatchListItem] =
     def itemPriority(item: MatchListItem): Int =
       MatchDraftStatus.fromWire(item.status).map(displayPriority).getOrElse(3)
-    def heldAt(item: MatchListItem): Long = item.playedAt.getOrElse(item.updatedAt).toEpochMilli
+    def heldAt(item: MatchListItem): Long = item.heldAt.orElse(item.playedAt)
+      .getOrElse(item.updatedAt).toEpochMilli
+    def matchNo(item: MatchListItem): Int = item.matchNoInEvent.map(_.value).getOrElse(Int.MaxValue)
 
     sort match
       case MatchListSort.StatusPriority => items
@@ -74,9 +76,9 @@ object MatchListProjection:
       case MatchListSort.UpdatedDesc => items
           .sortBy(i => (-i.updatedAt.toEpochMilli, i.kind.wire, i.id))
       case MatchListSort.HeldDesc => items
-          .sortBy(i => (-heldAt(i), -i.updatedAt.toEpochMilli, i.kind.wire, i.id))
+          .sortBy(i => (-heldAt(i), matchNo(i), -i.updatedAt.toEpochMilli, i.kind.wire, i.id))
       case MatchListSort.HeldAsc => items
-          .sortBy(i => (heldAt(i), -i.updatedAt.toEpochMilli, i.kind.wire, i.id))
+          .sortBy(i => (heldAt(i), matchNo(i), -i.updatedAt.toEpochMilli, i.kind.wire, i.id))
       case MatchListSort.MatchNoAsc => items.sortBy(i =>
           (
             i.matchNoInEvent.map(_.value).getOrElse(Int.MaxValue),

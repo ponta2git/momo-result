@@ -5,6 +5,7 @@ import type { components } from "../../src/shared/api/generated";
 import {
   makeFourPlayerResults,
   makeHeldEventDetailResponse,
+  makeHeldEventListItem,
   makeHeldEventResponse,
   makeMatchDetail,
 } from "../../src/test/factories";
@@ -14,7 +15,7 @@ import {
 } from "../../src/test/msw/achievementFixtures";
 import { incidentMastersSeed, mswState } from "../../src/test/msw/fixtures";
 import { makeSeriesAnalysisStatus } from "../../src/test/msw/seriesAnalysisFixtures";
-import { confirmedContext } from "./fixtures/records";
+import { confirmedContext, confirmedMatchIds } from "./fixtures/records";
 
 export { expect };
 
@@ -24,11 +25,11 @@ export const test = base.extend<{ mockedApi: void }>({
   mockedApi: [
     async ({ context }, use) => {
       const unexpected: string[] = [];
-      const matches = [1, 2].map((matchNoInEvent) =>
+      const matches = confirmedMatchIds.map((matchId, index) =>
         makeMatchDetail({
           ...confirmedContext,
-          matchId: `match-${matchNoInEvent}`,
-          matchNoInEvent,
+          matchId,
+          matchNoInEvent: index + 1,
           layoutFamily: "momotetsu_2",
           players: makeFourPlayerResults(),
         }),
@@ -52,6 +53,9 @@ export const test = base.extend<{ mockedApi: void }>({
           ownerMemberId: match.ownerMemberId,
           playedAt: match.playedAt,
           status: "confirmed",
+          ...(match.matchNoInEvent === 1
+            ? { hasNote: true, noteBody: "終盤にキングボンビーが付いた。" }
+            : {}),
           ranks: (match.players ?? []).map(({ memberId, playOrder, rank }) => ({
             memberId,
             playOrder,
@@ -68,21 +72,11 @@ export const test = base.extend<{ mockedApi: void }>({
           memberId: "member_ponta",
         } satisfies components["schemas"]["AuthMeResponse"],
         "/api/admin/login-accounts": { items: mswState.loginAccounts },
-        "/api/game-titles": {
-          items: [
-            ...mswState.gameTitles,
-            { ...mswState.gameTitles[0], id: "gt_ui_other", name: "別作品" },
-          ],
-        },
+        "/api/game-titles": { items: mswState.gameTitles },
         "/api/map-masters": { items: mswState.mapMasters },
         "/api/season-masters": { items: mswState.seasonMasters },
         "/api/member-aliases": { items: mswState.memberAliases },
         "/api/incident-masters": { items: incidentMastersSeed },
-        "/api/held-events": {
-          items: [makeHeldEventResponse({ matchCount: 2 })],
-          pagination: pagination(1, 10, 1),
-          totalMatchCount: 2,
-        },
         "/api/held-events/held-1": makeHeldEventDetailResponse({ matchCount: 2 }),
         "/api/held-events/held-1/summary": makeHeldEventResponse({ matchCount: 2 }),
         "/api/matches/summary": { incompleteCount: 0, needsReviewCount: 0 },
@@ -111,16 +105,103 @@ export const test = base.extend<{ mockedApi: void }>({
             await route.fulfill({ json: resource });
             return;
           }
+          if (path === "/api/held-events") {
+            // One held event holds the confirmed matches above. Scenarios using other search
+            // contracts must supply their own responses before falling back.
+            const unsupported = [
+              "from",
+              "to",
+              "minMatchCount",
+              "memberId",
+              "metric",
+              "metricValue",
+              "metricRange",
+            ].filter((key) => url.searchParams.has(key));
+            if (unsupported.length > 0) {
+              unexpected.push(`GET ${path}: unsupported conditions ${unsupported.join(", ")}`);
+              await route.abort("blockedbyclient");
+              return;
+            }
+            const q = url.searchParams.get("q");
+            const noted = q ? summaries.filter((match) => match.noteBody?.includes(q)) : summaries;
+            const scoped = (["gameTitleId", "seasonMasterId", "mapMasterId"] as const).every(
+              (key) => {
+                const requested = url.searchParams.get(key);
+                return !requested || summaries.some((match) => match[key] === requested);
+              },
+            );
+            const [firstNoted] = noted;
+            const items =
+              scoped && noted.length > 0
+                ? [
+                    makeHeldEventListItem({
+                      averageRanks: [3, 1, 2, 4],
+                      matchCount: summaries.length,
+                      ...(q && firstNoted
+                        ? {
+                            noteMatch: {
+                              matchId: firstNoted.matchId ?? firstNoted.id,
+                              matchNoInEvent: firstNoted.matchNoInEvent ?? 1,
+                              noteBody: firstNoted.noteBody ?? "",
+                              otherMatchCount: noted.length - 1,
+                            },
+                          }
+                        : {}),
+                    }),
+                  ]
+                : [];
+            const pageSize = Number(
+              url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? 10,
+            );
+            await route.fulfill({
+              json: {
+                items,
+                latestHeldEventId: confirmedContext.heldEventId,
+                pagination: pagination(1, pageSize, items.length),
+                totalMatchCount: items.reduce((sum, item) => sum + item.matchCount, 0),
+              } satisfies components["schemas"]["HeldEventListResponse"],
+            });
+            return;
+          }
           if (path === "/api/matches") {
+            // This shared fixture serves one page of confirmed matches. Scenarios using
+            // other search contracts must supply their own responses before falling back.
+            const unsupported = [
+              "from",
+              "to",
+              "memberId",
+              "record",
+              "recordValue",
+              "recordRange",
+              "cursor",
+            ].filter((key) => url.searchParams.has(key));
+            if (unsupported.length > 0) {
+              unexpected.push(`GET ${path}: unsupported conditions ${unsupported.join(", ")}`);
+              await route.abort("blockedbyclient");
+              return;
+            }
             const items = summaries.filter((match) => {
-              for (const key of ["heldEventId", "gameTitleId", "seasonMasterId"] as const) {
+              for (const key of [
+                "heldEventId",
+                "gameTitleId",
+                "seasonMasterId",
+                "mapMasterId",
+              ] as const) {
                 const requested = url.searchParams.get(key);
                 if (requested && requested !== match[key]) return false;
               }
+              const q = url.searchParams.get("q");
+              if (q && !match.noteBody?.includes(q)) return false;
               const status = url.searchParams.get("status");
-              return !status || status === "all" || status === "confirmed";
+              return (
+                url.searchParams.get("kind") !== "match_draft" &&
+                (!status || status === "all" || status === "confirmed")
+              );
             });
-            await route.fulfill({ json: { items, pagination: pagination(1, 100, items.length) } });
+            const pageSize = Number(url.searchParams.get("pageSize") ?? 25);
+            await route.fulfill({
+              json: { items, pagination: pagination(1, pageSize, items.length) },
+            });
             return;
           }
           const identity = matches.find((item) => path === `/api/matches/${item.matchId}/identity`);

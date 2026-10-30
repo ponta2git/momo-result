@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Design-sync notes and previews name classes; only app sources may generate utilities. */
+@source not "../.design-sync";
 
 @custom-variant short-viewport (@media (max-height: 24rem));
 
@@ -174,6 +176,8 @@
   --color-achievement-premium-foreground: var(--ref-gold-800);
   --color-achievement-premium-surface: var(--ref-gold-50);
   --color-achievement-premium-border: var(--ref-gold-300);
+  /* Marks the searched words inside matched text; the text color stays primary. */
+  --color-search-match-surface: color-mix(in oklab, var(--ref-rank-1) 30%, transparent);
   --color-chart-segment-separator: var(--color-surface);
   --color-tray-assets: var(--ref-tray-assets);
   --color-tray-revenue: var(--ref-tray-revenue);

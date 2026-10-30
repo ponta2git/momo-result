@@ -12,14 +12,11 @@ function LocationStateHarness() {
   return (
     <>
       <output aria-label="settling">{String(state.settling)}</output>
-      <button type="button" onClick={() => state.change({ kind: "status", status: "confirmed" })}>
-        confirmed
+      <button type="button" onClick={() => state.change({ kind: "memo", q: "bonby" })}>
+        memo bonby
       </button>
-      <button
-        type="button"
-        onClick={() => state.change({ kind: "status", status: "needs_review" })}
-      >
-        needs review
+      <button type="button" onClick={() => state.change({ kind: "memo", q: "ginji" })}>
+        memo ginji
       </button>
       <output aria-label="current search">{JSON.stringify(state.current)}</output>
       <output aria-label="location">{`${location.pathname}${location.search}${location.hash}`}</output>
@@ -37,7 +34,7 @@ function LocationStateHarness() {
         onClick={() => {
           state.change({ kind: "gameTitle", gameTitleId: "game-2" });
           state.change({ kind: "season", seasonMasterId: "season-2" });
-          state.change({ kind: "sort", sort: "updated_desc" });
+          state.change({ kind: "sort", sort: "held_asc" });
         }}
       >
         change consecutive conditions
@@ -52,7 +49,7 @@ describe("useMatchListSelection", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/matches?gameTitleId=game-1&seasonMasterId=season-1&cursor=old&status=confirmed",
+          "/matches?gameTitleId=game-1&seasonMasterId=season-1&mapMasterId=map-1&cursor=old&q=bonby",
         ]}
       >
         <LocationStateHarness />
@@ -61,9 +58,10 @@ describe("useMatchListSelection", () => {
     await user.click(screen.getByRole("button", { name: "change title" }));
     expect(JSON.parse(screen.getByLabelText("current search").textContent ?? "{}")).toMatchObject({
       gameTitleId: "game-2",
+      mapMasterId: "",
       seasonMasterId: "",
       cursor: "",
-      status: "confirmed",
+      q: "bonby",
     });
     await user.click(screen.getByRole("button", { name: "change consecutive conditions" }));
     await waitFor(() => expect(screen.getByLabelText("settling")).toHaveTextContent("false"));
@@ -71,8 +69,8 @@ describe("useMatchListSelection", () => {
       gameTitleId: "game-2",
       seasonMasterId: "season-2",
       cursor: "",
-      status: "confirmed",
-      sort: "updated_desc",
+      q: "bonby",
+      sort: "held_asc",
     });
   });
 
@@ -87,32 +85,30 @@ describe("useMatchListSelection", () => {
             path: "/matches",
             hydrateFallbackElement: <p>経路を準備中</p>,
             loader: ({ request }) =>
-              new URL(request.url).searchParams.get("status") === "confirmed" ? gate.promise : null,
+              new URL(request.url).searchParams.get("q") === "bonby" ? gate.promise : null,
             element: <LocationStateHarness />,
           },
         ],
         { initialEntries: ["/matches"] },
       );
       render(<RouterProvider router={router} />);
-      await screen.findByRole("button", { name: "confirmed" });
+      await screen.findByRole("button", { name: "memo bonby" });
 
-      await user.click(screen.getByRole("button", { name: "confirmed" }));
-      expect(screen.getByLabelText("current search")).toHaveTextContent('"status":"confirmed"');
+      await user.click(screen.getByRole("button", { name: "memo bonby" }));
+      expect(screen.getByLabelText("current search")).toHaveTextContent('"q":"bonby"');
       expect(screen.getByLabelText("settling")).toHaveTextContent("true");
       expect(router.state.location.search).toBe("");
 
       if (completion === "supersede") {
-        await user.click(screen.getByRole("button", { name: "needs review" }));
+        await user.click(screen.getByRole("button", { name: "memo ginji" }));
         await waitFor(() => expect(screen.getByLabelText("settling")).toHaveTextContent("false"));
-        expect(router.state.location.search).toBe("?status=needs_review");
+        expect(router.state.location.search).toBe("?q=ginji");
       }
       await act(async () => gate.resolve());
       await waitFor(() => expect(screen.getByLabelText("settling")).toHaveTextContent("false"));
-      const finalStatus = completion === "commit" ? "confirmed" : "needs_review";
-      expect(screen.getByLabelText("current search")).toHaveTextContent(
-        `"status":"${finalStatus}"`,
-      );
-      expect(router.state.location.search).toBe(`?status=${finalStatus}`);
+      const finalQuery = completion === "commit" ? "bonby" : "ginji";
+      expect(screen.getByLabelText("current search")).toHaveTextContent(`"q":"${finalQuery}"`);
+      expect(router.state.location.search).toBe(`?q=${finalQuery}`);
     },
   );
 
@@ -120,7 +116,7 @@ describe("useMatchListSelection", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/matches?status=broken&sort=updated_desc&pageSize=100&gameTitleId=%20game-1%20&unknown=1",
+          "/matches?status=confirmed&sort=held_asc&pageSize=10&gameTitleId=%20game-1%20&unknown=1",
         ]}
       >
         <LocationStateHarness />
@@ -129,16 +125,15 @@ describe("useMatchListSelection", () => {
 
     expect(JSON.parse(screen.getByLabelText("current search").textContent ?? "{}")).toMatchObject({
       gameTitleId: "game-1",
-      pageSize: 10,
-      sort: "updated_desc",
-      status: "all",
+      pageSize: 25,
+      sort: "held_asc",
     });
   });
 
-  it("clears list filters and pagination while retaining the fragment", async () => {
+  it("clears conditions and pagination while keeping sort and the fragment", async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={["/matches?status=confirmed&cursor=opaque#results"]}>
+      <MemoryRouter initialEntries={["/matches?q=bonby&sort=held_asc&cursor=opaque#results"]}>
         <LocationStateHarness />
       </MemoryRouter>,
     );
@@ -146,22 +141,22 @@ describe("useMatchListSelection", () => {
     await user.click(screen.getByRole("button", { name: "clear" }));
 
     await waitFor(() =>
-      expect(screen.getByLabelText("location")).toHaveTextContent("/matches#results"),
+      expect(screen.getByLabelText("location")).toHaveTextContent("/matches?sort=held_asc#results"),
     );
   });
 
   it("preserves the list fragment when changing filters", async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={["/matches?sort=updated_desc#results"]}>
+      <MemoryRouter initialEntries={["/matches?sort=held_asc#results"]}>
         <LocationStateHarness />
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "confirmed" }));
+    await user.click(screen.getByRole("button", { name: "memo bonby" }));
     await waitFor(() =>
       expect(screen.getByLabelText("location")).toHaveTextContent(
-        "/matches?status=confirmed&sort=updated_desc#results",
+        "/matches?q=bonby&sort=held_asc#results",
       ),
     );
   });

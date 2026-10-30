@@ -1,0 +1,58 @@
+{
+  "projectId": "ffc65946-646b-4f82-90d4-d763ca6f4c1d",
+  "shape": "package",
+  "pkg": "momo-result-ui",
+  "globalName": "MomoUI",
+  "entry": ".design-sync/.cache/pkg/index.ts",
+  "srcDir": "../../../src/shared/ui",
+  "tsconfig": "../../../tsconfig.json",
+  "buildCmd": "pnpm build && node .design-sync/build-pkg.mjs",
+  "cssEntry": "app.css",
+  "componentSrcMap": {
+    "MemoryRouter": null,
+    "AlertDialog": "../../../src/shared/ui/feedback/Dialog.tsx",
+    "DialogFooter": "../../../src/shared/ui/feedback/Dialog.tsx",
+    "Disclosure": "../../../src/shared/ui/data/Collapsible.tsx",
+    "InputControl": "../../../src/shared/ui/forms/Control.tsx",
+    "TextareaControl": "../../../src/shared/ui/forms/Control.tsx",
+    "SpinnerIcon": "../../../src/shared/ui/feedback/Spinner.tsx",
+    "TabsRoot": "../../../src/shared/ui/forms/Tabs.tsx",
+    "TabsList": "../../../src/shared/ui/forms/Tabs.tsx",
+    "TabsTab": "../../../src/shared/ui/forms/Tabs.tsx",
+    "TabsPanel": "../../../src/shared/ui/forms/Tabs.tsx",
+    "TooltipProvider": "../../../src/shared/ui/feedback/Tooltip.tsx"
+  },
+  "provider": {
+    "component": "TooltipProvider",
+    "inner": {
+      "component": "AppMotionProvider",
+      "inner": {
+        "component": "MemoryRouter"
+      }
+    }
+  },
+  "runtimeFontPrefixes": ["Cascadia Mono", "Roboto Mono"],
+  "overrides": {
+    "DataTable": {
+      "cardMode": "column"
+    },
+    "Dialog": {
+      "cardMode": "single",
+      "viewport": "720x480"
+    },
+    "AlertDialog": {
+      "cardMode": "single",
+      "viewport": "720x420"
+    },
+    "DialogFooter": {
+      "cardMode": "single",
+      "primaryStory": "InDialog",
+      "viewport": "720x420"
+    },
+    "ToastHost": {
+      "cardMode": "single",
+      "primaryStory": "Stack"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

@@ -20,7 +20,6 @@ export type PageLoadingKind =
   | "form"
   | "generic"
   | "list"
-  | "record-list"
   | "sectioned-comparison"
   | "workspace";
 
@@ -129,16 +128,13 @@ function PageLoadingSkeleton({
   const contextSkeleton = contextNoticeSlot ? <Skeleton className="min-h-28 rounded-md" /> : null;
   const toolbarSkeleton = contentToolbar ? <ContentToolbarSkeleton shape={contentToolbar} /> : null;
 
-  if (kind === "list" || kind === "record-list") {
+  if (kind === "list") {
     return (
       <>
         {leadingSkeleton}
         {headerSkeleton}
         {contextSkeleton}
-        <PageContentSurface
-          className={kind === "list" ? "grid gap-6" : "grid gap-4"}
-          padding={contentPadding}
-        >
+        <PageContentSurface className="grid gap-6" padding={contentPadding}>
           {toolbarSkeleton}
           <Skeleton className="h-16 rounded-md" />
           <Skeleton className="h-44 rounded-md" />

@@ -1,17 +1,8 @@
+import { formatGameSeason, formatMatchNo } from "@/features/matches/list/matchListFormat";
 import {
-  buildMatchListPrimaryAction,
-  buildMatchListSecondaryActions,
-  matchListDetailHref,
-  matchListExportHref,
-  matchListReviewHref,
-} from "@/features/matches/list/matchListActionPolicy";
-import {
-  hasMatchListWarnings,
-  matchListDisplayStatus,
-  matchListStatusDescription,
-  matchListStatusLabel,
-  normalizeMatchListStatus,
-} from "@/features/matches/list/matchListStatusPolicy";
+  defaultMatchListSearch,
+  hasMatchListConditions,
+} from "@/features/matches/list/matchListSearchParams";
 import type {
   MatchListItemView,
   MatchListSearch,
@@ -20,6 +11,7 @@ import type {
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import { memberDisplayName } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
+import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 type MatchListReadState = {
   available: boolean;
@@ -28,30 +20,19 @@ type MatchListReadState = {
   fromPreviousSelection: boolean;
 };
 
-/** Relates requested filters to retained reads before exposing rows, counts, or actions. */
+/** Relates the requested search to the retained read before exposing rows or actions. */
 export function resolveMatchListDisplayState({
-  current,
-  deferred,
   locationSettling,
   list,
-  summary,
 }: {
-  current: MatchListSearch;
-  deferred: MatchListSearch;
   locationSettling: boolean;
   list: MatchListReadState;
-  summary: Pick<MatchListReadState, "refreshing" | "fromPreviousSelection">;
 }) {
   const scopeChanging = locationSettling || list.fromPreviousSelection;
   return {
     initialLoading: list.loading,
     scopeChanging,
-    sameScopeRefreshing: !scopeChanging && (list.refreshing || summary.refreshing),
-    summaryMasked:
-      current.gameTitleId !== deferred.gameTitleId ||
-      current.heldEventId !== deferred.heldEventId ||
-      current.seasonMasterId !== deferred.seasonMasterId ||
-      summary.fromPreviousSelection,
+    sameScopeRefreshing: !scopeChanging && list.refreshing,
     updating:
       locationSettling || ((list.fromPreviousSelection || list.available) && list.refreshing),
   };
@@ -64,48 +45,53 @@ export function matchListHeldEventChoices(
   return selected ? [selected, ...events.filter((event) => event.id !== selected.id)] : events;
 }
 
-export function toMatchListItemView(item: MatchListSourceItem): MatchListItemView {
-  const status = normalizeMatchListStatus(item.status);
-  return {
-    canCancelOcr: false,
-    createdAt: item.createdAt,
-    displayStatus: matchListDisplayStatus(status),
-    hasWarnings: hasMatchListWarnings(status),
-    hasNote: item.hasNote === true,
-    id: item.id,
-    kind: item.kind === "match_draft" ? "match_draft" : "match",
-    primaryAction: buildMatchListPrimaryAction(item, status),
-    ranks: (item.ranks ?? [])
-      .toSorted((left, right) => left.rank - right.rank)
-      .map((rank) => ({
-        displayName: memberDisplayName(rank.memberId),
-        memberId: rank.memberId,
-        rank: rank.rank,
-      })),
-    secondaryActions: buildMatchListSecondaryActions(item, status),
-    status,
-    statusLabel: matchListStatusLabel(status),
-    updatedAt: item.updatedAt,
-    ...compact({
-      detailHref: matchListDetailHref(item.matchId, item.publicId),
-      exportHref: matchListExportHref(item.matchId),
-      gameTitleId: item.gameTitleId || undefined,
-      gameTitleName: item.gameTitleName || undefined,
-      heldAt: item.heldAt ?? item.playedAt ?? undefined,
-      heldEventId: item.heldEventId || undefined,
-      mapName: item.mapName || undefined,
-      matchDraftId: item.matchDraftId || undefined,
-      matchId: item.matchId || undefined,
-      matchNoInEvent: item.matchNoInEvent || undefined,
-      ownerName: item.ownerMemberId ? memberDisplayName(item.ownerMemberId) : undefined,
-      reviewHref: matchListReviewHref(item.matchDraftId, status),
-      seasonMasterId: item.seasonMasterId || undefined,
-      seasonName: item.seasonName || undefined,
-      statusDescription: matchListStatusDescription(status),
-    }),
-  };
+/** The list reads confirmed matches only; rows without a match id are not navigable and dropped. */
+export function toMatchListItemViews(items: MatchListSourceItem[]): MatchListItemView[] {
+  return items.flatMap((item) => {
+    if (!item.matchId) return [];
+    const noteBody = item.noteBody?.trim() ? item.noteBody : undefined;
+    return [
+      {
+        detailHref: matchDetailHref(item.matchId, item.publicId),
+        exportHref: `/exports?matchId=${encodeURIComponent(item.matchId)}`,
+        gameSeasonLabel: formatGameSeason(item.gameTitleName, item.seasonName),
+        id: item.id,
+        mapName: item.mapName || "マップ未設定",
+        matchNoLabel: formatMatchNo(item.matchNoInEvent || undefined),
+        ranks: (item.ranks ?? [])
+          .toSorted((left, right) => left.rank - right.rank)
+          .map((rank) => ({
+            displayName: memberDisplayName(rank.memberId),
+            memberId: rank.memberId,
+            rank: rank.rank,
+          })),
+        ...compact({ heldAt: item.heldAt ?? item.playedAt ?? undefined, noteBody }),
+      },
+    ];
+  });
 }
 
-export function toMatchListItemViews(items: MatchListSourceItem[]): MatchListItemView[] {
-  return items.map((item) => toMatchListItemView(item));
+/**
+ * Export accepts one held event or one season as its scope. The list's conditions are carried
+ * over only when they are exactly such a scope; otherwise the export starts from all matches.
+ */
+export function matchListExportLink(search: MatchListSearch): { href: string; label: string } {
+  const narrowedOnly = (allowed: ReadonlyArray<keyof MatchListSearch>) =>
+    !hasMatchListConditions({
+      ...search,
+      ...Object.fromEntries(allowed.map((key) => [key, defaultMatchListSearch[key]])),
+    });
+  if (search.heldEventId && narrowedOnly(["heldEventId"])) {
+    return {
+      href: `/exports?heldEventId=${encodeURIComponent(search.heldEventId)}`,
+      label: "この条件で出力",
+    };
+  }
+  if (search.seasonMasterId && narrowedOnly(["seasonMasterId", "gameTitleId"])) {
+    return {
+      href: `/exports?seasonMasterId=${encodeURIComponent(search.seasonMasterId)}`,
+      label: "この条件で出力",
+    };
+  }
+  return { href: "/exports", label: "まとめて出力" };
 }

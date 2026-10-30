@@ -30,6 +30,7 @@ export const idempotencyOperations = [
   "matchDetail.deleteMatch",
   "matchDetail.replaceMatchNote",
   "matchWorkspace.cancelMatchDraft",
+  "drafts.cancelMatchDraft",
   "matchWorkspace.confirmMatch",
   "matchWorkspace.createHeldEvent",
   "matchWorkspace.updateMatch",

@@ -323,7 +323,7 @@ pub(super) async fn publish_staged_artifact(
                  ) THEN current_artifact_id\x20\
                  WHEN current_artifact_id IS DISTINCT FROM (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1) THEN NULL\x20\
                  ELSE previous_artifact_id END,\x20\
-               current_artifact_id = (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1), pending_work = false, pending_forced_run_count = 0,\x20\
+               current_artifact_id = (SELECT id FROM series_analysis_artifact_identities WHERE legacy_id=$1), pending_work = false,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$2) AND input_revision = $3\x20\
                AND algorithm_version = $4 AND artifact_schema_version = $5\x20\
@@ -394,7 +394,7 @@ pub(super) async fn finish_success(
                  ) THEN previous_artifact_id ELSE NULL END,\x20\
                notification_baseline_state = 'artifact',\x20\
                notification_baseline_artifact_id = current_artifact_id,\x20\
-               pending_work = false, pending_forced_run_count = 0,\x20\
+               pending_work = false,\x20\
                last_failure_code = NULL, last_failure_at = NULL, updated_at = clock_timestamp()\x20\
              WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)",
             &[

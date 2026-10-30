@@ -309,7 +309,7 @@ WHERE game_titles.legacy_id = 'analysis-campaign-smoke-deleted';",
         vec![
             (
                 String::from("analysis-campaign-smoke-after"),
-                String::from("running"),
+                String::from("expanded"),
                 Some(String::from("assigned")),
                 Some(String::from("analysis-campaign-smoke-after-job")),
                 Some(String::from("attempt-after")),
@@ -351,9 +351,9 @@ WHERE game_titles.legacy_id = 'analysis-campaign-smoke-deleted';",
         .query_one(
             r"
                 SELECT c.expanded_count, c.terminal_count, c.skipped_count, c.status, o.status AS operation_status,
-                       (SELECT pending_forced_run_count
+                       (SELECT pending_work
                         FROM series_analysis_title_states
-                        WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id='analysis-campaign-smoke-before')) AS forced_runs, (SELECT input_revision
+                        WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id='analysis-campaign-smoke-before')) AS pending_work, (SELECT input_revision
                         FROM series_analysis_jobs
                         WHERE legacy_id = 'analysis-campaign-smoke-queued-job') AS queued_revision, (SELECT validation_contract_id
                         FROM series_analysis_jobs
@@ -381,7 +381,7 @@ WHERE game_titles.legacy_id = 'analysis-campaign-smoke-deleted';",
         projection.try_get::<_, String>("operation_status")?,
         "running"
     );
-    assert_eq!(projection.try_get::<_, i32>("forced_runs")?, 1);
+    assert!(projection.try_get::<_, bool>("pending_work")?);
     assert_eq!(projection.try_get::<_, i64>("queued_revision")?, 9);
     assert_eq!(
         projection

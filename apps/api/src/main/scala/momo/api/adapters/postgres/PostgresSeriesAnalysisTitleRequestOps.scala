@@ -162,7 +162,6 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
         case Some(_) => sql"""
             UPDATE series_analysis_title_states
             SET pending_work = true,
-                pending_forced_run_count = pending_forced_run_count + 1,
                 updated_at = now()
             WHERE game_title_id = ${identities.lookup(Entity.GameTitles, gameTitleId.value)}
           """.update.run.void
@@ -173,14 +172,14 @@ private[postgres] object PostgresSeriesAnalysisTitleRequestOps:
           "game_title_id"
         )}, operation_request_id, input_revision,
           algorithm_version, artifact_schema_version, validation_contract_id, trigger,
-          force_run, status, assigned_job_id, accepted_at
+          status, assigned_job_id, accepted_at
         ) VALUES (
           $allocatedRequest, $title ${identities.legacyValue(
           gameTitleId.value
         )}, ${identities.lookup(Entity.AnalysisOperations, operationId)}, ${version.inputRevision},
           ${version.algorithmVersion}, ${version.artifactSchemaVersion},
           ${version.validationContractId}, 'manual',
-          true, 'pending', ${identities.lookup(Entity.AnalysisJobs, accepted._1)}, $acceptedAt
+          'pending', ${identities.lookup(Entity.AnalysisJobs, accepted._1)}, $acceptedAt
         )
       """.update.run.void
     yield SeriesAnalysisRecalculationAccepted(

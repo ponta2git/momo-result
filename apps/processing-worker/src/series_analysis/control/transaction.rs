@@ -103,6 +103,20 @@ pub(super) async fn finish_attempt(
     Ok(())
 }
 
+pub(super) async fn release_attempt_requests(
+    transaction: &Transaction<'_>,
+    attempt_id: &str,
+) -> Result<(), ControlError> {
+    transaction
+        .execute(
+            "UPDATE series_analysis_job_requests SET status = 'pending', assigned_attempt_id = NULL, legacy_assigned_attempt_id = NULL\x20\
+             WHERE legacy_assigned_attempt_id = $1",
+            &[&attempt_id],
+        )
+        .await?;
+    Ok(())
+}
+
 pub(super) async fn fulfill_requests(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,

@@ -291,7 +291,6 @@
 
 - deploy 重複と lease 失効後の旧 process に対する DB fence の拒否と物理的な計算枠の区別は、[L8](#l8-高負荷分析は通常経路のコストと観測を先に固定する) の確認を併せて使う。
 - algorithm version 変更の完了を、定数と worker image の更新に加えて、対応 reader / worker、desired version 昇格、queued job の収束、非対応 delivery の観測を別々に確認して判断したか。
-- fresh DB の release singleton を fixture で変更する前に、promotion 済み DB や test 内の明示 UPDATE ではなくその fresh DB で、algorithm / artifact schema / validation contract の exact tuple を確認したか。
 - rollback 時は表示名ではなく、影響を受けた全実行経路を覆う差分か確認したか。
 
 **参照先**

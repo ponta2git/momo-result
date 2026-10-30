@@ -66,7 +66,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 
 test の採用・維持・削除は [テスト・品質規約](test-rule.md#品質証拠の採用維持削除) に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
 
-- 分析 release の algorithm / artifact schema / validation contract は不可分な tuple として扱う。momo-db revision、各 default、または baseline migration を変える場合は、fixture や cleanup が singleton を変更する前の fresh DB で exact consumer tuple との一致を確認し、promotion 済み DB の成功、legacy singleton からの promotion test、相対的な title inheritance、test 内で exact tuple を seed した repository test を代用にしない。
+- 分析 release の algorithm / artifact schema / validation contract は不可分な tuple として扱う。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。複数 table の write は statement / lock 順と保存後の関連 row を確認する。
 - job lease、永続 fence counter、pointer、cleanup 競合は複数接続で stale owner と rollback を直接通す。
 - publication contract を変更した場合は、staging の更新、published header / child の変更拒否、参照中 parent の削除拒否、未参照 parent の cascade cleanup を実 PostgreSQL で区別して検証する。

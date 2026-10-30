@@ -143,7 +143,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - publication を evidence に選ぶ場合、意味 oracle は Worker 規約が定める Rust の full semantic validator とし、exact validation contract、published row の immutability、API の bounded shape / identity defense をそれぞれの境界で検証する。
-- analysis release の baseline migration、momo-db revision、default を変える場合の fresh baseline の確認は [DB 規約の Contract Evidence](db-rule.md#contract-evidence) に従う。移行中だけの契約と撤去条件は [Transitional Contracts](db-rule.md#transitional-contracts) に置く。
+- 移行中だけの契約と撤去条件は [Transitional Contracts](db-rule.md#transitional-contracts) に置く。
 - release promotion は 2 接続の実 PostgreSQL で、capability 検査後の非互換登録が commit まで待つこと、singleton lock 中の新規作品が commit 後の tuple を継承すること、登録作品 0 件が terminal になることを検証する。
 - 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、release 完了は enqueue 成功ではなく保守の完了で判定する。
 - 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。旧世代が保存した中断 intent は失敗回数非加算、旧 child 回収後の再実行を保つ。

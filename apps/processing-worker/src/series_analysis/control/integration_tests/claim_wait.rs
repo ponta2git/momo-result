@@ -133,7 +133,7 @@ async fn real_postgres_claims_preserve_busy_deadlines_and_uncertain_commits() ->
         )
     );
     drop(config);
-    observed?;
+    observed.map_err(|_elapsed| "held claim COMMIT was not observed before test watchdog")?;
     assert!(matches!(result, Err(ConsumerError::ControlTimeout)));
     drop(uncertain);
     let row = client

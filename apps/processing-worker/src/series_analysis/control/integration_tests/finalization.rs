@@ -61,7 +61,10 @@ async fn verify_unacknowledged_transitions(database_url: &str, observer: &Client
             config.execution_limits.finalization_timeout + Duration::from_secs(2),
             async { tokio::join!(transition, committed.notified()) },
         )
-        .await?;
+        .await
+        .map_err(|_elapsed| {
+            format!("unacknowledged {status} finalization exceeded test watchdog")
+        })?;
         drop(config);
         assert!(matches!(result, Err(ConsumerError::ControlTimeout)));
         drop(uncertain);
@@ -146,12 +149,17 @@ async fn verify_publication_recovery(
             tokio::io::copy(&mut socket, &mut tokio::io::sink()).await?;
             Ok::<(), std::io::Error>(())
         };
-        let (result, closed) =
-            time::timeout(watchdog, async { tokio::join!(transition, peer) }).await?;
+        let (result, closed) = time::timeout(watchdog, async { tokio::join!(transition, peer) })
+            .await
+            .map_err(
+                |_elapsed| "stalled publication recovery did not finish and close its socket",
+            )?;
         assert!(matches!(result, Err(ConsumerError::ControlTimeout)));
         closed?;
     } else {
-        let result = time::timeout(watchdog, transition).await??;
+        let result = time::timeout(watchdog, transition)
+            .await
+            .map_err(|_elapsed| "publication recovery exceeded test watchdog")??;
         assert!(matches!(result.value, AttemptResult::Completed));
         control.query_one("SELECT 1", &[]).await?;
     }

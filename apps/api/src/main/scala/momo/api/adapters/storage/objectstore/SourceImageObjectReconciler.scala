@@ -4,7 +4,8 @@ import java.time.Instant
 
 import scala.concurrent.duration.FiniteDuration
 
-import cats.effect.Async
+import cats.effect.std.Mutex
+import cats.effect.{Async, Ref}
 import cats.syntax.all.*
 
 import momo.api.ports.storage.{SourceImageObjectFailure, SourceImageObjectStorage}
@@ -12,6 +13,7 @@ import momo.api.repositories.{
   SourceImageDeleteResult,
   SourceImageFailureCode,
   SourceImageRecord,
+  SourceImageScanCursor,
   SourceImageStatus,
   SourceImagesRepository
 }
@@ -51,29 +53,63 @@ object SourceImageObjectReconciliationStats:
     skipped = 0,
   )
 
-final class SourceImageObjectReconciler[F[_]: Async](
+final class SourceImageObjectReconciler[F[_]: Async] private (
     sourceImages: SourceImagesRepository[F],
     objects: SourceImageObjectStorage[F],
     config: SourceImageObjectReconcilerConfig,
     now: F[Instant],
+    progress: Ref[F, SourceImageObjectReconciler.Progress],
+    runMutex: Mutex[F],
 ):
   import SourceImageObjectReconciler.*
 
-  def runOnce: F[SourceImageObjectReconciliationStats] = now.flatMap { timestamp =>
-    val staleCutoff = timestamp.minusMillis(config.staleStateAge.toMillis)
-    val orphanCutoff = timestamp.minusMillis(config.orphanAge.toMillis)
-    val failedPurgeCutoff = timestamp.minusMillis(config.failedRecordRetention.toMillis)
+  def runOnce: F[SourceImageObjectReconciliationStats] = runMutex.lock.surround {
     for
-      stateCandidates <- sourceImages.reconciliationCandidates(staleCutoff, config.batchSize)
+      timestamp <- now
+      remembered <- progress.get
+      staleCutoff = timestamp.minusMillis(config.staleStateAge.toMillis)
+      orphanCutoff = timestamp.minusMillis(config.orphanAge.toMillis)
+      failedPurgeCutoff = timestamp.minusMillis(config.failedRecordRetention.toMillis)
+      statePage <- nextPage(
+        remembered.states,
+        staleCutoff,
+        (cutoff, after) => sourceImages.reconciliationCandidates(cutoff, config.batchSize, after),
+      )
+      (nextStates, stateCandidates) = statePage
       stateStats <- stateCandidates.traverse(
         reconcileState(_, timestamp, staleCutoff, failedPurgeCutoff)
       )
-      orphanCandidates <- sourceImages.orphanCandidates(orphanCutoff, config.batchSize)
+      _ <- progress.update(_.copy(states = nextStates))
+      orphanPage <- nextPage(
+        remembered.orphans,
+        orphanCutoff,
+        (cutoff, after) => sourceImages.orphanCandidates(cutoff, config.batchSize, after),
+      )
+      (nextOrphans, orphanCandidates) = orphanPage
       orphanStats <- orphanCandidates.traverse(deleteOrphan(_, timestamp))
+      _ <- progress.update(_.copy(orphans = nextOrphans))
     yield (stateStats ++ orphanStats).foldLeft(SourceImageObjectReconciliationStats.empty)(
       _.combine(_)
     )
   }
+
+  private def nextPage(
+      previous: Option[Sweep],
+      freshCutoff: Instant,
+      load: (Instant, Option[SourceImageScanCursor]) => F[List[SourceImageRecord]],
+  ): F[(Option[Sweep], List[SourceImageRecord])] =
+    val cutoff = previous.fold(freshCutoff)(_.cutoff)
+    def page(at: Instant, rows: List[SourceImageRecord]) =
+      val next = rows.lastOption.map(record =>
+        Sweep(at, SourceImageScanCursor(record.updatedAt, record.id))
+      )
+      (next, rows)
+    load(cutoff, previous.map(_.after)).flatMap {
+      // Finish the fixed window before admitting newer rows. An empty tail may rewind once,
+      // but each run still processes at most one bounded page from each candidate stream.
+      case Nil if previous.nonEmpty => load(freshCutoff, None).map(page(freshCutoff, _))
+      case rows => page(cutoff, rows).pure[F]
+    }
 
   private def reconcileState(
       record: SourceImageRecord,
@@ -176,6 +212,19 @@ final class SourceImageObjectReconciler[F[_]: Async](
   }
 
 object SourceImageObjectReconciler:
+  private final case class Sweep(cutoff: Instant, after: SourceImageScanCursor)
+  private final case class Progress(states: Option[Sweep], orphans: Option[Sweep])
+
+  def create[F[_]: Async](
+      sourceImages: SourceImagesRepository[F],
+      objects: SourceImageObjectStorage[F],
+      config: SourceImageObjectReconcilerConfig,
+      now: F[Instant],
+  ): F[SourceImageObjectReconciler[F]] =
+    (Ref.of[F, Progress](Progress(None, None)), Mutex[F]).mapN { (progress, mutex) =>
+      new SourceImageObjectReconciler(sourceImages, objects, config, now, progress, mutex)
+    }
+
   private val Recovered = SourceImageObjectReconciliationStats.empty.copy(recovered = 1)
   private val MarkedFailed = SourceImageObjectReconciliationStats.empty.copy(markedFailed = 1)
   private val Deleted = SourceImageObjectReconciliationStats.empty.copy(deleted = 1)

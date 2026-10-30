@@ -1,5 +1,5 @@
 use super::child_process::{AnalysisChildOutcome, AnalysisChildProcessSpec, ManagedAnalysisChild};
-use std::{pin::Pin, time::Instant};
+use std::{future::Future, pin::Pin, time::Instant};
 
 use tokio::{sync::watch, time};
 use tracing::{error, info, warn};
@@ -74,34 +74,77 @@ pub(super) fn child_spec(
 }
 
 pub(super) async fn finish_attempt_result(
-    control_client: &mut tokio_postgres::Client,
+    control_client: &mut postgres::ConnectedClient,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     started: Instant,
     result: Result<(AnalysisChildOutcome, AttemptMetrics), ChildSupervisionFailure>,
 ) -> Result<ControlOutcome<AttemptResult>, ConsumerError> {
-    match result {
-        Ok(result) => {
-            finish_child_outcome(control_client, config, claim, attempt_directory, result).await
+    finalize(config, |deadline| async move {
+        match result {
+            Ok(result) => {
+                finish_child_outcome(
+                    control_client,
+                    config,
+                    claim,
+                    attempt_directory,
+                    result,
+                    deadline,
+                )
+                .await
+            }
+            Err(ChildSupervisionFailure::Interrupted(interruption)) => {
+                finish_interruption(control_client, config, claim, started, interruption).await
+            }
+            Err(ChildSupervisionFailure::CleanupUnverified(error)) => {
+                // This return intentionally precedes every control-plane transition: an unverified
+                // child boundary must retain its durable lease for durable recovery.
+                Err(ConsumerError::Process(error))
+            }
         }
-        Err(ChildSupervisionFailure::Interrupted(interruption)) => {
-            finish_interruption(control_client, config, claim, started, interruption).await
-        }
-        Err(ChildSupervisionFailure::CleanupUnverified(error)) => {
-            // This return intentionally precedes every control-plane transition: an unverified
-            // child boundary must retain its durable lease for durable recovery.
-            Err(ConsumerError::Process(error))
+    })
+    .await
+}
+
+/// Shares one deadline across every finalization transition, including publication recovery.
+pub(super) async fn finalize<T, Fut>(
+    config: &AnalysisConsumerConfig,
+    operation: impl FnOnce(time::Instant) -> Fut,
+) -> Result<T, ConsumerError>
+where
+    Fut: Future<Output = Result<T, ConsumerError>>,
+{
+    let deadline = time::Instant::now()
+        .checked_add(config.execution_limits.finalization_timeout)
+        .ok_or(ConsumerError::DurationBound)?;
+    match time::timeout_at(deadline, operation(deadline)).await {
+        Ok(result) => result,
+        Err(_elapsed) => {
+            error!(
+                event = "analysis_attempt_finalization_failed",
+                phase = "finalization",
+                error_kind = "finalization_timeout",
+                "analysis attempt exceeded its finalization deadline"
+            );
+            // Cancelling the wait cannot stop a synchronous validator/read. Stop the worker
+            // and retain its durable lease rather than admitting another attempt alongside it.
+            if crate::blocking::has_pending_work() {
+                Err(ConsumerError::BlockingWorkUnfinished)
+            } else {
+                Err(ConsumerError::ControlTimeout)
+            }
         }
     }
 }
 
 async fn finish_child_outcome(
-    control_client: &mut tokio_postgres::Client,
+    control_client: &mut postgres::ConnectedClient,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     result: (AnalysisChildOutcome, AttemptMetrics),
+    deadline: time::Instant,
 ) -> Result<ControlOutcome<AttemptResult>, ConsumerError> {
     let (child_outcome, mut metrics) = result;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
@@ -121,6 +164,7 @@ async fn finish_child_outcome(
                 claim,
                 attempt_directory,
                 &mut metrics,
+                deadline,
             )
             .await?
         }
@@ -638,18 +682,26 @@ async fn terminate_for(
 }
 
 async fn finish_successful_child(
-    control_client: &mut tokio_postgres::Client,
+    control_client: &mut postgres::ConnectedClient,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     attempt_directory: &std::path::Path,
     metrics: &mut AttemptMetrics,
+    deadline: time::Instant,
 ) -> Result<ControlOutcome<AttemptResult>, ConsumerError> {
     let publication_started = Instant::now();
-    let result =
-        publish_with_deadline(control_client, config, claim, attempt_directory, metrics).await;
+    let result = Box::pin(publish(
+        control_client,
+        claim,
+        config,
+        attempt_directory,
+        metrics,
+        deadline,
+    ))
+    .await;
     metrics.observe_worker_peak(current_process_peak_resident_bytes().await);
     match result {
-        Ok(Ok(outcome)) => match outcome.value {
+        Ok(outcome) => match outcome.value {
             publication @ (PublicationResult::Published
             | PublicationResult::Reused
             | PublicationResult::Prepared) => {
@@ -681,7 +733,7 @@ async fn finish_successful_child(
                 Ok(outcome.map(|_| AttemptResult::Completed))
             }
         },
-        Ok(Err(ControlError::OwnerLost)) => {
+        Err(ControlError::OwnerLost) => {
             warn!(
                 event = "analysis_publication_rejected",
                 phase = "publication",
@@ -692,7 +744,7 @@ async fn finish_successful_child(
                 AttemptResult::OwnershipUncertain,
             ))
         }
-        Ok(Err(error)) if error.is_artifact_candidate_failure() => {
+        Err(error) if error.is_artifact_candidate_failure() => {
             metrics.record_staging(publication_started.elapsed());
             warn!(
                 event = "analysis_publication_failed",
@@ -705,7 +757,7 @@ async fn finish_successful_child(
             log_attempt_failure(failure, metrics, "artifact_validation");
             Ok(outcome.map(|()| AttemptResult::Completed))
         }
-        Ok(Err(error)) if error.is_candidate_processing_infrastructure_failure() => {
+        Err(error) if error.is_candidate_processing_infrastructure_failure() => {
             metrics.record_finalization(publication_started.elapsed());
             error!(
                 event = "analysis_publication_failed",
@@ -718,7 +770,7 @@ async fn finish_successful_child(
             // recovery is the only safe path.
             Err(ConsumerError::Control(error))
         }
-        Ok(Err(error)) => {
+        Err(error) => {
             metrics.record_finalization(publication_started.elapsed());
             error!(
                 event = "analysis_publication_failed",
@@ -726,48 +778,9 @@ async fn finish_successful_child(
                 error_kind = error.kind(),
                 "analysis publication dependency failed"
             );
-            finish_publication_failure(config, claim, metrics).await
-        }
-        Err(_elapsed) => {
-            metrics.record_finalization(publication_started.elapsed());
-            error!(
-                event = "analysis_publication_failed",
-                phase = "publication",
-                error_kind = "finalization_timeout",
-                "analysis publication exceeded its finalization deadline"
-            );
-            if crate::blocking::has_pending_work() {
-                // A cancelled wait cannot stop a synchronous validator/read. Retain the
-                // durable lease and stop this worker rather than admitting another attempt
-                // while the old one still consumes resources. Recovery owns the outcome.
-                return Err(ConsumerError::BlockingWorkUnfinished);
-            }
-            finish_publication_failure(config, claim, metrics).await
+            finish_publication_failure(control_client, config, claim, metrics).await
         }
     }
-}
-
-// Share one absolute deadline across staging, optional notification preparation and COMMIT.
-async fn publish_with_deadline(
-    control_client: &mut tokio_postgres::Client,
-    config: &AnalysisConsumerConfig,
-    claim: &ClaimedJob,
-    attempt_directory: &std::path::Path,
-    metrics: &mut AttemptMetrics,
-) -> Result<Result<ControlOutcome<PublicationResult>, ControlError>, time::error::Elapsed> {
-    let finalization_deadline = time::Instant::now() + config.execution_limits.finalization_timeout;
-    time::timeout_at(
-        finalization_deadline,
-        Box::pin(publish(
-            control_client,
-            claim,
-            config,
-            attempt_directory,
-            metrics,
-            finalization_deadline,
-        )),
-    )
-    .await
 }
 
 fn log_attempt_success(publication: PublicationResult, metrics: &AttemptMetrics) {
@@ -793,13 +806,15 @@ fn log_attempt_success(publication: PublicationResult, metrics: &AttemptMetrics)
 }
 
 async fn finish_publication_failure(
+    control_client: &mut postgres::ConnectedClient,
     config: &AnalysisConsumerConfig,
     claim: &ClaimedJob,
     metrics: &AttemptMetrics,
 ) -> Result<ControlOutcome<AttemptResult>, ConsumerError> {
-    let mut recovery_client = postgres::connect(&config.database_url).await?;
+    let recovery_client = postgres::connect(&config.database_url).await?;
+    drop(std::mem::replace(control_client, recovery_client));
     let failure = AttemptFailure::failed(SafeFailureCode::PublicationFailed);
-    match finish_failure(&mut recovery_client, claim, config, failure, metrics).await {
+    match finish_failure(control_client, claim, config, failure, metrics).await {
         Ok(outcome) => {
             log_attempt_failure(failure, metrics, "publication");
             Ok(outcome.map(|()| AttemptResult::Completed))

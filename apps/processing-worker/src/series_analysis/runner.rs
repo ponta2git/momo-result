@@ -79,7 +79,7 @@ fn submit_control_outcome<T>(
 }
 
 async fn execute_claimed_job(
-    control_client: &mut tokio_postgres::Client,
+    control_client: &mut postgres::ConnectedClient,
     heartbeat_client: &mut HeartbeatConnection,
     config: &AnalysisConsumerConfig,
     post_commit_sink: &PostCommitSink,
@@ -100,7 +100,10 @@ async fn execute_claimed_job(
         Err(_error) => {
             let metrics = elapsed_metrics(started, None);
             let failure = AttemptFailure::failed(SafeFailureCode::TemporaryStorageExhausted);
-            let outcome = finish_failure(control_client, claim, config, failure, &metrics).await?;
+            let outcome = attempt::finalize(config, |_deadline| async {
+                Ok(finish_failure(control_client, claim, config, failure, &metrics).await?)
+            })
+            .await?;
             submit_control_outcome(post_commit_sink, outcome)?;
             warn!(
                 event = "analysis_attempt_finished",

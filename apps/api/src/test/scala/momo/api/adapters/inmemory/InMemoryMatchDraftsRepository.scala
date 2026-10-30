@@ -72,7 +72,11 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
           if momo.api.domain.MatchDraftConfirmability.allows(e.status) &&
             MatchDraftConfirmation.from(e) == expected =>
         val next = MatchDraft.Confirmed(
-          common = e.common.copy(updatedAt = updatedAt),
+          common = e.common.copy(
+            sourceImagesRetainedUntil = Some(updatedAt),
+            sourceImagesDeletedAt = Some(updatedAt),
+            updatedAt = updatedAt,
+          ),
           confirmedMatchIdValue = confirmedMatchId,
         )
         (current + (expected.draftId -> next), true)
@@ -134,23 +138,6 @@ final class InMemoryMatchDraftsRepository[F[_]: Sync] private (
           .OcrRunning(withArtifacts.copy(updatedAt = updatedAt, sourceImagesDeletedAt = None))
         (current + (draftId -> next), MatchDraftAttachmentResult.Attached)
       case _ => (current, MatchDraftAttachmentResult.NotAttachable)
-  }
-
-  override def markSourceImagesRetention(
-      draftId: MatchDraftId,
-      retainedUntil: Option[Instant],
-      deletedAt: Option[Instant],
-      updatedAt: Instant,
-  ): F[MatchDraftSourceImageRetentionResult] = ref.modify { current =>
-    current.get(draftId) match
-      case None => (current, MatchDraftSourceImageRetentionResult.NotFound)
-      case Some(draft) =>
-        val next = draft.withCommon(_.copy(
-          sourceImagesRetainedUntil = retainedUntil,
-          sourceImagesDeletedAt = deletedAt,
-          updatedAt = updatedAt,
-        ))
-        (current + (draftId -> next), MatchDraftSourceImageRetentionResult.Updated)
   }
 
   def deleteConfirmedByMatchId(matchId: MatchId): F[Int] = ref.modify { current =>

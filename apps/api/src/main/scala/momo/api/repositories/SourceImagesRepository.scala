@@ -45,6 +45,8 @@ final case class SourceImageRecord(
     updatedAt: Instant,
 ) derives CanEqual
 
+final case class SourceImageScanCursor(updatedAt: Instant, imageId: ImageId) derives CanEqual
+
 final case class SourceImageReservation(
     id: ImageId,
     ownerAccountId: AccountId,
@@ -134,5 +136,15 @@ trait SourceImagesRepository[F[_]]:
   /** Atomically transitions an AVAILABLE image only when no live OCR/draft reference exists. */
   def beginDeleteUnreferenced(id: ImageId, now: Instant): F[SourceImageDeleteResult]
   def markDeleted(id: ImageId, now: Instant): F[Boolean]
-  def reconciliationCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
-  def orphanCandidates(olderThan: Instant, limit: Int): F[List[SourceImageRecord]]
+
+  /** Bounded pages ordered by (updatedAt, imageId); the cursor uses values read before processing. */
+  def reconciliationCandidates(
+      olderThan: Instant,
+      limit: Int,
+      after: Option[SourceImageScanCursor],
+  ): F[List[SourceImageRecord]]
+  def orphanCandidates(
+      olderThan: Instant,
+      limit: Int,
+      after: Option[SourceImageScanCursor],
+  ): F[List[SourceImageRecord]]

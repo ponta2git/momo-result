@@ -182,7 +182,8 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
     for
       _ <- repository.reserveWithinQuota(recent, generousQuota)
       _ <- repository.reserveWithinQuota(older, generousQuota)
-      candidates <- repository.reconciliationCandidates(now.minusSeconds(60), limit = 10)
+      candidates <-
+        repository.reconciliationCandidates(now.minusSeconds(60), limit = 10, after = None)
     yield assertEquals(candidates.map(_.id), List(older.id))
 
   test("orphan deletion rechecks references atomically before changing state"):
@@ -201,7 +202,7 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       _ <- repository.reserveWithinQuota(candidate, generousQuota)
       _ <- repository.markAvailable(candidate.id, None, now)
       _ <- insertReference
-      candidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10)
+      candidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10, after = None)
       guarded <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(2))
       _ <- sql"DELETE FROM ocr_jobs WHERE id = 'job-source-reference'".update.run
         .transact(transactor)
@@ -254,12 +255,13 @@ final class PostgresSourceImagesRepositorySpec extends IntegrationSuite:
       _ <- repository.reserveWithinQuota(candidate, generousQuota)
       _ <- repository.markAvailable(candidate.id, None, now)
       _ <- insertDraft
-      liveCandidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10)
+      liveCandidates <- repository.orphanCandidates(now.plusSeconds(1), limit = 10, after = None)
       guarded <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(1))
       _ <- sql"""
         UPDATE match_drafts SET source_images_deleted_at = ${now.plusSeconds(2)} WHERE id = $draftId
       """.update.run.transact(transactor)
-      releasedCandidates <- repository.orphanCandidates(now.plusSeconds(3), limit = 10)
+      releasedCandidates <-
+        repository.orphanCandidates(now.plusSeconds(3), limit = 10, after = None)
       pending <- repository.beginDeleteUnreferenced(candidate.id, now.plusSeconds(3))
     yield
       assertEquals(liveCandidates, Nil)

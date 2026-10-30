@@ -184,6 +184,7 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](
   override def reconciliationCandidates(
       olderThan: Instant,
       limit: Int,
+      after: Option[SourceImageScanCursor],
   ): F[List[SourceImageRecord]] =
     val boundedLimit = limit.max(1).min(MaxReconciliationBatchSize)
     (selectAll ++ fr"""
@@ -192,6 +193,9 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](
         ${SourceImageStatus.DeletePending}
       )
         AND updated_at <= $olderThan
+    """ ++ after.fold(Fragment.empty)(cursor => fr"""
+      AND (updated_at, ${ids.wireId("source_images")}) > (${cursor.updatedAt}, ${cursor.imageId})
+    """) ++ fr"""
       ORDER BY updated_at, ${ids.wireId("source_images")}
       LIMIT $boundedLimit
     """).query[Row].to[List].map(_.map(_.toRecord)).transact(transactor)
@@ -199,12 +203,19 @@ final class PostgresSourceImagesRepository[F[_]: MonadCancelThrow](
   override def orphanCandidates(
       olderThan: Instant,
       limit: Int,
+      after: Option[SourceImageScanCursor],
   ): F[List[SourceImageRecord]] =
     val boundedLimit = limit.max(1).min(MaxReconciliationBatchSize)
     (liveReferencesCte ++ selectAllAliased ++ fr"""
       WHERE candidate.status = ${SourceImageStatus.Available}
         AND candidate.updated_at <= $olderThan
-    """ ++ unreferencedFromCte ++ fr"""
+    """ ++ unreferencedFromCte ++ after.fold(Fragment.empty)(cursor =>
+      fr"""
+      AND (candidate.updated_at, ${ids.wireId(
+          "candidate"
+        )}) > (${cursor.updatedAt}, ${cursor.imageId})
+    """
+    ) ++ fr"""
       ORDER BY candidate.updated_at, ${ids.wireId("candidate")}
       LIMIT $boundedLimit
     """).query[Row].to[List].map(_.map(_.toRecord)).transact(transactor)

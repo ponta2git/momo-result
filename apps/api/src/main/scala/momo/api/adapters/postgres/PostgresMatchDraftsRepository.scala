@@ -210,21 +210,6 @@ object PostgresMatchDrafts extends PostgresMatchDraftsRowSupport:
               }
           }
 
-      override def markSourceImagesRetention(
-          draftId: MatchDraftId,
-          retainedUntil: Option[Instant],
-          deletedAt: Option[Instant],
-          updatedAt: Instant,
-      ): ConnectionIO[MatchDraftSourceImageRetentionResult] = sql"""
-      UPDATE match_drafts SET
-        source_images_retained_until = $retainedUntil,
-        source_images_deleted_at = $deletedAt,
-        updated_at = $updatedAt
-      WHERE id = ${ids.lookup(Entity.MatchDrafts, draftId.value)}
-    """.update.run.map {
-        case affected if affected > 0 => MatchDraftSourceImageRetentionResult.Updated
-        case _ => MatchDraftSourceImageRetentionResult.NotFound
-      }
   private final case class References(
       creator: Fragment,
       creatorMember: Fragment,

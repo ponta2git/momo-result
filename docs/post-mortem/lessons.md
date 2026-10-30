@@ -285,7 +285,7 @@
 **該当条件**
 
 - algorithm version、artifact schema version、validation contract、release singleton、desired version の昇格を変更する。
-- 分析の release evidence、rollback 対象、fixture が触る baseline migration を変更する。
+- 分析の release evidence、rollback 対象を変更する。
 
 **確認**
 

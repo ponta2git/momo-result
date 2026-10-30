@@ -57,7 +57,7 @@
 - wake は commit 後に実行し、post-commit effect は commit が成功した場合だけ返す。wake は業務 payload を持たない coalescing signal であり、仕事の正本は永続 job / request とする。
 - API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。確定済み更新の応答は通知の遅延・失敗と独立して返し、再試行と停止は coordinator、通知喪失後の回収は Worker runtime が所有する（[Worker 規約](worker-rule.md#runtime--listener--shutdown)）。
 - 手動再計算の idempotency は永続した operation を正本とし、同じ key の並行受付を直列化して対象を照合する。key は HTTP 予約の期限切れ後も最初の対象にだけ有効とする。
-- 分析では API と release controller が durable request を保存し、Worker が campaign 展開・job 作成・実行を所有する。業務内容は通知ではなく DB の要求に置き、展開途中の要求も DB に残す。
+- 分析では API と release controller が durable request を保存する。API は手動要求・試合 mutation 起点の job 作成を、Worker は campaign 展開・後続実行用の job 作成と実行を所有する。業務内容は通知ではなく DB の要求に置き、展開途中の要求も DB に残す。
 
 ## Error / Auth
 

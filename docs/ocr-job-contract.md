@@ -55,7 +55,7 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 | --- | --- |
 | 一時的な実行失敗 | `failure_retry_count` の予算内で将来時刻の queued へ戻す。予算を使い切れば終端化する |
 | owner の lease 切れ | `lease_recovery_count` の別予算で回復し、実行失敗とは別に数える |
-| 正常停止・旧世代の中断 intent | child を回収し、job を queued へ戻す。失敗・lease 回復の予算はそのまま保つ |
+| 正常停止 | child を回収し、job を queued へ戻す。失敗・lease 回復の予算はそのまま保つ |
 | 不正入力・再試行しない実行失敗 | 安全な理由を保存して終端化し、後続 job を処理する |
 | stale queued / owner を失った実行 | Worker の期限処理で収束する。この期限回復の対象は実行権を失った job に限り、有効な lease を持つ実行を別 timer で失敗にしない |
 | 全 job が終端でも下書きが実行中 | Worker が下書き状態を修復する |

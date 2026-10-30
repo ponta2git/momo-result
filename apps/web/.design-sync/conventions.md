@@ -33,21 +33,21 @@ const { TooltipProvider, AppMotionProvider, MemoryRouter, ToastHost } = window.M
 - `TabsRoot` > `TabsList` > `TabsTab`, plus `TabsPanel`; parts throw outside `TabsRoot` and take no `className`.
 - `DataTable` is generic: `columns` with `key`, `header`, `renderCell(row)`, `getRowKey`, `caption`.
 - `Notice` tones `info | success | warning | danger`; `EmptyState` for empty lists; `ResourcePageState` for not-found/load-error pages; `Skeleton`/`PageLoadingFallback` for loading.
-- Page layout: `PageFrame` > `PageHeader` (title, description, actions) > `PageContentSurface` on a `--color-canvas` background.
+- Page layout: `PageFrame` > `PageContentSurface` on a `--color-canvas` background. Only resource detail pages add `PageHeader` (title, description, actions) before the surface; other pages place actions with the related content.
 
 ## Where the truth lives
 
 Read `styles.css` (tokens under `:root`, component classes like `.momo-surface-*`) and each component's `.d.ts` / `.prompt.md` before styling.
 
-## Example
+## Example: resource detail
 
 ```jsx
 const { PageFrame, PageHeader, PageContentSurface, Button, DataTable, StatusBadge } = window.MomoUI;
 <div style={{ background: "var(--color-canvas)" }} className="p-4">
   <PageFrame>
     <PageHeader
-      title="試合結果"
-      description="開催ごとの最終順位を確認できます。"
+      title="第12回の開催記録"
+      description="この開催の最終順位を確認できます。"
       actions={<Button>試合を登録</Button>}
     />
     <PageContentSurface>

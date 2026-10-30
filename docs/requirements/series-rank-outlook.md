@@ -422,7 +422,7 @@ APIは用途に対応する一つの有限chunkを読み、保存済みの値を
 
 full validatorは、対象なしを含む必要scopeの完全性を検証する。作品に対象試合がある場合は4名・6組の表・本人別referenceを要求し、整数合計と平均の整合、直近n戦の周辺分布と表の一致、対角0、窓の長さ・期間・件数、20戦型の重複なし・順序、summaryとreferenceの一致を検証する。自己ベストは1〜min(作品戦数, 1000)の窓長を欠落・重複なく持ち、summaryの50・100戦は同じ窓または明示的な不足となる。APIは意味の検証を再実装せず、認めたpublication contractとboundedなshape・identityを確認する。
 
-referenceの件数上限に加え、encoded / decoded bytes・深さの上限を保存schemaとreaderへ定める。最大候補数と最大入力で成立する上限を実装時に確認し、静かに型を削って上限内へ収めない。新resourceの保存、公開後の変更禁止、件数検証は共有DB側の正式な変更として扱い、その作業前にmomo-dbの開発手順を読む。今回の仕様定義ではschema・migration・DBを変更しない。
+referenceの件数上限に加え、encoded / decoded bytes・深さの上限を保存schemaとreaderへ定める。最大候補数と最大入力で成立する上限を実装時に確認し、静かに型を削って上限内へ収めない。新resourceの保存、公開後の変更禁止、件数検証は共有DB側の正式な変更として扱い、その作業前にmomo-dbの開発手順を読む。
 
 ## 14. 更新と失敗
 

@@ -40,7 +40,7 @@ subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](w
 
 - `apps/web/scripts` は API / Web のローカル起動、Web の生成・build 検査・隔離 E2E 起動を所有する Node の開発用境界であり、`src` の実行層ではない。この開発用境界から production へ渡すのは生成された型・validator に限り、script や E2E fixture は import しない。
 - 複数 service の E2E 環境管理と runtime HTTP smoke は root の `scripts/e2e` に置く。
-- `apps/web/scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は隔離した子 process 環境と service の起動を所有する。子 process の起動・中断・終了待ちはローカル開発と同じ共通 module を使い、開発用 env の読取りはローカル起動 tool に閉じる。入口は実行専用とし、ライブラリとして import しない。OCR 専用の制御 worker・通知 recorder・画像 fixture は必要な suite に個別に用意し、通常 E2E はそれらなしで実行できるようにする。
+- `scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は隔離した子 process 環境と service の起動を所有する。`apps/web/scripts/e2e` には共通 helper と実行用の子スクリプトを置く。子 process の起動・中断・終了待ちはローカル開発と同じ共通 module を使い、開発用 env の読取りはローカル起動 tool に閉じる。入口は実行専用とし、ライブラリとして import しない。OCR 専用の制御 Worker は回復 E2E、画像 fixture と通知 recorder はシステム・回復 E2E で使い、UI E2E はいずれも使わない。
 - `scripts/ci` の Shell は外部 command、環境変数、file の受け渡し、終了状態と実行順序を扱い、アプリの業務判断は各 subsystem に置く。workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。
 - 構造化された CI data の集計・秘匿化・来歴検証と metadata 生成は `scripts/tools/cmd/ci-tool` に集約する。producer と consumer は同じ検証規則を使い、後続 release が以前の metadata を読める契約を保つ。CLI の入力・出力・終了値は [command の説明](../scripts/tools/cmd/ci-tool/README.md) から辿れる。
 - 独立した診断・評価用 Go command も `scripts/tools/cmd`、本番 runtime の process 管理と probe は独立 module の `apps/runtime` に置く。CI 専用の集計・判定は runtime binary の外に置く。

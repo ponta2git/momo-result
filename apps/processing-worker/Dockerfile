@@ -181,6 +181,8 @@ COPY --from=builder --chmod=0755 /usr/bin/getent /usr/bin/openssl /usr/bin/
 WORKDIR /var/lib/momo-analysis
 # Root exists only to prepare the fixed cgroup and delegate cgroup.procs. The bootstrap permanently
 # drops supplementary groups and all real/effective/saved IDs before re-execing the worker.
-# trivy:ignore:AVD-DS-0002:exp:2026-10-31
+# This exception follows the bootstrap contract, not a calendar deadline. Remove it when startup
+# no longer needs root; processing-worker-image-smoke.sh checks the bootstrap entrypoint.
+# trivy:ignore:AVD-DS-0002
 USER 0:0
 CMD ["/usr/local/bin/momo-processing-worker", "bootstrap", "--", "worker"]

@@ -82,16 +82,17 @@ jobs:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
-          version: 11.20.0
           package_json_file: _deps/summit/package.json
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: 26.13.0
           check-latest: true
           cache: pnpm
           cache-dependency-path: |
             _deps/momo-db/pnpm-lock.yaml
             _deps/summit/pnpm-lock.yaml
+      - name: Preserve Summit runtime before restoring the Web toolchain
+        run: printf 'MOMO_E2E_SUMMIT_NODE=%s\n' "$(command -v node)" >> "$GITHUB_ENV"
       - name: Build shared schema
         working-directory: _deps/momo-db
         run: pnpm install --frozen-lockfile && pnpm build

@@ -215,7 +215,7 @@ pub(super) async fn prepare_claim(
         };
         let effects = recover_expired_analysis_job(transaction, &lease).await?;
         let current_candidate_resolved =
-            recovery_resolves_candidate(transaction, job_id, job_id, effects).await?;
+            recovery_resolves_candidate(transaction, job_id, effects).await?;
         return Ok(ClaimPreparation::RecoveredExpiredHolder {
             effects,
             current_candidate_resolved,
@@ -261,13 +261,9 @@ fn supports_candidate(candidate: &ClaimCandidate, expected_schema: i32) -> bool 
 
 async fn recovery_resolves_candidate(
     transaction: &Transaction<'_>,
-    holder_job_id: &str,
     candidate_job_id: &str,
     recovery_effects: TransactionEffects,
 ) -> Result<bool, ControlError> {
-    if holder_job_id != candidate_job_id {
-        return Ok(false);
-    }
     let status = transaction
         .query_opt(
             "SELECT status FROM series_analysis_jobs WHERE legacy_id = $1",
@@ -390,14 +386,6 @@ async fn mark_associated_requests_running(
                SELECT 1 FROM series_analysis_job_requests r\x20\
                WHERE r.operation_request_id = o.id AND r.assigned_attempt_id = (SELECT id FROM series_analysis_job_attempts WHERE legacy_id=$1)\x20\
              )",
-            &[&attempt_id],
-        )
-        .await?;
-    transaction
-        .execute(
-            "UPDATE series_analysis_campaign_targets t SET status = 'running', updated_at = clock_timestamp()\x20\
-             FROM series_analysis_job_requests r\x20\
-             WHERE t.job_request_id = r.id AND r.assigned_attempt_id = (SELECT id FROM series_analysis_job_attempts WHERE legacy_id=$1)",
             &[&attempt_id],
         )
         .await?;

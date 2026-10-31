@@ -916,11 +916,11 @@ private[postgres] object PostgresSeriesPlayerRadarCommandOps:
         (${identities.idColumns}, game_title_id ${identities.legacyColumn(
           "game_title_id"
         )}, input_revision, algorithm_version, artifact_schema_version,
-         validation_contract_id, trigger, force_run, status)
+         validation_contract_id, trigger, status)
       SELECT $allocated, game_title_id ${identities.legacyValue(
           title.value
         )}, input_revision, algorithm_version,
-        artifact_schema_version, validation_contract_id, 'manual', false, 'pending'
+        artifact_schema_version, validation_contract_id, 'manual', 'pending'
       FROM series_analysis_title_states WHERE game_title_id = ${identities.lookup(
           Entity.GameTitles,
           title.value

@@ -14,12 +14,14 @@ import {
   runCommand,
   startPostgres,
 } from "../../apps/web/scripts/e2e/runtime.mts";
+import { summitNode } from "./summit-node.mts";
 import { cleanupResources } from "./system-environment.mts";
 
 // This producer fixture changes global member names, so it owns a separate database.
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const execute = promisify(execFile);
 const signal = createInterruptionSignal("Notification contract");
+const consumerNode = await summitNode();
 configureDockerHost();
 const image = process.env["MOMO_E2E_CONTROLLED_WORKER_IMAGE"];
 if (!image) throw new Error("MOMO_E2E_CONTROLLED_WORKER_IMAGE is required.");
@@ -95,7 +97,7 @@ try {
     throw dockerFailure("Notification producer contract", "run", error);
   }
   await runCommand(
-    "node",
+    consumerNode,
     [
       join(root, "apps/web/scripts/e2e/analysis-notification-contract.mts"),
       resolve(process.env["MOMO_E2E_SUMMIT_DIR"] ?? join(root, "_deps/summit")),

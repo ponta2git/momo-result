@@ -46,7 +46,7 @@ pub(crate) async fn terminal_failure_for_job(
         let canonical =
             crate::identity::allocate(crate::identity::Entity::AnalysisRequests, &request_id)
                 .map_err(|_error| ControlError::InvalidMetadata)?;
-        tx.execute("INSERT INTO series_analysis_job_requests (id,legacy_id,game_title_id,legacy_game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger,force_run,status) SELECT $3,$1,game_title_id,$2,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual',false,'pending' FROM series_analysis_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) ON CONFLICT(legacy_id) DO NOTHING", &[&request_id,&title,&canonical]).await?;
+        tx.execute("INSERT INTO series_analysis_job_requests (id,legacy_id,game_title_id,legacy_game_title_id,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,trigger,status) SELECT $3,$1,game_title_id,$2,input_revision,algorithm_version,artifact_schema_version,validation_contract_id,'manual','pending' FROM series_analysis_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$2) ON CONFLICT(legacy_id) DO NOTHING", &[&request_id,&title,&canonical]).await?;
         tx.execute("UPDATE series_analysis_title_states SET pending_work=true,updated_at=clock_timestamp() WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)", &[&title]).await?;
     }
     Ok(())

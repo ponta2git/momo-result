@@ -28,7 +28,7 @@ algorithm version の昇格、本番候補の build、backfill、credential rota
 
 ## E2E Suites
 
-全 suite は Node と、runner が使う Web の依存関係を用意する。UI・システム・回復 E2E は Playwright のブラウザを使う。システム・回復 E2E と通知契約は Docker、host の `jq`、`.momo-db-ref` に適合する migration、依存を install・build 済みの `.summit-ref` に固定した Summit checkout を使う。既定の配置は `_deps/momo-db` / `_deps/summit`。各 checkout の package manager で必要な依存を準備し、migration の準備は [DB 規約](db-rule.md#ownership) に従う。migration は runner が新しい DB に適用する。
+全 suite は Node と、runner が使う Web の依存関係を用意する。UI・システム・回復 E2E は Playwright のブラウザを使う。システム・回復 E2E と通知契約は Docker、host の `jq`、`.momo-db-ref` に適合する migration、依存を install・build 済みの `.summit-ref` に固定した Summit checkout を使う。既定の配置は `_deps/momo-db` / `_deps/summit`。Summit と momo-db は Node.js 26 と各 checkout 固定の pnpm 11 で準備する。runner を Web 用の Node.js 24 で動かす場合は、`MOMO_E2E_SUMMIT_NODE` に Node.js 26 実行ファイルの絶対パスを指定する。受信 process と通知 consumer contract はこの実行ファイルを使い、26.13.0 以上の26系であることを資源作成前に検証する。各 checkout の package manager で必要な依存を準備し、migration の準備は [DB 規約](db-rule.md#ownership) に従う。migration は runner が新しい DB に適用する。
 
 | suite | command | 検証対象 | 用意する image |
 | --- | --- | --- | --- |

@@ -26,6 +26,7 @@ import {
 } from "../../apps/web/scripts/e2e/runtime.mts";
 import { settle } from "../../apps/web/scripts/e2e/settle.mts";
 import { sessionFixtureJar, verifiedSessionFixture } from "./session-fixture.mts";
+import { summitNode } from "./summit-node.mts";
 import { analysisEnvironment } from "./worker-smoke-support.mts";
 
 const execute = promisify(execFile);
@@ -71,6 +72,7 @@ export async function withSystemEnvironment(
   { controlled = false, signal }: { controlled?: boolean; signal: AbortSignal },
   run: (metadata: SystemMetadata, metadataFile: string) => Promise<void>,
 ) {
+  const receiverNode = await summitNode();
   configureDockerHost();
   const runtimeImageId = await imageIdentity("MOMO_E2E_RUNTIME_IMAGE");
   const workerImageId = await imageIdentity(
@@ -226,7 +228,7 @@ export async function withSystemEnvironment(
     phase = "start notification receiver";
     const token = randomBytes(32).toString("hex");
     const recorder = Object.assign(
-      spawn("node", ["scripts/dev/resultNotificationRecorder.ts"], {
+      spawn(receiverNode, ["scripts/dev/resultNotificationRecorder.ts"], {
         cwd: summitDir,
         detached: true,
         stdio: ["ignore", "ignore", "ignore"],

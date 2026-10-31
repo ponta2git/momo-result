@@ -135,7 +135,6 @@ struct CampaignAssignment {
     job_id: Option<String>,
     attempt_id: Option<String>,
     request_status: &'static str,
-    target_status: &'static str,
 }
 
 async fn configure_campaign_transaction(
@@ -388,12 +387,12 @@ async fn materialize_campaign_target(
               id, legacy_id, game_title_id, legacy_game_title_id, operation_request_id, campaign_id,
               input_revision, algorithm_version, artifact_schema_version,
               validation_contract_id,
-              trigger, force_run, status, assigned_job_id, assigned_attempt_id, legacy_assigned_attempt_id, accepted_at
+              trigger, status, assigned_job_id, assigned_attempt_id, legacy_assigned_attempt_id, accepted_at
             ) VALUES (
               $14, $1, (SELECT id FROM game_titles WHERE legacy_id=$2), $2,
               (SELECT id FROM series_analysis_operation_requests WHERE legacy_id=$3),
               (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$4), $5, $6, $7,
-              $8, $9, true, $10,
+              $8, $9, $10,
               (SELECT id FROM series_analysis_jobs WHERE legacy_id=$11),
               (SELECT lease_attempt_id FROM series_analysis_jobs WHERE legacy_id=$11 AND legacy_lease_attempt_id=$12), $12, $13
             )
@@ -420,20 +419,15 @@ async fn materialize_campaign_target(
         .execute(
             r"
             UPDATE series_analysis_campaign_targets
-            SET status = $3,
-                job_request_id = (SELECT id FROM series_analysis_job_requests WHERE legacy_id=$4),
-                legacy_job_request_id = $4,
+            SET status = 'expanded',
+                job_request_id = (SELECT id FROM series_analysis_job_requests WHERE legacy_id=$3),
+                legacy_job_request_id = $3,
                 updated_at = clock_timestamp()
             WHERE campaign_id = (SELECT id FROM series_analysis_campaigns WHERE legacy_id=$1)
               AND legacy_game_title_id = $2
               AND status = 'pending'
             ",
-            &[
-                &target.campaign_id,
-                &target.game_title_id,
-                &assignment.target_status,
-                &request_id,
-            ],
+            &[&target.campaign_id, &target.game_title_id, &request_id],
         )
         .await?;
     super::campaign::refresh(transaction, std::slice::from_ref(&target.campaign_id))
@@ -481,7 +475,6 @@ async fn assign_campaign_target(
                 job_id: Some(String::from(new_job_id)),
                 attempt_id: None,
                 request_status: "pending",
-                target_status: "expanded",
             })
         }
         CampaignAssignmentDecision::RefreshQueued { job_id } => {
@@ -509,14 +502,12 @@ async fn assign_campaign_target(
                 job_id: Some(String::from(job_id)),
                 attempt_id: None,
                 request_status: "pending",
-                target_status: "expanded",
             })
         }
         CampaignAssignmentDecision::JoinRunning { job_id, attempt_id } => Ok(CampaignAssignment {
             job_id: Some(String::from(job_id)),
             attempt_id: Some(String::from(attempt_id)),
             request_status: "assigned",
-            target_status: "running",
         }),
         CampaignAssignmentDecision::DeferForcedRun => {
             transaction
@@ -524,7 +515,6 @@ async fn assign_campaign_target(
                     r"
                     UPDATE series_analysis_title_states
                     SET pending_work = true,
-                        pending_forced_run_count = pending_forced_run_count + 1,
                         updated_at = clock_timestamp()
                     WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1)
                     ",
@@ -535,7 +525,6 @@ async fn assign_campaign_target(
                 job_id: None,
                 attempt_id: None,
                 request_status: "pending",
-                target_status: "expanded",
             })
         }
     }

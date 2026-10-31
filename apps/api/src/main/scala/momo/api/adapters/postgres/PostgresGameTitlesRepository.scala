@@ -196,7 +196,6 @@ object PostgresGameTitles:
             notification_baseline_state = 'unknown',
             notification_baseline_artifact_id = NULL,
             pending_work = false,
-            pending_forced_run_count = 0,
             updated_at = $now
         WHERE game_title_id = ${ids.lookup(Entity.GameTitles, id.value)}
       """.update.run

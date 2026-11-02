@@ -279,6 +279,7 @@ export function OutlookPatterns({
                 <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
               </span>
             ),
+            align: "right" as const,
             tabular: true,
             renderCell: (row: (typeof rows)[number]) => (
               <span className="grid content-start gap-1">
@@ -298,8 +299,8 @@ export function OutlookPatterns({
       />
       <div className="grid gap-2">
         <p className={contentText.supporting}>{names[0]}の差：＋は上位、−は下位。</p>
-        <p className={contentText.body}>総合平均順位 · 上の線が先行</p>
-        <div className="flex flex-wrap gap-x-4 gap-y-2" aria-label="グラフの凡例">
+        <p className={contentText.body}>総合平均順位・上の線が先行</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1" aria-label="グラフの凡例">
           {people.map(({ memberId, role }, index) => (
             <span key={memberId} className="inline-flex min-w-0 items-center gap-2">
               <svg width="24" height="8" aria-hidden="true" className="shrink-0">
@@ -313,7 +314,7 @@ export function OutlookPatterns({
                   strokeDasharray={index === 1 ? "6 4" : undefined}
                 />
               </svg>
-              <span className={contentText.body}>
+              <span className="font-plain min-w-0 text-xs break-words text-[var(--color-text-primary)]">
                 {names[role]}
                 <span className="sr-only">（{index === 1 ? "破線" : "実線"}）</span>
               </span>

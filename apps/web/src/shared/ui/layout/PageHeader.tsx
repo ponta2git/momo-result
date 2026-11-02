@@ -15,7 +15,6 @@ type PageHeaderProps = {
   actions?: ReactNode;
   description?: ReactNode;
   descriptionStatus?: PageHeaderDescriptionStatus | undefined;
-  eyebrow?: ReactNode;
   meta?: ReactNode;
   title: ReactNode;
   titleRef?: Ref<HTMLHeadingElement> | undefined;
@@ -26,7 +25,6 @@ export function PageHeader({
   actions,
   description,
   descriptionStatus,
-  eyebrow,
   meta,
   title,
   titleRef,
@@ -35,15 +33,11 @@ export function PageHeader({
   return (
     <header className="@container/page-header flex min-w-0 flex-wrap items-end gap-4">
       <div className="min-w-0 flex-[1_1_24rem]">
-        {eyebrow ? <p className={contentText.supporting}>{eyebrow}</p> : null}
         <h1
           ref={titleRef}
           aria-describedby={titleDescriptionId}
           tabIndex={titleRef ? -1 : undefined}
-          className={cn(
-            "momo-heading text-2xl font-structure text-balance text-[var(--color-text-primary)] @3xl/page-header:text-3xl",
-            eyebrow ? "mt-1" : "",
-          )}
+          className="momo-heading font-structure text-2xl text-balance text-[var(--color-text-primary)] @3xl/page-header:text-3xl"
         >
           {title}
         </h1>

@@ -1,7 +1,6 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { cn } from "@/shared/ui/cn";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
 
@@ -28,8 +27,8 @@ export function ExportFormatTabs({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId}>
-      <h2 className={cn(contentText.heading, "mb-2")} id={headingId}>
+    <section aria-labelledby={headingId} className="grid gap-2">
+      <h2 className={contentText.heading} id={headingId}>
         ファイル形式
       </h2>
       <TabsRoot
@@ -48,7 +47,8 @@ export function ExportFormatTabs({
 
         {exportFormats.map((item) => (
           <TabsPanel keepMounted key={item.value} value={item.value}>
-            {format === item.value && children ? <div className="mt-4">{children}</div> : null}
+            {/* The download action stays mounted while hidden; its empty slot keeps no gap. */}
+            {format === item.value ? <div className="mt-4 empty:hidden">{children}</div> : null}
           </TabsPanel>
         ))}
       </TabsRoot>

@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { preservesMastersInput } from "@/features/masters/mastersNavigation";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 
 type PanelEditStatus = {
   dirty: boolean;
@@ -98,20 +99,21 @@ export function useReportMasterEditStatus(
   useLayoutEffect(() => () => reportStatus?.(panelId, undefined), [panelId, reportStatus]);
 }
 
-export function MastersEditFeedback() {
-  const { pending, error } = useContext(EditFeedback);
+/** Reserves its slot beside the tabs, so a pending change never moves the panel below. */
+export function MastersEditPendingStatus() {
+  const { pending } = useContext(EditFeedback);
   return (
-    <>
-      <p className="text-sm text-[var(--color-text-secondary)] empty:hidden" role="status">
-        {pending
-          ? "設定の追加・保存・削除の結果を確認しています。完了するまで別の画面への移動をお待ちください。"
-          : null}
-      </p>
-      {error ? (
-        <Notice tone="danger" title="設定の変更に失敗しました">
-          {error}
-        </Notice>
-      ) : null}
-    </>
+    <PendingStatus pending={pending}>
+      設定の追加・保存・削除の結果を確認しています。完了するまで別の画面への移動をお待ちください。
+    </PendingStatus>
   );
+}
+
+export function MastersEditError() {
+  const { error } = useContext(EditFeedback);
+  return error ? (
+    <Notice tone="danger" title="設定の変更に失敗しました">
+      {error}
+    </Notice>
+  ) : null;
 }

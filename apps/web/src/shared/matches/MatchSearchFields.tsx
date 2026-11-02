@@ -115,7 +115,7 @@ export function SearchPeriodFields({
     <div
       className={cn(
         "min-w-0",
-        layout === "grid" ? "grid grid-cols-2 gap-3" : "flex flex-wrap items-start gap-2",
+        layout === "grid" ? "grid grid-cols-2 gap-4" : "flex flex-wrap items-start gap-4",
       )}
     >
       <div className={layout === "grid" ? "min-w-0" : "w-42"}>

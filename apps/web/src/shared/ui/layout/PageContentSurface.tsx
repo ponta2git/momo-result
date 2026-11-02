@@ -2,14 +2,13 @@ import type { ComponentPropsWithRef } from "react";
 
 import { cn } from "@/shared/ui/cn";
 
-export type PageContentSurfacePadding = "compact" | "default" | "none";
+export type PageContentSurfacePadding = "default" | "none";
 
 type PageContentSurfaceProps = ComponentPropsWithRef<"div"> & {
   padding?: PageContentSurfacePadding | undefined;
 };
 
 const paddingClass = {
-  compact: "p-4",
   default: "p-4 sm:p-6",
   none: "",
 } as const satisfies Record<PageContentSurfacePadding, string>;

@@ -30,6 +30,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { FilterBar } from "@/shared/ui/forms/FilterBar";
 import { SelectField } from "@/shared/ui/forms/SelectField";
@@ -98,18 +99,14 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
             </Button>
           ) : undefined
         }
+        action={<PendingStatus pending={updating}>比較を読み込み中</PendingStatus>}
         meta={
           preview.after
             ? `比較対象 ${preview.after.sample.matchCount}試合・${preview.after.sample.heldEventCount}開催`
             : undefined
         }
       />
-      {updating ? (
-        <p className={contentText.body} role="status">
-          比較を読み込み中
-        </p>
-      ) : null}
-      <div className="grid min-w-0">
+      <div className="grid min-w-0 gap-4">
         <div aria-busy={updating || undefined} className="grid min-w-0 gap-4">
           {preview.evaluationState === "loading" ? (
             <Skeleton className="h-48 w-full" />
@@ -131,7 +128,7 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
               <div className="grid min-w-0 gap-1">
                 <p className={contentText.supporting}>適用中 → 変更案</p>
                 {axisId === "achievement" ? (
-                  <p className={contentText.supporting}>
+                  <p className={cn(contentText.supporting, readableTextWidthClass)}>
                     実績達成は選択マップの作品通算です。シーズンや成績6軸の試合数による未採点の影響を受けません。
                   </p>
                 ) : null}
@@ -261,39 +258,37 @@ export const PlayerRadarPreview = memo(function PlayerRadarPreview({
           )}
         </div>
         <Disclosure summary="点数の集計に使った記録" triggerVariant="supporting">
-          <div className="px-3">
-            <FactList
-              ariaLabel="点数の集計に使った記録"
-              columns={2}
-              items={[
-                {
-                  id: "created",
-                  label: "比較計算日時",
-                  value: formatDateTimeLong(preview.createdAt),
-                },
-                ...(preview.after
-                  ? [
-                      {
-                        id: "period",
-                        label: "対象期間",
-                        value:
-                          preview.after.sample.firstPlayedAt && preview.after.sample.lastPlayedAt
-                            ? `${formatDateTimeLong(preview.after.sample.firstPlayedAt)}〜${formatDateTimeLong(preview.after.sample.lastPlayedAt)}`
-                            : "未取得",
-                      },
-                      {
-                        id: "maps",
-                        label: "マップ別件数",
-                        value:
-                          preview.after.sample.maps
-                            .map((map) => `${map.displayName} ${map.matchCount}試合`)
-                            .join("、") || "未取得",
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </div>
+          <FactList
+            ariaLabel="点数の集計に使った記録"
+            columns={2}
+            items={[
+              {
+                id: "created",
+                label: "比較計算日時",
+                value: formatDateTimeLong(preview.createdAt),
+              },
+              ...(preview.after
+                ? [
+                    {
+                      id: "period",
+                      label: "対象期間",
+                      value:
+                        preview.after.sample.firstPlayedAt && preview.after.sample.lastPlayedAt
+                          ? `${formatDateTimeLong(preview.after.sample.firstPlayedAt)}〜${formatDateTimeLong(preview.after.sample.lastPlayedAt)}`
+                          : "未取得",
+                    },
+                    {
+                      id: "maps",
+                      label: "マップ別件数",
+                      value:
+                        preview.after.sample.maps
+                          .map((map) => `${map.displayName} ${map.matchCount}試合`)
+                          .join("、") || "未取得",
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </Disclosure>
       </div>
     </div>

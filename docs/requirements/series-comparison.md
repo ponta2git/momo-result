@@ -90,7 +90,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - pale surfaceは `docs/ui-rule.md` の強調文法に従い、選択中または現在のscope、状態・通知、操作のinset、compactな標章に限定する。primary result、page-local navigation、label付きheader、primary hypothesisは、重要という理由だけで淡色面へ置かず、読み順、文字、余白、dividerを優先する。同格比較でfillを反復する場合は比較群を一つのanchorとして扱い、その外側へ同じ強さの面を重ねず、意味を持つfillには非色labelまたはmarkerを併用する。
 - chart / table 内だけに必要な横スクロールを閉じ込め、legendはplot外でwrapし、axis名とtick labelをplot境界内に収める。mobileのdialogは本文に1つの縦scroll領域を持つ。
 - parts-of-a-wholeは1本の100% compositionと値一覧で示し、単一候補は確率100%ではなく「候補はこの1件」と表現する。
-- 選択試合のresult ledgerを分析目的より前に共有し、根拠試合と比較をURL stateで往復できるようにする。markerは試合粒度で一意に対応できる場合だけ表示し、tab切替後もfocusを保持する。
+- 選択試合のresult ledgerは目的tabの直後、各目的の内容より前に置いて目的間で共有し、目的tabの位置を選択試合の有無で動かさない。根拠試合と比較をURL stateで往復できるようにする。markerは試合粒度で一意に対応できる場合だけ表示し、tab切替後もfocusを保持する。
 
 ## 5. Metric Semantics
 

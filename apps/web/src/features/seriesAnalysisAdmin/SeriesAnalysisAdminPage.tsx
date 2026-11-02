@@ -12,6 +12,7 @@ import { useSeriesAnalysisAdmin } from "@/features/seriesAnalysisAdmin/useSeries
 import { formatApiError } from "@/shared/api/problemDetails";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -19,6 +20,7 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisAdminPage() {
@@ -28,7 +30,7 @@ export function SeriesAnalysisAdminPage() {
   const { data } = administration.resource;
   const { selectedTitle } = administration.selection;
   return (
-    <PageFrame width="wide">
+    <PageFrame width="analysis">
       <PageContentSurface
         aria-label="戦績分析管理"
         className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
@@ -41,7 +43,8 @@ export function SeriesAnalysisAdminPage() {
             </TabsTab>
             <TabsTab value="radar">レーダーの採点基準</TabsTab>
           </TabsList>
-          <div className="mt-6 grid min-w-0 gap-6">
+          {/* The shared slot leaves the layout when empty, so tab panels keep one 24px rhythm. */}
+          <div className="mt-6 grid min-w-0 gap-6 empty:hidden">
             {administration.feedback.resourceError ? (
               <Notice
                 action={
@@ -156,7 +159,6 @@ export function SeriesAnalysisAdminPage() {
                         disabled={administration.resource.refreshDisabled}
                         pending={administration.resource.refreshing}
                         pendingLabel="状態を更新中"
-                        size="sm"
                         variant="secondary"
                         onClick={administration.actions.refresh}
                       >
@@ -165,7 +167,7 @@ export function SeriesAnalysisAdminPage() {
                     )}
                   </div>
                   {administration.recalculation.titleReserved ? (
-                    <p className={contentText.body}>
+                    <p className={cn(contentText.supporting, readableTextWidthClass)}>
                       この作品には処理待ちの手動再計算予約があります。完了後にもう一度予約できます。
                     </p>
                   ) : null}
@@ -187,7 +189,7 @@ export function SeriesAnalysisAdminPage() {
                 </TabsList>
                 <TabsPanel keepMounted value="current">
                   {selectedTitle ? (
-                    <div className="mt-6 min-w-0">
+                    <div className="mt-4 min-w-0">
                       <PlayerRadarAdministration
                         key={selectedTitle.gameTitleId}
                         gameTitleId={selectedTitle.gameTitleId}
@@ -202,7 +204,7 @@ export function SeriesAnalysisAdminPage() {
                 {administration.authorization.retainOperations ? (
                   <TabsPanel value="history">
                     {activeTab === "radar" && radarView === "history" ? (
-                      <div className="mt-6 min-w-0">
+                      <div className="mt-4 min-w-0">
                         <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
                       </div>
                     ) : null}

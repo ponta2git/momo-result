@@ -17,7 +17,7 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
 import { TabsPanel, TabsRoot } from "@/shared/ui/forms/Tabs";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 type SourceImagePanelProps = {
   accountId?: string | undefined;
@@ -34,11 +34,15 @@ const followModeOptions = [
   { label: "固定", value: "fixed" },
 ];
 
+/** Every state keeps the 16:9 frame and the caption row, so switching kinds does not resize the panel. */
+const sourceImageFrameClass = "grid aspect-video w-full min-w-0 place-items-center";
+const sourceImageCaptionClass = "flex min-h-11 items-center pointer-fine:min-h-9";
+
 function SourceImageLoadingFrame({ detail, label }: { detail: string; label: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="grid min-h-[13rem] gap-1">
-      <Skeleton className="h-[10rem] w-full rounded-xs 2xl:aspect-video 2xl:h-auto" />
-      <p className={contentText.body}>{detail}</p>
+    <div aria-busy="true" aria-label={label} className="grid gap-2">
+      <Skeleton className="aspect-video w-full rounded-xs" />
+      <p className={cn(contentText.body, sourceImageCaptionClass)}>{detail}</p>
     </div>
   );
 }
@@ -71,7 +75,7 @@ function SourceImagePanelContent({
 
   return (
     <section className="grid gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
-      <div>
+      <div className="grid gap-1">
         <ContentWithActions
           actions={
             <Button
@@ -86,31 +90,28 @@ function SourceImagePanelContent({
             </Button>
           }
         >
-          <div>
+          <div className="grid gap-1">
             <h2 className={contentText.heading}>元画像参照</h2>
-            <span className={cn(contentText.compactPrimary, "mt-2 block")}>
-              {sourceImageKindLabels[panel.activeKind]}
-            </span>
-            <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
+            <p className={cn(contentText.supporting, "text-pretty")}>
               自動追従では、選択中の入力セルに対応する画像を表示します。
             </p>
           </div>
         </ContentWithActions>
         {!loading && panel.availableImageCount === 0 ? (
-          <p className={cn(contentText.body, "mt-1")}>保存できる元画像がありません。</p>
+          <p className={contentText.body}>保存できる元画像がありません。</p>
         ) : null}
         {panel.archiveDownloaded ? (
-          <p className="text-xs text-[var(--color-text-muted)]" role="status">
+          <p className={contentText.supporting} role="status">
             ダウンロードを開始しました
           </p>
         ) : null}
         {panel.archiveError ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+          <p className={fieldText.error} role="alert">
             {panel.archiveError}
           </p>
         ) : null}
         {panel.sourceImagesChanged ? (
-          <p className="mt-1 text-sm text-[var(--color-danger)]" role="alert">
+          <p className={fieldText.error} role="alert">
             元画像または記録が更新されています。入力内容はこの画面に保持されています。
             未保存の入力を控えてから画面を再読み込みし、最新の画像と読み取り結果を確認してください。
           </p>
@@ -125,84 +126,97 @@ function SourceImagePanelContent({
           if (kind) panel.handleSourceImageTabChange(kind);
         }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="shrink-0">
-            <SegmentedControl
-              label="元画像の追従方法"
-              options={followModeOptions}
-              value={panel.followMode}
-              onValueChange={panel.handleFollowModeChange}
-            />
+        <div className="grid gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="shrink-0">
+              <SegmentedControl
+                label="元画像の追従方法"
+                options={followModeOptions}
+                value={panel.followMode}
+                onValueChange={panel.handleFollowModeChange}
+              />
+            </div>
+            <SourceImageTabs />
           </div>
-          <SourceImageTabs />
-        </div>
 
-        {sourceImageKinds.map((kind) => (
-          <TabsPanel keepMounted key={kind} value={kind}>
-            {panel.activeKind === kind ? (
-              <div className="mt-4">
+          {sourceImageKinds.map((kind) => (
+            <TabsPanel keepMounted key={kind} value={kind}>
+              {panel.activeKind === kind ? (
                 <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
                   {loading ? (
                     <SourceImageLoadingFrame
                       detail="画像一覧を取得しています。"
                       label="元画像を取得中"
                     />
-                  ) : null}
-
-                  {!loading &&
-                  panel.activeState?.status === "available" &&
-                  (!panel.activeImage || panel.activeImage.status === "loading") ? (
+                  ) : panel.activeState?.status === "available" &&
+                    (!panel.activeImage || panel.activeImage.status === "loading") ? (
                     <SourceImageLoadingFrame
                       detail="元画像を読み込んでいます。"
                       label={`${sourceImageKindLabels[panel.activeState.kind]}の元画像を読み込み中`}
                     />
-                  ) : null}
-
-                  {!loading &&
-                  panel.activeState?.status === "available" &&
-                  panel.activeImage?.status === "error" ? (
-                    <div className="grid justify-items-start gap-2">
-                      <p className="text-sm text-[var(--color-danger)]" role="alert">
-                        元画像を読み込めませんでした。
-                      </p>
-                      <Button size="sm" variant="secondary" onClick={panel.handleActiveImageRetry}>
-                        元画像を再読み込み
-                      </Button>
+                  ) : panel.activeState?.status === "available" &&
+                    panel.activeImage?.status === "error" ? (
+                    <div className="grid gap-2">
+                      <div className={sourceImageFrameClass}>
+                        <p className={fieldText.error} role="alert">
+                          元画像を読み込めませんでした。
+                        </p>
+                      </div>
+                      <div className={sourceImageCaptionClass}>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={panel.handleActiveImageRetry}
+                        >
+                          元画像を再読み込み
+                        </Button>
+                      </div>
                     </div>
-                  ) : null}
-
-                  {!loading && panel.activeImage?.status === "replaced" ? (
-                    <p className={contentText.body}>
-                      元画像が差し替えられたため、この画面では表示できません。
-                    </p>
-                  ) : null}
-
-                  {!loading && panel.activeState?.status === "available" && panel.displayUrl ? (
-                    <>
-                      <div className="grid h-[13rem] w-full 2xl:aspect-video 2xl:h-auto">
+                  ) : panel.activeImage?.status === "replaced" ? (
+                    <div className="grid gap-2">
+                      <div className={sourceImageFrameClass}>
+                        <p className={cn(contentText.body, "text-center text-pretty")}>
+                          元画像が差し替えられたため、この画面では表示できません。
+                        </p>
+                      </div>
+                      <div className={sourceImageCaptionClass} />
+                    </div>
+                  ) : panel.activeState?.status === "available" && panel.displayUrl ? (
+                    <div className="grid gap-2">
+                      <div className={sourceImageFrameClass}>
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
                           className="size-full min-h-0 min-w-0 rounded-xs bg-[var(--color-media-canvas)] object-contain"
                           src={panel.displayUrl}
                         />
                       </div>
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        <p className={contentText.supporting}>{panel.activeState.description}</p>
-                        <Button variant="secondary" onClick={panel.handlePreviewOpen}>
-                          拡大
-                        </Button>
+                      <ContentWithActions
+                        actions={
+                          <Button size="sm" variant="secondary" onClick={panel.handlePreviewOpen}>
+                            拡大
+                          </Button>
+                        }
+                      >
+                        <p className={cn(contentText.supporting, sourceImageCaptionClass)}>
+                          {panel.activeState.description}
+                        </p>
+                      </ContentWithActions>
+                    </div>
+                  ) : panel.activeState?.status === "missing" ? (
+                    <div className="grid gap-2">
+                      <div className={sourceImageFrameClass}>
+                        <p className={cn(contentText.body, "text-center text-pretty")}>
+                          {panel.activeState.description}
+                        </p>
                       </div>
-                    </>
-                  ) : null}
-
-                  {!loading && panel.activeState?.status === "missing" ? (
-                    <p className={contentText.body}>{panel.activeState.description}</p>
+                      <div className={sourceImageCaptionClass} />
+                    </div>
                   ) : null}
                 </div>
-              </div>
-            ) : null}
-          </TabsPanel>
-        ))}
+              ) : null}
+            </TabsPanel>
+          ))}
+        </div>
       </TabsRoot>
 
       {panel.previewKind && panel.previewUrl ? (

@@ -3,20 +3,27 @@ import type { ReactNode } from "react";
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
 
-export type StatusBadgeTone = "attention" | "danger" | "info" | "neutral" | "success" | "warning";
+export type StatusBadgeTone =
+  | "attention"
+  | "danger"
+  | "neutral"
+  | "progress"
+  | "success"
+  | "warning";
 
 const toneClass = {
   attention:
-    "border-[var(--color-review)]/70 bg-[var(--color-review)]/14 text-[var(--color-text-primary)]",
+    "border-[var(--color-tone-review-border)] bg-[var(--color-tone-review-surface)] text-[var(--color-text-primary)]",
   danger:
-    "border-[var(--color-danger)]/55 bg-[var(--color-danger)]/10 text-[var(--color-text-primary)]",
-  info: "border-[var(--color-status-info)]/60 bg-[var(--color-status-info)]/12 text-[var(--color-text-primary)]",
+    "border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] text-[var(--color-text-primary)]",
   neutral:
     "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
+  progress:
+    "border-[var(--color-tone-info-border)] bg-[var(--color-tone-info-surface)] text-[var(--color-text-primary)]",
   success:
-    "border-[var(--color-success)]/60 bg-[var(--color-success)]/12 text-[var(--color-text-primary)]",
+    "border-[var(--color-tone-success-border)] bg-[var(--color-tone-success-surface)] text-[var(--color-text-primary)]",
   warning:
-    "border-[var(--color-warning)]/80 bg-[var(--color-warning)]/20 text-[var(--color-text-primary)]",
+    "border-[var(--color-tone-warning-border)] bg-[var(--color-tone-warning-surface)] text-[var(--color-text-primary)]",
 } as const satisfies Record<StatusBadgeTone, string>;
 
 export type StatusBadgeProps = {

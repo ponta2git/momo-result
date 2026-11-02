@@ -33,7 +33,7 @@ export function MatchNoInEventMatrix({
   const additionalEntries = entries.filter((entry) => entry.category === "additional");
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-4">
       <MatchNoMatrix
         ariaLabel="通常試合の開催内順別傾向"
         entries={regularEntries}
@@ -97,21 +97,20 @@ function MatchNoRow({ entry }: { entry: MatchNoEntry }) {
         return (
           <MatrixCell
             aria-label={`${player.displayName}、${formatMatchNoInEvent(entry.matchNoInEvent)}、${player.targetCount}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(player.averageRank)}位、入賞${formatPercent(player.podiumRate)}`}
-            className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2"
+            className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
             key={player.memberId}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className={cn(contentText.supporting, "tabular-nums")}>
-                {player.targetCount}戦
-              </span>
-              <SeriesAnalysisQualityAdvisory status={player.qualityStatus} />
-            </div>
-            <p className={cn(contentText.compactPrimary, "mt-1 tabular-nums")}>
+            <strong className={cn(contentText.compactPrimary, "tabular-nums")}>
               平均 {formatDecimal(player.averageRank)}位
+            </strong>
+            <p className={cn(contentText.supporting, "mt-0.5 tabular-nums")}>
+              {player.targetCount}戦・入賞 {formatPercent(player.podiumRate)}
             </p>
-            <p className={cn(contentText.body, "mt-0.5 tabular-nums")}>
-              入賞 {formatPercent(player.podiumRate)}
-            </p>
+            {qualityAdvisory ? (
+              <p className="mt-1">
+                <SeriesAnalysisQualityAdvisory status={player.qualityStatus} />
+              </p>
+            ) : null}
           </MatrixCell>
         );
       })}

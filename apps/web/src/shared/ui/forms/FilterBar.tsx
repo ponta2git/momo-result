@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { contentText } from "@/shared/ui/typography";
 
 export type FilterBarDetails = {
   align?: "end" | "start" | undefined;
@@ -62,11 +63,11 @@ export function FilterBar({
             panelPadding="sm"
             summary={
               <span className="min-w-0">
-                <span className="font-plain block text-sm text-[var(--color-text-primary)]">
+                <span className={cn(contentText.body, "block text-[var(--color-text-primary)]")}>
                   {details.label}
                 </span>
                 {details.summary ? (
-                  <span className="mt-0.5 block text-xs leading-5 text-pretty text-[var(--color-text-secondary)]">
+                  <span className={cn(contentText.supporting, "mt-1 block text-pretty")}>
                     {details.summary}
                   </span>
                 ) : null}
@@ -92,7 +93,7 @@ export function FilterBar({
         ) : null}
 
         {meta ? (
-          <div className="min-w-0 text-xs text-[var(--color-text-secondary)] tabular-nums sm:text-right">
+          <div className={cn(contentText.supporting, "min-w-0 tabular-nums sm:text-right")}>
             {meta}
           </div>
         ) : null}

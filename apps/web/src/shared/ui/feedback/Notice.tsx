@@ -9,9 +9,9 @@ type NoticePresentation = "contained" | "nested" | "bare";
 
 const toneClass = {
   info: "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
-  success: "border-[var(--color-success)]/50 bg-[var(--color-success)]/12",
-  warning: "border-[var(--color-warning)]/65 bg-[var(--color-warning)]/22",
-  danger: "border-[var(--color-danger)]/50 bg-[var(--color-danger)]/10",
+  success: "border-[var(--color-tone-success-border)] bg-[var(--color-tone-success-surface)]",
+  warning: "border-[var(--color-tone-warning-border)] bg-[var(--color-tone-warning-surface)]",
+  danger: "border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)]",
 } as const satisfies Record<NoticeTone, string>;
 
 const boundedPresentationClass = {
@@ -48,7 +48,7 @@ export function Notice({
       <div className={cn("min-w-0 text-pretty", readableTextWidthClass, title ? "mt-1" : "")}>
         {children}
       </div>
-      {action ? <div className="mt-2">{action}</div> : null}
+      {action ? <div className="mt-3">{action}</div> : null}
     </section>
   );
 }

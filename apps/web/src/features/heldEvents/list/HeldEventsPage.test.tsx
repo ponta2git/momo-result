@@ -913,7 +913,7 @@ describe("HeldEventsPage", () => {
       q: "ボンビー",
     });
     expect(within(table).getByRole("columnheader", { name: "メモの一致" })).toBeInTheDocument();
-    expect(within(table).getByText(/^第2試合 ·$/u)).toBeInTheDocument();
+    expect(within(table).getByText(/^第2試合・$/u)).toBeInTheDocument();
     expect(table.querySelector("mark")).toHaveTextContent("ボンビー");
     expect(within(table).getByText("ほか1試合のメモにも一致")).toBeInTheDocument();
     // Only the member named by the average-rank condition is emphasized.

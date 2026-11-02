@@ -95,9 +95,7 @@ export function AccountSettingsPanel({ settings }: { settings: AccountSettingsCo
                   header: "DiscordユーザーID",
                   width: "14rem",
                   renderCell: (account) => (
-                    <span className={cn(contentText.supporting, "momo-data")}>
-                      {account.discordUserId}
-                    </span>
+                    <span className="momo-data">{account.discordUserId}</span>
                   ),
                 },
                 {

@@ -25,7 +25,7 @@ const settings = [
   },
 ] as const;
 
-const notificationFieldsClass = "grid min-w-0 gap-x-6 gap-y-4 md:grid-cols-2";
+const notificationFieldsClass = "grid min-w-0 gap-4 md:grid-cols-2";
 
 export function NotificationSettingsPanel({ editor }: { editor: NotificationSettingsEditor }) {
   const saveButtonRef = useRef<HTMLButtonElement>(null);

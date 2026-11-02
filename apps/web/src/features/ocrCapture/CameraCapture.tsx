@@ -40,7 +40,7 @@ export function CameraCapture({
   return (
     <div className="grid gap-4">
       {camera.devices.length > 0 ? (
-        <div className="max-w-[28rem]">
+        <div className="max-w-md">
           <SelectField
             disabled={disabled || camera.active || camera.starting}
             label="カメラ"
@@ -118,7 +118,7 @@ export function CameraCapture({
         {disabled ? <p className={contentText.supporting}>現在は撮影できません。</p> : null}
       </div>
       {!camera.error && renderFallback ? (
-        <div className="grid w-full text-sm text-[var(--color-text-secondary)] sm:w-fit">
+        <div className="grid w-full sm:w-fit">
           <Disclosure
             keepMounted
             panelPadding="xs"

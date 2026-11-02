@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { AchievementMatchPicker } from "@/features/achievements/AchievementMatchPicker";
 import { useAchievementRecord } from "@/features/achievements/useAchievementRecord";
 import type { AchievementRecordProps } from "@/features/achievements/useAchievementRecord";
@@ -5,6 +7,7 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -35,6 +38,7 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
     reload,
     requestClose,
   } = useAchievementRecord(props);
+  const formId = useId();
   const picker = (
     <AchievementMatchPicker
       item={item}
@@ -57,8 +61,25 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
         onOpenChange={(open) => {
           if (!open) requestClose();
         }}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" disabled={busy} onClick={requestClose}>
+              キャンセル
+            </Button>
+            <Button
+              type="submit"
+              form={formId}
+              pending={saving}
+              pendingLabel="保存中"
+              disabled={!canSave}
+            >
+              達成を保存
+            </Button>
+          </DialogFooter>
+        }
       >
         <form
+          id={formId}
           className="grid gap-6"
           onSubmit={(event) => {
             event.preventDefault();
@@ -102,7 +123,7 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
           ) : null}
           {matchId ? (
             <div className="grid gap-2" aria-label="選択した試合">
-              <p className={contentText.primary}>
+              <p className={cn(contentText.body, "tabular-nums")}>
                 {matchIdentity
                   ? `${formatDateTimeLong(matchIdentity.playedAt)}・第${matchIdentity.matchNoInEvent}試合`
                   : matchMissing
@@ -144,14 +165,6 @@ export function AchievementRecordDialog(props: AchievementRecordProps) {
               {saveError}試合の選択は保持しています。
             </Notice>
           ) : null}
-          <DialogFooter>
-            <Button variant="secondary" disabled={busy} onClick={requestClose}>
-              キャンセル
-            </Button>
-            <Button type="submit" pending={saving} pendingLabel="保存中" disabled={!canSave}>
-              達成を保存
-            </Button>
-          </DialogFooter>
         </form>
       </Dialog>
       <AlertDialog

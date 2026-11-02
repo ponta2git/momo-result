@@ -39,7 +39,11 @@ export function AnalysisSection({
 }) {
   const headingId = `${id}-heading`;
   return (
-    <section aria-labelledby={headingId} className="min-w-0 scroll-mt-24" id={id}>
+    <section
+      aria-labelledby={headingId}
+      className="grid min-w-0 scroll-mt-(--sticky-below-nav) gap-2"
+      id={id}
+    >
       <header
         className={
           meta ? "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1" : undefined
@@ -50,7 +54,7 @@ export function AnalysisSection({
         </h2>
         {meta}
       </header>
-      <div className="mt-4">{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -70,14 +74,14 @@ export function AnalysisSubsection({
 }) {
   const headingId = `${id}-heading`;
   return (
-    <section aria-labelledby={headingId} id={id}>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+    <section aria-labelledby={headingId} className="grid min-w-0 gap-2" id={id}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className={contentText.heading} id={headingId} tabIndex={-1}>
           {title}
         </h3>
         {meta ? <span className={cn(contentText.supporting, "tabular-nums")}>{meta}</span> : null}
       </div>
-      {children}
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -107,15 +111,6 @@ export function AnalysisReadingGuide({
         <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
       </div>
     </Disclosure>
-  );
-}
-
-export function MetricValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className={contentText.supporting}>{label}</dt>
-      <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{value}</dd>
-    </div>
   );
 }
 

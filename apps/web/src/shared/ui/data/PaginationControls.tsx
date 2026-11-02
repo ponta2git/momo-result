@@ -68,6 +68,7 @@ export function PaginationControls(props: PaginationControlsProps) {
         {props.variant === "compact" ? null : (
           <div className="min-w-0 @2xl/pagination:min-w-36">
             <SelectField
+              controlHeight="touch"
               disabled={disabled}
               label="表示件数"
               options={props.pageSizeOptions.map((value) => ({

@@ -30,16 +30,38 @@ import { contentText } from "@/shared/ui/typography";
 /** Below the smallest page size every match fits on one page, so the count moves to the toolbar. */
 const paginationThreshold = matchListPageSizeOptions[0];
 
+const skeletonRowIds = ["s1", "s2", "s3", "s4"];
+
+/** Mirrors the ready table (header and row rules, cell inset) or the compact record list. */
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
     <div aria-label="試合一覧を読み込み中" role="status">
       <span className="sr-only">試合一覧を読み込み中</span>
-      <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
-        {showDesktopTable ? <Skeleton className="min-h-10" /> : null}
-        {["s1", "s2", "s3", "s4"].map((id) => (
-          <Skeleton key={id} className={showDesktopTable ? "min-h-16" : "min-h-14"} />
-        ))}
-      </div>
+      {showDesktopTable ? (
+        <div className="border-y border-[var(--color-border-strong)]">
+          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+            <Skeleton className="h-4 w-full" />
+          </div>
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="px-3 py-3">
+              <Skeleton className="h-11" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]">
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="grid gap-2 py-3">
+              <div className="grid gap-1">
+                <Skeleton className="h-5 w-3/5" />
+                <Skeleton className="h-4 w-2/5" />
+              </div>
+              <Skeleton className="h-6 w-4/5" />
+              <Skeleton className="h-11" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -47,7 +69,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
 function DraftNotice({ count, href }: { count: number | undefined; href: string }) {
   if (!count) return null;
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-sm bg-[var(--color-surface-subtle)] px-3 py-1.5 sm:px-4">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-[var(--color-surface-subtle)] p-3">
       <p className={cn(contentText.body, "inline-flex items-center gap-2 tabular-nums")}>
         <PencilLine aria-hidden="true" className="size-4 shrink-0" />
         確定前の下書き {count.toLocaleString()}件
@@ -101,140 +123,142 @@ export function MatchesListPage() {
 
   return (
     <PageFrame>
-      <div className="grid gap-4">
-        <DraftNotice count={draftCount} href={navigation.draftsHref} />
-        <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
-          <div
-            className={cn(
-              "flex min-w-0 flex-wrap items-center gap-2",
-              showDesktopTable ? "justify-end" : "justify-between",
-            )}
+      <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
+        <div
+          className={cn(
+            "flex min-w-0 flex-wrap items-center gap-2",
+            showDesktopTable ? "justify-end" : "justify-between",
+          )}
+        >
+          <Button
+            hidden={showDesktopTable}
+            icon={<Filter aria-hidden="true" />}
+            size="sm"
+            variant="secondary"
+            onClick={() => setSheetOpen(true)}
           >
-            <Button
-              hidden={showDesktopTable}
-              icon={<Filter aria-hidden="true" />}
-              size="sm"
-              variant="secondary"
-              onClick={() => setSheetOpen(true)}
-            >
-              {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
-            </Button>
-            <RegisterActions navigation={navigation} />
+            {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
+          </Button>
+          <RegisterActions navigation={navigation} />
+        </div>
+
+        {filters.loadFailed ? (
+          <Notice
+            action={
+              <Button
+                pending={filters.refresh.pending}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={filters.refresh.run}
+              >
+                候補を再読み込み
+              </Button>
+            }
+            tone="warning"
+            title="検索条件の候補を一部読み込めません"
+          >
+            <p>試合一覧は表示できます。開催、作品、シーズン、マップの候補を再取得できます。</p>
+          </Notice>
+        ) : null}
+
+        {showDesktopTable ? (
+          <MatchesFilterBar
+            actions={filters.actions}
+            candidates={filters.candidates}
+            hasConditions={filters.hasConditions}
+            pending={filters.pending}
+            search={filters.search}
+          />
+        ) : null}
+        <MatchListSearchSheet
+          candidates={filters.candidates}
+          open={sheetOpen}
+          search={filters.search}
+          onApply={(search) => {
+            setSheetOpen(false);
+            filters.actions.onChange({ kind: "conditions", search });
+          }}
+          onOpenChange={setSheetOpen}
+        />
+
+        <section aria-label="確定済みの試合" className="relative grid min-h-[24rem] gap-4">
+          <div className="grid gap-3">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              {totalItems !== undefined && !showPagination ? (
+                <p className={cn(contentText.body, "tabular-nums")}>
+                  {totalItems.toLocaleString()}試合
+                </p>
+              ) : (
+                <span />
+              )}
+              <div
+                aria-label="試合一覧の操作"
+                className="flex flex-wrap items-center justify-end gap-2"
+                role="group"
+              >
+                <PendingStatus pending={toolbarPending} spinner={false}>
+                  一覧を更新中
+                </PendingStatus>
+                <IconButton
+                  aria-label="最新情報に更新"
+                  disabled={listPending || list.loading}
+                  icon={<RefreshCw />}
+                  pending={toolbarPending}
+                  pendingLabel="一覧を更新中"
+                  tooltip={list.refresh.pending ? "更新中…" : "最新情報に更新"}
+                  variant="quiet"
+                  onClick={() => void list.refresh.run()}
+                />
+                {showDesktopTable ? (
+                  <LinkButton icon={<Download />} size="sm" to={exportLink.href} variant="quiet">
+                    {exportLink.label}
+                  </LinkButton>
+                ) : (
+                  <IconLink
+                    aria-label={exportLink.label}
+                    icon={<Download />}
+                    to={exportLink.href}
+                    tooltip={exportLink.label}
+                    variant="quiet"
+                  />
+                )}
+              </div>
+            </div>
+            <AppliedConditionChips
+              conditions={chipConditions}
+              disabled={list.scopeChanging}
+              onRemove={removeCondition}
+            />
           </div>
 
-          {filters.loadFailed ? (
+          {list.refreshFailed ? (
             <Notice
               action={
                 <Button
-                  pending={filters.refresh.pending}
-                  pendingLabel="再読み込み中"
+                  pending={listPending}
+                  pendingLabel="一覧を再読み込み中"
                   size="sm"
                   variant="secondary"
-                  onClick={filters.refresh.run}
+                  onClick={() => void list.refresh.run()}
                 >
-                  候補を再読み込み
+                  一覧を再読み込み
                 </Button>
               }
+              title="一覧を更新できませんでした"
               tone="warning"
-              title="検索条件の候補を一部読み込めません"
             >
-              <p>試合一覧は表示できます。開催、作品、シーズン、マップの候補を再取得できます。</p>
+              <p>取得済みの試合は表示したままです。通信状態を確認して再読み込みしてください。</p>
             </Notice>
           ) : null}
 
-          {showDesktopTable ? (
-            <MatchesFilterBar
-              actions={filters.actions}
-              candidates={filters.candidates}
-              hasConditions={filters.hasConditions}
-              pending={filters.pending}
-              search={filters.search}
-            />
-          ) : null}
-          <MatchListSearchSheet
-            candidates={filters.candidates}
-            open={sheetOpen}
-            search={filters.search}
-            onApply={(search) => {
-              setSheetOpen(false);
-              filters.actions.onChange({ kind: "conditions", search });
-            }}
-            onOpenChange={setSheetOpen}
-          />
-
-          <section aria-label="確定済みの試合" className="relative grid min-h-[24rem] gap-4">
-            <div className="grid gap-3">
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                {totalItems !== undefined && !showPagination ? (
-                  <p className={cn(contentText.compactPrimary, "tabular-nums")}>
-                    {totalItems.toLocaleString()}試合
-                  </p>
-                ) : (
-                  <span />
-                )}
-                <div
-                  aria-label="試合一覧の操作"
-                  className="flex flex-wrap items-center justify-end gap-1"
-                  role="group"
-                >
-                  <PendingStatus pending={toolbarPending} spinner={false}>
-                    一覧を更新中
-                  </PendingStatus>
-                  <IconButton
-                    aria-label="最新情報に更新"
-                    disabled={listPending || list.loading}
-                    icon={<RefreshCw />}
-                    pending={toolbarPending}
-                    pendingLabel="一覧を更新中"
-                    tooltip={list.refresh.pending ? "更新中…" : "最新情報に更新"}
-                    variant="quiet"
-                    onClick={() => void list.refresh.run()}
-                  />
-                  {showDesktopTable ? (
-                    <LinkButton icon={<Download />} size="sm" to={exportLink.href} variant="quiet">
-                      {exportLink.label}
-                    </LinkButton>
-                  ) : (
-                    <IconLink
-                      aria-label={exportLink.label}
-                      icon={<Download />}
-                      to={exportLink.href}
-                      tooltip={exportLink.label}
-                      variant="quiet"
-                    />
-                  )}
-                </div>
-              </div>
-              <AppliedConditionChips
-                conditions={chipConditions}
-                disabled={list.scopeChanging}
-                onRemove={removeCondition}
-              />
-            </div>
-
-            {list.refreshFailed ? (
-              <Notice
-                action={
-                  <Button
-                    pending={listPending}
-                    pendingLabel="一覧を再読み込み中"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void list.refresh.run()}
-                  >
-                    一覧を再読み込み
-                  </Button>
-                }
-                title="一覧を更新できませんでした"
-                tone="warning"
-              >
-                <p>取得済みの試合は表示したままです。通信状態を確認して再読み込みしてください。</p>
-              </Notice>
-            ) : null}
-
-            {list.loading ? (
-              <ListSkeleton showDesktopTable={showDesktopTable} />
-            ) : (
+          {list.loading ? (
+            <ListSkeleton showDesktopTable={showDesktopTable} />
+          ) : (
+            <>
+              {/* Directly above the list and revealed with it, so it never pushes the visible
+                  filters or toolbar down while the list is still loading. */}
+              <DraftNotice count={draftCount} href={navigation.draftsHref} />
               <StaleShield
                 active={list.updating}
                 busyLabel="一覧を更新中"
@@ -330,10 +354,10 @@ export function MatchesListPage() {
                   )}
                 </div>
               </StaleShield>
-            )}
-          </section>
-        </PageContentSurface>
-      </div>
+            </>
+          )}
+        </section>
+      </PageContentSurface>
     </PageFrame>
   );
 }

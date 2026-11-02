@@ -4,34 +4,36 @@ import {
   SeriesAnalysisQualityAdvisory,
 } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisMomentumRate } from "@/shared/api/seriesAnalysisMetricTypes";
-import { cn } from "@/shared/ui/cn";
+import type { FactListItem } from "@/shared/ui/data/FactList";
 import { contentText } from "@/shared/ui/typography";
 
-export function MomentumRateSummary({
-  label,
-  rate,
-}: {
-  label: string;
-  rate: SeriesAnalysisMomentumRate;
-}) {
+/** One momentum rate as a label/value fact: the rate leads, the baseline and signal follow. */
+export function momentumRateFact(
+  id: string,
+  label: string,
+  rate: SeriesAnalysisMomentumRate,
+): FactListItem {
   const qualityAdvisory = qualityAdvisoryLabel(rate.qualityStatus);
-  return (
-    <div className="min-w-0">
-      <dt className={contentText.supporting}>{label}</dt>
-      <dd className={cn(contentText.compactPrimary, "mt-1 tabular-nums")}>
-        {rate.successCount}/{rate.targetCount}戦・{formatPercent(rate.rate)}
-      </dd>
-      <dd className={cn(contentText.body, "mt-1 tabular-nums")}>
-        通常 {formatPercent(rate.baselineRate)}・差 {formatPercent(rate.deltaFromBaseline)}・
-        {momentumSignalLabel(rate.signal)}
-      </dd>
-      {qualityAdvisory ? (
-        <dd className="mt-1">
-          <SeriesAnalysisQualityAdvisory status={rate.qualityStatus} />
-        </dd>
-      ) : null}
-    </div>
-  );
+  return {
+    id,
+    label,
+    value: (
+      <span className="grid gap-1">
+        <span className={contentText.compactPrimary}>
+          {rate.successCount}/{rate.targetCount}戦・{formatPercent(rate.rate)}
+        </span>
+        <span>
+          通常 {formatPercent(rate.baselineRate)}・差 {formatPercent(rate.deltaFromBaseline)}・
+          {momentumSignalLabel(rate.signal)}
+        </span>
+        {qualityAdvisory ? (
+          <span>
+            <SeriesAnalysisQualityAdvisory status={rate.qualityStatus} />
+          </span>
+        ) : null}
+      </span>
+    ),
+  };
 }
 
 function momentumSignalLabel(signal: SeriesAnalysisMomentumRate["signal"]): string {

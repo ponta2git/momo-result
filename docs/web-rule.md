@@ -32,13 +32,16 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 
 | 役割（UI 規約の呼称） | 現在の実装入口 |
 | --- | --- |
-| page frame / page-level content surface と幅 variant（narrow / standard / wide / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`） |
-| 共通の readable measure | `max-w-2xl` |
+| page frame / page-level content surface と幅の用途（readable / default / analysis / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`）、幅の値は `styles.css` の `--container-readable` / `--container-page-*`、route ごとの用途は `routePagePresentation` |
+| 共通の readable measure | `readableTextWidthClass`（`--container-readable`） |
 | 文字色の呼称 `text-primary` / `text-body` / `text-secondary` / `text-muted` | `styles.css` の `--color-text-primary` / `--color-text-body` / `--color-text-secondary` / `--color-text-muted` |
 | 文字ウェイト token と utility | global stylesheet `styles.css` |
 | 共通文字 recipe（主要結論 `primary`、一覧用主要結果 `compactPrimary`、入力文字 `fieldText`） | `shared/ui/typography.ts` |
 | field / fieldset | `shared/ui/forms/Field.tsx` の `Field`、native `<fieldset>` |
 | 通常・invalid の境界 recipe と control の tone 優先順位 | `shared/ui/forms/controlPresentation` |
+| 状態 tone の枠・面の強さ | `styles.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
+| 分類・特徴など小さな標章の寸法・角丸・tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `compactBadgeToneClass` |
+| global navigation の下で止める sticky の位置 | `styles.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |
 | 確認 dialog | `AlertDialog` |

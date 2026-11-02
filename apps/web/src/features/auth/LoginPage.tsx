@@ -23,29 +23,27 @@ export function LoginPage() {
   const view = useLoginView();
 
   return (
-    <PageFrame width="narrow">
-      <div className="mx-auto w-full max-w-[34rem]">
-        <PageContentSurface aria-label="ログイン" className="space-y-4" role="region">
-          {view.notice ? (
-            <Notice tone={view.notice.tone} title={view.notice.title}>
-              {view.notice.message}
-            </Notice>
-          ) : null}
+    <PageFrame width="readable">
+      <PageContentSurface aria-label="ログイン" className="grid gap-4" role="region">
+        {view.notice ? (
+          <Notice tone={view.notice.tone} title={view.notice.title}>
+            {view.notice.message}
+          </Notice>
+        ) : null}
 
-          <AuthPanel
-            auth={undefined}
-            embedded
-            forceDevPicker={view.forceDevPicker}
-            loginNextPath={view.loginNextPath}
-          />
+        <AuthPanel
+          auth={undefined}
+          embedded
+          forceDevPicker={view.forceDevPicker}
+          loginNextPath={view.loginNextPath}
+        />
 
-          {view.showAccountSwitchHint ? (
-            <p className={contentText.supporting}>
-              別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
-            </p>
-          ) : null}
-        </PageContentSurface>
-      </div>
+        {view.showAccountSwitchHint ? (
+          <p className={contentText.supporting}>
+            別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
+          </p>
+        ) : null}
+      </PageContentSurface>
     </PageFrame>
   );
 }

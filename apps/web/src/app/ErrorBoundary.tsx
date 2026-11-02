@@ -36,7 +36,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const reloadRequired = isModuleLoadError(this.state.error);
       return (
         <main className={`${pageViewportGutterClass} py-12 sm:py-16`}>
-          <PageFrame width="narrow">
+          <PageFrame width="readable">
             <PageContentSurface aria-label="画面を表示できません" role="region">
               <Notice
                 action={

@@ -9,15 +9,21 @@ import { RankBadge } from "@/shared/matches/RankBadge";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
+// A coarse pointer gets the 44px hit target; a fine pointer keeps the row's text density.
 const titleLinkClass =
-  "underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current";
+  "inline-flex min-h-11 items-center underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
+
+// The list owns the dividers between records; its outer rules match the table's top and bottom.
+const compactListClass =
+  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
 
 function MatchTitle({ item }: { item: MatchListItemView }) {
   return (
     <Link className={cn(contentText.compactPrimary, titleLinkClass)} to={item.detailHref}>
-      {item.matchNoLabel} · {item.mapName}
+      {item.matchNoLabel}・{item.mapName}
     </Link>
   );
 }
@@ -31,7 +37,7 @@ function RankList({ compact = false, item }: { compact?: boolean; item: MatchLis
       role="list"
     >
       {item.ranks.map((rank) => (
-        <li key={rank.memberId} className="inline-flex min-w-0 items-center gap-1.5">
+        <li key={rank.memberId} className="inline-flex min-w-0 items-center gap-2">
           <RankBadge rank={rank.rank} />
           <span className={contentText.body}>{rank.displayName}</span>
         </li>
@@ -75,7 +81,7 @@ export const MatchesTable = memo(function MatchesTable({
             <div className="grid gap-1">
               <MatchTitle item={item} />
               <span className={cn(contentText.supporting, "tabular-nums")}>
-                {formatCompactDateTime(item.heldAt)} · {item.gameSeasonLabel}
+                {formatCompactDateTime(item.heldAt)}・{item.gameSeasonLabel}
               </span>
             </div>
           ),
@@ -127,28 +133,25 @@ export const MatchListCompactRows = memo(function MatchListCompactRows({
   return (
     <ol
       aria-label="確定済みの試合"
-      className="border-t border-[var(--color-border)]"
+      className={compactListClass}
       // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs an explicit list role when Preflight removes markers.
       role="list"
     >
       {items.map((item) => (
-        <li key={item.id} className="grid gap-2 border-b border-[var(--color-border)] py-3">
-          <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <MatchTitle item={item} />
-            <span className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
-              {formatCompactDateTime(item.heldAt)}
-            </span>
+        <li key={item.id} className="grid gap-2 py-3">
+          <div className="grid gap-1">
+            <div className="flex min-w-0 items-baseline justify-between gap-2">
+              <MatchTitle item={item} />
+              <span className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
+                {formatCompactDateTime(item.heldAt)}
+              </span>
+            </div>
+            <span className={contentText.supporting}>{item.gameSeasonLabel}</span>
           </div>
-          <span className={contentText.supporting}>{item.gameSeasonLabel}</span>
           <RankList compact item={item} />
-          <div className="flex min-w-0 items-end justify-between gap-2">
-            {item.noteBody ? (
-              <MatchNoteExcerpt compact memoQuery={memoQuery} text={item.noteBody} />
-            ) : (
-              <span />
-            )}
-            <ExportLink disabled={disabled} item={item} />
-          </div>
+          <ContentWithActions actions={<ExportLink disabled={disabled} item={item} />}>
+            {item.noteBody ? <MatchNoteExcerpt memoQuery={memoQuery} text={item.noteBody} /> : null}
+          </ContentWithActions>
         </li>
       ))}
     </ol>

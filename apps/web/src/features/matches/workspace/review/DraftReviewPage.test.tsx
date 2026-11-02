@@ -37,7 +37,11 @@ function LocationProbe() {
   return <output aria-label="current location">{`${location.pathname}${location.search}`}</output>;
 }
 
+/** The setup starts closed when its names are already cached, so open it before editing. */
 async function waitForReviewWorkspaceReady() {
+  const setup = await screen.findByRole("button", { name: /^条件を(?:変更|閉じる)$/u });
+  await waitFor(() => expect(setup).toBeEnabled());
+  if (setup.getAttribute("aria-expanded") === "false") await userEvent.click(setup);
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
 }
 

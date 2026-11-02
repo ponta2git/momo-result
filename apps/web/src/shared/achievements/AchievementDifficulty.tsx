@@ -1,4 +1,5 @@
 import { cn } from "@/shared/ui/cn";
+import { compactBadgeClass } from "@/shared/ui/status/badgeRecipes";
 
 export function AchievementDifficulty({ stars }: { stars: number }) {
   return (
@@ -6,7 +7,10 @@ export function AchievementDifficulty({ stars }: { stars: number }) {
       role="img"
       aria-label={`難易度：星${stars}`}
       className={cn(
-        "inline-flex min-h-7 items-center rounded-sm border px-2 py-1 text-sm leading-none tracking-widest whitespace-nowrap",
+        compactBadgeClass,
+        // Stars are the difficulty value itself, so they keep the readable data size inside
+        // the shared badge box rather than shrinking to the label size.
+        "text-sm/4 tracking-widest",
         stars >= 5
           ? "border-[var(--color-achievement-premium-border)] bg-[var(--color-achievement-premium-surface)] text-[var(--color-achievement-premium-foreground)]"
           : stars === 4

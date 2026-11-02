@@ -147,7 +147,9 @@ export function buildMatchWorkspaceSubmitView(input: {
       message: input.createEventPending
         ? "開催の作成が完了すると、入力内容を保存・確定できます。"
         : input.valid
-          ? "確定前の確認へ進めます"
+          ? input.mode === "edit"
+            ? "入力内容を保存できます"
+            : "確定前の確認へ進めます"
           : (input.firstValidationMessage ?? "入力内容に不足があります"),
     },
   };

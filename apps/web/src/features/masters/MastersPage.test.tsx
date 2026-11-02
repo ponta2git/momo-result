@@ -409,9 +409,13 @@ describe("MastersPage", () => {
     await user.click(screen.getByRole("button", { name: "再読み込み" }));
     expect(screen.getByText("作品を読み込めません")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "再読み込み中" })).toBeDisabled();
+    // The panel heading stays through loading and failure; wait for the recovered content.
+    expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
     retryGate.resolve();
-    expect(await screen.findByRole("heading", { name: "作品" })).toBeInTheDocument();
-    expect(screen.getByRole("tabpanel", { name: "作品・マップ・シーズン" })).toHaveFocus();
+    expect(await screen.findByText("作品はまだありません")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("tabpanel", { name: "作品・マップ・シーズン" })).toHaveFocus(),
+    );
     await user.click(notificationsTab);
     expect(screen.getByRole("checkbox", { name: "OCR完了" })).toBe(checkbox);
     expect(checkbox).not.toBeChecked();
@@ -1056,7 +1060,7 @@ describe("MastersPage", () => {
 
     await user.click(await screen.findByRole("tab", { name: "メンバー名寄せ" }));
     expect(await screen.findByRole("heading", { name: "プレーヤー名の別名" })).toBeInTheDocument();
-    expect(screen.getByText("NO11")).toBeInTheDocument();
+    expect(await screen.findByText("NO11")).toBeInTheDocument();
     const aliasPanel = screen
       .getByRole("heading", { name: "プレーヤー名の別名" })
       .closest("section");

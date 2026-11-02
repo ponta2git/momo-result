@@ -299,7 +299,7 @@ export function AlertDialogLayer({
                     <p
                       className={cn(
                         fieldText.error,
-                        "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
+                        "rounded-sm border border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] p-3",
                         readableTextWidthClass,
                       )}
                       role="alert"

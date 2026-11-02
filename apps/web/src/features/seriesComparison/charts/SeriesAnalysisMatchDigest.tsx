@@ -1,6 +1,10 @@
 import { ArrowUpRight, Search } from "lucide-react";
 
 import {
+  focusedMetricLabelClass,
+  focusedMetricRingClass,
+} from "@/features/seriesComparison/charts/chartPresentation";
+import {
   playerName,
   formatDateTime,
   formatManYen,
@@ -12,6 +16,8 @@ import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -29,16 +35,16 @@ export function MatchDigestStrip({
 }) {
   return (
     <div className="grid gap-4">
-      <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {flagOrder.map((flag) => (
-          <div className="min-w-0" key={flag}>
-            <dt className={contentText.supporting}>{timelineFlagLabel(flag)}</dt>
-            <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>
-              {digest.flagCounts[flag] ?? 0}戦
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <FactList
+        ariaLabel="荒れ方ごとの試合数"
+        columns={4}
+        items={flagOrder.map((flag) => ({
+          id: flag,
+          label: timelineFlagLabel(flag),
+          value: `${digest.flagCounts[flag] ?? 0}戦`,
+        }))}
+        layout="plain"
+      />
       {digest.recent.length === 0 ? (
         <p className={cn(contentText.body, "py-3")}>対象試合はありません。</p>
       ) : (
@@ -48,7 +54,10 @@ export function MatchDigestStrip({
               const focused = focusedItemIds.includes(match.itemId);
               return (
                 <article
-                  className={`w-52 shrink-0 rounded-sm border bg-[var(--color-surface)] p-4 ${focused ? "border-[var(--color-action)] ring-2 ring-[var(--color-action)]/25" : "border-[var(--color-border)]"}`}
+                  className={cn(
+                    "w-52 shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
+                    focused && focusedMetricRingClass,
+                  )}
                   data-focused-metric={focused ? "true" : undefined}
                   key={match.itemId}
                 >
@@ -73,27 +82,37 @@ export function MatchDigestStrip({
                   <p className={cn(contentText.supporting, "mt-1")}>
                     {formatDateTime(match.playedAt)}
                   </p>
-                  {focused ? (
-                    <p className="font-plain mt-1 text-xs text-[var(--color-action)]">選択中</p>
-                  ) : null}
-                  <dl className="mt-2 grid gap-2">
-                    <DigestValue
-                      label="1位–2位差"
-                      value={formatManYen(match.assetGapFirstToSecond)}
+                  {focused ? <p className={cn(focusedMetricLabelClass, "mt-1")}>選択中</p> : null}
+                  <div className="mt-2">
+                    <FactList
+                      ariaLabel={`${formatSeriesMatchIndex(match.matchIndex)}の資産差と銀次`}
+                      items={[
+                        {
+                          id: "first-second",
+                          label: "1位–2位差",
+                          value: formatManYen(match.assetGapFirstToSecond),
+                        },
+                        {
+                          id: "first-last",
+                          label: "1位–4位差",
+                          value: formatManYen(match.assetGapFirstToLast),
+                        },
+                        {
+                          id: "ginji",
+                          label: "スリの銀次",
+                          value: `${match.totalGinjiCount}回`,
+                        },
+                      ]}
+                      layout="plain"
                     />
-                    <DigestValue
-                      label="1位–4位差"
-                      value={formatManYen(match.assetGapFirstToLast)}
-                    />
-                    <DigestValue label="スリの銀次" value={`${match.totalGinjiCount}回`} />
-                  </dl>
-                  <div className="mt-2 flex min-h-6 flex-wrap gap-1">
+                  </div>
+                  <div className="mt-2 flex min-h-6 flex-wrap gap-2">
                     {match.flags.length === 0 ? (
                       <span className={contentText.supporting}>大きな特徴なし</span>
                     ) : (
                       match.flags.map((flag) => (
                         <span
-                          className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs text-[var(--color-text-secondary)]"
+                          className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}
                           key={flag}
                         >
                           {timelineFlagLabel(flag)}
@@ -101,7 +120,7 @@ export function MatchDigestStrip({
                       ))
                     )}
                   </div>
-                  <div className="mt-2 grid">
+                  <div className="mt-2">
                     <Button
                       icon={<Search aria-hidden="true" />}
                       size="sm"
@@ -117,15 +136,6 @@ export function MatchDigestStrip({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function DigestValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-0.5">
-      <dt className={contentText.supporting}>{label}</dt>
-      <dd className={cn(contentText.body, "tabular-nums")}>{value}</dd>
     </div>
   );
 }

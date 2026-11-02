@@ -83,8 +83,13 @@ test("keeps canceled edits, waits for discard, and browses another title's immut
     .toBe(radar.historyTitleId);
   await page.getByRole("button", { name: /の改訂詳細$/u }).click();
   const detail = page.getByRole("region", { name: "改訂詳細" });
-  await expect(detail.getByText("適用者: 適用時の担当者")).toBeVisible();
-  await expect(detail.getByText("案の保存者: 保存時の担当者")).toBeVisible();
+  // Each person is a term/definition pair, so the label and the name are read together.
+  await expect(detail.locator("dt", { hasText: "適用者" }).locator("+ dd")).toHaveText(
+    "適用時の担当者",
+  );
+  await expect(detail.locator("dt", { hasText: "案の保存者" }).locator("+ dd")).toHaveText(
+    "保存時の担当者",
+  );
 
   await page.getByRole("tab", { name: "現在の採点境界", exact: true }).click();
   await expect(page.getByRole("table", { name: "適用中の採点境界" })).toBeVisible();

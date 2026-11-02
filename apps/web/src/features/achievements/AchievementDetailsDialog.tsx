@@ -20,6 +20,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TabsRoot, TabsList, TabsTab, TabsPanel } from "@/shared/ui/forms/Tabs";
@@ -109,10 +110,16 @@ export function AchievementDetailsDialog({
           </div>
           {condition ? <p className={contentText.body}>{condition}</p> : null}
           {item.notes.trim() ? (
-            <dl className="grid gap-1">
-              <dt className={contentText.supporting}>備考</dt>
-              <dd className={cn(contentText.body, "whitespace-pre-wrap")}>{item.notes}</dd>
-            </dl>
+            <FactList
+              ariaLabel="備考"
+              items={[
+                {
+                  id: "notes",
+                  label: "備考",
+                  value: <span className="whitespace-pre-wrap">{item.notes}</span>,
+                },
+              ]}
+            />
           ) : null}
           {item.retired ? (
             <p className={contentText.supporting}>
@@ -231,6 +238,7 @@ function AchievementPlayerRecord({
     claims.length === 0 &&
     catalog?.items.some((value) => value.achievementId === item.achievementId && !value.retiredAt);
   const achieved = player?.status === "achieved";
+  const notRecordedHint = player?.status === "not_recorded" && !item.retired;
   const points = [1, 2, 3, 5, 8][item.stars - 1];
   const StateIcon = achieved ? Award : player?.status === "unconfirmed" ? CircleHelp : Flag;
   return (
@@ -244,7 +252,7 @@ function AchievementPlayerRecord({
           )}
         />
         <div className="grid gap-2">
-          <p className={contentText.primary}>
+          <p className={achieved ? contentText.primary : contentText.body}>
             {player ? achievementStatusLabel(player.status) : "達成状況は未取得"}
           </p>
           {player && !item.retired ? (
@@ -288,18 +296,21 @@ function AchievementPlayerRecord({
           ) : null}
         </div>
       </div>
-      {player?.status === "not_recorded" && !item.retired ? (
-        <p className={contentText.body}>
-          {item.ruleKind === "manual"
-            ? "達成した試合を選んで記録できます。"
-            : "試合結果がこの条件を満たすと、自動で達成になります。"}
-        </p>
-      ) : null}
-      {canRecord ? (
-        <div>
-          <Button variant="secondary" onClick={onRecord}>
-            達成を記録する
-          </Button>
+      {notRecordedHint || canRecord ? (
+        // The hint explains the record action, so the two stay one group.
+        <div className="grid justify-items-start gap-2">
+          {notRecordedHint ? (
+            <p className={contentText.body}>
+              {item.ruleKind === "manual"
+                ? "達成した試合を選んで記録できます。"
+                : "試合結果がこの条件を満たすと、自動で達成になります。"}
+            </p>
+          ) : null}
+          {canRecord ? (
+            <Button variant="secondary" onClick={onRecord}>
+              達成を記録する
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {item.ruleKind === "manual" && derivedSources.length > 0 ? (

@@ -3,6 +3,7 @@ import {
   niceCeil,
   numberTicks,
 } from "@/features/seriesComparison/charts/dataViz/scales";
+import { useChartWidth } from "@/features/seriesComparison/charts/dataViz/useChartWidth";
 import {
   DataVizLegend,
   DataVizPointMark,
@@ -10,6 +11,7 @@ import {
 } from "@/shared/seriesAnalysis/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/seriesAnalysis/seriesPresentation";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
+import { contentText } from "@/shared/ui/typography";
 
 export type DataVizScatterPoint = {
   href?: string | undefined;
@@ -49,7 +51,7 @@ export function DataVizScatterPlot({
   yDomain?: [number, number] | undefined;
   yMinimumStep: number;
 }) {
-  const width = 760;
+  const { containerRef, width } = useChartWidth(760, 980);
   const height = 360;
   const padding = { bottom: 64, left: 92, right: 36, top: 28 };
   const plotted = points.filter((point) => finiteNumber(point.x) && finiteNumber(point.y));
@@ -72,13 +74,14 @@ export function DataVizScatterPlot({
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
-      <div className="max-w-full min-w-0 overflow-x-auto pb-1">
+      <div className="max-w-full min-w-0 overflow-x-auto pb-1" ref={containerRef}>
         <svg
           aria-label={ariaLabel}
-          className="mx-auto block w-[760px] max-w-none min-w-[760px] rounded-sm bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="block max-w-none rounded-sm bg-[var(--color-surface)]"
+          height={height}
           role="img"
-          style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
+          width={width}
         >
           <line
             stroke="var(--color-border-strong)"
@@ -194,7 +197,7 @@ export function DataVizScatterPlot({
           </text>
         </svg>
       </div>
-      <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
+      <p className={contentText.supporting}>
         1点は1人が1試合で残した値です。選択中の試合は、ほかの点と異なる輪郭で示します。
       </p>
       <DataVizLegend series={seriesIdentity} />
@@ -222,12 +225,14 @@ export function DataVizScatterPlot({
               seriesIdentity.find((identity) => identity.id === point.seriesId)?.label ?? "—",
           },
           {
+            align: "right",
             key: "x",
             header: xAxisLabel,
             tabular: true,
             renderCell: (point) => (finiteNumber(point.x) ? formatX(point.x) : "—"),
           },
           {
+            align: "right",
             key: "y",
             header: yAxisLabel,
             tabular: true,

@@ -3,7 +3,10 @@ import { useAccountSettings } from "@/features/masters/accounts/useAccountSettin
 import { AchievementCatalogPanel } from "@/features/masters/achievements/AchievementCatalogPanel";
 import { MemberAliasPanel } from "@/features/masters/aliases/MemberAliasPanel";
 import { useMemberAliases } from "@/features/masters/aliases/useMemberAliases";
-import { MasterCatalogPanel } from "@/features/masters/catalog/MasterCatalogPanel";
+import {
+  MasterCatalogActions,
+  MasterCatalogPanel,
+} from "@/features/masters/catalog/MasterCatalogPanel";
 import { useMasterCatalog } from "@/features/masters/catalog/useMasterCatalog";
 import { IncidentMasterPanel } from "@/features/masters/incidents/IncidentMasterPanel";
 import { useIncidentMasters } from "@/features/masters/incidents/useIncidentMasters";
@@ -33,7 +36,19 @@ export function CatalogTab({ enabled }: TabAccess) {
   return (
     <TabsPanel keepMounted value="catalog">
       <div className="mt-6">
-        <MasterPanelContent resource={catalog.gameTitle} resourceLabel="作品">
+        <MasterPanelContent
+          actions={
+            <MasterCatalogActions
+              gameTitle={catalog.gameTitle}
+              map={catalog.map}
+              season={catalog.season}
+            />
+          }
+          description="作品を選ぶと、対応するマップとシーズンを編集できます。"
+          heading="作品"
+          resource={catalog.gameTitle}
+          resourceLabel="作品"
+        >
           <MasterCatalogPanel
             gameTitle={catalog.gameTitle}
             map={catalog.map}
@@ -52,7 +67,12 @@ export function AliasesTab({ enabled, retained, epoch }: AdminTabAccess) {
   return retained ? (
     <TabsPanel key={`${epoch}:aliases`} keepMounted value="aliases">
       <div className="mt-6">
-        <MasterPanelContent resource={aliases} resourceLabel="メンバー名寄せ">
+        <MasterPanelContent
+          description="画像から読み取られる表記を正式なプレーヤー名に紐づけます。"
+          heading="プレーヤー名の別名"
+          resource={aliases}
+          resourceLabel="メンバー名寄せ"
+        >
           <MemberAliasPanel
             aliases={aliases.items}
             completion={aliases.completion}
@@ -77,7 +97,13 @@ export function IncidentsTab({ enabled }: TabAccess) {
   return (
     <TabsPanel keepMounted value="incidents">
       <div className="mt-6">
-        <MasterPanelContent resource={incidents} resourceLabel="事件簿">
+        <MasterPanelContent
+          description="現在は6項目固定です。追加・編集はできません。"
+          heading="事件簿"
+          headingVisibility="screen-reader"
+          resource={incidents}
+          resourceLabel="事件簿"
+        >
           <IncidentMasterPanel
             items={incidents.items}
             onRetry={incidents.onRetry}

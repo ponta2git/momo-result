@@ -3,6 +3,7 @@ import type { SlotKind } from "@/shared/domain/ocr";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
 const slotKindLabels = {
@@ -32,21 +33,21 @@ export function CaptureSlotFeedback({
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
       {slot.failureAction ? <CaptureJobFailure action={slot.failureAction} /> : null}
       {canRefreshStatus ? (
-        <div
-          className={cn(
-            contentText.body,
-            "grid gap-2 rounded-sm bg-[var(--color-surface-subtle)] p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
-          )}
-        >
-          <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
-          <Button
-            pending={refreshing}
-            pendingLabel="更新中"
-            variant="secondary"
-            onClick={onRefreshStatus}
+        <div className={cn(contentText.body, "rounded-sm bg-[var(--color-surface-subtle)] p-3")}>
+          <ContentWithActions
+            actions={
+              <Button
+                pending={refreshing}
+                pendingLabel="更新中"
+                variant="secondary"
+                onClick={onRefreshStatus}
+              >
+                状態を更新
+              </Button>
+            }
           >
-            状態を更新
-          </Button>
+            <p>読み取り状態は自動更新されません。必要なときに最新の状態を取得してください。</p>
+          </ContentWithActions>
         </div>
       ) : null}
     </>

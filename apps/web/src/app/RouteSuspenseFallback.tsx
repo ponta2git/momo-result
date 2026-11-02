@@ -1,3 +1,4 @@
+import { trimSearchParam } from "@/shared/lib/searchParams";
 import { PageLoadingFallback } from "@/shared/ui/feedback/PageLoadingFallback";
 import type {
   PageLoadingContentToolbarShape,
@@ -7,7 +8,12 @@ import type {
 import type { PageContentSurfacePadding } from "@/shared/ui/layout/PageContentSurface";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import type { PageHeaderDescriptionStatus } from "@/shared/ui/layout/PageHeader";
-import { workspaceSampleStatus } from "@/shared/workflows/matchWorkspacePresentation";
+import {
+  matchWorkspacePageWidth,
+  workspaceSampleStatus,
+} from "@/shared/workflows/matchWorkspacePresentation";
+import { MatchWorkspaceSkeleton } from "@/shared/workflows/MatchWorkspaceSkeleton";
+import type { MatchWorkspaceSkeletonProps } from "@/shared/workflows/MatchWorkspaceSkeleton";
 
 type RouteSuspenseFallbackProps = {
   asMain?: boolean | undefined;
@@ -18,6 +24,8 @@ type RouteSuspenseFallbackProps = {
 
 type RouteLoadingPresentation = {
   contentToolbar?: PageLoadingContentToolbarShape | undefined;
+  /** Match entry routes reuse the editor's own skeleton, decided from the URL alone. */
+  matchWorkspace?: MatchWorkspaceSkeletonProps | undefined;
   header?: PageLoadingHeaderShape | undefined;
   kind: NonNullable<PageLoadingFallbackProps["kind"]>;
   leadingActionSlot?: boolean;
@@ -26,10 +34,11 @@ type RouteLoadingPresentation = {
 };
 
 type RouteTerminalPresentation = {
+  /** A back link whose destination the pathname alone fixes, kept in the ready position. */
+  backLink?: { href: string; label: string } | undefined;
   contentPadding: PageContentSurfacePadding;
   description?: string | undefined;
   descriptionStatus?: PageHeaderDescriptionStatus | undefined;
-  eyebrow?: string | undefined;
   preserveHeader?: boolean | undefined;
   width: PageFrameWidth;
 };
@@ -67,18 +76,23 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
         actionWidths: ["standard", "wide"],
       },
       kind: "list",
-      width: "standard",
+      loadingLabel: "試合一覧を読み込み中",
+      width: "default",
     });
   }
   if (normalizedPathname === "/held-events") {
     return defineRoutePresentation({
-      contentToolbar: {
-        actionSize: "sm",
-        actionSlots: 1,
-        actionWidths: ["standard"],
-      },
       kind: "list",
-      width: "standard",
+      loadingLabel: "開催履歴を読み込み中",
+      width: "default",
+    });
+  }
+  if (normalizedPathname === "/drafts") {
+    return defineRoutePresentation({
+      contentToolbar: { actionSize: "sm", actionSlots: 3, actionWidths: ["icon", "long", "long"] },
+      kind: "grouped-list",
+      loadingLabel: "下書きを読み込み中",
+      width: "default",
     });
   }
   if (
@@ -86,10 +100,14 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
     /^\/matches\/[^/]+\/edit$/u.test(normalizedPathname) ||
     /^\/review\/[^/]+$/u.test(normalizedPathname)
   ) {
-    const descriptionStatus =
-      normalizedPathname.startsWith("/review/") && new URLSearchParams(search).get("sample") === "1"
-        ? workspaceSampleStatus
-        : undefined;
+    const searchParams = new URLSearchParams(search);
+    const mode = normalizedPathname.startsWith("/review/")
+      ? "review"
+      : normalizedPathname === "/matches/new"
+        ? "create"
+        : "edit";
+    const sample = mode === "review" && searchParams.get("sample") === "1";
+    const descriptionStatus = sample ? workspaceSampleStatus : undefined;
     return defineRoutePresentation(
       {
         contentToolbar: {
@@ -100,16 +118,41 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
           status: descriptionStatus,
         },
         kind: "workspace",
-        width: "workspace",
+        matchWorkspace: {
+          mode,
+          sample,
+          sourcePanel:
+            matchWorkspacePageWidth({
+              matchDraftId:
+                mode === "review"
+                  ? normalizedPathname.slice("/review/".length)
+                  : trimSearchParam(searchParams.get("matchDraftId")),
+              mode,
+              sample,
+            }) === "workspace",
+        },
+        width: matchWorkspacePageWidth({
+          matchDraftId:
+            mode === "review"
+              ? normalizedPathname.slice("/review/".length)
+              : trimSearchParam(searchParams.get("matchDraftId")),
+          mode,
+          sample,
+        }),
       },
       { descriptionStatus },
     );
   }
   if (normalizedPathname === "/ocr/new") {
     return defineRoutePresentation({
-      kind: "workspace",
-      leadingActionSlot: true,
-      width: "standard",
+      contentToolbar: {
+        actionPlacement: "leading",
+        actionSize: "sm",
+        actionSlots: 1,
+        actionWidths: ["long"],
+      },
+      kind: "capture",
+      width: "default",
     });
   }
   if (/^\/(?:matches|m)\/[^/]+$/u.test(normalizedPathname)) {
@@ -119,14 +162,13 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
           actionSize: "sm",
           actionSlots: 2,
           actionWidths: ["wide", "wide"],
-          description: true,
-          eyebrow: false,
+          description: false,
         },
         kind: "detail",
         leadingActionSlot: true,
-        width: "wide",
+        width: "analysis",
       },
-      { preserveHeader: true },
+      { backLink: { href: "/matches", label: "試合一覧へ" }, preserveHeader: true },
     );
   }
   if (/^\/(?:held-events|e)\/[^/]+$/u.test(normalizedPathname)) {
@@ -137,15 +179,14 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
           actionSlots: 2,
           actionWidths: ["standard", "compact"],
           description: true,
-          eyebrow: true,
         },
         kind: "detail",
         leadingActionSlot: true,
-        width: "wide",
+        width: "analysis",
       },
       {
+        backLink: { href: "/held-events", label: "開催履歴へ" },
         description: "試合数・下書き数は未取得です。",
-        eyebrow: "開催記録",
         preserveHeader: true,
       },
     );
@@ -154,33 +195,45 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
     return defineRoutePresentation({
       kind: "comparison",
       loadingLabel: "戦績比較を読み込んでいます",
-      width: "wide",
+      width: "analysis",
+    });
+  }
+  if (normalizedPathname === "/achievements") {
+    return defineRoutePresentation({
+      kind: "field-sections",
+      loadingLabel: "実績を読み込み中",
+      width: "analysis",
     });
   }
   if (normalizedPathname === "/admin/analysis") {
     return defineRoutePresentation({
       kind: "sectioned-comparison",
       loadingLabel: "戦績分析管理を読み込んでいます",
-      width: "wide",
+      width: "analysis",
     });
   }
   if (normalizedPathname === "/admin/masters") {
     return defineRoutePresentation({
       kind: "catalog",
       loadingLabel: "設定管理を読み込んでいます",
-      width: "standard",
+      width: "default",
     });
   }
+  if (normalizedPathname === "/login") {
+    return defineRoutePresentation({ kind: "generic", width: "readable" });
+  }
   if (normalizedPathname === "/exports") {
-    return defineRoutePresentation(
-      { kind: "form", width: "narrow" },
-      { contentPadding: "compact" },
-    );
+    return defineRoutePresentation({ kind: "form", width: "readable" });
   }
   return defineRoutePresentation({
     kind: "generic",
-    width: "standard",
+    width: "default",
   });
+}
+
+/** Lets viewport-level chrome follow the width the current route's page uses. */
+export function routePageWidth(pathname: string, search = ""): PageFrameWidth {
+  return routePagePresentation(pathname, search).loading.width;
 }
 
 export function routeTerminalPresentation(
@@ -197,10 +250,12 @@ export function RouteSuspenseFallback({
   search = "",
 }: RouteSuspenseFallbackProps) {
   const { loading: presentation, terminal } = routePagePresentation(pathname, search);
+  const { matchWorkspace, ...shape } = presentation;
   return (
     <PageLoadingFallback
       asMain={asMain}
-      {...presentation}
+      {...shape}
+      content={matchWorkspace ? <MatchWorkspaceSkeleton {...matchWorkspace} /> : undefined}
       contentPadding={terminal.contentPadding}
       loadingLabel={loadingLabel ?? presentation.loadingLabel}
     />

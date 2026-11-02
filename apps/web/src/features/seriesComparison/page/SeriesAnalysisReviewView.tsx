@@ -15,6 +15,7 @@ import {
   purposePanelId,
   purposeTabId,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { ReviewSkeleton } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import {
   lowEvidenceStrengthWarningLabel,
   SeriesAnalysisEvidenceStrengthWarning,
@@ -31,7 +32,7 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function ReviewView({
@@ -49,10 +50,9 @@ export function ReviewView({
   if (loading) {
     return (
       <div aria-labelledby={purposeTabId("review")} id={purposePanelId("review")} role="tabpanel">
-        <div aria-label="次戦の準備を読み込み中" className="grid gap-6" role="status">
+        <div aria-label="次戦の準備を読み込み中" role="status">
           <span className="sr-only">次戦の準備を読み込み中</span>
-          <Skeleton className="min-h-24" />
-          <Skeleton className="min-h-48" />
+          <ReviewSkeleton />
         </div>
       </div>
     );
@@ -87,10 +87,10 @@ export function ReviewView({
           <SeriesAnalysisReviewHelpDialog />
         </div>
         {response.commonPlaybookTopics.length > 0 ? (
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             {response.commonPlaybookTopics.map((topic) => (
-              <article className="grid content-start gap-3" key={topic.topicId}>
-                <h3 className={contentText.primary}>{topic.heading}</h3>
+              <article className="grid content-start gap-1" key={topic.topicId}>
+                <h3 className={contentText.compactPrimary}>{topic.heading}</h3>
                 <span className={contentText.supporting}>{topic.playerIds.length}人</span>
                 <p className={contentText.supporting}>
                   {playbookByPlayer
@@ -103,10 +103,12 @@ export function ReviewView({
           </div>
         ) : null}
       </section>
-      <div className="grid items-start gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+      {/* Each player spans three shared rows. The primary card row aligns every column's actions,
+          and expanding one player's other hypotheses grows only the last row. */}
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {playbookByPlayer.map((entry) => (
           <section
-            className="min-w-0"
+            className="row-span-3 grid min-w-0 grid-rows-subgrid gap-y-2"
             key={entry.player.memberId}
             id={`review-member-${entry.player.memberId}`}
           >
@@ -116,11 +118,9 @@ export function ReviewView({
               </MemberSequenceLabel>
             </h2>
             {entry.primaryCard ? (
-              <div className="mt-2 min-h-0">
-                <PlaybookCard card={entry.primaryCard} emphasis />
-              </div>
+              <PlaybookCard card={entry.primaryCard} emphasis />
             ) : (
-              <div className="mt-2 flex h-full flex-col justify-between gap-3">
+              <div className="flex min-w-0 flex-col items-start justify-between gap-2">
                 <p className={contentText.body}>今回は無理に作戦を変えず、現在の差を確認します。</p>
                 <Button size="sm" variant="secondary" onClick={() => onViewChange("overview")}>
                   今の差を見る
@@ -128,7 +128,7 @@ export function ReviewView({
               </div>
             )}
             {entry.secondaryCards.length > 0 ? (
-              <div className="mt-6 min-h-11">
+              <div className="min-w-0 pt-4">
                 <Disclosure
                   ariaLabel={`${entry.player.displayName}のほかの仮説`}
                   defaultOpen={navigation?.isMemberExpanded(entry.player.memberId)}
@@ -161,18 +161,13 @@ function PlaybookCard({
   emphasis?: boolean;
 }) {
   return (
-    <article className={cn("flex h-full min-w-0 flex-col", emphasis ? "gap-6" : "gap-4 py-1")}>
-      <div className="grid gap-3">
-        <h3 className={emphasis ? contentText.primary : contentText.heading}>
+    <article className={cn("flex min-w-0 flex-col", emphasis ? "gap-6" : "gap-4 py-1")}>
+      <div className="grid gap-2">
+        <h3 className={emphasis ? contentText.compactPrimary : contentText.heading}>
           {card.actionHypothesis}
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              contentText.supporting,
-              "rounded-xs border border-[var(--color-border)] px-2 py-0.5",
-            )}
-          >
+          <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>
             {classificationLabel(card.classification)}
           </span>
           <span className={contentText.supporting}>
@@ -189,7 +184,7 @@ function PlaybookCard({
         ]}
         layout="plain"
       />
-      <div className="mt-auto grid">
+      <div className="mt-auto grid justify-items-start">
         <Dialog
           description={[
             playbookCategoryLabel(card.category),

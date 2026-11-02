@@ -109,7 +109,7 @@ function OutlookWorkspace({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
       <div
-        className="@container/outlook-people grid max-w-2xl min-w-0 grid-cols-1 gap-2"
+        className="max-w-readable @container/outlook-people grid min-w-0 grid-cols-1 gap-2"
         data-outlook-preserve-draft
       >
         <div className="grid min-w-0 gap-4 @xs/outlook-people:grid-cols-2">
@@ -142,9 +142,9 @@ function OutlookWorkspace({
           <TabsTab value="goal">戦数から考える</TabsTab>
         </TabsList>
         <TabsPanel value="performance" keepMounted>
-          <div className="grid min-w-0 grid-cols-1 gap-6 pt-6 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
+          <div className="grid min-w-0 grid-cols-1 gap-6 pt-4 lg:grid-cols-[minmax(18rem,2fr)_minmax(0,3fr)]">
             <section
-              className="grid min-w-0 grid-cols-1 content-start gap-6"
+              className="grid min-w-0 grid-cols-1 content-start gap-4"
               aria-labelledby="outlook-assumptions"
             >
               <div className="grid gap-2">
@@ -158,7 +158,7 @@ function OutlookWorkspace({
                   小さいほど上位。初期値は作品全体の直近{summary.recent.matchCount}戦です。
                 </p>
               </div>
-              <div className="grid gap-6">
+              <div className="grid gap-4">
                 {displayRoles.map(({ memberId, role }) => (
                   <div key={memberId} className="grid min-w-0 gap-4">
                     <OutlookPlayerEditor {...playerProps} role={role} showComparison />
@@ -180,7 +180,7 @@ function OutlookWorkspace({
                 </p>
               ) : null}
             </section>
-            <div className="grid min-w-0 grid-cols-1 content-start gap-6">
+            <div className="grid min-w-0 grid-cols-1 content-start gap-4">
               <section className="grid min-w-0 gap-2" aria-labelledby="outlook-conclusion">
                 <h2
                   ref={resultHeading}
@@ -255,7 +255,7 @@ function OutlookWorkspace({
           </div>
         </TabsPanel>
         <TabsPanel value="goal" keepMounted>
-          <div className="min-w-0 pt-6">
+          <div className="min-w-0 pt-4">
             {view.task === "goal" ? (
               <OutlookGoalPanel
                 {...playerProps}
@@ -280,12 +280,7 @@ function OutlookWorkspace({
           </div>
         </TabsPanel>
       </TabsRoot>
-      <Disclosure
-        summary="数値と計算の前提"
-        ariaLabel="数値と計算の前提"
-        triggerLayout="flush-horizontal"
-        panelSpacing="sm"
-      >
+      <Disclosure summary="数値と計算の前提" ariaLabel="数値と計算の前提" panelSpacing="sm">
         <div className="grid min-w-0 grid-cols-1 gap-4">
           <DataTable
             caption={{ content: "今後の総合平均順位の詳しい数値", visibility: "screen-reader" }}
@@ -306,6 +301,7 @@ function OutlookWorkspace({
                 header: (
                   <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
                 ),
+                align: "right" as const,
                 tabular: true,
                 renderCell: (row: (typeof projectionRows)[number]) =>
                   `${outlookAverage(role === 0 ? row.focusAverage : row.rivalAverage)}位`,
@@ -313,9 +309,10 @@ function OutlookWorkspace({
               {
                 key: "gap",
                 header: "平均順位の差",
+                align: "right",
                 tabular: true,
                 renderCell: (row) =>
-                  `${formatRational(row.gap, 4)} · ${row.relation === "tied" ? "同率" : `${row.relation === "ahead" ? names[0] : names[1]}が上`}`,
+                  `${formatRational(row.gap, 4)}・${row.relation === "tied" ? "同率" : `${row.relation === "ahead" ? names[0] : names[1]}が上`}`,
               },
             ]}
           />

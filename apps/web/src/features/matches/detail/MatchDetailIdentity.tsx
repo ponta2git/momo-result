@@ -5,12 +5,15 @@ import { FactList } from "@/shared/ui/data/FactList";
 export function MatchDetailIdentity({
   gameTitle,
   heldAt,
+  id,
   map,
   matchNoInEvent,
   season,
 }: {
   gameTitle: string;
   heldAt: string;
+  /** Describes the page title, so arriving from the previous or next match names its event. */
+  id?: string;
   map: string;
   matchNoInEvent: number;
   season: string;
@@ -24,7 +27,7 @@ export function MatchDetailIdentity({
   ] as const;
 
   return (
-    <section aria-label={`${matchLabel}の開催条件`} className="min-w-0">
+    <section aria-label={`${matchLabel}の開催条件`} className="min-w-0" id={id}>
       <FactList
         ariaLabel={`${matchLabel}の開催条件`}
         columns={4}

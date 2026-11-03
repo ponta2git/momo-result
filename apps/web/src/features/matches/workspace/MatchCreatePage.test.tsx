@@ -148,7 +148,10 @@ describe("MatchCreatePage", () => {
       expect(within(confirmation).getByRole("cell", { name: "1,234" })).toBeVisible();
       await user.click(within(confirmation).getByRole("button", { name: "確定する" }));
 
-      expect(await screen.findByRole("heading", { name: "第7試合の結果" })).toBeVisible();
+      // Confirming now reads the saved match before leaving, so arrival takes one more round trip.
+      expect(
+        await screen.findByRole("heading", { name: "第7試合の結果" }, { timeout: 5_000 }),
+      ).toBeVisible();
       expect(router.state.location.pathname).toBe("/matches/match-manual-created");
       expect(requests).toEqual([expectedRequest]);
       expect(

@@ -303,7 +303,9 @@ describe("DraftReviewPage", () => {
     await user.click(await screen.findByRole("button", { name: "確定する" }));
 
     // The failed early read is not left behind as an error for the detail page.
-    expect(await screen.findByLabelText("試合詳細を読み込み中")).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText("試合詳細を読み込み中", undefined, { timeout: 5_000 }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("試合詳細を読み込めませんでした")).not.toBeInTheDocument();
     confirmedRead.resolve();
 

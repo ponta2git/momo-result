@@ -77,6 +77,13 @@
     --ref-gold-300: oklch(79% 0.075 80);
     --ref-gold-800: oklch(43% 0.085 75);
 
+    /* Milestone moments (UI rule: 節目の演出) own their warm palette, apart from rank and
+       achievement colors, so a celebration can be tuned without moving either scale. */
+    --ref-celebration-surface: oklch(96.5% 0.045 90);
+    --ref-celebration-border: oklch(80% 0.105 86);
+    --ref-celebration-mark: oklch(57% 0.13 78);
+    --ref-celebration-shine: oklch(100% 0 0 / 0.7);
+
     --ref-tray-assets: oklch(60% 0.09 240);
     --ref-tray-revenue: oklch(61% 0.09 92);
     --ref-tray-incident: oklch(59% 0.075 160);
@@ -205,6 +212,10 @@
   --color-achievement-premium-foreground: var(--ref-gold-800);
   --color-achievement-premium-surface: var(--ref-gold-50);
   --color-achievement-premium-border: var(--ref-gold-300);
+  --color-celebration-surface: var(--ref-celebration-surface);
+  --color-celebration-border: var(--ref-celebration-border);
+  --color-celebration-mark: var(--ref-celebration-mark);
+  --color-celebration-shine: var(--ref-celebration-shine);
   /* Marks the searched words inside matched text; the text color stays primary. It owns its
      reference value so rank colors can change without moving search highlights. */
   --color-search-match-surface: var(--ref-search-match);

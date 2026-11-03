@@ -1,7 +1,9 @@
-import { ArrowLeft, Download, PenSquare } from "lucide-react";
+import { ArrowLeft, Camera, Download, Keyboard, PenSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
+import { useConfirmedArrival } from "@/features/matches/confirmedArrival";
+import type { ConfirmedArrival } from "@/features/matches/confirmedArrival";
 import { MatchAchievements } from "@/features/matches/detail/MatchAchievements";
 import { MatchDetailAdjacentNavigation } from "@/features/matches/detail/MatchDetailAdjacentNavigation";
 import { MatchDetailIdentity } from "@/features/matches/detail/MatchDetailIdentity";
@@ -23,6 +25,7 @@ import {
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
+import { matchRecordHref } from "@/shared/navigation/matchLinks";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -71,6 +74,7 @@ function MatchDetailReadyContent({
   titleRef: Ref<HTMLHeadingElement>;
 }) {
   const { analysis, identity, match, navigation } = view;
+  const confirmedArrival = useConfirmedArrival(match.matchId);
   const ledgerRows = view.ledgerRows.map(({ incidents, ...row }) => ({
     ...row,
     details: incidents ? (
@@ -119,6 +123,9 @@ function MatchDetailReadyContent({
             >
               試合結果を編集
             </LinkButton>
+            {confirmedArrival ? (
+              <NextMatchRecordLink arrival={confirmedArrival} heldEventId={match.heldEventId} />
+            ) : null}
           </nav>
         }
       />
@@ -156,7 +163,11 @@ function MatchDetailReadyContent({
                 </p>
               ) : null}
             </div>
-            <MatchResultLedger contextStatus={analysis.comparisonContextStatus} rows={ledgerRows} />
+            <MatchResultLedger
+              celebrateWinner={confirmedArrival !== undefined}
+              contextStatus={analysis.comparisonContextStatus}
+              rows={ledgerRows}
+            />
           </div>
           <div className="flex justify-end">
             <LinkButton to={navigation.comparisonHref} size="sm" variant="secondary">
@@ -177,6 +188,35 @@ function MatchDetailReadyContent({
 
       <MatchDetailAdjacentNavigation view={view} />
     </PageFrame>
+  );
+}
+
+/**
+ * The confirmed result ends the recording task, so it offers the next match of the same event the
+ * way this one was recorded (UI rule: 有限のタスクループ). Other ways stay on the held event.
+ */
+function NextMatchRecordLink({
+  arrival,
+  heldEventId,
+}: {
+  arrival: ConfirmedArrival;
+  heldEventId: string;
+}) {
+  return (
+    <LinkButton
+      icon={
+        arrival.recordedWith === "ocr" ? (
+          <Camera aria-hidden="true" />
+        ) : (
+          <Keyboard aria-hidden="true" />
+        )
+      }
+      size="sm"
+      to={matchRecordHref(heldEventId, arrival.recordedWith)}
+      variant="primary"
+    >
+      次の試合を記録
+    </LinkButton>
   );
 }
 

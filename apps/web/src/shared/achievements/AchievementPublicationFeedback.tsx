@@ -12,6 +12,10 @@ export function AchievementPublicationFeedback({
   statusFailed: boolean;
   resourceFailed: boolean;
   hasPublishedData: boolean;
+  /**
+   * `page` is for a page without an update control that follows a running calculation by itself
+   * (Web rule Server State); a stale result without one still tells the reader to reopen.
+   */
   refreshMode?: "button" | "page";
 }) {
   if (statusFailed || resourceFailed) {
@@ -35,17 +39,20 @@ export function AchievementPublicationFeedback({
       </Notice>
     );
   }
-  if (
-    calculation === "queued" ||
-    calculation === "running" ||
-    status?.artifactFreshness === "stale"
-  ) {
+  const calculating = calculation === "queued" || calculation === "running";
+  if (calculating || status?.artifactFreshness === "stale") {
+    // A page follows a running calculation itself; only a stale result without one asks the
+    // reader to reopen the page later.
+    const recovery =
+      refreshMode === "button"
+        ? "集計後に「表示を更新」を押してください。"
+        : calculating
+          ? null
+          : "集計後にページを開き直すと反映されます。";
     return (
       <Notice tone="info" title="保存された変更の集計を待っています">
         {hasPublishedData ? "集計前の実績を表示しています。" : "初回の集計が終わると表示できます。"}
-        {refreshMode === "button"
-          ? "集計後に「表示を更新」を押してください。"
-          : "集計後にページを開き直すと反映されます。"}
+        {recovery}
       </Notice>
     );
   }

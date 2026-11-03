@@ -1,4 +1,3 @@
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type { DetailNavigation, HeldEventNeighbor } from "@/shared/api/detailReadResult";
 import type {
   HeldEventDetailResponse,
@@ -8,6 +7,7 @@ import type {
 } from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeCompact, formatNavigationDateTime } from "@/shared/lib/dateTime";
+import { matchRecordHref } from "@/shared/navigation/matchLinks";
 import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
 
@@ -119,8 +119,8 @@ export function buildHeldEventDetailView({
       },
       currentDateTime: formatNavigationDateTime(detail.heldAt, peers),
       exportHref: `/exports?heldEventId=${encodedHeldEventId}&format=csv`,
-      manualEntryHref: `/matches/new?heldEventId=${encodedHeldEventId}`,
-      ocrCaptureHref: heldEventOcrCaptureHref(detail.id),
+      manualEntryHref: matchRecordHref(detail.id, "manual"),
+      ocrCaptureHref: matchRecordHref(detail.id, "ocr"),
     },
     refresh,
   };

@@ -66,3 +66,16 @@ export function isCancelableDraftStatus(status: string | null | undefined): bool
 export function reviewStatusLabel(status: string | null | undefined): string {
   return draftStatusLabels[asDraftStatusOrUnknown(status)];
 }
+
+/**
+ * Names the OCR reads still running among the shown drafts, so a completion check follows that
+ * exact set and starts a fresh wait when it changes.
+ */
+export function runningOcrReadsWait(
+  drafts: ReadonlyArray<{ readonly matchDraftId?: string | null; readonly status?: string | null }>,
+): string | undefined {
+  const ids = drafts.flatMap((draft) =>
+    draft.status === "ocr_running" && draft.matchDraftId ? [draft.matchDraftId] : [],
+  );
+  return ids.length === 0 ? undefined : ids.toSorted().join(" ");
+}

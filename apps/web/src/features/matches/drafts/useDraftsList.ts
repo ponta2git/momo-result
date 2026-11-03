@@ -5,14 +5,16 @@ import { groupDrafts } from "@/features/matches/drafts/draftsPresentation";
 import type { DraftAction, DraftGroupView } from "@/features/matches/drafts/draftsTypes";
 import { useConfirmedDraftNavigation } from "@/features/matches/drafts/useConfirmedDraftNavigation";
 import { invalidateAfterDraftCancelled } from "@/shared/api/cacheInvalidation";
+import { completionCheckOptions, useUserRefresh } from "@/shared/api/completionCheck";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft } from "@/shared/api/matchDrafts";
-import type { ListMatchesQuery } from "@/shared/api/matches";
+import type { ListMatchesQuery, MatchListResponse } from "@/shared/api/matches";
 import { formatApiError } from "@/shared/api/problemDetails";
 import { isInitialQueryLoading, shouldShowBlockingQueryError } from "@/shared/api/queryErrorState";
 import { matchListQueryOptions } from "@/shared/api/queryOptions";
 import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
+import { runningOcrReadsWait } from "@/shared/domain/draftStatus";
 
 /** The API's largest page; more unconfirmed drafts than this is not an expected workload. */
 const draftsQuery: ListMatchesQuery = {
@@ -21,6 +23,11 @@ const draftsQuery: ListMatchesQuery = {
   sort: "updated_desc",
   status: "incomplete",
 };
+
+/** The running group waits on its OCR reads; the page rechecks itself until they end. */
+function runningReadsOf(list: MatchListResponse) {
+  return runningOcrReadsWait(list.items ?? []);
+}
 
 export type DraftsListView = {
   groups: DraftGroupView[];
@@ -43,7 +50,9 @@ export function useDraftsList(): DraftsListView {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
   const queryOptions = matchListQueryOptions(draftsQuery);
-  const query = useQuery(queryOptions);
+  const query = useQuery({ ...queryOptions, ...completionCheckOptions(runningReadsOf) });
+  const userRefresh = useUserRefresh(query.refetch);
+  const checking = query.data !== undefined && runningReadsOf(query.data) !== undefined;
   const navigation = useConfirmedDraftNavigation();
   const cancel = useMutation({
     mutationFn: (matchDraftId: string) =>
@@ -82,9 +91,10 @@ export function useDraftsList(): DraftsListView {
       run: (action) => void navigation.run(action),
     },
     refresh: {
-      pending: query.isFetching && !isInitialQueryLoading(query),
+      pending:
+        userRefresh.pending || (query.isFetching && !checking && !isInitialQueryLoading(query)),
       refreshFailed: query.isRefetchError,
-      run: () => void query.refetch(),
+      run: userRefresh.run,
     },
     remove: async (matchDraftId) => {
       try {

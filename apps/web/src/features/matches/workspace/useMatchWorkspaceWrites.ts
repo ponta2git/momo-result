@@ -12,6 +12,7 @@ import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { cancelMatchDraft } from "@/shared/api/matchDrafts";
 import { confirmMatch, updateMatch } from "@/shared/api/matches";
 import type { ConfirmMatchRequest, UpdateMatchRequest } from "@/shared/api/matches";
+import { matchDetailPrefetchQueryOptions } from "@/shared/api/queryOptions";
 import { evictDraftSourceImageBlobs } from "@/shared/api/sourceImageQueries";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 import { assertDefined } from "@/shared/lib/invariant";
@@ -53,6 +54,9 @@ export function useMatchWorkspaceWrites(events: WriteEvents): {
     onSuccess: async (response, request) => {
       if (request.matchDraftId) evictDraftSourceImageBlobs(queryClient, request.matchDraftId);
       await invalidateAfterMatchConfirmed(queryClient);
+      // Read the confirmed result before leaving, so the detail opens on it rather than a skeleton.
+      // A failed read is not an outcome here; the detail page reads the match again on arrival.
+      await queryClient.prefetchQuery(matchDetailPrefetchQueryOptions(response.matchId));
       events.saved({ kind: "confirm", matchId: response.matchId });
     },
     onError: (error, request) =>

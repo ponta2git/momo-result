@@ -63,7 +63,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ### Query / API Error
 
-- 自動再取得の契約は [Web 実装規約の Server State](web-rule.md#server-state) を正本とし、共通 QueryClient の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
+- 自動再取得の契約は [Web 実装規約の Server State](web-rule.md#server-state) を正本とし、共通 QueryClient と共通の完了確認の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
 - query key ごとの runtime data shape と、mutation 後の detail / list / selector cache の整合を検証する。
 
 ### Form / Interaction

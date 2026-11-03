@@ -5,9 +5,13 @@ import type { MatchPerformanceContextRow } from "@/shared/matches/matchPerforman
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { RankBadge } from "@/shared/matches/RankBadge";
+import {
+  WinnerCelebrationMark,
+  WinnerCelebrationSurface,
+} from "@/shared/matches/WinnerCelebration";
 import { cn } from "@/shared/ui/cn";
 import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, momentText } from "@/shared/ui/typography";
 
 type MatchResultLedgerRow = MatchPerformanceContextRow & {
   displayName: string;
@@ -27,11 +31,18 @@ export const matchResultLedgerGridClass = "grid min-w-0 gap-4 lg:grid-cols-2";
 
 export function MatchResultLedger({
   ariaLabel = "試合の順位と成績",
+  celebrateWinner = false,
   contextStatus,
   presentation = "standalone",
   rows,
 }: {
   ariaLabel?: string;
+  /**
+   * Set only for the moment a match is confirmed (UI rule: 節目の演出). Every first place, ties
+   * included, gets the celebration surface, mark, and the moment-sized total; the rest keep the
+   * same shape so the four still compare as one group.
+   */
+  celebrateWinner?: boolean;
   contextStatus: MatchResultLedgerContextStatus;
   presentation?: MatchResultLedgerPresentation;
   rows: MatchResultLedgerRow[];
@@ -40,62 +51,80 @@ export function MatchResultLedger({
     <ol aria-label={ariaLabel} className={matchResultLedgerGridClass}>
       {rows
         .toSorted((left, right) => left.rank - right.rank)
-        .map((row) => (
-          <li
-            key={row.memberId}
-            className={cn(
-              matchResultLedgerRowClass,
-              "border border-[var(--color-border)]",
-              presentation === "embedded" ? "rounded-sm" : "rounded-md",
-            )}
-          >
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <RankBadge rank={row.rank} size="md" />
-                <h3 className={cn(contentText.primary, "min-w-0")}>
-                  <MemberSequenceLabel accent={row.playOrder === undefined} memberId={row.memberId}>
-                    {row.displayName}
-                  </MemberSequenceLabel>
-                </h3>
+        .map((row) => {
+          const celebrated = celebrateWinner && row.rank === 1;
+          return (
+            <li
+              key={row.memberId}
+              className={cn(
+                matchResultLedgerRowClass,
+                "border",
+                celebrated
+                  ? "@container/winner relative isolate border-[var(--color-celebration-border)]"
+                  : "border-[var(--color-border)]",
+                presentation === "embedded" ? "rounded-sm" : "rounded-md",
+              )}
+            >
+              {celebrated ? <WinnerCelebrationSurface /> : null}
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <RankBadge rank={row.rank} size="md" />
+                  <h3 className={cn(contentText.primary, "min-w-0")}>
+                    <MemberSequenceLabel
+                      accent={row.playOrder === undefined}
+                      memberId={row.memberId}
+                    >
+                      {row.displayName}
+                    </MemberSequenceLabel>
+                  </h3>
+                  {celebrated ? <WinnerCelebrationMark /> : null}
+                </div>
+                {row.playOrder === undefined ? null : <PlayOrderMark playOrder={row.playOrder} />}
               </div>
-              {row.playOrder === undefined ? null : <PlayOrderMark playOrder={row.playOrder} />}
-            </div>
 
-            <dl className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-4">
-              <div className="min-w-0">
-                <dt className={contentText.supporting}>総資産</dt>
-                <dd className={cn(contentText.primary, "mt-0.5 break-words tabular-nums")}>
-                  {formatManYen(row.totalAssetsManYen)}
+              <dl className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-4">
+                {/* In a narrow card the moment-sized total takes the whole row, so it never breaks
+                    mid-amount; a wide card keeps the columns the other three use. */}
+                <div className={cn("min-w-0", celebrated && "@max-xl/winner:col-span-full")}>
+                  <dt className={contentText.supporting}>総資産</dt>
+                  <dd
+                    className={cn(
+                      celebrated ? momentText.result : contentText.primary,
+                      "mt-0.5 break-words tabular-nums",
+                    )}
+                  >
+                    {formatManYen(row.totalAssetsManYen)}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className={contentText.supporting}>物件収益</dt>
+                  <dd className={cn(contentText.body, "mt-0.5 break-words tabular-nums")}>
+                    {formatManYen(row.revenueManYen)}
+                  </dd>
+                  <dd className={cn(contentText.supporting, "mt-1 grid gap-1 tabular-nums")}>
+                    <span>収益順位 {formatOrdinal(row.revenueRank)}</span>
+                    <span>
+                      物件収益比率{" "}
+                      {row.revenueAssetRate === undefined
+                        ? row.totalAssetsManYen <= 0
+                          ? "対象外"
+                          : "—"
+                        : formatRevenueAssetRate(row.revenueAssetRate)}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+              <dl className="grid gap-0.5">
+                <dt className={contentText.supporting}>通算平均順位</dt>
+                {/* Every comparison state keeps the badge row height, so the late context does not move the card. */}
+                <dd className="flex min-h-6 flex-wrap items-center gap-2">
+                  <AverageRankChange contextStatus={contextStatus} row={row} />
                 </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className={contentText.supporting}>物件収益</dt>
-                <dd className={cn(contentText.body, "mt-0.5 break-words tabular-nums")}>
-                  {formatManYen(row.revenueManYen)}
-                </dd>
-                <dd className={cn(contentText.supporting, "mt-1 grid gap-1 tabular-nums")}>
-                  <span>収益順位 {formatOrdinal(row.revenueRank)}</span>
-                  <span>
-                    物件収益比率{" "}
-                    {row.revenueAssetRate === undefined
-                      ? row.totalAssetsManYen <= 0
-                        ? "対象外"
-                        : "—"
-                      : formatRevenueAssetRate(row.revenueAssetRate)}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-            <dl className="grid gap-0.5">
-              <dt className={contentText.supporting}>通算平均順位</dt>
-              {/* Every comparison state keeps the badge row height, so the late context does not move the card. */}
-              <dd className="flex min-h-6 flex-wrap items-center gap-2">
-                <AverageRankChange contextStatus={contextStatus} row={row} />
-              </dd>
-            </dl>
-            {row.details}
-          </li>
-        ))}
+              </dl>
+              {row.details}
+            </li>
+          );
+        })}
     </ol>
   );
 }

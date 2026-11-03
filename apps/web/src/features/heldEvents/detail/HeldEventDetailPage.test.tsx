@@ -12,9 +12,10 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/detail/HeldEventDetailPage";
+import { completionCheckIntervalMs } from "@/shared/api/completionCheck";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -40,6 +41,15 @@ function renderPage() {
 
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
+
+function ocrDraft(status: string) {
+  return {
+    matchDraftId: "draft-ocr-1",
+    matchNoInEvent: 1,
+    status,
+    updatedAt: "2026-01-01T01:00:00.000Z",
+  };
+}
 
 function LocationProbe() {
   const location = useLocation();
@@ -457,6 +467,47 @@ describe("HeldEventDetailPage", () => {
       expect(screen.queryByText("開催詳細を更新できませんでした")).not.toBeInTheDocument(),
     );
     expect(attempts).toBe(3);
+  });
+
+  it("follows a running OCR read until it can be reviewed, without reading as a user refresh", async () => {
+    let attempts = 0;
+    const recheck = createDeferred<void>();
+    server.use(
+      http.get("/api/held-events/:heldEventId", async () => {
+        attempts += 1;
+        if (attempts === 2) await recheck.promise;
+        return HttpResponse.json(
+          makeHeldEventDetailResponse({
+            draftCount: 1,
+            drafts: [ocrDraft(attempts < 3 ? "ocr_running" : "draft_ready")],
+          }),
+        );
+      }),
+    );
+    // Fake only the clock the completion check schedules on, and let real time drive the rest.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+
+      expect(await screen.findByRole("button", { name: "読み取り中" })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(attempts).toBe(2));
+      // A recheck in flight leaves the update control and the neighbors as they were.
+      expect(screen.getByRole("button", { name: "開催詳細を更新" })).toBeEnabled();
+      expect(screen.queryByText("前後の開催を確認しています。")).not.toBeInTheDocument();
+      recheck.resolve();
+
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByRole("link", { name: "内容を確認" })).toHaveAttribute(
+        "href",
+        "/review/draft-ocr-1",
+      );
+      expect(attempts).toBe(3);
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 5));
+      expect(attempts).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("replaces stale detail with the deleted state when a refresh confirms a 404", async () => {

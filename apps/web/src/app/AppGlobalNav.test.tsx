@@ -30,16 +30,38 @@ describe("AppGlobalNav", () => {
     };
   });
 
-  it("keeps match review in the match section while its navigation link returns to the list", () => {
+  it.each(["/ocr/new?heldEventId=held-1", "/review/session-1", "/matches/new", "/drafts"])(
+    "marks 記録する while %s records a match, and opens the newest held event from it",
+    (entry) => {
+      render(
+        <MemoryRouter initialEntries={[entry]}>
+          <AppGlobalNav />
+        </MemoryRouter>,
+      );
+      const record = screen.getByRole("link", { name: "記録する" });
+      expect(record).toHaveAttribute("aria-current", "page");
+      expect(record).toHaveAttribute("href", "/");
+      // Entering a match sits under /matches, but it is not browsing confirmed matches.
+      for (const name of ["開催", "試合", "戦績比較", "実績"]) {
+        expect(screen.getByRole("link", { name })).not.toHaveAttribute("aria-current");
+      }
+    },
+  );
+
+  it.each([
+    ["/matches/match-1/edit", "試合"],
+    ["/m/12", "試合"],
+    ["/exports?heldEventId=held-1", "試合"],
+    ["/e/3", "開催"],
+    ["/held-events/held-1", "開催"],
+  ])("places %s under %s", (entry, area) => {
     render(
-      <MemoryRouter initialEntries={["/review/session-1"]}>
+      <MemoryRouter initialEntries={[entry]}>
         <AppGlobalNav />
       </MemoryRouter>,
     );
-    const current = screen.getByRole("link", { name: "試合" });
-    expect(current).toHaveAttribute("aria-current", "page");
-    expect(current).toHaveAttribute("href", "/matches");
-    expect(screen.getByRole("link", { name: "OCR" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: area })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "記録する" })).not.toHaveAttribute("aria-current");
   });
 
   it("keeps management destinations hidden from a user and shows them after promotion", () => {
@@ -51,9 +73,14 @@ describe("AppGlobalNav", () => {
       </MemoryRouter>,
     );
 
-    for (const name of ["試合", "戦績比較", "OCR", "開催", "出力"]) {
-      expect(screen.getByRole("link", { name })).toBeInTheDocument();
-    }
+    // Destinations are the recorded objects and the views across them; ways of recording live
+    // inside 記録する, and 出力 opens from the records it carries out.
+    expect(
+      screen
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+        .filter((label) => label !== "momo-result"),
+    ).toEqual(["記録する", "開催", "試合", "戦績比較", "実績"]);
     expect(screen.queryByRole("group", { name: "管理" })).not.toBeInTheDocument();
 
     authMock.current = {

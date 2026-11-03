@@ -70,11 +70,6 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
 
   if (normalizedPathname === "/matches") {
     return defineRoutePresentation({
-      contentToolbar: {
-        actionSize: "sm",
-        actionSlots: 2,
-        actionWidths: ["standard", "wide"],
-      },
       kind: "list",
       loadingLabel: "試合一覧を読み込み中",
       width: "default",
@@ -89,7 +84,7 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
   }
   if (normalizedPathname === "/drafts") {
     return defineRoutePresentation({
-      contentToolbar: { actionSize: "sm", actionSlots: 3, actionWidths: ["icon", "long", "long"] },
+      contentToolbar: { actionSize: "sm", actionSlots: 1, actionWidths: ["icon"] },
       kind: "grouped-list",
       loadingLabel: "下書きを読み込み中",
       width: "default",
@@ -171,7 +166,8 @@ function routePagePresentation(pathname: string, search = ""): RoutePagePresenta
       { backLink: { href: "/matches", label: "試合一覧へ" }, preserveHeader: true },
     );
   }
-  if (/^\/(?:held-events|e)\/[^/]+$/u.test(normalizedPathname)) {
+  // The entry resolves to the newest held event's hub and keeps that hub's shape meanwhile.
+  if (normalizedPathname === "/" || /^\/(?:held-events|e)\/[^/]+$/u.test(normalizedPathname)) {
     return defineRoutePresentation(
       {
         header: {

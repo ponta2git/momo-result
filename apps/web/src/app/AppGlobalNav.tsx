@@ -4,9 +4,8 @@ import {
   BarChart3,
   CalendarDays,
   Database,
-  Download,
   LogOut,
-  ScanLine,
+  NotebookPen,
   Trophy,
 } from "lucide-react";
 import { useLocation, useMatch } from "react-router-dom";
@@ -20,14 +19,21 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { fieldText } from "@/shared/ui/typography";
 
+// Destinations are the recorded objects (開催 ⊃ 試合) and the views across them. Ways of recording
+// (OCR取り込み・手入力) live inside 記録する, and 出力 is reached from the records it carries out.
 const primaryItems = [
+  { icon: <CalendarDays />, label: "開催", to: "/held-events" },
   { icon: <Trophy />, label: "試合", to: "/matches" },
   { icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
   { icon: <Award />, label: "実績", to: "/achievements" },
-  { icon: <ScanLine />, label: "OCR", to: "/ocr/new" },
-  { icon: <CalendarDays />, label: "開催", to: "/held-events" },
-  { icon: <Download />, label: "出力", to: "/exports" },
 ] as const satisfies readonly GlobalNavItem[];
+
+/** Opens the newest held event's hub, where the next match is recorded or a new event starts. */
+const recordAction = {
+  icon: <NotebookPen />,
+  label: "記録する",
+  to: "/",
+} as const satisfies GlobalNavItem;
 
 const managementItems = [
   { icon: <Activity />, label: "分析", to: "/admin/analysis" },
@@ -39,13 +45,19 @@ const noManagementItems: readonly GlobalNavItem[] = [];
 export function AppGlobalNav() {
   const auth = useAuthSession();
   const location = useLocation();
-  const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
-  // Drafts are unconfirmed matches, so they belong to the matches area.
-  const draftList = useMatch("/drafts") !== null;
+  // Capturing, reviewing, entering, and resuming drafts are all recording until confirmed.
+  const capturing = useMatch("/ocr/new") !== null;
+  const reviewing = useMatch("/review/:matchSessionId") !== null;
+  const entering = useMatch("/matches/new") !== null;
+  const resumingDrafts = useMatch("/drafts") !== null;
+  const recording = capturing || reviewing || entering || resumingDrafts;
   const publicMatch = useMatch("/m/:publicId") !== null;
   const publicHeldEvent = useMatch("/e/:publicId") !== null;
-  const currentArea =
-    reviewingMatch || publicMatch || draftList
+  // 出力 carries confirmed matches out, so it stays in the matches area.
+  const exporting = useMatch("/exports") !== null;
+  const currentArea = recording
+    ? "record"
+    : publicMatch || exporting
       ? "/matches"
       : publicHeldEvent
         ? "/held-events"
@@ -64,7 +76,8 @@ export function AppGlobalNav() {
 
   return (
     <GlobalNav
-      brandTo="/matches"
+      action={{ ...recordAction, current: currentArea === "record" }}
+      brandTo="/"
       contentWidth={routePageWidth(location.pathname, location.search)}
       endContent={
         <div className="grid max-w-full min-w-0 justify-items-end gap-1">

@@ -593,6 +593,11 @@ describe("OcrCapturePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き1件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
+    // A capture started from a held event's hub returns there when abandoned.
+    expect(screen.getByRole("link", { name: "取り込みをやめる" })).toHaveAttribute(
+      "href",
+      "/held-events/held-scoped",
+    );
     await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
     const selectedEvent = screen.getByRole("radio", { name: "2026/02/03 13:05" });
     expect(selectedEvent).toBeChecked();

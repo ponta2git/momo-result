@@ -17,7 +17,7 @@ test("announces the new page through its title and landmark without disturbing c
   await page.goto("/matches");
   await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
   await expect(page).toHaveTitle("試合一覧 | 桃鉄戦績台帳");
-  await page.getByRole("link", { name: "出力", exact: true }).click();
+  await page.getByRole("link", { name: "まとめて出力", exact: true }).click();
   await expect(page.getByRole("region", { name: "出力条件" })).toBeVisible();
   await expect(page).toHaveTitle("戦績を出力 | 桃鉄戦績台帳");
   await expect(page.getByRole("main")).toBeFocused();

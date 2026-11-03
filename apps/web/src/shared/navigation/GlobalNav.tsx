@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link, useMatch, useResolvedPath } from "react-router-dom";
 
+import { buttonClassName } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
 import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
@@ -19,6 +20,11 @@ export type GlobalNavItem = {
 const emptyNavItems: readonly GlobalNavItem[] = [];
 
 type GlobalNavProps = {
+  /**
+   * The app's main operation, kept apart from the destinations at the first row's end so it stays
+   * in view on every width instead of scrolling away with them.
+   */
+  action?: GlobalNavItem | undefined;
   brandLabel?: ReactNode;
   brandTo: string;
   /** The current page's width; navigation aligns its edges with that page content. */
@@ -58,6 +64,29 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
   );
 }
 
+/** An operation rather than a destination: framed like a secondary action, marked while in use. */
+function NavActionLink({ item }: { item: GlobalNavItem }) {
+  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
+  const current = item.current ?? false;
+  return (
+    <Link
+      ref={surfaceRef}
+      to={item.to}
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        buttonClassName({ size: "sm", variant: "secondary" }),
+        "shrink-0",
+        current && "momo-surface-nav-current border-[var(--color-action)]/60",
+      )}
+    >
+      <span aria-hidden="true" className="[&_svg]:size-4">
+        {item.icon}
+      </span>
+      <span>{item.label}</span>
+    </Link>
+  );
+}
+
 /** Responds with the shared surface feedback, keeping its text and size like other nav links. */
 function BrandLink({ children, to }: { children: ReactNode; to: string }) {
   const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
@@ -84,6 +113,7 @@ function revealActiveDestination(scroller: HTMLDivElement, activeLink: HTMLAncho
 }
 
 export function GlobalNav({
+  action,
   brandLabel = "momo-result",
   brandTo,
   contentWidth = "default",
@@ -149,8 +179,19 @@ export function GlobalNav({
               </span>
             ) : null}
           </div>
-          {endContent ? (
-            <div className="ml-auto min-w-0 lg:col-start-3 lg:row-start-1">{endContent}</div>
+          {endContent || action ? (
+            <div className="ml-auto flex min-w-0 items-center justify-end gap-3 lg:col-start-3 lg:row-start-1">
+              {action ? (
+                <div
+                  aria-hidden={itemsPending || undefined}
+                  className={cn("shrink-0", itemsPending && "invisible")}
+                  inert={itemsPending || undefined}
+                >
+                  <NavActionLink item={action} />
+                </div>
+              ) : null}
+              {endContent ? <div className="min-w-0">{endContent}</div> : null}
+            </div>
           ) : null}
         </div>
         <div

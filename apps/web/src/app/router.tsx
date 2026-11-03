@@ -9,7 +9,6 @@ import {
   AuthenticatedRoute,
   NotFoundRoute,
   PublicOnlyRoute,
-  RootRedirect,
 } from "@/app/routeGuards";
 import {
   LoginPage,
@@ -19,6 +18,7 @@ import {
   loadExportPage,
   loadHeldEventDetailPage,
   loadHeldEventsPage,
+  loadLatestHeldEventRedirect,
   loadMastersPage,
   loadMatchCreatePage,
   loadMatchDetailPage,
@@ -36,6 +36,7 @@ const AchievementsPage = lazy(() => loadLazyModule(loadAchievementsPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
 const HeldEventsPage = lazy(() => loadLazyModule(loadHeldEventsPage));
+const LatestHeldEventRedirect = lazy(() => loadLazyModule(loadLatestHeldEventRedirect));
 const MastersPage = lazy(() => loadLazyModule(loadMastersPage));
 const MatchCreatePage = lazy(() => loadLazyModule(loadMatchCreatePage));
 const MatchDetailPage = lazy(() => loadLazyModule(loadMatchDetailPage));
@@ -50,10 +51,6 @@ export const appRoutes: RouteObject[] = [
     path: "/",
     element: <App />,
     children: [
-      {
-        index: true,
-        element: <RootRedirect />,
-      },
       {
         path: "login",
         handle: { title: "ログイン" },
@@ -70,6 +67,12 @@ export const appRoutes: RouteObject[] = [
           </AuthenticatedRoute>
         ),
         children: [
+          {
+            // Opening the app shows the newest held event, where tonight's record continues.
+            index: true,
+            handle: { title: "最新の開催" },
+            element: <LatestHeldEventRedirect />,
+          },
           {
             path: "achievements",
             handle: { title: "実績達成" },

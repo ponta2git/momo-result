@@ -1,5 +1,6 @@
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { memo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
@@ -16,6 +17,8 @@ import {
   OcrCaptureSetupSection,
 } from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
+import { trimSearchParam } from "@/shared/lib/searchParams";
+import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -29,6 +32,10 @@ import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function OcrCapturePage() {
   const auth = useOcrCaptureAuth();
+  const [searchParams] = useSearchParams();
+  // A capture started from a held event's hub returns there; without one, to the matches.
+  const startedFrom = trimSearchParam(searchParams.get("heldEventId"));
+  const exitHref = startedFrom ? heldEventDetailHref(startedFrom) : "/matches";
   return (
     <OcrCaptureSetupProvider authReady={auth.ready} key={auth.accountId ?? "unresolved"}>
       <PageFrame>
@@ -37,7 +44,7 @@ export function OcrCapturePage() {
             <LinkButton
               icon={<ArrowLeft aria-hidden="true" />}
               size="sm"
-              to="/matches"
+              to={exitHref}
               variant="quiet"
             >
               取り込みをやめる

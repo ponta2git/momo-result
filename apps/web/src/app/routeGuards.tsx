@@ -112,32 +112,6 @@ function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () =
   );
 }
 
-export function RootRedirect() {
-  const auth = useAuthStatus();
-
-  if (auth.isChecking) {
-    return <AuthLoading message="ログイン状態を確認中…" standalone />;
-  }
-
-  if (auth.isForbidden) {
-    return <Navigate to="/login?reason=forbidden" replace />;
-  }
-
-  if (auth.isAuthenticated) {
-    return <Navigate to="/matches" replace />;
-  }
-
-  if (auth.error && !auth.isUnauthorized) {
-    return (
-      <StandaloneRouteMain>
-        <AuthUnavailable pending={auth.isRefetching} onRetry={() => void auth.refetch()} />
-      </StandaloneRouteMain>
-    );
-  }
-
-  return <Navigate to="/login" replace />;
-}
-
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const auth = useAuthStatus();
   const [searchParams] = useSearchParams();
@@ -147,7 +121,7 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   }
 
   if (auth.isAuthenticated) {
-    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/matches";
+    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/";
     return <Navigate to={destination} replace />;
   }
 

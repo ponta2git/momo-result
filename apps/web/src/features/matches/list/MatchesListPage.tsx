@@ -1,4 +1,4 @@
-import { Download, Filter, PencilLine, PenSquare, RefreshCw, ScanLine, Trophy } from "lucide-react";
+import { Download, Filter, PencilLine, RefreshCw, Trophy } from "lucide-react";
 import { useState } from "react";
 
 import { MatchesFilterBar } from "@/features/matches/list/MatchesFilterBar";
@@ -7,10 +7,8 @@ import { matchListExportLink } from "@/features/matches/list/matchListPresentati
 import { MatchesTable, MatchListCompactRows } from "@/features/matches/list/MatchListRows";
 import { matchListPageSizeOptions } from "@/features/matches/list/matchListSearchParams";
 import { MatchListSearchSheet } from "@/features/matches/list/MatchListSearchSheet";
-import type { MatchesListView } from "@/features/matches/list/useMatchesList";
 import { useMatchesList } from "@/features/matches/list/useMatchesList";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
-import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
@@ -81,29 +79,6 @@ function DraftNotice({ count, href }: { count: number | undefined; href: string 
   );
 }
 
-function RegisterActions({ navigation }: { navigation: MatchesListView["navigation"] }) {
-  return (
-    <div aria-label="試合を登録" className={cn(inlineActionGroupClass, "justify-end")} role="group">
-      <LinkButton
-        icon={<ScanLine aria-hidden="true" />}
-        size="sm"
-        to={navigation.ocrHref}
-        variant="secondary"
-      >
-        OCR取り込み
-      </LinkButton>
-      <LinkButton
-        icon={<PenSquare aria-hidden="true" />}
-        size="sm"
-        to={navigation.manualCreateHref}
-        variant="secondary"
-      >
-        手入力で作成
-      </LinkButton>
-    </div>
-  );
-}
-
 export function MatchesListPage() {
   const showDesktopTable = useMediaQuery("(min-width: 1024px)");
   const { draftCount, filters, list, navigation } = useMatchesList();
@@ -124,14 +99,11 @@ export function MatchesListPage() {
   return (
     <PageFrame>
       <PageContentSurface aria-label="試合一覧" className="grid gap-6" role="region">
-        <div
-          className={cn(
-            "flex min-w-0 flex-wrap items-center gap-2",
-            showDesktopTable ? "justify-end" : "justify-between",
-          )}
-        >
+        {/* Stays mounted while hidden at desktop width, so an open search sheet can still
+            return focus to its trigger after the layout changes back. Recording starts from the
+            global 記録する, which opens a held event, so this list carries no capture actions. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2" hidden={showDesktopTable}>
           <Button
-            hidden={showDesktopTable}
             icon={<Filter aria-hidden="true" />}
             size="sm"
             variant="secondary"
@@ -139,7 +111,6 @@ export function MatchesListPage() {
           >
             {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
           </Button>
-          <RegisterActions navigation={navigation} />
         </div>
 
         {filters.loadFailed ? (
@@ -300,15 +271,8 @@ export function MatchesListPage() {
                         />
                       ) : (
                         <EmptyState
-                          action={
-                            <div className="flex flex-wrap gap-2">
-                              <LinkButton to={navigation.ocrHref}>OCR取り込み</LinkButton>
-                              <LinkButton to={navigation.manualCreateHref} variant="secondary">
-                                手入力で作成
-                              </LinkButton>
-                            </div>
-                          }
-                          description="OCR取り込みか手入力で、最初の試合を登録します。"
+                          action={<LinkButton to={navigation.recordHref}>記録する</LinkButton>}
+                          description="開催からOCR取り込みか手入力で記録した試合が、ここに並びます。"
                           icon={<Trophy />}
                           placement="embedded"
                           title="試合はまだありません"

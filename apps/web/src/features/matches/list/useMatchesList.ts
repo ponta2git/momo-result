@@ -45,8 +45,8 @@ export type MatchesListView = {
   };
   navigation: {
     draftsHref: string;
-    manualCreateHref: string;
-    ocrHref: string;
+    /** Recording starts from a held event, so the list sends a first record to the newest one. */
+    recordHref: string;
   };
 };
 
@@ -97,8 +97,7 @@ export function useMatchesList(): MatchesListView {
     },
     navigation: {
       draftsHref: "/drafts",
-      manualCreateHref: "/matches/new",
-      ocrHref: "/ocr/new",
+      recordHref: "/",
     },
   };
 }

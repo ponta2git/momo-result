@@ -267,19 +267,15 @@ describe("MatchesListPage", () => {
     }
   });
 
-  it("offers registration when there are no matches yet", async () => {
+  it("sends a first record to a held event when there are no matches yet", async () => {
     server.use(http.get("/api/matches", () => HttpResponse.json(listResponse([]))));
     renderList();
 
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)).toHaveAttribute(
-      "href",
-      "/ocr/new",
-    );
-    expect(screen.getAllByRole("link", { name: "手入力で作成" }).at(-1)).toHaveAttribute(
-      "href",
-      "/matches/new",
-    );
+    expect(screen.getByRole("link", { name: "記録する" })).toHaveAttribute("href", "/");
+    // Capture without a held event's context is not offered from the list.
+    expect(screen.queryByRole("link", { name: "OCR取り込み" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "手入力で作成" })).not.toBeInTheDocument();
   });
 
   it("clears conditions and paging from an empty search while keeping the sort", async () => {

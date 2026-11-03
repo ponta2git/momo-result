@@ -1,4 +1,4 @@
-import { PencilLine, PenSquare, RefreshCw, ScanLine } from "lucide-react";
+import { PencilLine, RefreshCw } from "lucide-react";
 
 import type { DraftItemView } from "@/features/matches/drafts/draftsTypes";
 import type { DraftsListView } from "@/features/matches/drafts/useDraftsList";
@@ -220,24 +220,6 @@ export function DraftsPage() {
               variant="quiet"
               onClick={refresh.run}
             />
-            <div aria-label="試合を登録" className={inlineActionGroupClass} role="group">
-              <LinkButton
-                icon={<ScanLine aria-hidden="true" />}
-                size="sm"
-                to="/ocr/new"
-                variant="secondary"
-              >
-                OCR取り込み
-              </LinkButton>
-              <LinkButton
-                icon={<PenSquare aria-hidden="true" />}
-                size="sm"
-                to="/matches/new"
-                variant="secondary"
-              >
-                手入力で作成
-              </LinkButton>
-            </div>
           </div>
         </div>
 

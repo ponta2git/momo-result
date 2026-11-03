@@ -22,12 +22,6 @@ type MatchConfirmSummaryProps = {
   seasonName?: string | undefined;
 };
 
-type MatchConfirmReviewSummary = {
-  changedCount: number;
-  totalCount: number;
-  unresolvedCount: number;
-};
-
 function ConfirmActionButtons({ onCancel, pending }: { onCancel: () => void; pending: boolean }) {
   return (
     <DialogFooter>
@@ -118,38 +112,23 @@ function PlayerLedger({ values }: { values: MatchWorkspaceConfirmationDialogView
   );
 }
 
-function OcrReviewSummary({
-  changedCount,
-  totalCount,
-  unresolvedCount,
-}: MatchConfirmReviewSummary) {
-  if (totalCount === 0 && changedCount === 0) {
-    return null;
-  }
-  const reviewedCount = totalCount - unresolvedCount;
+/**
+ * The dialog confirms the conditions and the four results. Of the OCR review it only carries the
+ * one caution that can change the decision: readings still unconfirmed against the source image.
+ */
+function UnresolvedReadingsCaution({ unresolvedCount }: { unresolvedCount: number }) {
+  if (unresolvedCount === 0) return null;
   return (
-    <div className="grid gap-2 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-      {/* The title names the panel; the counts are the values and keep the body strength. */}
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 tabular-nums">
-        <span className={contentText.heading}>OCR確認状況</span>
-        <span className={contentText.body}>修正 {changedCount}件</span>
-        <span className={contentText.body}>
-          確認済み{reviewedCount}件／全{totalCount}件
-        </span>
-      </div>
-      {unresolvedCount > 0 ? (
-        <p className={cn(contentText.body, "flex gap-2")}>
-          <AlertTriangle
-            aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
-          />
-          <span>
-            未確認の強調項目が{unresolvedCount}
-            件あります。このまま確定できますが、元画像との照合を推奨します。
-          </span>
-        </p>
-      ) : null}
-    </div>
+    <p className={cn(contentText.body, "flex gap-2 text-pretty")}>
+      <AlertTriangle
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
+      />
+      <span>
+        未確認の読み取りが{unresolvedCount}
+        件あります。このまま確定できますが、元画像との照合をおすすめします。
+      </span>
+    </p>
   );
 }
 
@@ -190,7 +169,7 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
             </p>
           </section>
         ) : null}
-        <OcrReviewSummary {...view.review} />
+        <UnresolvedReadingsCaution unresolvedCount={view.review.unresolvedCount} />
 
         {view.feedback.validationMessage ? (
           <Notice presentation="nested" role="alert" tone="warning">

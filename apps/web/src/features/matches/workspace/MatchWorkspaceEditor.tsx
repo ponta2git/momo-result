@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { MatchAchievementFields } from "@/features/matches/workspace/MatchAchievementFields";
 import { MatchFormActions } from "@/features/matches/workspace/MatchFormActions";
@@ -18,6 +18,9 @@ import type { SourceImageKind } from "@/features/matches/workspace/sourceImages/
 import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { cn } from "@/shared/ui/cn";
 import { Notice } from "@/shared/ui/feedback/Notice";
+import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { contentText } from "@/shared/ui/typography";
+import { matchWorkspaceSideBySideColumnsClass } from "@/shared/workflows/matchWorkspacePresentation";
 
 type EditorBindings = MatchWorkspaceEditorBindings;
 
@@ -144,6 +147,55 @@ function WorkspaceSubmit({
   return <MatchFormActions view={persistence.submit} primaryActionRef={primaryActionRef} />;
 }
 
+type WorkspaceSection = "result" | "achievements";
+
+/**
+ * The result (scores, source image, note) and the achievements are separate views of one
+ * record, so they share one form and one execution area below them. A validation request opens
+ * the view that holds its field before that field takes focus.
+ */
+function WorkspaceSections({ editing, result }: { editing: EditorBindings; result: ReactNode }) {
+  const interaction = useWorkspaceInteraction();
+  const achievements = useWorkspaceSnapshot(editing.achievements);
+  const [section, setSection] = useState<WorkspaceSection>("result");
+  const request = interaction.validationFocusRequest;
+  const [handledRequest, setHandledRequest] = useState(request);
+  if (request && handledRequest !== request) {
+    setHandledRequest(request);
+    if (request.path.startsWith("achievements")) setSection("achievements");
+    else if (request.path.startsWith("players") || request.path === "noteBody")
+      setSection("result");
+  }
+  return (
+    <TabsRoot
+      value={section}
+      onValueChange={(value) => {
+        if (value === "result" || value === "achievements") setSection(value);
+      }}
+    >
+      <div className="grid min-w-0 gap-4">
+        <TabsList aria-label="入力する内容" variant="underline">
+          <TabsTab value="result">試合結果</TabsTab>
+          <TabsTab value="achievements">
+            実績（任意）
+            {achievements.length > 0 ? (
+              <span className={cn(contentText.supporting, "ml-2 tabular-nums")}>
+                {achievements.length}件
+              </span>
+            ) : null}
+          </TabsTab>
+        </TabsList>
+        <TabsPanel keepMounted value="result">
+          {result}
+        </TabsPanel>
+        <TabsPanel keepMounted value="achievements">
+          <WorkspaceAchievements editing={editing} />
+        </TabsPanel>
+      </div>
+    </TabsRoot>
+  );
+}
+
 export function MatchWorkspaceEditor({
   editing,
   view,
@@ -157,13 +209,13 @@ export function MatchWorkspaceEditor({
     primaryActionRef.current?.focus();
   }, []);
   return (
-    // Setup, notices, and the score editor are sibling sections of one form.
+    // Setup, notices, the two views of the record, and the execution area are one form.
     <div className="grid min-w-0 gap-4">
       <WorkspaceSetup editing={editing} mode={view.mode} view={view.setup} />
       <WorkspaceRecovery />
       {view.notice ? <Notice tone={view.notice.tone}>{view.notice.message}</Notice> : null}
       {view.warnings.length > 0 ? (
-        <Notice tone="warning" title="入力内容を確認してください">
+        <Notice tone="warning" title="読み取り結果の注意">
           <ul className="grid list-disc gap-1 pl-4">
             {view.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
@@ -171,39 +223,37 @@ export function MatchWorkspaceEditor({
           </ul>
         </Notice>
       ) : null}
-      {/* Side by side only once the editor area fits the 64rem score table, a 1rem gap,
-          and the 32rem source panel; viewport width cannot see the page padding. */}
-      <div className="@container/match-editor min-w-0">
-        <div
-          className={cn(
-            "grid min-w-0 grid-cols-1 gap-4",
-            view.sourceImagePanel
-              ? "@min-[97rem]/match-editor:grid-cols-[minmax(0,1fr)_32rem]"
-              : "",
-          )}
-        >
-          <div className="order-2 grid min-w-0 gap-4 @min-[97rem]/match-editor:order-none">
-            <WorkspaceScore
-              editing={editing}
-              onPreferImageKindChange={preferImageKind}
-              onRequestSubmitFocus={onRequestSubmitFocus}
-            />
-            <WorkspaceAchievements editing={editing} />
-            {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
-          </div>
-          {/* The aside only sticks beside the editor; stacked, it scrolls with the form. */}
-          <aside className="contents @min-[97rem]/match-editor:sticky @min-[97rem]/match-editor:top-(--sticky-below-nav) @min-[97rem]/match-editor:grid @min-[97rem]/match-editor:h-fit @min-[97rem]/match-editor:gap-4">
-            {view.sourceImagePanel ? (
-              <div className="order-1 @min-[97rem]/match-editor:order-none">
-                <SourceImagePanel {...view.sourceImagePanel} preferredKind={preferredKind} />
+      <WorkspaceSections
+        editing={editing}
+        result={
+          // Once the table reaches its one-line width beside the image, its incidents unfold.
+          <div className="@container/match-editor min-w-0">
+            <div
+              className={cn(
+                "grid min-w-0 grid-cols-1 gap-4",
+                view.sourceImagePanel ? matchWorkspaceSideBySideColumnsClass : "",
+              )}
+            >
+              <div className="order-2 grid min-w-0 gap-4 @min-[79rem]/match-editor:order-none">
+                <WorkspaceScore
+                  editing={editing}
+                  onPreferImageKindChange={preferImageKind}
+                  onRequestSubmitFocus={onRequestSubmitFocus}
+                />
+                {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
               </div>
-            ) : null}
-            <div className="order-3 @min-[97rem]/match-editor:order-none">
-              <WorkspaceSubmit primaryActionRef={primaryActionRef} />
+              {view.sourceImagePanel ? (
+                // The image only sticks beside the editor; stacked, it scrolls with the form.
+                <aside className="order-1 @min-[79rem]/match-editor:sticky @min-[79rem]/match-editor:top-(--sticky-below-nav) @min-[79rem]/match-editor:order-none @min-[79rem]/match-editor:h-fit">
+                  <SourceImagePanel {...view.sourceImagePanel} preferredKind={preferredKind} />
+                </aside>
+              ) : null}
             </div>
-          </aside>
-        </div>
-      </div>
+          </div>
+        }
+      />
+      {/* One execution area for both views, at the end of the form (UI rule: 末尾の実行領域). */}
+      <WorkspaceSubmit primaryActionRef={primaryActionRef} />
     </div>
   );
 }

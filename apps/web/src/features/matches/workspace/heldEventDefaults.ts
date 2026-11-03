@@ -1,15 +1,19 @@
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
+/** Without a held event to start from, a record starts in the newest one. */
+export function latestHeldEvent(
+  heldEvents: readonly HeldEventResponse[],
+): HeldEventResponse | undefined {
+  return heldEvents.toSorted(
+    (left, right) => new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime(),
+  )[0];
+}
+
 export function latestHeldEventDefaults(
   heldEvents: readonly HeldEventResponse[],
 ): { heldEventId: string; matchNoInEvent: number; playedAt: string } | undefined {
-  const latest = heldEvents.toSorted(
-    (left, right) => new Date(right.heldAt).getTime() - new Date(left.heldAt).getTime(),
-  )[0];
-  if (!latest) {
-    return undefined;
-  }
-  return heldEventDefaults(latest);
+  const latest = latestHeldEvent(heldEvents);
+  return latest ? heldEventDefaults(latest) : undefined;
 }
 
 export function heldEventDefaultsById(

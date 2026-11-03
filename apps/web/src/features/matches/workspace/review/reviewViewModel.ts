@@ -10,6 +10,7 @@ import {
 import {
   byPlayOrder,
   emptyIncidents,
+  hasNumberValue,
   numberValue,
   parseDraft,
 } from "@/features/matches/workspace/review/reviewDraftExtractors";
@@ -80,7 +81,7 @@ function collectWarnings(parsed: ParsedDrafts): string[] {
     warnings.push("総資産の読み取り結果がありません。順位と総資産は手入力してください。");
   if (!parsed.revenue) warnings.push("収益の読み取り結果がありません。収益は手入力してください。");
   if (!parsed.incidentLog)
-    warnings.push("事件簿の読み取り結果がありません。事件簿は0で初期化しました。");
+    warnings.push("事件簿の読み取り結果がありません。事件簿は手入力してください。");
   return warnings;
 }
 
@@ -93,10 +94,12 @@ function buildIncidentLookup(
     const counts = emptyIncidents();
     const confidence: Partial<Record<IncidentName, number | null>> = {};
     const evidence: Partial<Record<IncidentName, ReviewFieldEvidence>> = {};
+    const unread: IncidentName[] = [];
     const playerIndex = incidentLog?.payload.players.indexOf(entry) ?? -1;
     for (const name of incidentNames) {
       const field = entry.incidents[name];
       counts[name] = numberValue(field, 0);
+      if (!hasNumberValue(field)) unread.push(name);
       confidence[name] = field?.confidence ?? null;
       if (incidentLog && playerIndex >= 0) {
         evidence[name] = buildFieldEvidence({
@@ -110,7 +113,7 @@ function buildIncidentLookup(
         });
       }
     }
-    lookup.set(order, { counts, confidence, evidence });
+    lookup.set(order, { counts, confidence, evidence, unread });
   }
   return lookup;
 }
@@ -138,6 +141,8 @@ function padToFour(players: readonly ReviewPlayer[]): ReviewPlayer[] {
       revenueManYen: 0,
       incidents: emptyIncidents(),
       rawPlayerName: undefined,
+      // A padded row stands in for a player the result did not contain at all.
+      unread: ["rank", "totalAssetsManYen", "revenueManYen"],
       warnings: [],
       evidence: { incidents: {} },
       confidence: { rank: null, totalAssets: null, revenue: null, incidents: {} },

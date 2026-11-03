@@ -5,6 +5,7 @@ import type {
 import {
   byMemberId,
   emptyIncidents,
+  hasNumberValue,
   numberValue,
   resolveMemberIds,
   resolvePlayOrders,
@@ -170,6 +171,11 @@ export function buildReviewPlayers(
       rawPlayerName: entry?.raw_player_name.value ?? undefined,
       revenueManYen: numberValue(revenueEntry?.revenue_man_yen, 0),
       totalAssetsManYen: numberValue(entry?.total_assets_man_yen, 0),
+      unread: [
+        ...(hasNumberValue(entry?.rank) ? [] : (["rank"] as const)),
+        ...(hasNumberValue(entry?.total_assets_man_yen) ? [] : (["totalAssetsManYen"] as const)),
+        ...(hasNumberValue(revenueEntry?.revenue_man_yen) ? [] : (["revenueManYen"] as const)),
+      ],
       warnings: playerWarnings,
     };
   });

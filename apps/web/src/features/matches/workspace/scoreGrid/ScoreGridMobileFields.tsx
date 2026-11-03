@@ -164,6 +164,7 @@ export function MobilePlayerNumericField({
   registerCellRef,
   reviewItem,
   reviewed,
+  unread,
 }: {
   allowSign?: boolean;
   cellId: string;
@@ -181,6 +182,7 @@ export function MobilePlayerNumericField({
   registerCellRef: ScoreGridCellRegistry["registerCellRef"];
   reviewItem: ReviewItem | undefined;
   reviewed: boolean;
+  unread: boolean;
 }) {
   return (
     <label className={cn(fieldText.label, "grid")} htmlFor={cellId}>
@@ -202,6 +204,7 @@ export function MobilePlayerNumericField({
         reviewMessage={reviewItem?.message}
         row={index}
         showStateLabel
+        unread={unread}
         validationPath={keyToPath(index, field)}
         value={player[field]}
         onPlayerCommit={onPlayerCommit}

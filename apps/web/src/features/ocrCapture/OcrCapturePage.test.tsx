@@ -19,6 +19,7 @@ import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
+import { makeHeldEventDetailResponse } from "@/test/factories/heldEvents";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -564,16 +565,16 @@ describe("OcrCapturePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId/summary", ({ params }) =>
-        HttpResponse.json({
-          draftCount: 1,
-          drafts: [],
-          heldAt: "2026-02-03T04:05:06.000Z",
-          id: String(params["heldEventId"]),
-          matchCount: 3,
-          matches: [],
-          nextMatchNo: 7,
-        }),
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            draftCount: 1,
+            heldAt: "2026-02-03T04:05:06.000Z",
+            id: String(params["heldEventId"]),
+            matchCount: 3,
+            nextMatchNo: 7,
+          }),
+        ),
       ),
       http.post("/api/match-drafts", async ({ request }) => {
         createdDrafts.push((await request.json()) as MatchDraftRequestBody);

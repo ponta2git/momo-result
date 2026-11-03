@@ -120,8 +120,38 @@ describe("draftToMatchForm", () => {
     expect(initialData.warnings).toEqual([
       "総資産の読み取り結果がありません。順位と総資産は手入力してください。",
       "収益の読み取り結果がありません。収益は手入力してください。",
-      "事件簿の読み取り結果がありません。事件簿は0で初期化しました。",
+      "事件簿の読み取り結果がありません。事件簿は手入力してください。",
     ]);
+  });
+
+  it("starts each value OCR could not read as an empty input instead of 0", () => {
+    const totalAssets = createSampleDraft("total_assets");
+    const payload = totalAssets.payloadJson as {
+      players: Array<{ total_assets_man_yen: { value: number | null } }>;
+    };
+    payload.players[0]!.total_assets_man_yen.value = null;
+    const { values } = draftToMatchForm({
+      draftByKind: { total_assets: totalAssets, revenue: createSampleDraft("revenue") },
+      nowIso: baseIso,
+    });
+
+    // The unread total sorts last; without an incident log every count is unread.
+    expect(values.players[3]!.memberId).toBe("member_ponta");
+    expect(values.numericDrafts).toEqual({
+      "players.3.totalAssetsManYen": "",
+      ...Object.fromEntries(
+        [0, 1, 2, 3].flatMap((row) =>
+          [
+            "destination",
+            "plusStation",
+            "minusStation",
+            "cardStation",
+            "cardShop",
+            "suriNoGinji",
+          ].map((key) => [`players.${row}.incidents.${key}`, ""]),
+        ),
+      ),
+    });
   });
 
   it("omits matchDraftId when not provided", () => {

@@ -10,6 +10,8 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
   const { actions, options, values } = view;
   const fieldError = (path: string) =>
     view.validation.errorPathSet.has(path) ? "未入力です" : undefined;
+  // シーズン and マップ cannot be chosen before 作品, so the missing 作品 carries the one error.
+  const titleScopedError = (path: string) => (values.gameTitleId ? fieldError(path) : undefined);
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -89,7 +91,7 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
         <SelectField
           data-validation-path="seasonMasterId"
           disabled={!values.gameTitleId}
-          error={fieldError("seasonMasterId")}
+          error={titleScopedError("seasonMasterId")}
           label="シーズン（必須）"
           options={[
             { label: "未選択", value: "" },
@@ -107,7 +109,7 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
         <SelectField
           data-validation-path="mapMasterId"
           disabled={!values.gameTitleId}
-          error={fieldError("mapMasterId")}
+          error={titleScopedError("mapMasterId")}
           label="マップ（必須）"
           options={[
             { label: "未選択", value: "" },

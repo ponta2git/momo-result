@@ -1,6 +1,27 @@
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
 import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import { incidentDefinitions } from "@/shared/domain/incidents";
+import { memberDisplayName } from "@/shared/domain/members";
+
+const playerValueLabels: Readonly<Record<string, string>> = {
+  rank: "順位",
+  revenueManYen: "収益",
+  totalAssetsManYen: "総資産",
+  ...Object.fromEntries(
+    incidentDefinitions.map((definition) => [`incidents.${definition.key}`, definition.label]),
+  ),
+};
+
+/** Names the empty input, so the message points at one cell among the four players' values. */
+function emptyValueMessage(values: MatchFormValues, path: string): string {
+  const match = /^players\.(\d+)\.(.+)$/u.exec(path);
+  const player = match ? values.players[Number(match[1])] : undefined;
+  const label = match?.[2] ? playerValueLabels[match[2]] : undefined;
+  return player && label
+    ? `${memberDisplayName(player.memberId)}の${label}を入力してください`
+    : "値を入力してください";
+}
 
 type ValidationResult = {
   firstMessage?: string;
@@ -36,11 +57,11 @@ export function validateMatchForm(values: MatchFormValues): ValidationResult {
     ),
   );
   const pathSet = new Set(paths);
-  const messages = result.error.issues.map((issue, index) =>
-    values.numericDrafts?.[paths[index] ?? ""] !== undefined && issue.code === "invalid_type"
-      ? "数値を入力してください"
-      : issue.message,
-  );
+  const messages = result.error.issues.map((issue, index) => {
+    const draft = values.numericDrafts?.[paths[index] ?? ""];
+    if (draft === undefined || issue.code !== "invalid_type") return issue.message;
+    return draft === "" ? emptyValueMessage(values, paths[index] ?? "") : "数値を入力してください";
+  });
 
   return {
     ...(messages[0] ? { firstMessage: messages[0] } : {}),

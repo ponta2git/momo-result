@@ -52,6 +52,7 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | 前後移動 primitive | `AdjacentNavigation` |
 | プレー順 marker、member sequence label | `PlayOrderMark`、`MemberSequenceLabel` |
 | 面の hover feedback hook | `useSurfaceFeedback` |
+| 開催から始める記録の初期値（開催・次の試合番号・直前の試合の条件、候補が一つの選択） | `shared/heldEvents/recordContext.ts` の `fillRecordSetup`、開催の読み直しは `useRecordContext` |
 | 共通 QueryClient と自動再取得の契約 | `app/queryClient.ts` の `queryClient`、受付済み処理の完了確認は `shared/api/completionCheck.ts` |
 | 共通の許可判断と本人情報 | `shared/auth` |
 | 画面をまたぐ toast の共通 host | `shared/ui/feedback/ToastHost.tsx` の `ToastHost`。`app/AppShell.tsx` が配置する |
@@ -89,7 +90,7 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | --- | --- | --- |
 | 試合一覧・開催一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
 | 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
-| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える |
+| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える。OCR が読み取れなかった値は空の数値文字列から始め、0 で補わない |
 | マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
 | 保存・削除・OCR 開始・権限 / 通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
 | 開催選択・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |

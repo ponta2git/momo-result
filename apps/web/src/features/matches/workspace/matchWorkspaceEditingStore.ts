@@ -21,12 +21,11 @@ import type {
   MatchWorkspaceEditingState,
 } from "@/features/matches/workspace/matchWorkspaceEditing";
 import type { MatchWorkspaceSessionDraft } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
-import {
-  buildReviewItems,
-  countChangedReviewCells,
-} from "@/features/matches/workspace/review/reviewProgress";
+import { buildReviewItems } from "@/features/matches/workspace/review/reviewProgress";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
+import { unreadFieldsOf } from "@/features/matches/workspace/review/unreadFields";
+import type { UnreadField } from "@/features/matches/workspace/review/unreadFields";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 
 export type WorkspaceSubscription<T> = {
@@ -61,6 +60,8 @@ export type MatchWorkspaceScoreRowView = {
   readonly acknowledgedCellIds: readonly string[];
   readonly items: ReadonlyArray<Readonly<ReviewItem>>;
   readonly synced: boolean;
+  /** Values OCR left unread for this row; their inputs ask for entry instead of a reading. */
+  readonly unreadFields: readonly UnreadField[];
 };
 export type MatchWorkspaceEditorBindings = {
   readonly setup: WorkspaceSubscription<Readonly<MatchSetupValues>>;
@@ -77,6 +78,9 @@ export type MatchWorkspaceEditorBindings = {
     readonly changeSetup: <K extends Exclude<keyof MatchSetupValues, "heldEventId">>(
       field: K,
       value: MatchSetupValues[K],
+    ) => void;
+    readonly fillSetup: (
+      patch: Partial<Pick<MatchSetupValues, "gameTitleId" | "mapMasterId" | "seasonMasterId">>,
     ) => void;
     readonly changeNote: (value: string) => void;
     readonly changeAchievements: (value: MatchAchievementSelection[]) => void;
@@ -101,6 +105,15 @@ function sameList<T>(
   return (
     left.length === right.length && left.every((item, index) => equal(item, right[index] as T))
   );
+}
+
+function readUnreadFields(current: MatchWorkspaceEditingState, index: number) {
+  const player = current.values.players[index];
+  return unreadFieldsOf({
+    incidentByPlayOrder: current.initialData?.incidentByPlayOrder,
+    original: current.initialData?.originalPlayers[index],
+    playOrder: player?.playOrder ?? 0,
+  });
 }
 
 /** One store per keyed workspace. Only editing state lives here; Query and IO stay in hooks. */
@@ -152,7 +165,6 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
     originalPlayers: undefined,
     incidentByPlayOrder: undefined,
   });
-  let changedCount = 0;
   function readReviewItems(current: MatchWorkspaceEditingState) {
     if (current.values.players !== previousPlayers || current.initialData !== previousInitialData) {
       previousPlayers = current.values.players;
@@ -164,7 +176,6 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
       };
       const nextItems = buildReviewItems(input);
       if (!sameList(items, nextItems, sameFields)) items = nextItems;
-      changedCount = countChangedReviewCells(input);
     }
     return items;
   }
@@ -233,6 +244,7 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
           ),
           items: readReviewItems(current).filter((item) => item.row === index),
           synced: current.lastIncidentSyncPlayerIndex === index,
+          unreadFields: readUnreadFields(current, index),
         };
       },
       (left, right) =>
@@ -240,6 +252,7 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
         left.originalPlayer === right.originalPlayer &&
         left.originalByOrder === right.originalByOrder &&
         left.synced === right.synced &&
+        sameList(left.unreadFields, right.unreadFields) &&
         sameFields(left.numericDrafts, right.numericDrafts) &&
         sameList(left.acknowledgedCellIds, right.acknowledgedCellIds) &&
         sameList(left.items, right.items, sameFields),
@@ -258,8 +271,6 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
       achievements: current.values.achievements ?? noAchievements,
       playedAt: current.values.playedAt,
       players: current.values.players,
-      changedCount,
-      totalCount: reviewList.length,
       unresolvedCount: reviewList.filter(
         (item) => !current.acknowledgedCellIds.includes(item.cellId),
       ).length,
@@ -272,6 +283,9 @@ export function createMatchWorkspaceEditingStore(nowIso: string) {
       field: K,
       value: MatchSetupValues[K],
     ) => commit({ type: "change-setup", field, value }),
+    fillSetup: (
+      patch: Partial<Pick<MatchSetupValues, "gameTitleId" | "mapMasterId" | "seasonMasterId">>,
+    ) => commit({ type: "fill-setup", patch }),
     changeNote: (value: string) => commit({ type: "change-note", value }),
     changeAchievements: (value: MatchAchievementSelection[]) =>
       commit({ type: "change-achievements", value }),

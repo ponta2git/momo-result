@@ -78,9 +78,12 @@ export function useMatchWorkspace(input: {
     mode,
     onInitialize: editingStore.initialize,
     onSelectHeldEvent: editingStore.actions.selectHeldEvent,
+    onFillSetup: editingStore.actions.fillSetup,
     readNowIso,
     preferredHeldEventId,
-    preferredHeldEventPending: load.preferredHeldEventPending,
+    recordContextPending: load.recordContextPending,
+    setup: selection,
+    mastersPending: load.mastersPending,
     reviewDraftIdList: draftReview.draftIdList,
     reviewDraftIds: draftReview.draftIds,
     sourceImages: resources.sourceImageItems,
@@ -97,7 +100,9 @@ export function useMatchWorkspace(input: {
   });
   const workspaceLoading = isMatchWorkspaceLoading({
     confirmedDraftLoaded: view.confirmedDraftLoaded,
-    waitingForData: initialization.status === "waiting-for-data",
+    // Defaults decide the starting values the user's input is told apart from, so the form opens
+    // once they are filled rather than taking keystrokes into that baseline.
+    waitingForData: initialization.status !== "ready",
     reviewBlocked: draftReview.blocked,
     initializationFailed: load.initializationFailed,
   });

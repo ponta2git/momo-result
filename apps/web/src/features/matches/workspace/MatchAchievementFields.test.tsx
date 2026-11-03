@@ -87,7 +87,6 @@ describe("MatchAchievementFields", () => {
     });
     server.use(http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)));
     renderFields();
-    await user.click(screen.getByRole("button", { name: "試合と一緒に実績を記録" }));
     expect(
       await screen.findByRole("link", { name: "手入力のテスト実績・いーゆーの保存済み実績を見る" }),
     ).toBeVisible();
@@ -115,7 +114,6 @@ describe("MatchAchievementFields", () => {
     const catalog = makeAchievementCatalog({ items: [makeAchievementItem()] });
     server.use(http.get("/api/achievements/catalog", () => HttpResponse.json(catalog)));
     const client = renderFields();
-    await user.click(screen.getByRole("button", { name: "試合と一緒に実績を記録" }));
     await user.click(await screen.findByRole("checkbox", { name: "手入力のテスト実績・ぽんた" }));
     catalog.items[0]!.version = "2";
     await act(() =>

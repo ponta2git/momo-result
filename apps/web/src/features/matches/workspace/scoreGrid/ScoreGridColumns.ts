@@ -27,7 +27,6 @@ export type ScoreGridColumnDescriptor =
       header: IncidentLabel;
       incidentKey: IncidentKey;
       kind: "incident";
-      widthClass: string;
     };
 export type IncidentScoreGridColumnDescriptor = Extract<
   ScoreGridColumnDescriptor,
@@ -41,18 +40,27 @@ function isIncidentScoreGridColumn(
 }
 
 /**
- * The fixed table layout shares its width in these proportions. They add up to just under the
- * 64rem minimum, where each column still fits its one-line header and its control, so wider
- * tables only add room. Incident columns follow the length of their labels.
+ * The fixed table layout shares its width in these proportions. The player columns add up to
+ * the width where each still fits its one-line header and its control. Incident counts share
+ * one column: in a table as wide as the one-line layout they sit side by side under their own
+ * headers, and in a narrower one they fold into two lines of three with their names beside each
+ * input, so the table fits next to the source image (UI rule: 編集中の field と照合する画像の
+ * 該当箇所を同時に見られる配置).
  */
-const incidentWidthClass = {
-  destination: "w-[4.5rem]",
-  plusStation: "w-[4.5rem]",
-  minusStation: "w-[5rem]",
-  cardStation: "w-[4.5rem]",
-  cardShop: "w-[6rem]",
-  suriNoGinji: "w-[5rem]",
-} as const satisfies Record<IncidentKey, string>;
+export const scoreGridContainerClass = "@container/score-grid";
+/**
+ * Each count gets 4.5rem, enough for its longest name and for an error-sized「未読み取り」:
+ * six across with their gaps take 33rem, three across 16.5rem.
+ */
+export const scoreGridTableWidthClass = "min-w-[50.5rem] @min-[67rem]/score-grid:min-w-[67rem]";
+export const incidentScoreGridColumnWidthClass = "w-[16.5rem] @min-[67rem]/score-grid:w-[33rem]";
+/** Header and cells share one template so each count stays under its own name. */
+export const incidentScoreGridLayoutClass =
+  "grid grid-cols-3 gap-x-4 gap-y-2 @min-[67rem]/score-grid:grid-cols-6";
+/** Names shown beside each count only while the counts are folded. */
+export const incidentScoreGridInlineLabelClass = "@min-[67rem]/score-grid:hidden";
+export const incidentScoreGridHeaderLabelsClass = "hidden @min-[67rem]/score-grid:grid";
+export const incidentScoreGridHeaderGroupClass = "@min-[67rem]/score-grid:sr-only";
 
 export const scoreGridColumns: ScoreGridColumnDescriptor[] = [
   {
@@ -90,12 +98,15 @@ export const scoreGridColumns: ScoreGridColumnDescriptor[] = [
     header,
     incidentKey,
     kind: "incident",
-    widthClass: incidentWidthClass[incidentKey],
   })),
 ];
 
 export const gridColumns = scoreGridColumns.map((column) => column.column);
 export const incidentScoreGridColumns = scoreGridColumns.filter(isIncidentScoreGridColumn);
+export const playerScoreGridColumns = scoreGridColumns.filter(
+  (column): column is Exclude<ScoreGridColumnDescriptor, { kind: "incident" }> =>
+    !isIncidentScoreGridColumn(column),
+);
 
 export function playerSlotKey(index: number): string {
   return workspaceInputMembers[index]?.memberId ?? `extra-player-${index}`;

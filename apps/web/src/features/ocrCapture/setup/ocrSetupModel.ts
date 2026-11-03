@@ -6,6 +6,8 @@ import type {
   MapMasterResponse,
   SeasonMasterResponse,
 } from "@/shared/api/masters";
+import { fillRecordSetup } from "@/shared/heldEvents/recordContext";
+import type { RecordSetupChoice } from "@/shared/heldEvents/recordContext";
 
 export type HeldEventContextState = "idle" | "pending" | "resolved" | "notFound" | "failed";
 
@@ -124,11 +126,19 @@ export function sameSetupValue(left: OcrSetupValues, right: OcrSetupValues): boo
   );
 }
 
+/**
+ * Drops choices that no longer exist and fills the empty ones by the rule every way of recording
+ * shares (UI rule: 対象と導線): the held event's next number and previous match, otherwise a lone
+ * candidate. Nothing is decided from the held event while its own read is still pending, since a
+ * cached entry can predate a match confirmed or deleted since.
+ */
 export function deriveValidSetupValue(args: {
   gameTitles: GameTitleResponse[];
   heldEventNotFound: boolean;
   heldEvents: HeldEventResponse[];
   mapMasters: MapMasterResponse[];
+  previousMatchSetup: RecordSetupChoice | undefined;
+  recordContextPending: boolean;
   seasonMasters: SeasonMasterResponse[];
   value: OcrSetupValues;
 }): OcrSetupValues {
@@ -142,34 +152,51 @@ export function deriveValidSetupValue(args: {
     const selectedHeldEvent = heldEvents.find((event) => event.id === next.heldEventId);
     if (heldEventNotFound) {
       patch({ heldEventId: "", matchNoInEvent: undefined });
-    } else if (selectedHeldEvent && (!next.matchNoInEvent || next.matchNoInEvent < 1)) {
+    } else if (
+      selectedHeldEvent &&
+      !args.recordContextPending &&
+      (!next.matchNoInEvent || next.matchNoInEvent < 1)
+    ) {
       patch({ matchNoInEvent: selectedHeldEvent.nextMatchNo });
     }
   }
 
+  if (
+    next.gameTitleId &&
+    gameTitles.length > 0 &&
+    !gameTitles.some((gameTitle) => gameTitle.id === next.gameTitleId)
+  ) {
+    patch({ gameTitleId: "", mapMasterId: "", seasonMasterId: "" });
+  }
   if (next.gameTitleId) {
-    const stillValid = gameTitles.some((gameTitle) => gameTitle.id === next.gameTitleId);
-    const first = gameTitles[0];
-    if (!stillValid && first) {
-      patch({ gameTitleId: first.id, mapMasterId: "", seasonMasterId: "" });
+    const scopedMaps = mapMasters.filter((item) => item.gameTitleId === next.gameTitleId);
+    if (
+      next.mapMasterId &&
+      scopedMaps.length > 0 &&
+      !scopedMaps.some((item) => item.id === next.mapMasterId)
+    ) {
+      patch({ mapMasterId: "" });
     }
-  } else {
-    const fallback = gameTitles[0];
-    if (fallback) patch({ gameTitleId: fallback.id });
+    const scopedSeasons = seasonMasters.filter((item) => item.gameTitleId === next.gameTitleId);
+    if (
+      next.seasonMasterId &&
+      scopedSeasons.length > 0 &&
+      !scopedSeasons.some((item) => item.id === next.seasonMasterId)
+    ) {
+      patch({ seasonMasterId: "" });
+    }
   }
 
-  if (next.gameTitleId) {
-    const firstMap = mapMasters.find((item) => item.gameTitleId === next.gameTitleId);
-    const mapStillValid = mapMasters.some(
-      (item) => item.id === next.mapMasterId && item.gameTitleId === next.gameTitleId,
+  if (!args.recordContextPending) {
+    patch(
+      fillRecordSetup({
+        value: next,
+        previous: next.heldEventId ? args.previousMatchSetup : undefined,
+        gameTitles,
+        seasons: seasonMasters,
+        maps: mapMasters,
+      }),
     );
-    if (!mapStillValid && firstMap) patch({ mapMasterId: firstMap.id });
-
-    const firstSeason = seasonMasters.find((item) => item.gameTitleId === next.gameTitleId);
-    const seasonStillValid = seasonMasters.some(
-      (item) => item.id === next.seasonMasterId && item.gameTitleId === next.gameTitleId,
-    );
-    if (!seasonStillValid && firstSeason) patch({ seasonMasterId: firstSeason.id });
   }
 
   return next;

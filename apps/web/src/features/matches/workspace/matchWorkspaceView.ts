@@ -117,8 +117,6 @@ export function buildMatchWorkspaceSubmitView(input: {
   cancelDraftConfirmOpen: boolean;
   operationError: MatchWorkspaceOperationError | null;
   validationMessage: string;
-  valid: boolean;
-  firstValidationMessage: string | undefined;
 }): Omit<MatchWorkspaceSubmitView, "action"> & {
   label: MatchWorkspaceSubmitView["action"]["label"];
 } {
@@ -144,13 +142,10 @@ export function buildMatchWorkspaceSubmitView(input: {
         input.operationError?.kind === "cancelDraft"
           ? validationError
           : (operationError ?? validationError),
+      // A standing prompt for the next input would repeat the error shown after an attempt.
       message: input.createEventPending
         ? "開催の作成が完了すると、入力内容を保存・確定できます。"
-        : input.valid
-          ? input.mode === "edit"
-            ? "入力内容を保存できます"
-            : "確定前の確認へ進めます"
-          : (input.firstValidationMessage ?? "入力内容に不足があります"),
+        : undefined,
     },
   };
 }

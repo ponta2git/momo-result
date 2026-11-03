@@ -3,7 +3,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewItem } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
-import { gridColumns, keyToPath } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
+import {
+  gridColumns,
+  keyToPath,
+  scoreGridContainerClass,
+} from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridDesktopTable } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktop";
 import { handleScoreGridKeydown } from "@/features/matches/workspace/scoreGrid/ScoreGridKeyboard";
 import { ScoreGridMobileCards } from "@/features/matches/workspace/scoreGrid/ScoreGridMobile";
@@ -95,8 +99,11 @@ const ScoreGridContent = memo(function ScoreGridContent({
       (pendingFocus.force || current === pendingFocus.origin || current === document.body)
     ) {
       next.focus({ preventScroll: true });
+      // The control itself must be in view, and its label too: revealing only the label can
+      // leave the control just past the bottom edge.
+      revealPageElement(next);
       const label = (next as HTMLInputElement | HTMLButtonElement).labels?.[0];
-      revealPageElement(label ?? next);
+      if (label) revealPageElement(label);
     }
   }, [pendingFocus]);
 
@@ -197,7 +204,11 @@ const ScoreGridContent = memo(function ScoreGridContent({
   }, []);
 
   return (
-    <section className="grid min-w-0 gap-4" data-validation-path="players" tabIndex={-1}>
+    <section
+      className={cn("grid min-w-0 gap-4", scoreGridContainerClass)}
+      data-validation-path="players"
+      tabIndex={-1}
+    >
       <div className="grid gap-1">
         <h2 className={contentText.heading} id="score-grid-heading">
           4人分の結果を確認・修正

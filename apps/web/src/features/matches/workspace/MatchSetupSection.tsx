@@ -62,17 +62,29 @@ export function MatchSetupSection({ mastersNavigation, mode, view }: MatchSetupS
     setPreviousHasErrors(hasErrors);
     if (hasErrors) setEditorOpen(true);
   }
-  const contextSummary = contextIncomplete
-    ? "必須条件を設定してください"
-    : [
-        selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
-        formatMatchNoInEvent(values.matchNoInEvent),
-        selectedGameTitle?.name,
-        selectedSeason?.name,
-        selectedMap?.name,
-      ]
-        .filter(Boolean)
-        .join("・");
+  // Conditions still to choose are not an error until the user tries to proceed (UI rule:
+  // 準備不足は操作を試みる前から error として示さない); until then the summary names them.
+  const missingConditions = [
+    selectedHeldEvent ? null : "開催",
+    selectedGameTitle ? null : "作品",
+    selectedSeason ? null : "シーズン",
+    selectedMap ? null : "マップ",
+  ].filter(Boolean);
+  const contextSummary =
+    contextIncomplete && hasErrors
+      ? "必須条件を設定してください"
+      : [
+          selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
+          formatMatchNoInEvent(values.matchNoInEvent),
+          selectedGameTitle?.name,
+          selectedSeason?.name,
+          selectedMap?.name,
+          contextIncomplete && missingConditions.length > 0
+            ? `未選択：${missingConditions.join("・")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("・");
   return (
     <section>
       <h2 className="sr-only">保存先と試合条件</h2>
@@ -89,9 +101,7 @@ export function MatchSetupSection({ mastersNavigation, mode, view }: MatchSetupS
               <span
                 className={cn(
                   "tabular-nums",
-                  hasErrors || contextIncomplete
-                    ? fieldText.error
-                    : cn(contentText.supporting, "truncate"),
+                  hasErrors ? fieldText.error : cn(contentText.supporting, "truncate"),
                 )}
                 title={contextSummary}
               >

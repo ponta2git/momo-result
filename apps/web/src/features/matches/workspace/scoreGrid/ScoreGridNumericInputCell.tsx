@@ -2,6 +2,7 @@ import { memo, useCallback, useRef } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
+import { cn } from "@/shared/ui/cn";
 import { InputControl } from "@/shared/ui/forms/Control";
 import type { ControlTone } from "@/shared/ui/forms/Control";
 import { contentText, fieldText } from "@/shared/ui/typography";
@@ -26,12 +27,27 @@ type CellViewState = {
 
 function cellViewState(args: {
   currentValue: number;
+  empty: boolean;
   error: boolean;
   originalValue: number | undefined;
   reviewMessage: string | undefined;
   reviewed: boolean;
   synced: boolean;
+  unread: boolean;
 }): CellViewState {
+  // An unread value is neither a reading to confirm nor a correction of one.
+  if (args.unread) {
+    return args.empty
+      ? {
+          description: "読み取れなかったため、元画像を見て入力してください",
+          label: "未読み取り",
+          tone: args.error ? "default" : "review",
+        }
+      : args.error
+        ? { label: "要確認", tone: "default" }
+        : { label: "手入力", tone: "default" };
+  }
+
   if (args.error) {
     return {
       label: "要確認",
@@ -129,6 +145,8 @@ export type NumericInputCellInteraction = {
 
 export type NumericInputCellState = {
   error?: boolean | undefined;
+  /** OCR left this value unread: the input starts empty and asks for entry. */
+  unread?: boolean | undefined;
   originalValue?: number | undefined;
   reviewMessage?: string | undefined;
   reviewed?: boolean | undefined;
@@ -157,6 +175,7 @@ export const NumericInputCell = memo(function NumericInputCell({
   row,
   showStateLabel = false,
   synced = false,
+  unread = false,
   validationPath,
   value,
   onCommit,
@@ -179,11 +198,13 @@ export const NumericInputCell = memo(function NumericInputCell({
   const viewState: CellViewState = showStateLabel
     ? cellViewState({
         currentValue,
+        empty: inputValue.trim() === "",
         error,
         originalValue,
         reviewMessage,
         reviewed,
         synced,
+        unread,
       })
     : { tone: "default" };
 
@@ -273,7 +294,10 @@ export const NumericInputCell = memo(function NumericInputCell({
       {showStateLabel ? (
         <div className="min-h-5 pt-1">
           {viewState.label ? (
-            <p className={error ? fieldText.error : contentText.supporting} id={`${cellId}-status`}>
+            <p
+              className={cn(error ? fieldText.error : contentText.supporting, "whitespace-nowrap")}
+              id={`${cellId}-status`}
+            >
               {viewState.label}
               {viewState.description ? (
                 <span className="sr-only">：{viewState.description}</span>

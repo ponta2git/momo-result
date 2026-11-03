@@ -19,12 +19,16 @@ import { MatchCreatePage } from "@/features/matches/workspace/MatchCreatePage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import type { AuthMeResponse } from "@/shared/api/auth";
 import type { ConfirmMatchRequest } from "@/shared/api/matches";
+import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
+import { heldEventPickerPageSize } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
+import { makeHeldEventDetailResponse, makeHeldEventListItem } from "@/test/factories/heldEvents";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
+import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -209,6 +213,20 @@ describe("MatchCreatePage", () => {
         });
       }),
     );
+    const detailReads: string[] = [];
+    server.use(
+      http.get("/api/held-events/:heldEventId", ({ params }) => {
+        detailReads.push(String(params["heldEventId"]));
+        return HttpResponse.json(
+          makeHeldEventDetailResponse({
+            heldAt: "2026-06-01T00:00:00Z",
+            id: String(params["heldEventId"]),
+            matchCount: 8,
+            nextMatchNo: 9,
+          }),
+        );
+      }),
+    );
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={["/matches/new"]}>
@@ -220,6 +238,8 @@ describe("MatchCreatePage", () => {
     );
     await waitForMatchCreateReady();
     await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
+    // The newest event is read on its own for its number and previous match, not a second page.
+    expect(detailReads).toEqual(["held-latest"]);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.get("page")).toBe("1");
     expect(requests[0]?.get("pageSize")).toBe("20");
@@ -359,6 +379,16 @@ describe("MatchCreatePage", () => {
           ],
         }),
       ),
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            heldAt: "2026-03-01T00:00:00.000Z",
+            id: String(params["heldEventId"]),
+            matchCount: 8,
+            nextMatchNo: 9,
+          }),
+        ),
+      ),
     );
     renderWorkspace();
     await waitForMatchCreateReady();
@@ -477,16 +507,16 @@ describe("MatchCreatePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId/summary", ({ params }) =>
-        HttpResponse.json({
-          draftCount: 2,
-          drafts: [],
-          heldAt: "2026-01-01T00:00:00.000Z",
-          id: String(params["heldEventId"]),
-          matchCount: 3,
-          matches: [],
-          nextMatchNo: 8,
-        }),
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            draftCount: 2,
+            heldAt: "2026-01-01T00:00:00.000Z",
+            id: String(params["heldEventId"]),
+            matchCount: 3,
+            nextMatchNo: 8,
+          }),
+        ),
       ),
     );
 
@@ -505,6 +535,117 @@ describe("MatchCreatePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
+  });
+
+  it("numbers the match from a fresh read of its held event, not an older list entry", async () => {
+    setDevUser();
+    // A list cached before a deletion still says 3; the event's own read says 2.
+    queryClient.setQueryData(
+      heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }).queryKey,
+      {
+        items: [makeHeldEventListItem({ id: "held-1", matchCount: 2, nextMatchNo: 3 })],
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          page: 1,
+          pageSize: heldEventPickerPageSize,
+          totalItems: 1,
+          totalPages: 1,
+        },
+        totalMatchCount: 2,
+      },
+    );
+    server.use(
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({ id: String(params["heldEventId"]), nextMatchNo: 2 }),
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?heldEventId=held-1"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitForMatchCreateReady();
+    expect(screen.getByLabelText("試合番号")).toHaveValue("2");
+  });
+
+  it("carries the previous match's conditions over, and picks a lone candidate otherwise", async () => {
+    setDevUser();
+    mswState.gameTitles.push({
+      ...mswState.gameTitles[0]!,
+      displayOrder: 2,
+      id: "gt_world",
+      name: "ワールド",
+    });
+    mswState.seasonMasters.push(
+      { ...mswState.seasonMasters[0]!, displayOrder: 2, id: "season_next", name: "来シーズン" },
+      {
+        ...mswState.seasonMasters[0]!,
+        gameTitleId: "gt_world",
+        id: "season_world",
+        name: "ワールド通常",
+      },
+    );
+    mswState.mapMasters.push(
+      { ...mswState.mapMasters[0]!, displayOrder: 2, id: "map_west", name: "西日本編" },
+      { ...mswState.mapMasters[0]!, gameTitleId: "gt_world", id: "map_world", name: "世界" },
+    );
+    server.use(
+      http.get("/api/held-events/:heldEventId", ({ params }) =>
+        HttpResponse.json(
+          makeHeldEventDetailResponse({
+            id: String(params["heldEventId"]),
+            matchCount: 2,
+            nextMatchNo: 3,
+            matches: [1, 2].map((matchNoInEvent) => ({
+              gameTitleId: "gt_momotetsu_2",
+              mapMasterId: matchNoInEvent === 2 ? "map_west" : "map_east",
+              matchId: `match-${matchNoInEvent}`,
+              matchNoInEvent,
+              ownerMemberId: "member_ponta",
+              playedAt: "2026-01-01T00:00:00.000Z",
+              seasonMasterId: matchNoInEvent === 2 ? "season_next" : "season_current",
+            })),
+          }),
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?heldEventId=held-1"]}>
+          <Routes>
+            <Route path="/matches/new" element={<MatchCreatePage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitForMatchCreateReady();
+    // The latest match (第2試合) decides, not the first candidates of each list.
+    expect(screen.getByRole("combobox", { name: "作品（必須）" })).toHaveTextContent("桃太郎電鉄2");
+    expect(screen.getByRole("combobox", { name: "シーズン（必須）" })).toHaveTextContent(
+      "来シーズン",
+    );
+    expect(screen.getByRole("combobox", { name: "マップ（必須）" })).toHaveTextContent("西日本編");
+    expect(screen.getByLabelText("試合番号")).toHaveValue("3");
+
+    // Another 作品 has one シーズン and one マップ, so choosing it chooses them too.
+    await selectOption(user, screen.getByRole("combobox", { name: "作品（必須）" }), "gt_world");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "シーズン（必須）" })).toHaveTextContent(
+        "ワールド通常",
+      ),
+    );
+    expect(screen.getByRole("combobox", { name: "マップ（必須）" })).toHaveTextContent("世界");
   });
 
   it("preserves user input when only the preferred event changes", async () => {

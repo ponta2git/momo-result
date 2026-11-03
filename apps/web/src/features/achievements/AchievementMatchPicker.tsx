@@ -1,8 +1,10 @@
 import { useAchievementMatchPicker } from "@/features/achievements/useAchievementMatchPicker";
 import type { AchievementItem } from "@/shared/api/achievements";
+import { cursorForPage } from "@/shared/lib/cursorPagination";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
@@ -84,28 +86,19 @@ export function AchievementMatchPicker({
         })}
       </ul>
       {empty ? <p className={contentText.body}>確定済みの試合はありません。</p> : null}
-      {pagination ? (
-        <div className="flex items-center justify-between gap-2">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!pagination.hasPreviousPage || refreshing}
-            onClick={() => setCursor(pagination.previousCursor)}
-          >
-            前へ
-          </Button>
-          <span className={cn(contentText.supporting, "tabular-nums")}>
-            {pagination.page}／{Math.max(1, pagination.totalPages)}ページ
-          </span>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!pagination.hasNextPage || refreshing}
-            onClick={() => setCursor(pagination.nextCursor)}
-          >
-            次へ
-          </Button>
-        </div>
+      {pagination && pagination.totalPages > 1 ? (
+        <PaginationControls
+          ariaLabel="試合候補のページネーション"
+          disabled={refreshing}
+          pagination={pagination}
+          placement="embedded"
+          variant="compact"
+          onPageChange={(page) => {
+            const cursor = cursorForPage(pagination, page);
+            // An empty cursor is the first page; an unknown edge leaves the page unchanged.
+            if (cursor !== undefined) setCursor(cursor || undefined);
+          }}
+        />
       ) : null}
     </div>
   );

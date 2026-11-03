@@ -6,6 +6,7 @@ import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { RankBadge } from "@/shared/matches/RankBadge";
 import { cn } from "@/shared/ui/cn";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchResultLedgerRow = MatchPerformanceContextRow & {
@@ -44,7 +45,7 @@ export function MatchResultLedger({
               presentation === "embedded" ? "rounded-sm" : "rounded-md",
             )}
           >
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
                 <RankBadge rank={row.rank} size="md" />
                 <h3 className={cn(contentText.primary, "min-w-0")}>
@@ -59,13 +60,13 @@ export function MatchResultLedger({
             <dl className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-4">
               <div className="min-w-0">
                 <dt className={contentText.supporting}>総資産</dt>
-                <dd className={cn(contentText.primary, "mt-1 break-words tabular-nums")}>
+                <dd className={cn(contentText.primary, "mt-0.5 break-words tabular-nums")}>
                   {formatManYen(row.totalAssetsManYen)}
                 </dd>
               </div>
               <div className="min-w-0">
                 <dt className={contentText.supporting}>物件収益</dt>
-                <dd className={cn(contentText.body, "mt-1 break-words tabular-nums")}>
+                <dd className={cn(contentText.body, "mt-0.5 break-words tabular-nums")}>
                   {formatManYen(row.revenueManYen)}
                 </dd>
                 <dd className={cn(contentText.supporting, "mt-1 grid gap-1 tabular-nums")}>
@@ -81,9 +82,10 @@ export function MatchResultLedger({
                 </dd>
               </div>
             </dl>
-            <dl className="grid gap-1">
+            <dl className="grid gap-0.5">
               <dt className={contentText.supporting}>通算平均順位</dt>
-              <dd>
+              {/* Every comparison state keeps the badge row height, so the late context does not move the card. */}
+              <dd className="flex min-h-6 flex-wrap items-center gap-2">
                 <AverageRankChange contextStatus={contextStatus} row={row} />
               </dd>
             </dl>
@@ -119,14 +121,10 @@ function AverageRankChange({
           row.cumulativeAverageAfter,
         )}`;
   return (
-    <span className="flex flex-wrap items-center gap-2">
+    <>
       <strong className={cn(contentText.body, "tabular-nums")}>{transition}</strong>
-      <span
-        className={cn("rounded-xs border px-2 py-0.5 text-xs/4 font-plain", trendTone(row.trend))}
-      >
-        {trendLabel(row)}
-      </span>
-    </span>
+      <span className={cn(compactBadgeClass, trendTone(row.trend))}>{trendLabel(row)}</span>
+    </>
   );
 }
 
@@ -159,6 +157,7 @@ function trendLabel(row: MatchResultLedgerRow): string {
   }`;
 }
 
+/** Improvement and decline keep their analysis colors; the badge recipe owns size and type. */
 function trendTone(trend: MatchResultLedgerRow["trend"]): string {
   if (trend === "improved") {
     return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10 text-[var(--color-analysis-positive)]";
@@ -166,5 +165,5 @@ function trendTone(trend: MatchResultLedgerRow["trend"]): string {
   if (trend === "declined") {
     return "border-[var(--color-analysis-negative)]/35 bg-[var(--color-analysis-negative)]/8 text-[var(--color-analysis-negative)]";
   }
-  return "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]";
+  return compactBadgeToneClass.neutral;
 }

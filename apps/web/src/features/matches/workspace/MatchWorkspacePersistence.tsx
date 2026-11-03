@@ -153,6 +153,7 @@ export function MatchWorkspacePersistence({
   });
   const validation = useMatchWorkspaceValidation({
     mode,
+    ready: input.enabled,
     showValidationErrors: showValidationErrors,
     values: editingSnapshot.values,
   });

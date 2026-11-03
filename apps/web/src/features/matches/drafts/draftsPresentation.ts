@@ -86,7 +86,7 @@ export function toDraftItemView(item: MatchSummaryResponse): DraftItemView | und
     id: item.id,
     matchDraftId: item.matchDraftId,
     status,
-    title: `${formatMatchNoInEvent(item.matchNoInEvent || undefined)} · ${item.mapName || "マップ未設定"}`,
+    title: `${formatMatchNoInEvent(item.matchNoInEvent || undefined)}・${item.mapName || "マップ未設定"}`,
     updatedAt: item.updatedAt,
     ...compact({
       primaryAction: primaryAction(status, item.matchDraftId),

@@ -10,7 +10,6 @@ import {
   playerRadarSettingThresholds,
   defaultAchievementCurve,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
@@ -19,6 +18,7 @@ import { InputControl } from "@/shared/ui/forms/Control";
 import { Field } from "@/shared/ui/forms/Field";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
@@ -98,36 +98,39 @@ export function PlayerRadarThresholdEditor({
             : "入力中の比較です。まだ適用されていません。";
   return (
     <section aria-label="採点境界の編集" className="grid min-w-0 grid-cols-1 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <ContentWithActions
+        actions={
+          <>
+            <Button disabled={disabled} size="sm" variant="quiet" onClick={editor.reset}>
+              編集開始時の値へ戻す
+            </Button>
+            {active ? (
+              <AlertDialog
+                title="編集内容を破棄しますか？"
+                description="入力した採点境界を破棄し、編集前の画面に戻ります。適用中の基準は変わりません。"
+                confirmLabel="編集内容を破棄する"
+                confirmDisabled={pending}
+                finalFocus={() =>
+                  exitTriggerRef.current?.isConnected
+                    ? exitTriggerRef.current
+                    : document.getElementById("radar-administration-heading")
+                }
+                trigger={
+                  <Button disabled={pending} ref={exitTriggerRef} size="sm" variant="secondary">
+                    編集をやめる
+                  </Button>
+                }
+                onConfirm={editor.discard}
+              />
+            ) : null}
+          </>
+        }
+      >
         <div className="grid gap-1">
           <h3 className={contentText.heading}>採点境界を調整</h3>
           <p className={contentText.supporting}>編集元: {editor.sourceLabel}</p>
         </div>
-        <div className={actionRowClass}>
-          <Button disabled={disabled} size="sm" variant="quiet" onClick={editor.reset}>
-            編集開始時の値へ戻す
-          </Button>
-          {active ? (
-            <AlertDialog
-              title="編集内容を破棄しますか？"
-              description="入力した採点境界を破棄し、編集前の画面に戻ります。適用中の基準は変わりません。"
-              confirmLabel="編集内容を破棄する"
-              confirmDisabled={pending}
-              finalFocus={() =>
-                exitTriggerRef.current?.isConnected
-                  ? exitTriggerRef.current
-                  : document.getElementById("radar-administration-heading")
-              }
-              trigger={
-                <Button disabled={pending} ref={exitTriggerRef} size="sm" variant="secondary">
-                  編集をやめる
-                </Button>
-              }
-              onConfirm={editor.discard}
-            />
-          ) : null}
-        </div>
-      </div>
+      </ContentWithActions>
       {editor.contextChanged ? (
         <Notice
           tone="warning"
@@ -199,7 +202,7 @@ export function PlayerRadarThresholdEditor({
                         : ""}
                     </p>
                     {achievementEditingReason ? (
-                      <p className={contentText.supporting}>
+                      <p className={cn(contentText.supporting, readableTextWidthClass)}>
                         {achievementEditingReason}
                         6軸だけを調整する場合、実績の基準は引き継ぎます。実績の境界も作るには編集を終了し、「最新の記録から作り直す」を選んでください。
                       </p>
@@ -306,9 +309,9 @@ export function PlayerRadarThresholdEditor({
                       );
                     })}
                   </fieldset>
-                  <div className="grid justify-items-start gap-2">
+                  <div className="grid justify-items-start gap-1">
                     {editor.replacesCandidate ? (
-                      <p className={contentText.supporting}>
+                      <p className={cn(contentText.supporting, readableTextWidthClass)}>
                         適用の確認に進むと、現在の変更案をこの入力で置き換えます。適用中の基準は変わりません。
                       </p>
                     ) : null}
@@ -324,7 +327,11 @@ export function PlayerRadarThresholdEditor({
                     >
                       変更を適用
                     </Button>
-                    {applyReason ? <p className={contentText.supporting}>{applyReason}</p> : null}
+                    {applyReason ? (
+                      <p className={cn(contentText.supporting, readableTextWidthClass)}>
+                        {applyReason}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="grid min-w-0 grid-cols-1 gap-4">

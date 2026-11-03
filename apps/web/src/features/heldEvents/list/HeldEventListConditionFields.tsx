@@ -72,12 +72,12 @@ export function HeldEventListMetricFields({
     layout === "grid" ? cn("min-w-0", wide && "col-span-2") : width;
 
   return (
-    <fieldset className="grid min-w-0 gap-2">
+    <fieldset className="grid min-w-0 gap-1">
       <legend className={cn(contentText.heading, "mb-2")}>プレーヤーの開催成績</legend>
       <div
         className={cn(
           "min-w-0",
-          layout === "grid" ? "grid grid-cols-2 gap-3" : "flex flex-wrap items-start gap-3",
+          layout === "grid" ? "grid grid-cols-2 gap-4" : "flex flex-wrap items-start gap-4",
         )}
       >
         <div className={cell("w-40", true)}>

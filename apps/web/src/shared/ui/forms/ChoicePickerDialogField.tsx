@@ -94,18 +94,22 @@ export function ChoicePickerDialogField({
       label={label}
       required={required}
     >
-      <div
-        className={cn(
-          "flex min-h-11 min-w-0 items-center gap-2 rounded-sm border bg-[var(--color-surface)] pr-1 pl-3 pointer-fine:min-h-10",
-          error ? controlBorderClass.invalid : controlBorderClass.default,
-        )}
-      >
-        <p
-          className="font-plain min-w-0 flex-1 text-sm leading-5 text-pretty text-[var(--color-text-primary)]"
-          id={valueId}
+      {/* The value box and its change action sit side by side at the shared control height,
+          so neither nests a second outline inside the field nor outgrows neighboring inputs. */}
+      <div className="flex min-w-0 items-start gap-2">
+        <div
+          className={cn(
+            "flex min-h-11 min-w-0 flex-1 items-center rounded-sm border bg-[var(--color-surface)] px-3 py-2 pointer-fine:min-h-10",
+            error ? controlBorderClass.invalid : controlBorderClass.default,
+          )}
         >
-          {selectedLabel}
-        </p>
+          <p
+            className="font-plain min-w-0 flex-1 text-base leading-6 text-pretty text-[var(--color-text-primary)] sm:text-sm sm:leading-5"
+            id={valueId}
+          >
+            {selectedLabel}
+          </p>
+        </div>
         {required ? (
           <span className="sr-only" id={requiredId}>
             必須
@@ -132,7 +136,6 @@ export function ChoicePickerDialogField({
                 disabled={disabled}
                 icon={<ChevronDown aria-hidden="true" />}
                 id={triggerId}
-                size="sm"
                 variant={recovery ? "primary" : "secondary"}
               >
                 {recovery ? "選び直す" : "変更"}

@@ -9,13 +9,16 @@ import {
   ScanLine,
   Trophy,
 } from "lucide-react";
-import { useMatch } from "react-router-dom";
+import { useLocation, useMatch } from "react-router-dom";
 
+import { routePageWidth } from "@/app/RouteSuspenseFallback";
 import { hasOperationsRole } from "@/shared/auth/permissions";
 import { useAuthSession } from "@/shared/auth/useAuthSession";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
 import { Button } from "@/shared/ui/actions/Button";
+import { cn } from "@/shared/ui/cn";
+import { fieldText } from "@/shared/ui/typography";
 
 const primaryItems = [
   { icon: <Trophy />, label: "試合", to: "/matches" },
@@ -35,11 +38,18 @@ const noManagementItems: readonly GlobalNavItem[] = [];
 
 export function AppGlobalNav() {
   const auth = useAuthSession();
+  const location = useLocation();
   const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
+  // Drafts are unconfirmed matches, so they belong to the matches area.
+  const draftList = useMatch("/drafts") !== null;
   const publicMatch = useMatch("/m/:publicId") !== null;
   const publicHeldEvent = useMatch("/e/:publicId") !== null;
   const currentArea =
-    reviewingMatch || publicMatch ? "/matches" : publicHeldEvent ? "/held-events" : undefined;
+    reviewingMatch || publicMatch || draftList
+      ? "/matches"
+      : publicHeldEvent
+        ? "/held-events"
+        : undefined;
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
   const sessionLabel =
@@ -55,6 +65,7 @@ export function AppGlobalNav() {
   return (
     <GlobalNav
       brandTo="/matches"
+      contentWidth={routePageWidth(location.pathname, location.search)}
       endContent={
         <div className="grid max-w-full min-w-0 justify-items-end gap-1">
           <div className="flex max-w-full min-w-0 items-center justify-end gap-2">
@@ -80,7 +91,7 @@ export function AppGlobalNav() {
           </div>
           {logoutFailed && canLogout ? (
             <p
-              className="max-w-72 text-right text-xs leading-5 break-words text-[var(--color-danger)]"
+              className={cn(fieldText.error, "max-w-72 text-right break-words")}
               id="global-nav-logout-error"
               role="alert"
             >
@@ -91,6 +102,7 @@ export function AppGlobalNav() {
         </div>
       }
       environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
+      itemsPending={auth.isChecking}
       items={
         currentArea
           ? primaryItems.map((item) => ({ ...item, current: item.to === currentArea }))

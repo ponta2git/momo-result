@@ -70,7 +70,7 @@ export function HeldEventsFilterBar({
       details={{
         columns: 1,
         controls: (
-          <div className="grid min-w-0 gap-5">
+          <div className="grid min-w-0 gap-4">
             <div className="flex min-w-0 flex-wrap items-start gap-4">
               <SearchPeriodFields
                 from={period.from}
@@ -91,7 +91,7 @@ export function HeldEventsFilterBar({
                 />
               </div>
             </div>
-            <div className="w-full max-w-[34rem] min-w-0">
+            <div className="max-w-readable w-full min-w-0">
               <HeldEventListMemoField value={memo} onChange={setMemo} onCommit={commitMemo} />
             </div>
             <HeldEventListMetricFields

@@ -23,14 +23,16 @@ type EditorBindings = MatchWorkspaceEditorBindings;
 
 const WorkspaceSetup = memo(function WorkspaceSetup({
   editing,
+  mode,
   view,
 }: {
   editing: EditorBindings;
+  mode: MatchWorkspaceEditorLayoutView["mode"];
   view: MatchWorkspaceEditorLayoutView["setup"];
 }) {
   const values = useWorkspaceSnapshot(editing.setup);
   const interaction = useWorkspaceInteraction();
-  const { masters, persistence } = useWorkspacePersistenceControls();
+  const { masters } = useWorkspacePersistenceControls();
   useEffect(() => {
     const request = interaction.validationFocusRequest;
     if (!request || request.path.startsWith("players.")) return;
@@ -44,8 +46,8 @@ const WorkspaceSetup = memo(function WorkspaceSetup({
       disabled={interaction.disabled || view.eventCreation.action.pending}
     >
       <MatchSetupSection
-        cancellation={persistence.cancellation}
         mastersNavigation={masters}
+        mode={mode}
         view={{
           eventCreation: view.eventCreation,
           fields: {
@@ -155,45 +157,53 @@ export function MatchWorkspaceEditor({
     primaryActionRef.current?.focus();
   }, []);
   return (
-    <>
-      <WorkspaceSetup editing={editing} view={view.setup} />
+    // Setup, notices, and the score editor are sibling sections of one form.
+    <div className="grid min-w-0 gap-4">
+      <WorkspaceSetup editing={editing} mode={view.mode} view={view.setup} />
       <WorkspaceRecovery />
       {view.notice ? <Notice tone={view.notice.tone}>{view.notice.message}</Notice> : null}
       {view.warnings.length > 0 ? (
         <Notice tone="warning" title="入力内容を確認してください">
-          <ul className="list-disc pl-5 text-sm text-[var(--color-text-primary)]">
+          <ul className="grid list-disc gap-1 pl-4">
             {view.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
         </Notice>
       ) : null}
-      <div
-        className={cn(
-          "grid min-w-0 grid-cols-1 gap-4",
-          view.sourceImagePanel ? "2xl:grid-cols-[minmax(0,1fr)_minmax(30rem,32rem)]" : "",
-        )}
-      >
-        <div className="order-2 grid min-w-0 gap-4 2xl:order-none">
-          <WorkspaceScore
-            editing={editing}
-            onPreferImageKindChange={preferImageKind}
-            onRequestSubmitFocus={onRequestSubmitFocus}
-          />
-          <WorkspaceAchievements editing={editing} />
-          {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
-        </div>
-        <aside className="contents 2xl:sticky 2xl:top-4 2xl:grid 2xl:h-fit 2xl:gap-4">
-          {view.sourceImagePanel ? (
-            <div className="order-1 2xl:order-none">
-              <SourceImagePanel {...view.sourceImagePanel} preferredKind={preferredKind} />
-            </div>
-          ) : null}
-          <div className="order-3 2xl:order-none">
-            <WorkspaceSubmit primaryActionRef={primaryActionRef} />
+      {/* Side by side only once the editor area fits the 64rem score table, a 1rem gap,
+          and the 32rem source panel; viewport width cannot see the page padding. */}
+      <div className="@container/match-editor min-w-0">
+        <div
+          className={cn(
+            "grid min-w-0 grid-cols-1 gap-4",
+            view.sourceImagePanel
+              ? "@min-[97rem]/match-editor:grid-cols-[minmax(0,1fr)_32rem]"
+              : "",
+          )}
+        >
+          <div className="order-2 grid min-w-0 gap-4 @min-[97rem]/match-editor:order-none">
+            <WorkspaceScore
+              editing={editing}
+              onPreferImageKindChange={preferImageKind}
+              onRequestSubmitFocus={onRequestSubmitFocus}
+            />
+            <WorkspaceAchievements editing={editing} />
+            {view.mode === "edit" ? null : <WorkspaceNote editing={editing} />}
           </div>
-        </aside>
+          {/* The aside only sticks beside the editor; stacked, it scrolls with the form. */}
+          <aside className="contents @min-[97rem]/match-editor:sticky @min-[97rem]/match-editor:top-(--sticky-below-nav) @min-[97rem]/match-editor:grid @min-[97rem]/match-editor:h-fit @min-[97rem]/match-editor:gap-4">
+            {view.sourceImagePanel ? (
+              <div className="order-1 @min-[97rem]/match-editor:order-none">
+                <SourceImagePanel {...view.sourceImagePanel} preferredKind={preferredKind} />
+              </div>
+            ) : null}
+            <div className="order-3 @min-[97rem]/match-editor:order-none">
+              <WorkspaceSubmit primaryActionRef={primaryActionRef} />
+            </div>
+          </aside>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

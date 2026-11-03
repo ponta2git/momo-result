@@ -54,7 +54,7 @@ export function Tooltip({ children, content, delay, side = "top" }: TooltipProps
           sideOffset={8}
         >
           <BaseTooltip.Popup
-            className="max-w-[min(22rem,var(--available-width))] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs leading-5 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]"
+            className="max-w-[min(22rem,var(--available-width))] rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-inverse)] px-3 py-2 text-xs/4 text-[var(--color-text-inverse)] shadow-[var(--shadow-raised)]"
             id={descriptionId}
             role="tooltip"
           >

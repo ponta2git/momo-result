@@ -13,10 +13,16 @@ import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
+// A coarse pointer gets the 44px hit target; a fine pointer keeps the row's text density.
 const titleLinkClass =
-  "underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current";
+  "inline-flex min-h-11 items-center underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
+
+// The list owns the dividers between records; its outer rules match the table's top and bottom.
+const compactListClass =
+  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
 
 type HeldEventListRowsProps = {
   /** Links lead away from rows that may belong to a previous search. */
@@ -30,16 +36,7 @@ type HeldEventListRowsProps = {
 };
 
 function LatestBadge() {
-  return (
-    <span
-      className={cn(
-        contentText.supporting,
-        "shrink-0 rounded-xs border border-[var(--color-border-strong)] px-1.5 py-0.5",
-      )}
-    >
-      最新
-    </span>
-  );
+  return <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>最新</span>;
 }
 
 function HeldEventTitle({ disabled, row }: { disabled: boolean; row: HeldEventListRowView }) {
@@ -61,10 +58,7 @@ function HeldEventTitle({ disabled, row }: { disabled: boolean; row: HeldEventLi
 function HeldEventScopes({ row }: { row: HeldEventListRowView }) {
   if (row.scopes.length === 0) return null;
   return (
-    <ul
-      aria-label="開催のシリーズ・シーズン"
-      className={cn(contentText.supporting, "grid gap-0.5")}
-    >
+    <ul aria-label="開催のシリーズ・シーズン" className={cn(contentText.supporting, "grid gap-1")}>
       {row.scopes.map((scope) => (
         <li key={scope.key}>{scope.label}</li>
       ))}
@@ -77,7 +71,7 @@ function MatchCounts({ row }: { row: HeldEventListRowView }) {
     return <span className={contentText.supporting}>試合なし</span>;
   }
   return (
-    <span className="grid gap-0.5 tabular-nums">
+    <span className="grid gap-1 tabular-nums">
       <span className={contentText.body}>{row.matchCount.toLocaleString()}試合</span>
       {row.draftCount > 0 ? (
         <span className={contentText.supporting}>下書き {row.draftCount.toLocaleString()}件</span>
@@ -94,7 +88,7 @@ function StandingItem({
   standing: HeldEventStanding;
 }) {
   return (
-    <li className="inline-flex min-w-0 items-center gap-1.5">
+    <li className="inline-flex min-w-0 items-center gap-2">
       <RankBadge rank={standing.standing} />
       <span className={cn(contentText.body, "flex min-w-0 items-center whitespace-nowrap")}>
         <MemberSequenceLabel memberId={standing.memberId}>
@@ -130,8 +124,8 @@ function Standings({
     <ol
       aria-label="開催平均順位"
       className={cn(
-        "grid min-w-0 gap-y-1",
-        compact ? "grid-cols-2 gap-x-4" : "grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-5",
+        "grid min-w-0 gap-x-4 gap-y-1",
+        compact ? "grid-cols-2" : "grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]",
       )}
       // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs an explicit list role when Preflight removes markers.
       role="list"
@@ -147,22 +141,13 @@ function Standings({
   );
 }
 
-function NoteMatch({
-  compact = false,
-  memoQuery,
-  row,
-}: {
-  compact?: boolean;
-  memoQuery: string;
-  row: HeldEventListRowView;
-}) {
+function NoteMatch({ memoQuery, row }: { memoQuery: string; row: HeldEventListRowView }) {
   if (!row.noteMatch) return null;
   return (
     <div className="grid min-w-0 gap-1">
       <MatchNoteExcerpt
-        compact={compact}
         memoQuery={memoQuery}
-        prefix={`${row.noteMatch.matchNoLabel} · `}
+        prefix={`${row.noteMatch.matchNoLabel}・`}
         text={row.noteMatch.noteBody}
       />
       {row.noteMatch.otherMatchCount > 0 ? (
@@ -183,7 +168,7 @@ function RowActions({
   row: HeldEventListRowView;
 }) {
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
       {row.ocrHref ? (
         <IconLink
           aria-label={`${row.heldAtLabel}の開催にOCR取り込み`}
@@ -279,7 +264,8 @@ export const HeldEventsTable = memo(function HeldEventsTable({
               onDelete={onDelete}
             />
           ),
-          width: "9rem",
+          // Three 44px icons and their 8px gaps fit on one line inside the cell inset.
+          width: "11rem",
         },
       ]}
       getRowKey={(row) => row.id}
@@ -303,12 +289,12 @@ export const HeldEventListCompactRows = memo(function HeldEventListCompactRows({
   return (
     <ol
       aria-label="開催の一覧"
-      className="border-t border-[var(--color-border)]"
+      className={compactListClass}
       // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs an explicit list role when Preflight removes markers.
       role="list"
     >
       {rows.map((row) => (
-        <li key={row.id} className="grid gap-2 border-b border-[var(--color-border)] py-3">
+        <li key={row.id} className="grid gap-2 py-3">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="grid min-w-0 gap-1">
               <HeldEventTitle disabled={actionsDisabled} row={row} />
@@ -319,7 +305,7 @@ export const HeldEventListCompactRows = memo(function HeldEventListCompactRows({
             </span>
           </div>
           <Standings compact emphasizedMemberId={emphasizedMemberId} row={row} />
-          <NoteMatch compact memoQuery={memoQuery} row={row} />
+          <NoteMatch memoQuery={memoQuery} row={row} />
           <RowActions
             actionsDisabled={actionsDisabled}
             deleteDisabled={deleteDisabled}

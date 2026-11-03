@@ -125,7 +125,7 @@ export function PlayerRadarSection({
           </p>
         ) : null}
         {hasScores ? (
-          <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
             {players.map((player) => (
               <div className="w-full max-w-sm min-w-0" key={player.memberId}>
                 <PlayerRadarChart
@@ -173,6 +173,7 @@ export function PlayerRadarSection({
                       {player.displayName}
                     </MemberSequenceLabel>
                   ),
+                  align: "right" as const,
                   key: player.memberId,
                   minWidth: "8.5rem",
                   tabular: true,
@@ -218,7 +219,7 @@ export function PlayerRadarSection({
             panelSpacing="sm"
           >
             <div className="grid min-w-0 gap-4">
-              <div className={cn(readableTextWidthClass, "px-3")}>
+              <div className={readableTextWidthClass}>
                 <FactList
                   ariaLabel="採点対象"
                   items={[
@@ -257,6 +258,7 @@ export function PlayerRadarSection({
                     },
                     ...Array.from({ length: 9 }, (_, index) => index + 2).map((score) => ({
                       header: `${score}点`,
+                      align: "right" as const,
                       key: `score-${score}`,
                       tabular: true,
                       minWidth: "9rem",

@@ -194,7 +194,7 @@ aggregateの必須 `ownerComparison` に列、行、全7指標を保存する。
 | `ginji.average` | 銀次遭遇回数（1試合平均） |
 
 - 未指定は通知なく既定値にし、明示した既定値もcanonical URLでは省略する。不正値は平均順位へ正規化し、既存の条件補正通知で理由を示す。
-- 指標変更は履歴置換でsearchとfragmentを一度に確定し、scope・view・`focusMatchId`・安全な `returnTo` を保持する。通信・再計算・取得中の遮蔽を起こさず、selectのfocusとページ・表内の位置を保つ。scope・viewの変更でも指標を保持し、選択試合の解除だけは既存scope変更規則に従う。
+- 指標変更は履歴置換でsearchとfragmentを一度に確定し、scope・view・`focusMatchId` を保持する。通信・再計算・取得中の遮蔽を起こさず、selectのfocusとページ・表内の位置を保つ。scope・viewの変更でも指標を保持し、選択試合の解除だけは既存scope変更規則に従う。
 - 通常の目次移動、別端末でのURL読込み、reloadでは節へ移動する。browser backではそのvisitの保存位置と起点復帰を優先し、位置がなければ既存fragmentの復元に従う。URLは表示条件を共有し、過去の数値を固定しない。
 - 表示変更の位置保持は、発行元visit・操作・正規化後のtargetを対応させた一度限りのintentで扱う。該当commitにだけ冪等に適用し、別target・POP・unmountでは失効させる。永続したhistory flagや「次の移動を抑止する」booleanにしない。続くcanonical化が新しい操作を上書きせず、指標ごとのremountやURLと同期する第二の選択stateを増やさない。
 

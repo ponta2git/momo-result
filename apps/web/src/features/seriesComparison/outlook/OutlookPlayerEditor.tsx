@@ -52,7 +52,7 @@ export function OutlookPlayerEditor(props: Props) {
       />
       <div className="grid gap-1">
         <p className={contentText.supporting} aria-label={`${names[role]}の直近からの差`}>
-          {editor.outdated ? "更新前の成績 · " : ""}
+          {editor.outdated ? "更新前の成績・" : ""}
           {editor.differenceLabel}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -86,10 +86,8 @@ export function OutlookPlayerEditor(props: Props) {
                   name={proposal.name}
                   edit={dialog.edit}
                 />
-                <div
-                  className="grid gap-2 border-t border-[var(--color-border)] pt-4"
-                  aria-label="この回数を続けた結果"
-                >
+                <div aria-hidden="true" className="border-t border-[var(--color-border)]" />
+                <div className="grid justify-items-start gap-2" aria-label="この回数を続けた結果">
                   <p className={contentText.heading}>
                     {proposal.name}の平均：{proposal.average}位
                   </p>

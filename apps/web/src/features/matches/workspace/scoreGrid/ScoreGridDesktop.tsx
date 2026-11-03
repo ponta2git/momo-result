@@ -43,7 +43,8 @@ type ScoreGridDesktopTableProps = Pick<ScoreGridData, "rows" | "errorPathSet"> &
 
 export function ScoreGridDesktopTable({ rows, ...props }: ScoreGridDesktopTableProps) {
   return (
-    <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
+    // Isolation keeps the sticky member column's layers inside the table, under the global navigation.
+    <table className="isolate w-full min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
       <ScoreGridDesktopHeader />
       <tbody>
         {rows.map((row, rowIndex) => (
@@ -96,7 +97,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
   return (
     <tr className="bg-[var(--color-surface-subtle)]">
       <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-md bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
-        <div className="min-w-[10rem]">
+        <div className="min-w-0">
           <SelectControl
             ref={(node) => registerCellRef(memberCellId, node)}
             aria-describedby={memberReviewItem ? `${memberCellId}-review-status` : undefined}

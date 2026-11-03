@@ -26,20 +26,23 @@ export function HeldEventDraftsSection({
   )?.matchDraftId;
 
   return (
-    <section aria-labelledby="held-event-drafts-heading" className="min-w-0">
-      <h2 id="held-event-drafts-heading" className={contentText.heading}>
-        未確定下書き
-      </h2>
-      <p className={cn(contentText.body, "mt-1 text-pretty")}>
-        この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
-      </p>
-      <ul className="mt-4 divide-y divide-[var(--color-border)]">
+    <section aria-labelledby="held-event-drafts-heading" className="grid min-w-0 gap-2">
+      <div className="grid gap-1">
+        <h2 id="held-event-drafts-heading" className={contentText.heading}>
+          未確定下書き
+        </h2>
+        <p className={cn(contentText.body, "text-pretty")}>
+          この開催に紐づく読み取り・確認作業です。確定すると下の試合記録へ移ります。
+        </p>
+      </div>
+      {/* The list owns the dividers; the first and last records drop their outer padding. */}
+      <ul className="divide-y divide-[var(--color-border)]">
         {drafts.map((draft) => {
           const actionView = buildHeldEventDraftActionView(draft);
           const scopeLabel = heldEventDraftScopeLabel(draft);
           const updatedAt = formatHeldEventShortDateTime(draft.updatedAt);
           return (
-            <li key={draft.matchDraftId} className="py-3">
+            <li key={draft.matchDraftId} className="py-3 first:pt-0 last:pb-0">
               <ContentWithActions
                 actions={
                   actionView.href ? (
@@ -57,9 +60,9 @@ export function HeldEventDraftsSection({
                   )
                 }
               >
-                <div className="min-w-0">
+                <div className="grid min-w-0 gap-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className={cn(contentText.body, "tabular-nums")}>
+                    <p className={cn(contentText.heading, "tabular-nums")}>
                       {formatMatchNoInEvent(draft.matchNoInEvent)}
                     </p>
                     <DraftStatusBadge
@@ -67,11 +70,9 @@ export function HeldEventDraftsSection({
                       status={asDraftStatusOrUnknown(draft.status)}
                     />
                   </div>
-                  {scopeLabel ? (
-                    <p className={cn(contentText.body, "mt-1 truncate")}>{scopeLabel}</p>
-                  ) : null}
+                  {scopeLabel ? <p className={contentText.body}>{scopeLabel}</p> : null}
                   {updatedAt ? (
-                    <p className={cn(contentText.supporting, "mt-1 tabular-nums")}>
+                    <p className={cn(contentText.supporting, "tabular-nums")}>
                       最終更新 {updatedAt}
                     </p>
                   ) : null}

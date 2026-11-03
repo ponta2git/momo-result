@@ -30,7 +30,7 @@ const draftStatusPresentation: Record<DraftStatusOrUnknown, DraftStatusPresentat
   },
   ocr_running: {
     icon: <Clock3 />,
-    tone: "info",
+    tone: "progress",
   },
   unknown: {
     icon: <AlertTriangle />,

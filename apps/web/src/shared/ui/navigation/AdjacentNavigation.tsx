@@ -36,7 +36,7 @@ export function AdjacentNavigation({
 }: AdjacentNavigationProps) {
   return (
     <nav aria-label={label} className="grid min-w-0 gap-2">
-      <div className="grid min-w-0 grid-flow-col grid-cols-2 grid-rows-[auto_auto] gap-x-3 gap-y-1">
+      <div className="grid min-w-0 grid-flow-col grid-cols-2 grid-rows-[auto_auto] gap-x-2 gap-y-1">
         <Destination destination={previous} direction="previous" disabled={disabled} />
         <Destination destination={next} direction="next" disabled={disabled} />
       </div>

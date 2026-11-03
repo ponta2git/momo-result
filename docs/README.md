@@ -43,7 +43,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | 文書 | 所有する判断 |
 | --- | --- |
 | [AGENTS.md](../AGENTS.md) | 横断する判断と並列作業、文脈の選び方、作業境界、検証と完了（PR / Linear の入口を含む） |
-| 要求（`requirements/`） | 目的、適用範囲、正常 / 失敗時の結果、受入条件。画面固有の目的・順序・指標（例外: [UI 規約の画面固有の要求](ui-rule.md#画面固有の要求) が正本とする2項目） |
+| 要求（`requirements/`） | 目的、適用範囲、正常 / 失敗時の結果、受入条件。画面固有の目的・順序・指標（例外: [UI 規約の画面固有の要求](ui-rule.md#画面固有の要求) が正本とする項目） |
 | [ドメイン規約] | 用語、不変条件、状態遷移、識別子の意味 |
 | [アーキテクチャ] | システム境界、依存方向、資源境界、script / tool の配置、runtime / security |
 | [API 規約] | wire、bootstrap、usecase / repository、transaction と wake、error / auth |
@@ -51,7 +51,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | [Worker 規約] | parent / child、runtime / listener / shutdown、資源予約、分析公開、OCR の役割、通知の準備と送信 |
 | [DB 規約] | 所有権、永続状態、consumer contract、DB contract evidence、migration、移行中の契約 |
 | [OCR job 契約] | API と Worker の非同期 job 契約 |
-| [UI 規約] | 意味表現、視覚階層、操作文法、文言、取得状態、4人の台帳、視覚レビューの観点、要求に正本がない画面固有の要求（明示した2項目） |
+| [UI 規約] | 意味表現、視覚階層、操作文法、文言、取得状態、4人の台帳、視覚レビューの観点、要求に正本がない画面固有の要求（明示した項目） |
 | [テスト・品質規約] | 品質証拠の採用・維持・削除、層と oracle、領域別 failure-mode catalog |
 | [テスト実行設計] | test size、coverage、実行境界、cross-system contract、並列性、CI artifact |
 | [開発作業規約] | 環境、ローカル起動、E2E suite、コマンド、変更 gate、並列実行、Git |

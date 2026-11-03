@@ -32,8 +32,9 @@ export function ScoreGridSelectStatus({
   reviewed: boolean;
   synced?: boolean;
 }) {
+  // Short labels fit the narrow select columns and match the numeric cells' labels.
   const label = error
-    ? "入力を確認してください"
+    ? "要確認"
     : reviewItem && !reviewed
       ? "OCR要確認"
       : changed

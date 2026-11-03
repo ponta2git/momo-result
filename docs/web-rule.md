@@ -32,13 +32,16 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 
 | 役割（UI 規約の呼称） | 現在の実装入口 |
 | --- | --- |
-| page frame / page-level content surface と幅 variant（narrow / standard / wide / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`） |
-| 共通の readable measure | `max-w-2xl` |
+| page frame / page-level content surface と幅の用途（readable / default / analysis / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`）、幅の値は `styles.css` の `--container-readable` / `--container-page-*`、route ごとの用途は `routePagePresentation` |
+| 共通の readable measure | `readableTextWidthClass`（`--container-readable`） |
 | 文字色の呼称 `text-primary` / `text-body` / `text-secondary` / `text-muted` | `styles.css` の `--color-text-primary` / `--color-text-body` / `--color-text-secondary` / `--color-text-muted` |
 | 文字ウェイト token と utility | global stylesheet `styles.css` |
 | 共通文字 recipe（主要結論 `primary`、一覧用主要結果 `compactPrimary`、入力文字 `fieldText`） | `shared/ui/typography.ts` |
 | field / fieldset | `shared/ui/forms/Field.tsx` の `Field`、native `<fieldset>` |
 | 通常・invalid の境界 recipe と control の tone 優先順位 | `shared/ui/forms/controlPresentation` |
+| 状態 tone の枠・面の強さ | `styles.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
+| 分類・特徴など小さな標章の寸法・角丸・tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `compactBadgeToneClass` |
+| global navigation の下で止める sticky の位置 | `styles.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |
 | 確認 dialog | `AlertDialog` |
@@ -119,8 +122,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 - Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。画面の合成 hook、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
 - presence による一時保持は、shared dialog と toast が通常の close / remove 後に非対話的な exit snapshot を描く場合だけ許可する。親 subtree、route、artifact、view の identity が失われた場合は exit を省略してよく、表示補間のためにそれらの lifecycle を遅らせない。
-- 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。
-- reduced motion では非必須の残存 motion を末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測る。
+- 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。
+- reduced motion では非必須の残存 motion を末端 component でも省略する。feature bundle の変更では production build の bundle 差分を測る。
 
 ## Form / React 19 / API Client
 

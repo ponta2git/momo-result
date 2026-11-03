@@ -99,10 +99,10 @@ function SeriesComparisonPageContent() {
       displayIntent={comparison.displayIntent}
       failed={options.hasError || status.hasError || resource.hasError}
     >
-      <PageFrame width="wide">
+      <PageFrame width="analysis">
         <PageContentSurface
           aria-label="戦績比較"
-          className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4"
+          className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6"
           role="region"
         >
           {comparison.normalizationNotice ? (
@@ -197,7 +197,11 @@ function SeriesComparisonPageContent() {
                   tone="info"
                   title="見通しは全マップの総合成績で試します"
                   action={
-                    <Button variant="secondary" onClick={() => filters.updateMapMasterId("")}>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => filters.updateMapMasterId("")}
+                    >
                       全マップで試す
                     </Button>
                   }
@@ -207,6 +211,7 @@ function SeriesComparisonPageContent() {
               ) : resource.scopeState === "empty" ? (
                 <div className="grid gap-4">
                   <EmptyState
+                    icon={<BarChart3 />}
                     placement="embedded"
                     title="この範囲に確定済みの試合がありません"
                     description="シーズン・マップの選択は保持しています。条件を変更すると別の記録を確認できます。"
@@ -227,7 +232,7 @@ function SeriesComparisonPageContent() {
                   tone="warning"
                   title="この比較条件は現在利用できません"
                   action={
-                    <Button variant="secondary" onClick={comparison.actions.clearScope}>
+                    <Button size="sm" variant="secondary" onClick={comparison.actions.clearScope}>
                       全シーズン・全マップに戻す
                     </Button>
                   }

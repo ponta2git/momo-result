@@ -30,7 +30,11 @@ setupMsw();
 
 let user: ReturnType<typeof userEvent.setup>;
 
+/** Editing inherits complete conditions, so the setup starts closed; open it before editing. */
 async function waitForMatchEditReady() {
+  const setup = await screen.findByRole("button", { name: /^条件を(?:変更|閉じる)$/u });
+  await waitFor(() => expect(setup).toBeEnabled());
+  if (setup.getAttribute("aria-expanded") === "false") await userEvent.click(setup);
   expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
 }
 

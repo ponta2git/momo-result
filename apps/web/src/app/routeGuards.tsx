@@ -24,7 +24,7 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
-import { PageHeader } from "@/shared/ui/layout/PageHeader";
+import { contentText } from "@/shared/ui/typography";
 
 function StandaloneRouteMain({ children }: { children: ReactNode }) {
   return (
@@ -49,7 +49,7 @@ function ProtectedRouteMain({ children }: { children: ReactNode }) {
 function RouteGuardFrame({
   children,
   standalone = false,
-  width = "standard",
+  width = "default",
 }: {
   children: ReactNode;
   standalone?: boolean;
@@ -66,31 +66,28 @@ function RouteGuardFrame({
 
 function LoginAuthLoading() {
   return (
-    <RouteGuardFrame standalone width="narrow">
-      <div className="mx-auto w-full max-w-[34rem]">
-        <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中" role="region">
-          <div aria-hidden="true" className="grid gap-4">
-            <Skeleton className="h-10 w-full max-w-md" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        </PageContentSurface>
-      </div>
-    </RouteGuardFrame>
-  );
-}
-
-function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
-  return (
-    <RouteGuardFrame standalone={standalone}>
-      <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中">
-        <p className="font-emphasis text-sm text-[var(--color-text-primary)]">{message}</p>
-        <div className="mt-4 grid gap-3">
+    <RouteGuardFrame standalone width="readable">
+      <PageContentSurface aria-busy="true" aria-label="ログイン状態を確認中" role="region">
+        <div aria-hidden="true" className="grid gap-4">
           <Skeleton className="h-10 w-full max-w-md" />
           <Skeleton className="h-20 w-full" />
         </div>
       </PageContentSurface>
     </RouteGuardFrame>
   );
+}
+
+/** Holds the requested route's structural skeleton, so a session check keeps width and slots. */
+function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
+  const location = useLocation();
+  const fallback = (
+    <RouteSuspenseFallback
+      loadingLabel={message}
+      pathname={location.pathname}
+      search={location.search}
+    />
+  );
+  return standalone ? <StandaloneRouteMain>{fallback}</StandaloneRouteMain> : fallback;
 }
 
 function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {
@@ -212,10 +209,18 @@ export function AuthenticatedRoute({ children }: { children: ReactNode }) {
 export function NotFoundRoute() {
   const auth = useAuthStatus();
   const content = (
-    <PageFrame width="narrow">
-      <PageHeader title="ページが見つかりません" />
-      <PageContentSurface className="grid justify-items-start gap-4">
-        <p>URLを確認するか、以下のリンクから画面を開き直してください。</p>
+    <PageFrame width="readable">
+      <PageContentSurface
+        aria-label="ページが見つかりません"
+        className="grid justify-items-start gap-4"
+        role="region"
+      >
+        <div className="grid gap-1">
+          <h1 className={contentText.heading}>ページが見つかりません</h1>
+          <p className={contentText.body}>
+            URLを確認するか、以下のリンクから画面を開き直してください。
+          </p>
+        </div>
         <LinkButton to={auth.isAuthenticated ? "/matches" : "/login"}>
           {auth.isAuthenticated ? "試合一覧へ戻る" : "ログイン画面へ"}
         </LinkButton>

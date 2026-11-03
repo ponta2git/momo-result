@@ -14,12 +14,11 @@ type ResourcePageStateBase = {
   backHref: string;
   backLabel: string;
   description: string;
-  eyebrow?: ReactNode;
   headerActions?: ReactNode;
   headerDescription?: ReactNode;
   title: string;
   titleRef?: Ref<HTMLHeadingElement> | undefined;
-  width?: PageFrameWidth | undefined;
+  width: PageFrameWidth;
 };
 
 type ResourceNotFoundState = ResourcePageStateBase & {
@@ -41,7 +40,7 @@ export type ResourcePageStateProps = ResourceErrorState | ResourceNotFoundState;
  */
 export function ResourcePageState(props: ResourcePageStateProps) {
   return (
-    <PageFrame width={props.width ?? "wide"}>
+    <PageFrame width={props.width}>
       <div>
         <LinkButton
           icon={<ArrowLeft aria-hidden="true" />}
@@ -55,7 +54,6 @@ export function ResourcePageState(props: ResourcePageStateProps) {
       <PageHeader
         actions={props.headerActions}
         description={props.headerDescription}
-        eyebrow={props.eyebrow}
         title={props.title}
         titleRef={props.titleRef}
       />

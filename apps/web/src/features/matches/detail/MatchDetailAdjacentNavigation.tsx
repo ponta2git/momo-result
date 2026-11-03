@@ -36,7 +36,12 @@ export function MatchDetailAdjacentNavigation({ view }: { view: MatchDetailReady
           <Notice
             tone="warning"
             action={
-              <Button size="sm" pending={view.refresh.pending} onClick={view.refresh.run}>
+              <Button
+                size="sm"
+                variant="secondary"
+                pending={view.refresh.pending}
+                onClick={view.refresh.run}
+              >
                 前後の試合を再取得
               </Button>
             }

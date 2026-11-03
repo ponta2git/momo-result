@@ -12,6 +12,7 @@ describe("ResourcePageState", () => {
     render(
       <MemoryRouter>
         <ResourcePageState
+          width="analysis"
           backHref="/matches"
           backLabel="試合一覧へ戻る"
           description="通信状態を確認してください。"
@@ -38,6 +39,7 @@ describe("ResourcePageState", () => {
     render(
       <MemoryRouter>
         <ResourcePageState
+          width="analysis"
           backHref="/held-events"
           backLabel="開催履歴へ戻る"
           description="指定された開催は削除されたか、存在しません。開催履歴から別の開催を選んでください。"

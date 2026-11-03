@@ -44,8 +44,8 @@ export function CheckboxField({
         <label
           ref={surfaceRef}
           className={cn(
-            "momo-surface momo-surface-press inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-xs px-2 text-sm font-plain text-[var(--color-text-primary)]",
-            disabled ? "cursor-not-allowed opacity-65" : "",
+            "momo-surface momo-surface-press inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm font-plain text-[var(--color-text-primary)]",
+            disabled ? "cursor-not-allowed opacity-60" : "",
           )}
           htmlFor={fieldId}
         >

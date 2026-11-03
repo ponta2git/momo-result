@@ -57,10 +57,10 @@ export const FlowView = memo(function FlowView({
         />
       </AnalysisSection>
       <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
-        <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
           {response.rankAnalysis.unexpectedWinsByPlayer.map((entry) => (
-            <article className="min-w-0" key={entry.memberId}>
-              <div className="flex justify-between gap-2">
+            <article className="grid min-w-0 content-start gap-2" key={entry.memberId}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h3 className={contentText.heading}>
                   <MemberSequenceLabel memberId={entry.memberId}>
                     {playerName(response.players, entry.memberId)}
@@ -68,10 +68,10 @@ export const FlowView = memo(function FlowView({
                 </h3>
                 <SeriesAnalysisQualityAdvisory status={entry.status} />
               </div>
-              <p className={cn(contentText.compactPrimary, "mt-2 tabular-nums")}>
+              <p className={cn(contentText.compactPrimary, "tabular-nums")}>
                 全{entry.totalWinCount}勝のうち {entry.unexpectedWinCount}戦
               </p>
-              <div className="mt-2">
+              <div>
                 <Button
                   disabled={!entry.hasDetails}
                   size="sm"
@@ -91,15 +91,15 @@ export const FlowView = memo(function FlowView({
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-recent-form" title="直近順位と累積推移">
-        <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
-          <RecentRankStrips
-            focusedItemIds={focusedItemIds}
-            players={response.players}
-            recentRanks={response.recentRanks}
-            matchIndexes={matchIndexes}
-          />
-        </AnalysisSubsection>
-        <div className="mt-6">
+        <div className="grid gap-6">
+          <AnalysisSubsection id="metric-recent-form-recent" title={recentWindowTitle}>
+            <RecentRankStrips
+              focusedItemIds={focusedItemIds}
+              players={response.players}
+              recentRanks={response.recentRanks}
+              matchIndexes={matchIndexes}
+            />
+          </AnalysisSubsection>
           <AnalysisSubsection
             id="metric-recent-form-cumulative"
             meta={`${response.scope.matchCount}戦`}

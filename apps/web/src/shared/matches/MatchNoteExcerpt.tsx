@@ -20,25 +20,18 @@ export function splitMemoHighlights(text: string, query: string) {
   return parts;
 }
 
-/** A match note clamped to two lines, with the searched words marked. */
+/** A match note clamped to two lines, with the searched words marked. It is body text at every width. */
 export function MatchNoteExcerpt({
-  compact = false,
   memoQuery,
   prefix,
   text,
 }: {
-  compact?: boolean;
   memoQuery: string;
   prefix?: string | undefined;
   text: string;
 }) {
   return (
-    <p
-      className={cn(
-        compact ? contentText.supporting : contentText.body,
-        "line-clamp-2 whitespace-pre-line text-pretty",
-      )}
-    >
+    <p className={cn(contentText.body, "line-clamp-2 whitespace-pre-line text-pretty")}>
       {prefix ? <span className="tabular-nums">{prefix}</span> : null}
       {splitMemoHighlights(text, memoQuery).map((part, index) => (
         // Parts never reorder for one text; the index is stable.

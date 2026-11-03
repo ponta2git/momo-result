@@ -5,6 +5,7 @@ import {
   createDataVizSeriesPresentationLookup,
 } from "@/shared/seriesAnalysis/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/seriesAnalysis/seriesPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function DataVizQuadrantPlot({
   ariaLabel,
@@ -58,7 +59,7 @@ export function DataVizQuadrantPlot({
       <div className="overflow-x-auto pb-1">
         <svg
           aria-label={ariaLabel}
-          className="mx-auto block w-[620px] max-w-none min-w-[620px] rounded-sm bg-[var(--color-surface)]"
+          className="block w-[620px] max-w-none min-w-[620px] rounded-sm bg-[var(--color-surface)]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
@@ -124,7 +125,7 @@ export function DataVizQuadrantPlot({
           </text>
         </svg>
       </div>
-      <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
+      <p className={contentText.supporting}>
         破線は4人の中央値です。近い点は断定せず、同程度として読みます。
       </p>
       <DataVizLegend series={seriesIdentity} />
@@ -139,12 +140,14 @@ export function DataVizQuadrantPlot({
         columns={[
           { key: "player", header: "プレーヤー", rowHeader: true, renderCell: (row) => row.label },
           {
+            align: "right",
             key: "x",
             header: xAxisLabel,
             tabular: true,
             renderCell: (row) => (finiteNumber(row.point?.x) ? formatX(row.point.x) : "—"),
           },
           {
+            align: "right",
             key: "y",
             header: yAxisLabel,
             tabular: true,

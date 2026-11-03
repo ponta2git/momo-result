@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { AchievementMatchPicker } from "@/features/achievements/AchievementMatchPicker";
 import { useAchievementClaimEditor } from "@/features/achievements/useAchievementClaimEditor";
 import type { AchievementClaimEditorProps } from "@/features/achievements/useAchievementClaimEditor";
@@ -11,7 +13,7 @@ import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function AchievementClaimEditorDialog({
   claim,
@@ -46,6 +48,7 @@ export function AchievementClaimEditorDialog({
     requestSave,
     requestClose,
   } = useAchievementClaimEditor({ claim, item, onClose });
+  const formId = useId();
   return (
     <>
       <UnsavedChangesGuard
@@ -60,8 +63,25 @@ export function AchievementClaimEditorDialog({
         onOpenChange={(open) => {
           if (!open) requestClose();
         }}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" disabled={saving} onClick={requestClose}>
+              キャンセル
+            </Button>
+            <Button
+              type="submit"
+              form={formId}
+              pending={saving}
+              pendingLabel="保存中"
+              disabled={!canSave}
+            >
+              記録を保存
+            </Button>
+          </DialogFooter>
+        }
       >
         <form
+          id={formId}
           className="grid gap-6"
           onSubmit={(event) => {
             event.preventDefault();
@@ -113,17 +133,19 @@ export function AchievementClaimEditorDialog({
               </Notice>
             ) : null}
             {form.matchId ? (
-              <div className="grid gap-1">
-                <p className={contentText.body}>
+              <div className="grid gap-2">
+                <p className={cn(contentText.body, "tabular-nums")}>
                   {matchIdentity
                     ? `${formatDateTimeLong(matchIdentity.playedAt)}・第${matchIdentity.matchNoInEvent}試合`
                     : matchMissing
                       ? "達成した試合が見つかりません"
                       : "達成した試合を読み込み中"}
                 </p>
-                <Button variant="quiet" size="sm" onClick={() => selectMatch("")}>
-                  試合の指定を外す
-                </Button>
+                <div>
+                  <Button variant="quiet" size="sm" onClick={() => selectMatch("")}>
+                    試合の指定を外す
+                  </Button>
+                </div>
                 {matchFailed ? (
                   <Notice
                     tone="danger"
@@ -138,9 +160,7 @@ export function AchievementClaimEditorDialog({
                   </Notice>
                 ) : null}
                 {!matchLoading && !eligibleIdentity ? (
-                  <p className="text-sm text-[var(--color-danger)]">
-                    この試合は現在の実績の対象外です。
-                  </p>
+                  <p className={fieldText.error}>この試合は現在の実績の対象外です。</p>
                 ) : null}
               </div>
             ) : (
@@ -180,14 +200,6 @@ export function AchievementClaimEditorDialog({
               {saveError}入力は保持しています。
             </Notice>
           ) : null}
-          <DialogFooter>
-            <Button variant="secondary" disabled={saving} onClick={requestClose}>
-              キャンセル
-            </Button>
-            <Button type="submit" pending={saving} pendingLabel="保存中" disabled={!canSave}>
-              記録を保存
-            </Button>
-          </DialogFooter>
         </form>
       </Dialog>
       <AlertDialog

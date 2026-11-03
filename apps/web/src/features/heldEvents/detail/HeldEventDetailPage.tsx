@@ -1,4 +1,4 @@
-import { Camera, Keyboard } from "lucide-react";
+import { ArrowLeft, Camera, Keyboard } from "lucide-react";
 import type { Ref } from "react";
 
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/detail/HeldEventDetailHeaderActions";
@@ -13,6 +13,7 @@ import { HeldEventPlayerRecap } from "@/features/heldEvents/detail/HeldEventPlay
 import { useHeldEventDetail } from "@/features/heldEvents/detail/useHeldEventDetail";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -56,9 +57,14 @@ function HeldEventDetailReadyContent({
   const { detail, drafts, emphasizeNewMatch, matches, playerRecaps } = event;
 
   return (
-    <PageFrame className="min-w-0" width="wide">
+    <PageFrame className="min-w-0" width="analysis">
       <div>
-        <LinkButton size="sm" to="/held-events" variant="quiet">
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          size="sm"
+          to="/held-events"
+          variant="quiet"
+        >
           開催履歴へ
         </LinkButton>
       </div>
@@ -68,12 +74,11 @@ function HeldEventDetailReadyContent({
           <HeldEventDetailHeaderActions exportHref={navigation.exportHref} refresh={refresh} />
         }
         description={`確定済み${detail.matchCount}試合・未確定下書き${detail.draftCount}件`}
-        eyebrow="開催記録"
         title={navigation.currentDateTime}
         titleRef={titleRef}
       />
 
-      <PageContentSurface aria-label="開催内容" className="grid gap-8" role="region">
+      <PageContentSurface aria-label="開催内容" className="grid gap-6" role="region">
         {freshness.kind === "stale" ? (
           <Notice
             tone="warning"
@@ -95,31 +100,34 @@ function HeldEventDetailReadyContent({
           </Notice>
         ) : null}
 
-        <section aria-labelledby="held-event-next-match-heading" className="grid gap-4">
-          <h2 className={contentText.heading} id="held-event-next-match-heading">
-            {formatMatchNoInEvent(detail.nextMatchNo)}を記録
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            <LinkButton
-              icon={<Camera aria-hidden="true" />}
-              to={navigation.ocrCaptureHref}
-              variant={emphasizeNewMatch ? "primary" : "secondary"}
-            >
-              OCR取り込み
-            </LinkButton>
-            <LinkButton
-              icon={<Keyboard aria-hidden="true" />}
-              to={navigation.manualEntryHref}
-              variant="secondary"
-            >
-              手入力
-            </LinkButton>
-          </div>
-        </section>
+        {/* Only the independent top-level sections take the long-detail 32px; a notice stays 24px away. */}
+        <div className="grid gap-8">
+          <section aria-labelledby="held-event-next-match-heading" className="grid gap-2">
+            <h2 className={contentText.heading} id="held-event-next-match-heading">
+              {formatMatchNoInEvent(detail.nextMatchNo)}を記録
+            </h2>
+            <div className={inlineActionGroupClass}>
+              <LinkButton
+                icon={<Camera aria-hidden="true" />}
+                to={navigation.ocrCaptureHref}
+                variant={emphasizeNewMatch ? "primary" : "secondary"}
+              >
+                OCR取り込み
+              </LinkButton>
+              <LinkButton
+                icon={<Keyboard aria-hidden="true" />}
+                to={navigation.manualEntryHref}
+                variant="secondary"
+              >
+                手入力
+              </LinkButton>
+            </div>
+          </section>
 
-        <HeldEventDraftsSection drafts={drafts} />
-        <HeldEventPlayerRecap recaps={playerRecaps} />
-        <HeldEventMatchTimeline matches={matches} />
+          <HeldEventDraftsSection drafts={drafts} />
+          <HeldEventPlayerRecap recaps={playerRecaps} />
+          <HeldEventMatchTimeline matches={matches} />
+        </div>
       </PageContentSurface>
 
       <AdjacentNavigation

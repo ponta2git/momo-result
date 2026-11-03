@@ -11,6 +11,7 @@ import {
   achievementCurveUnit,
 } from "@/shared/seriesAnalysis/playerRadarPresentation";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import { FactList } from "@/shared/ui/data/FactList";
 import { TabsList, TabsPanel, TabsRoot, TabsTab } from "@/shared/ui/forms/Tabs";
 import { contentText } from "@/shared/ui/typography";
 
@@ -41,16 +42,29 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
   }, []);
   return (
     <section aria-label="改訂詳細" className="grid min-w-0 grid-cols-1 gap-4">
-      <div className="grid gap-1">
+      <div className="grid gap-2">
         <h3 ref={headingRef} tabIndex={-1} className={contentText.heading}>
-          {revision.gameTitleName} · {playerRadarRevisionKind[revision.kind]}
+          {revision.gameTitleName}・{playerRadarRevisionKind[revision.kind]}
         </h3>
-        <p className={contentText.body}>{formatDateTimeLong(revision.appliedAt)} 適用</p>
-        <p className={contentText.body}>適用者: {playerRadarRevisionActor(revision.appliedBy)}</p>
-        <p className={contentText.body}>
-          案の保存者:{" "}
-          {revision.savedBy ? playerRadarRevisionActor(revision.savedBy) : "当時の情報なし"}
-        </p>
+        <FactList
+          ariaLabel="改訂の記録"
+          columns={3}
+          items={[
+            { id: "applied-at", label: "適用日時", value: formatDateTimeLong(revision.appliedAt) },
+            {
+              id: "applied-by",
+              label: "適用者",
+              value: playerRadarRevisionActor(revision.appliedBy),
+            },
+            {
+              id: "saved-by",
+              label: "案の保存者",
+              value: revision.savedBy
+                ? playerRadarRevisionActor(revision.savedBy)
+                : "当時の情報なし",
+            },
+          ]}
+        />
       </div>
       {beforeBasis ? null : (
         <p className={contentText.body}>初回適用のため、変更前の保存基準はありません。</p>
@@ -100,6 +114,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                       renderCell: (row) => `${row.score}点`,
                     },
                     {
+                      align: "right",
                       key: "before",
                       minWidth: "10rem",
                       header: `変更前（${axis.id === "achievement" ? (beforeCurve ? achievementCurveUnit(beforeCurve) : "基準未適用") : unit}）`,
@@ -112,6 +127,7 @@ export function PlayerRadarHistoryDetail({ detail }: { detail: PlayerRadarRevisi
                           : String(row.before),
                     },
                     {
+                      align: "right",
                       key: "after",
                       minWidth: "10rem",
                       header: `変更後（${axis.id === "achievement" ? achievementCurveUnit(afterCurve) : unit}）`,

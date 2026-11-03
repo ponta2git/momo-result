@@ -11,7 +11,6 @@ import {
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
 
 export function AssetRevenueHistograms({
@@ -33,8 +32,8 @@ export function AssetRevenueHistograms({
           ["revenue", "物件収益"],
         ] as const
       ).map(([key, label]) => (
-        <div key={key}>
-          <h3 className={cn(contentText.heading, "mb-2")}>{label}の分布</h3>
+        <div className="grid min-w-0 gap-2" key={key}>
+          <h3 className={contentText.heading}>{label}の分布</h3>
           <DataVizHistogramChart
             ariaLabel={`4人の${label}分布`}
             bins={histograms[key].bins.map((bin) => ({
@@ -77,10 +76,10 @@ export function RevenueConversionMatrices({
         {entries.map((entry) => {
           return (
             <article
-              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+              className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
-              <h3 className={cn(contentText.heading, "mb-4")}>
+              <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>

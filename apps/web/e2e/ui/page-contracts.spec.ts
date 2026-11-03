@@ -61,7 +61,8 @@ test("preserves an unfinished numeric edit across responsive layouts and refuses
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/matches/page-edit/edit");
-  await expect(page.getByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
+  // Editing inherits complete conditions, so the setup starts closed behind its summary.
+  await expect(page.getByRole("button", { name: "条件を変更" })).toBeEnabled();
   const revenue = page.getByRole("textbox", { name: "ぽんた 収益（万円）", exact: true });
   await revenue.fill("-");
   await revenue.press("Tab");

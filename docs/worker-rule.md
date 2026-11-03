@@ -37,7 +37,7 @@ API と Worker の非同期 job 契約は [OCR job 契約](ocr-job-contract.md)�
 - 子 process tree の CPU bandwidth と hard memory limit は実 runtime の cgroup で保証する。CPU 予算は専用の設定値で指定し、runtime の CPU 割当を超える構成は拒否する。memory は child limit と親用 headroom の合計を runtime budget 内に収める。開始 barrier を開く前に両 controller への所属と制限値を読み戻し、v1 の別 hierarchy も両方が空になるまで回収を続ける。非対応 OS や未検証の制限は job claim 前に fail closed にする。
 - 候補走査の soft な時間予算は一回の処理量を区切る目安とし、候補取得だけで予算を使い切っても候補があれば少なくとも一件を試みる。続きは cursor と次回期限へ引き継ぐ。停止要求、SQL の上限、lease・fence などの実行権の条件は、この予算にかかわらず守る。
 - Busy 後の早期再確認は consumer ごとの共有予算で回数・開始期限・同時数を制限し、予算は新しい配送や再接続の後も引き継ぐ。上限到達時は元の回復・保守期限へ戻す。開始済み claim の確定と post-commit effect を処理してから次の候補へ進み、実行権は wake ではなく claim で得る。
-- 待機候補では OCR を先に選び、試合の記録作業の待ちを抑える。実行中の分析は完了させるため、OCR が分析の終了を待つ場合はあり、この優先順は待ち時間の上限を保証しない。共有実行枠、旧世代の中断 intent の回収、再 queue、失敗回数、公開の詳細は [分析 batch 要求](requirements/series-analysis-batch.md#3-job--delivery) を正本とする。
+- 待機候補では OCR を先に選び、試合の記録作業の待ちを抑える。実行中の分析は完了させるため、OCR が分析の終了を待つ場合はあり、この優先順は待ち時間の上限を保証しない。共有実行枠、再 queue、失敗回数、公開の詳細は [分析 batch 要求](requirements/series-analysis-batch.md#3-job--delivery) を正本とする。
 
 ## Analysis Publication and Release Control
 

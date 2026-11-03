@@ -56,8 +56,10 @@ export function buildScopedMasterPanelView(
     loadBlocked,
     showStaleError: list.stale && list.hasData && Boolean(list.error),
     createDisabled: loading || loadBlocked || Boolean(disabledReason),
+    // Loading already has the list skeleton and the title status; a third wait message here
+    // would appear and vanish under the field and move everything below it.
     createDisabledReason: loading
-      ? `${itemLabel}を読み込み中です。`
+      ? undefined
       : loadBlocked
         ? `${itemLabel}を読み込んでから追加できます。`
         : disabledReason,

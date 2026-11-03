@@ -1,7 +1,21 @@
 import type { MatchFeatureBadge } from "@/features/matches/detail/matchDetailPresentation";
 import { cn } from "@/shared/ui/cn";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
-export function MatchFeatureSection({ badges }: { badges: MatchFeatureBadge[] }) {
+/**
+ * Features come from the separate analysis read. While it is pending, one badge row stays
+ * reserved so the result ledger does not move when the features arrive. A completed read
+ * without features removes the row, because that is the data rather than a wait.
+ */
+export function MatchFeatureSection({
+  badges,
+  loading,
+}: {
+  badges: MatchFeatureBadge[];
+  loading: boolean;
+}) {
+  if (loading) return <MatchFeaturePlaceholder />;
   if (badges.length === 0) return null;
   return (
     <ul aria-label="試合の特徴" className="flex flex-wrap gap-2">
@@ -11,8 +25,8 @@ export function MatchFeatureSection({ badges }: { badges: MatchFeatureBadge[] })
           aria-label={`${badge.label}。${badge.description}`}
           title={badge.description}
           className={cn(
-            "inline-flex min-h-7 items-center gap-2 rounded-full border px-3 py-1 text-xs font-plain text-[var(--color-text-primary)]",
-            matchFeatureBadgeClass(badge),
+            compactBadgeClass,
+            compactBadgeToneClass[badge.tone === "notice" ? "attention" : "neutral"],
           )}
         >
           {badge.label}
@@ -22,9 +36,11 @@ export function MatchFeatureSection({ badges }: { badges: MatchFeatureBadge[] })
   );
 }
 
-function matchFeatureBadgeClass(badge: MatchFeatureBadge): string {
-  if (badge.tone === "notice") {
-    return "border-[var(--color-review)]/45 bg-[var(--color-review)]/10";
-  }
-  return "border-[var(--color-border)] bg-[var(--color-surface-subtle)]";
+export function MatchFeaturePlaceholder() {
+  return (
+    <div aria-hidden="true" className="flex flex-wrap gap-2">
+      <Skeleton className="h-6 w-16" />
+      <Skeleton className="h-6 w-24" />
+    </div>
+  );
 }

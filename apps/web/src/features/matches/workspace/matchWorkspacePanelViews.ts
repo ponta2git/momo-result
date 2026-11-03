@@ -41,6 +41,8 @@ export type MatchWorkspaceSetupFieldsView = {
     heldEventPicker: HeldEventPickerDirectory;
     heldEvents: HeldEventResponse[];
     mapItems: MapMasterResponse[];
+    /** The selected title's seasons or maps are still being fetched for the first time. */
+    mastersPending?: boolean | undefined;
     seasonItems: SeasonMasterResponse[];
   };
   validation: {

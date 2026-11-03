@@ -239,8 +239,13 @@ describe("radar revision history", () => {
     );
     await user.click(await screen.findByRole("button", { name: /の改訂詳細$/u }));
     const detailRegion = await screen.findByRole("region", { name: "改訂詳細" });
-    expect(within(detailRegion).getByText("適用者: 適用時の名前")).toBeVisible();
-    expect(within(detailRegion).getByText("案の保存者: 保存時の名前")).toBeVisible();
+    const revisionFacts = within(detailRegion).getByLabelText("改訂の記録");
+    expect(within(revisionFacts).getByText("適用者").nextElementSibling).toHaveTextContent(
+      "適用時の名前",
+    );
+    expect(within(revisionFacts).getByText("案の保存者").nextElementSibling).toHaveTextContent(
+      "保存時の名前",
+    );
     expect(within(detailRegion).getByText("4.123456789123")).toBeVisible();
     expect(within(detailRegion).getByText("変更あり")).toBeVisible();
     await user.click(within(detailRegion).getByRole("tab", { name: "実績達成" }));

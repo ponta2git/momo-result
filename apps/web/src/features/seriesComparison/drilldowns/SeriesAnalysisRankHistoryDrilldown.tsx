@@ -103,6 +103,7 @@ export function RankHistoryDrilldown({
             renderCell: (row) => row.ranks.join(" → "),
           },
           {
+            align: "right",
             tabular: true,
             header: "開催平均",
             key: "event-average",
@@ -123,8 +124,8 @@ export function RankHistoryDrilldown({
             header: "通算平均の変化",
             key: "cumulative-change",
             renderCell: (row) => (
-              <>
-                <span className="mr-2">
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <span className="tabular-nums">
                   {formatDecimal(row.cumulativeAverageBefore)}位 →{" "}
                   {formatDecimal(row.cumulativeAverageAfter)}位
                 </span>
@@ -132,7 +133,7 @@ export function RankHistoryDrilldown({
                   direction={deltaDirection(row.cumulativeAverageDelta)}
                   magnitude={row.cumulativeAverageDelta}
                 />
-              </>
+              </span>
             ),
           },
         ]}
@@ -177,6 +178,7 @@ export function RankHistoryDrilldown({
             renderCell: (row) => <RankBadge rank={row.rank} />,
           },
           {
+            align: "right",
             tabular: true,
             header: "通算平均",
             key: "cumulative-average",

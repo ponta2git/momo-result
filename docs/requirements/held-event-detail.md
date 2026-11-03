@@ -10,7 +10,7 @@
 
 - `/held-events` は開催回を条件で探し、開催ごとの成績を見比べ、作成する入口とする。
 - `/held-events/:heldEventId` は1開催内の未確定作業、開催内サマリー、確定試合を表示する。
-- `/matches` は開催をまたぐ検索と作業一覧を担当し、確定済み試合のメモ有無を本文なしで判別できるようにする。表示の詳細は `docs/requirements/match-note.md` を正本とする。
+- `/matches` は開催をまたぐ確定済み試合の検索を担当し、メモ本文の抜粋を表示する。表示の詳細は `docs/requirements/match-note.md` を正本とする。
 - `/matches/:matchId` は単一試合の保存結果を担当する。
 - `/analytics/series` は作品、シーズン、マップを条件とした戦績比較を担当する。
 

@@ -1,6 +1,8 @@
+import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { routeTerminalPresentation } from "@/app/RouteSuspenseFallback";
+import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
@@ -27,12 +29,20 @@ export function RouteTerminalPage({
   const presentation = routeTerminalPresentation(pathname, search);
   return (
     <PageFrame width={presentation.width}>
+      {presentation.backLink ? (
+        <div>
+          <LinkButton
+            icon={<ArrowLeft aria-hidden="true" />}
+            size="sm"
+            to={presentation.backLink.href}
+            variant="quiet"
+          >
+            {presentation.backLink.label}
+          </LinkButton>
+        </div>
+      ) : null}
       {presentation.preserveHeader ? (
-        <PageHeader
-          description={presentation.description}
-          eyebrow={presentation.eyebrow}
-          title={title}
-        />
+        <PageHeader description={presentation.description} title={title} />
       ) : null}
       <PageContentSurface
         aria-label={typeof title === "string" ? title : undefined}

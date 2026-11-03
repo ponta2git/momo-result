@@ -83,6 +83,10 @@ describe("public record routes", () => {
     const edit = screen.getByRole("link", { name: "試合結果を編集" });
     expect(edit).toHaveAttribute("href", "/matches/match-1/edit");
     await user.click(edit);
+    // Editing inherits complete conditions, so the setup starts closed.
+    const setup = await screen.findByRole("button", { name: "条件を変更" });
+    await waitFor(() => expect(setup).toBeEnabled());
+    await user.click(setup);
     expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
     const matchNo = screen.getByLabelText("試合番号");
     await user.clear(matchNo);

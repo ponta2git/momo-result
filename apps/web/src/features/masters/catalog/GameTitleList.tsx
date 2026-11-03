@@ -20,14 +20,12 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
+/** The heading and add action belong to the tab's panel header, which persists while loading. */
 export function GameTitleList({
   canEdit,
   completion,
-  create,
-  defaultLayoutFamily,
   items,
   onRetry,
   onDelete,
@@ -36,7 +34,7 @@ export function GameTitleList({
   selectedGameTitleId,
   refreshing,
   stale,
-}: GameTitleCatalogView) {
+}: Omit<GameTitleCatalogView, "create" | "defaultLayoutFamily">) {
   const choices = buildGameTitleChoices(items, canEdit).map((choice) => {
     const { item, pending: isPending } = choice;
     return {
@@ -72,26 +70,7 @@ export function GameTitleList({
   });
 
   return (
-    <section className="grid min-w-0 gap-4">
-      <ContentWithActions
-        actions={
-          canEdit ? (
-            <GameTitleCreateDialog
-              key={create.formKey}
-              create={create}
-              defaultLayoutFamily={defaultLayoutFamily}
-            />
-          ) : undefined
-        }
-      >
-        <div>
-          <h2 className={contentText.heading}>作品</h2>
-          <p className={cn(contentText.body, "mt-1")}>
-            作品を選ぶと、対応するマップとシーズンを編集できます。
-          </p>
-        </div>
-      </ContentWithActions>
-
+    <div className="grid min-w-0 gap-4">
       <p className={cn(contentText.supporting, "empty:hidden")} role="status">
         {completion}
       </p>
@@ -127,11 +106,11 @@ export function GameTitleList({
           />
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
-function GameTitleCreateDialog({
+export function GameTitleCreateDialog({
   create,
   defaultLayoutFamily,
 }: {

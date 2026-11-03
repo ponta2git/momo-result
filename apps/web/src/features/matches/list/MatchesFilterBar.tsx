@@ -73,7 +73,7 @@ export function MatchesFilterBar({
       details={{
         columns: 1,
         controls: (
-          <div className="grid min-w-0 gap-5">
+          <div className="grid min-w-0 gap-4">
             <div className="flex min-w-0 flex-wrap items-start gap-4">
               <div className="w-64 min-w-0">
                 <MatchListHeldEventField
@@ -93,7 +93,7 @@ export function MatchesFilterBar({
                 }}
               />
             </div>
-            <div className="w-full max-w-[34rem] min-w-0">
+            <div className="max-w-readable w-full min-w-0">
               <MatchNoteQueryField value={memo} onChange={setMemo} onCommit={commitMemo} />
             </div>
             <MatchListRecordFields value={record} onChange={setRecord} onCommit={commitRecord} />

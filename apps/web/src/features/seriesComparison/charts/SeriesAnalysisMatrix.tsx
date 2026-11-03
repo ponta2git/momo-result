@@ -104,7 +104,7 @@ export function MatrixValueLegend({
   return (
     <dl
       aria-label={ariaLabel}
-      className={cn(contentText.supporting, "flex flex-wrap gap-x-4 gap-y-1")}
+      className={cn(contentText.supporting, "flex flex-wrap gap-x-3 gap-y-1")}
     >
       {items.map((item) => (
         <div className="inline-flex items-baseline gap-1" key={item.id}>

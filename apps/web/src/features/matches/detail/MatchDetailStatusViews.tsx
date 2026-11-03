@@ -3,6 +3,8 @@ import type { ReactNode, Ref } from "react";
 import { matchIncidentFactsGridClass } from "@/features/matches/detail/matchDetailPresentation";
 import { MatchFeaturePlaceholder } from "@/features/matches/detail/MatchFeatureSection";
 import {
+  matchResultLedgerBreakdownClass,
+  matchResultLedgerFlowClass,
   matchResultLedgerGridClass,
   matchResultLedgerRowClass,
 } from "@/shared/matches/MatchResultLedger";
@@ -72,19 +74,21 @@ export function MatchDetailLoading() {
                   <Skeleton className="h-10 w-14" />
                   <Skeleton className="h-7 w-32" />
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] items-start gap-4">
-                  <SkeletonFact valueClassName="h-7 w-24" />
-                  <div className="grid gap-1">
+                <SkeletonFact valueClassName="h-7 w-24" />
+                <div className={matchResultLedgerFlowClass}>
+                  <div className={matchResultLedgerBreakdownClass}>
                     <SkeletonFact valueClassName="h-5 w-20" />
-                    <Skeleton className="h-4 w-20" />
-                    <Skeleton className="h-4 w-28" />
+                    <SkeletonFact valueClassName="h-5 w-10" />
+                    <SkeletonFact valueClassName="h-5 w-12" />
                   </div>
                 </div>
                 <SkeletonFact valueClassName="h-6 w-40 max-w-full" />
-                <div className={matchIncidentFactsGridClass}>
-                  {[1, 2, 3, 4, 5, 6].map((key) => (
-                    <SkeletonFact key={key} valueClassName="h-5 w-8" />
-                  ))}
+                <div className={matchResultLedgerFlowClass}>
+                  <div className={matchIncidentFactsGridClass}>
+                    {[1, 2, 3, 4, 5, 6].map((key) => (
+                      <SkeletonFact key={key} valueClassName="h-5 w-8" />
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

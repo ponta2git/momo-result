@@ -16,8 +16,11 @@ export type MatchFeatureBadge = MatchFeatureDefinition & {
 type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV3["match"]>["features"][number];
 
 /** The incident counts fill one row when the ledger card is wide enough; loading reuses it. */
-export const matchIncidentFactsGridClass =
-  "grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2";
+/**
+ * Six incidents sit as 3×2 or 6×1 by the card's width, so no single item is left on a line. The
+ * column gap matches the revenue breakdown above, so their column lines meet in both layouts.
+ */
+export const matchIncidentFactsGridClass = "grid grid-cols-3 gap-x-4 gap-y-2 @xl:grid-cols-6";
 
 export type MatchDetailLedgerRow = MatchPerformanceContextRow & {
   displayName: string;

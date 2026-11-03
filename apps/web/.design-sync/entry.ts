@@ -13,7 +13,7 @@ export { PendingActionContent } from "../src/shared/ui/actions/PendingActionCont
 export { buttonClassName, iconActionClassName } from "../src/shared/ui/actions/actionRecipes";
 export { actionRowClass, inlineActionGroupClass } from "../src/shared/ui/actions/actionGroup";
 export { cn } from "../src/shared/ui/cn";
-export { contentText, fieldText } from "../src/shared/ui/typography";
+export { contentText, fieldText, momentText } from "../src/shared/ui/typography";
 
 export { Disclosure } from "../src/shared/ui/data/Collapsible";
 export { DataTable } from "../src/shared/ui/data/DataTable";

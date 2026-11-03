@@ -52,7 +52,7 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | 前後移動 primitive | `AdjacentNavigation` |
 | プレー順 marker、member sequence label | `PlayOrderMark`、`MemberSequenceLabel` |
 | 面の hover feedback hook | `useSurfaceFeedback` |
-| 共通 QueryClient と自動再取得の契約 | `app/queryClient.ts` の `queryClient` |
+| 共通 QueryClient と自動再取得の契約 | `app/queryClient.ts` の `queryClient`、受付済み処理の完了確認は `shared/api/completionCheck.ts` |
 | 共通の許可判断と本人情報 | `shared/auth` |
 | 画面をまたぐ toast の共通 host | `shared/ui/feedback/ToastHost.tsx` の `ToastHost`。`app/AppShell.tsx` が配置する |
 | Motion provider | 同期 `LazyMotion` + `domMin` + `strict` + `m` component、`MotionConfig` |
@@ -72,8 +72,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 - Web の本人情報は auth query を正本とし、管理機能の表示・query・明示 refetch・送信直前の command を `shared/auth` の共通の許可判断へ接続する。再確認の進行と操作の所有期間も同じ境界で扱い、一時失敗中に旧 role だけで操作を再開しない。ロール変更の再確認中は、許可が残り得る作業の未保存入力と進行中の操作を保ちつつ、権限外の情報を表示・送信しない。確定失権した scope の入力は終了し、別主体・別対象へ持ち越さない。
 - 確定失権した管理 read は cancel して cache を除去する。管理者権限だけの喪失ではアカウント・通知、運用権限も失った場合は分析管理・レーダーを対象にし、通常の master・分析結果等の共有参照は保持する。主体と許可の所有期間が変わった後の応答で保護 cache や新しい入力を復活・上書きせず、再付与を古い操作の継続と扱わない。同一主体が参照できる master の確定 mutation 結果の反映と、保護 refetch・画面の完了処理を分ける。
 - 管理用 query / command の権限拒否は一度の本人情報再確認へ集約し、処理済み・旧作業の拒否を起点に循環させない。本人情報と保護 query の 401 / 403 は自動 retry せず、許可継続後も拒否された read の再試行は利用者の操作に任せる。再確認・再表示で POST を再送せず、確認中に到着した受付結果は既存 mutation の owner に保持する。
-- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行が server state の取得を開始する。次項の受理済みレーダー作成・復元の完了確認を例外とし、それ以外では interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約する。
-- レーダー基準の作成・復元は、利用者が開始して受付が確定した操作に限り、待機表示から編集へ進むために完了状態を自動確認する。対象はその操作だけとし、完了・失敗・読取エラー・権限停止で止め、非表示ブラウザでは継続取得しない。読取失敗の再開は明示更新で行い、POST を再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
+- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行が server state の取得を開始する。次項の完了確認を例外とし、それ以外では interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約する。
+- 利用者が開始して受付が確定した処理を、画面が結果や次の操作の代わりに待機として示している間に限り、その表示の read が完了を自動確認する。対象は、OCR の読み取りを処理中として示す開催詳細と下書き画面、集計待ちを示す試合詳細、待機表示から編集へ進むレーダー基準の作成・復元（受理した操作の状態だけを読む）とする。待機の終了、読取エラー、権限停止で止め、非表示ブラウザでは取得しない。OCR と集計は同じ待機が上限時間を超えても止め、間隔と上限は共通の完了確認が所有する。自動確認の取得を利用者の更新や読み込み中として表示しない。読取失敗と上限後の再開は明示更新か再表示で行い、POST を再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
 - 分析の計算 payload が immutable でも、現在の名称や試合 revision に依存する HTTP projection は可変として扱う。master 変更は表示名を含む artifact response、試合訂正・削除はその試合の context と identity を更新する。手動更新は status で参照世代を確定してから必要な resource を読み、新旧 artifact を同時に再取得しない。
 - match-context の確定した不存在・失効は成功済み cache の利用を止め、一時的な更新失敗と区別する。比較画面と試合結果画面で共通の利用判定を使い、表示 bundle の選択試合と全マーカーを揃える。再取得中の復活を含む状態契約は [分析 batch 要求の Web State](requirements/series-analysis-batch.md#web-state) を正本とする。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を維持する範囲で使う。

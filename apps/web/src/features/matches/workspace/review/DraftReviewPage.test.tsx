@@ -15,6 +15,7 @@ import {
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { confirmedDraftMessages } from "@/features/matches/confirmedDraftNavigation";
+import { MatchDetailPage } from "@/features/matches/detail/MatchDetailPage";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import type { AuthMeResponse } from "@/shared/api/auth";
@@ -24,7 +25,7 @@ import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import { makeHeldEventResponse } from "@/test/factories";
+import { makeHeldEventResponse, makeMatchDetail } from "@/test/factories";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -257,6 +258,64 @@ describe("DraftReviewPage", () => {
     expect(await screen.findByText("試合詳細")).toBeInTheDocument();
     expect(postCount).toBe(1);
     expect(separateReads).toBe(0);
+  });
+
+  it("opens the confirmed result as its moment, and lets a failed early read load normally", async () => {
+    setDevUser();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
+    const confirmedRead = createDeferred<void>();
+    let detailReads = 0;
+    server.use(
+      http.get("/api/match-drafts/:draftId/review", ({ params }) =>
+        HttpResponse.json(makeMatchDraftReviewResponse(String(params["draftId"]))),
+      ),
+      http.post("/api/matches", () =>
+        HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00Z",
+          heldEventId: "held-1",
+          matchId: "match-confirmed",
+          matchNoInEvent: 3,
+        }),
+      ),
+      http.get("/api/matches/:matchId", async () => {
+        detailReads += 1;
+        if (detailReads === 1) {
+          return HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+        }
+        await confirmedRead.promise;
+        return HttpResponse.json(
+          makeMatchDetail({ heldEventId: "held-1", matchId: "match-confirmed", matchNoInEvent: 3 }),
+        );
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/moment"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitForReviewWorkspaceReady();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await user.click(await screen.findByRole("button", { name: "確定する" }));
+
+    // The failed early read is not left behind as an error for the detail page.
+    expect(
+      await screen.findByLabelText("試合詳細を読み込み中", undefined, { timeout: 5_000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("試合詳細を読み込めませんでした")).not.toBeInTheDocument();
+    confirmedRead.resolve();
+
+    expect(await screen.findByRole("heading", { name: "第3試合の結果" })).toBeVisible();
+    // Recorded through OCR review, so the next match starts the same way in the same event.
+    expect(screen.getByRole("link", { name: "次の試合を記録" })).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-1",
+    );
+    expect(detailReads).toBe(2);
   });
 
   it("keeps input and the same mutation key when a confirmation response is lost", async () => {

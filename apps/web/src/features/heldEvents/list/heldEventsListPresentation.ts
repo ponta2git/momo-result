@@ -1,4 +1,3 @@
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import { canDeleteHeldEvent } from "@/features/heldEvents/list/heldEventActions";
 import type {
   HeldEventCreateForm,
@@ -12,6 +11,7 @@ import type {
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
+import { matchRecordHref } from "@/shared/navigation/matchLinks";
 import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 export type HeldEventStanding = {
@@ -100,7 +100,7 @@ export function toHeldEventListRows(
             otherMatchCount: noteMatch.otherMatchCount,
           }
         : undefined,
-      ocrHref: latest ? heldEventOcrCaptureHref(item.id) : undefined,
+      ocrHref: latest ? matchRecordHref(item.id, "ocr") : undefined,
       scopes: (item.scopes ?? []).map((scope) => ({
         key: `${scope.gameTitleId ?? ""}:${scope.seasonMasterId ?? ""}`,
         label: scopeLabel(scope),

@@ -89,34 +89,42 @@ describe("MatchAchievements", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps published achievements during calculation and gives recovery advice without the removed refresh action", async () => {
-    const resource = makeMatchAchievements();
-    server.use(
-      http.get("/api/achievements", () => HttpResponse.json(resource)),
-      http.get("/api/analytics/series-comparison/v2/status", () =>
-        HttpResponse.json(
-          makeSeriesAnalysisStatus({
-            artifactFreshness: "stale",
-            calculation: {
-              status: "running",
-              trigger: "achievement_mutation",
-              requestedAt: "2026-08-09T02:00:00.000Z",
-              startedAt: "2026-08-09T02:00:01.000Z",
-              finishedAt: null,
-            },
-          }),
+  it.each([
+    {
+      name: "a running calculation, which the page follows itself",
+      calculation: {
+        status: "running" as const,
+        trigger: "achievement_mutation" as const,
+        requestedAt: "2026-08-09T02:00:00.000Z",
+        startedAt: "2026-08-09T02:00:01.000Z",
+        finishedAt: null,
+      },
+      advice: "集計前の実績を表示しています。",
+    },
+    {
+      name: "a stale result with no calculation under way",
+      calculation: null,
+      advice: "集計前の実績を表示しています。集計後にページを開き直すと反映されます。",
+    },
+  ])(
+    "keeps published achievements while waiting for $name, without the removed refresh action",
+    async ({ calculation, advice }) => {
+      const resource = makeMatchAchievements();
+      server.use(
+        http.get("/api/achievements", () => HttpResponse.json(resource)),
+        http.get("/api/analytics/series-comparison/v2/status", () =>
+          HttpResponse.json(makeSeriesAnalysisStatus({ artifactFreshness: "stale", calculation })),
         ),
-      ),
-    );
-    renderAchievements();
+      );
+      renderAchievements();
 
-    expect(await screen.findByText("保存された変更の集計を待っています")).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "手入力のテスト実績" })).toBeVisible();
-    expect(screen.getByText(/集計前の実績を表示しています。/u)).toHaveTextContent(
-      "集計後にページを開き直すと反映されます。",
-    );
-    expect(screen.queryByText(/表示を更新/u)).not.toBeInTheDocument();
-  });
+      expect(await screen.findByText("保存された変更の集計を待っています")).toBeVisible();
+      expect(await screen.findByRole("heading", { name: "手入力のテスト実績" })).toBeVisible();
+      // The whole notice body, so the reopen advice is pinned both present and absent.
+      expect(screen.getByText(/集計前の実績を表示しています。/u).textContent).toBe(advice);
+      expect(screen.queryByText(/表示を更新/u)).not.toBeInTheDocument();
+    },
+  );
 
   it("does not present a failed initial fetch as no achievements or refer to the removed action", async () => {
     server.use(

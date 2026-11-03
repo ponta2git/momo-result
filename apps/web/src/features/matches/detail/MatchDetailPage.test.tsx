@@ -15,7 +15,9 @@ import {
 } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { confirmedArrivalState } from "@/features/matches/confirmedArrival";
 import { MatchDetailPage } from "@/features/matches/detail/MatchDetailPage";
+import { completionCheckIntervalMs } from "@/shared/api/completionCheck";
 import { matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -637,7 +639,48 @@ describe("MatchDetailPage", () => {
     expect(statusAttempts).toBe(1);
   });
 
-  it("omits feature content while the first analysis is queued", async () => {
+  it("offers the next match only on the visit that confirmed it, never on a revisit", async () => {
+    setDevUser();
+    const router = createMemoryRouter(
+      [
+        { path: "/matches/:matchId", element: <MatchDetailPage /> },
+        { path: "/other", element: <p>other-page</p> },
+      ],
+      { initialEntries: ["/other"] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    const state = confirmedArrivalState({ matchId: "match-1", recordedWith: "ocr" });
+
+    // A state meant for another match is not this match's moment.
+    await act(() =>
+      router.navigate("/matches/match-1", {
+        state: confirmedArrivalState({ matchId: "match-2", recordedWith: "ocr" }),
+      }),
+    );
+    expect(await screen.findByRole("heading", { name: /の結果$/u })).toBeVisible();
+    expect(screen.queryByRole("link", { name: "次の試合を記録" })).not.toBeInTheDocument();
+
+    await act(() => router.navigate("/other"));
+    await act(() => router.navigate("/matches/match-1", { state }));
+    expect(await screen.findByRole("link", { name: "次の試合を記録" })).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-1",
+    );
+
+    // Back and forward restore the same entry as a revisit.
+    await act(() => router.navigate(-1));
+    expect(await screen.findByText("other-page")).toBeInTheDocument();
+    await act(() => router.navigate(1));
+    expect(await screen.findByRole("heading", { name: /の結果$/u })).toBeVisible();
+    expect(router.state.location.state).toEqual(state);
+    expect(screen.queryByRole("link", { name: "次の試合を記録" })).not.toBeInTheDocument();
+  });
+
+  it("waits for the first analysis without feature content, then follows it to the result", async () => {
     setDevUser();
     let statusAttempts = 0;
     server.use(
@@ -660,24 +703,36 @@ describe("MatchDetailPage", () => {
         );
       }),
     );
+    // Fake only the clock the completion check schedules on, and let real time drive the rest.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={["/matches/match-1"]}>
+            <Routes>
+              <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
 
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={["/matches/match-1"]}>
-          <Routes>
-            <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
+      expect(await screen.findAllByText("集計待ち")).toHaveLength(4);
+      expect(screen.queryByText("比較データを読み込み中")).not.toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
+      expect(statusAttempts).toBe(1);
 
-    expect(await screen.findAllByText("集計待ち")).toHaveLength(4);
-    expect(screen.queryByText("比較データを読み込み中")).not.toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
-    expect(statusAttempts).toBe(1);
-    await dispatchPassiveRefreshSignals();
-    expect(statusAttempts).toBe(1);
+      // No update control is offered; the page rechecks the accepted calculation itself.
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByText("接戦")).toBeInTheDocument();
+      expect(screen.queryByText("集計待ち")).not.toBeInTheDocument();
+      expect(statusAttempts).toBe(2);
+
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 5));
+      expect(statusAttempts).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps published badges visible while replacement analysis is queued", async () => {

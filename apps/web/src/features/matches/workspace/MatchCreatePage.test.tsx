@@ -87,6 +87,7 @@ describe("MatchCreatePage", () => {
       const requests: unknown[] = [];
       const operationKeys: Array<string | null> = [];
       const reads: string[] = [];
+      const readFrom: string[] = [];
       server.use(
         http.post("/api/matches", async ({ request }) => {
           requests.push(await request.json());
@@ -100,6 +101,7 @@ describe("MatchCreatePage", () => {
         }),
         http.get("/api/matches/:matchId", ({ params }) => {
           reads.push(String(params["matchId"]));
+          readFrom.push(router.state.location.pathname);
           return HttpResponse.json(savedMatch);
         }),
       );
@@ -146,7 +148,10 @@ describe("MatchCreatePage", () => {
       expect(within(confirmation).getByRole("cell", { name: "1,234" })).toBeVisible();
       await user.click(within(confirmation).getByRole("button", { name: "確定する" }));
 
-      expect(await screen.findByRole("heading", { name: "第7試合の結果" })).toBeVisible();
+      // Confirming now reads the saved match before leaving, so arrival takes one more round trip.
+      expect(
+        await screen.findByRole("heading", { name: "第7試合の結果" }, { timeout: 5_000 }),
+      ).toBeVisible();
       expect(router.state.location.pathname).toBe("/matches/match-manual-created");
       expect(requests).toEqual([expectedRequest]);
       expect(
@@ -160,6 +165,13 @@ describe("MatchCreatePage", () => {
       ).toBeNull();
       expect(operationKeys[0]).toBeTruthy();
       expect(new Set(reads)).toEqual(new Set(["match-manual-created"]));
+      // The confirmed result is read before leaving, so the detail opens on it.
+      expect(readFrom[0]).toBe("/matches/new");
+      // Recorded by hand, so the next match starts the same way in the same event.
+      expect(screen.getByRole("link", { name: "次の試合を記録" })).toHaveAttribute(
+        "href",
+        "/matches/new?heldEventId=held-1",
+      );
       expect(screen.getByText("カード交換を次戦に生かす")).toBeVisible();
       const results = screen.getByRole("list", { name: "試合の順位と成績" });
       const ponta = within(results)

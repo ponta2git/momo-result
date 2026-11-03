@@ -173,7 +173,7 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。
 - 対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
-- Webは初回表示と利用者の明示的な更新操作で状態を取得し、interval、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
+- Webは初回表示と利用者の明示的な更新操作で状態を取得し、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。intervalによる取得は、`queued` / `running` を集計待ちとして表示している画面が完了を確認する場合に限り、[Web 実装規約の Server State](../web-rule.md#server-state) の範囲で行う。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
 - artifact切替時に古いdrilldown / match contextを混在させない。ancillary resource failureで主表示の切替を無期限に待たない。
 - 選択試合表示と各指標の強調は、同じartifact・scope・試合の有効なcontextから導出する。切替中の旧表示を保護する場合も表と選択表示を一体で保持し、新bundleのcommitで一体に切り替える。選択解除後にownerだけを遅れて残さない。
 - 成功済みcontextがない取得失敗では強調を出さず、同じcontextの一時的な再取得失敗では有効な成功snapshotと更新失敗表示を維持してよい。現在のrequestの404（試合不存在）・410（artifact失効）またはrevision不一致等の除外はcached contextを無効とし、選択表示と全指標の強調を外す。別keyのerrorを混ぜず、新たな成功前に再取得中のcacheから復活させない。aggregateの表示・bounded recoveryは既存契約に従い、試合結果の保存済み本体は維持する。

@@ -115,6 +115,7 @@ export function MatchWorkspacePersistence({
     heldEventPublicId: view.selectedHeldEvent?.publicId,
     notify: input.notifyToast,
     onPersistedSuccess: sessionDraft.markCommitted,
+    recordedWith: mode === "review" ? "ocr" : "manual",
     setConfirmOpen: setConfirmOpen,
     setOperationError: setOperationError,
     setValidationMessage: setValidationMessage,

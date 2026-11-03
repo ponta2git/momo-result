@@ -175,7 +175,11 @@ describe("app routing", () => {
           makeSeriesAnalysisAdminOverview().selectedTitle?.gameTitleId,
         ),
       );
-      await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+      // Refresh stays disabled until the title-scoped read after the handoff settles.
+      await waitFor(
+        () => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled(),
+        { timeout: 5000 },
+      );
       await user.click(screen.getByRole("button", { name: "状態を更新" }));
       expect(
         await screen.findByText("更新済みの処理履歴", {}, { timeout: 5000 }),

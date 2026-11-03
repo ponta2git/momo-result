@@ -1,13 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
-import { syncHeldEventCreatedCache, syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
-import { createHeldEvent, deleteHeldEvent } from "@/shared/api/heldEvents";
-import type { CreateHeldEventRequest } from "@/shared/api/heldEvents";
+import { syncHeldEventDeletedCache } from "@/shared/api/heldEventCache";
+import { deleteHeldEvent } from "@/shared/api/heldEvents";
 import { runIdempotentMutation } from "@/shared/api/idempotency";
 import { useIdempotencyKeyStore } from "@/shared/api/useIdempotencyKeyStore";
 
-/** Cache reconciliation survives the dialog and completes before a write is reported as done. */
+/** Deletion's cache reconciliation survives the dialog and completes before it is reported done. */
 export function useHeldEventWrites(onRemoved: () => void) {
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
@@ -30,18 +29,5 @@ export function useHeldEventWrites(onRemoved: () => void) {
     },
     [mutateAsync],
   );
-  return {
-    removing,
-    remove,
-    create: async (request: CreateHeldEventRequest) => {
-      const event = await runIdempotentMutation(
-        idempotencyKeys,
-        "heldEvents.createHeldEvent",
-        request,
-        (options) => createHeldEvent(request, options),
-      );
-      await syncHeldEventCreatedCache(queryClient, event);
-      return event;
-    },
-  };
+  return { removing, remove };
 }

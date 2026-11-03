@@ -1,8 +1,6 @@
+import type { HeldEventCreateForm } from "@/features/heldEvents/create/heldEventCreate";
 import { canDeleteHeldEvent } from "@/features/heldEvents/list/heldEventActions";
-import type {
-  HeldEventCreateForm,
-  HeldEventDeleteConfirmation,
-} from "@/features/heldEvents/list/heldEventActions";
+import type { HeldEventDeleteConfirmation } from "@/features/heldEvents/list/heldEventActions";
 import type {
   HeldEventListItemResponse,
   HeldEventListPlayerResultResponse,

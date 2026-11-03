@@ -82,7 +82,16 @@ function MatchDetailReadyContent({
         {incidentColumns.map(([key, label]) => (
           <div key={key} className="min-w-0">
             <dt className={contentText.supporting}>{label}</dt>
-            <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{incidents[key]}回</dd>
+            {/* A repeated zero recedes so the incidents that happened stand out (UI rule). */}
+            <dd
+              className={cn(
+                contentText.body,
+                "mt-0.5 tabular-nums",
+                incidents[key] === 0 && "text-[var(--color-text-muted)]",
+              )}
+            >
+              {incidents[key]}回
+            </dd>
           </div>
         ))}
       </dl>

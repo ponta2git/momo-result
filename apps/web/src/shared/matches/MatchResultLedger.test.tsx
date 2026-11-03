@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
@@ -42,8 +42,11 @@ describe("MatchResultLedger", () => {
     expect(screen.getByText("2.00 → 1.97")).toBeInTheDocument();
     expect(screen.getByText("0.03改善")).toBeInTheDocument();
     expect(screen.getByText("0.05後退")).toBeInTheDocument();
-    expect(screen.getByText("収益順位 1.5位")).toBeInTheDocument();
-    expect(screen.getByText("物件収益比率 50.0%")).toBeInTheDocument();
+    const ponta = cardOf("ぽんた");
+    expect(factValue(ponta, "総資産")).toBe("1800万円");
+    expect(factValue(ponta, "物件収益")).toBe("900万円");
+    expect(factValue(ponta, "収益順位")).toBe("1.5位");
+    expect(factValue(ponta, "物件収益比率")).toBe("50.0%");
     expect(screen.queryByText("+0.03")).not.toBeInTheDocument();
   });
 
@@ -65,9 +68,11 @@ describe("MatchResultLedger", () => {
       />,
     );
 
-    expect(screen.getByText("2位")).toBeInTheDocument();
-    expect(screen.getByText("0万円")).toBeInTheDocument();
-    expect(screen.getByText("物件収益比率 対象外")).toBeInTheDocument();
+    const card = cardOf("あかねまみ");
+    expect(within(card).getAllByText("2位")[0]).toBeInTheDocument();
+    expect(factValue(card, "総資産")).toBe("0万円");
+    expect(factValue(card, "収益順位")).toBe("2位");
+    expect(factValue(cardOf("あかねまみ"), "物件収益比率")).toBe("対象外");
     expect(screen.getByText("比較データなし")).toBeInTheDocument();
   });
 
@@ -78,8 +83,7 @@ describe("MatchResultLedger", () => {
         rows={[ledgerRow("member_ponta", "ぽんた", 1)]}
       />,
     );
-    expect(screen.getByText("物件収益比率 —")).toBeInTheDocument();
-    expect(screen.queryByText("物件収益比率 対象外")).not.toBeInTheDocument();
+    expect(factValue(cardOf("ぽんた"), "物件収益比率")).toBe("—");
   });
 
   it("shows first through fourth place regardless of member or API order", () => {
@@ -101,9 +105,26 @@ describe("MatchResultLedger", () => {
       expect.stringContaining("ぽんた"),
       expect.stringContaining("いーゆー"),
     ]);
-    expect(screen.getAllByText(/^[1-4]位$/u)).toHaveLength(4);
+    // The rank badge leads each card; the revenue rank is a separate labelled fact.
+    expect(
+      screen.getAllByRole("listitem").map((item) => within(item).getAllByText(/^[1-4]位$/u)[0]),
+    ).toEqual(
+      ["1位", "2位", "3位", "4位"].map((rank) => expect.objectContaining({ textContent: rank })),
+    );
   });
 });
+
+function cardOf(displayName: string): HTMLElement {
+  const card = screen.getByRole("heading", { name: displayName }).closest("li");
+  if (!card) throw new Error(`no card for ${displayName}`);
+  return card;
+}
+
+/** Reads a labelled fact the way assistive technology pairs a term with its definition. */
+function factValue(card: HTMLElement, label: string): string | null | undefined {
+  const term = within(card).getByText(label, { selector: "dt" });
+  return term.nextElementSibling?.textContent;
+}
 
 function ledgerRow(memberId: string, displayName: string, rank: number) {
   return {

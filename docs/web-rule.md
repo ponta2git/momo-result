@@ -1,6 +1,6 @@
 # Web 実装規約
 
-目的: `apps/web` の層、server state、React の更新境界、client lifecycle と motion、form / API client、build / test tooling の実装契約を定める。表示の意味、視覚階層、操作文法、文言は [UI 規約](ui-rule.md) が所有する。現在の component / module / token 名は実装を正本とし、主要な実装への入口は本書の [Implementation Entry Points](#implementation-entry-points) から辿れる。
+目的: `apps/web` の層、server state、React の更新境界、client lifecycle と motion、form / API client、build / test tooling の実装契約を定める。体験方針、情報設計、表示の意味、視覚階層、操作文法、文言は [UI 規約](ui-rule.md) が所有する。現在の component / module / token 名は実装を正本とし、主要な実装への入口は本書の [Implementation Entry Points](#implementation-entry-points) から辿れる。
 
 wire は [API 規約](api-rule.md#wire-boundary)、分析の Web state 契約は [分析 batch 要求](requirements/series-analysis-batch.md#web-state)、品質証拠は [テスト・品質規約](test-rule.md#web-evidence-catalog)、実行境界は [テスト実行設計](test-architecture.md#web-の実行境界) を参照する。
 

@@ -3,10 +3,10 @@ import { DataTable, StatusBadge } from "momo-result-ui";
 type Row = { rank: number; player: string; assets: number; revenue: number; destinations: number };
 
 const rows: Row[] = [
-  { rank: 1, player: "ももたろう", assets: 128_400, revenue: 23_500, destinations: 9 },
-  { rank: 2, player: "きんたろう", assets: 97_200, revenue: 18_100, destinations: 7 },
-  { rank: 3, player: "うらしま", assets: 64_850, revenue: 12_900, destinations: 5 },
-  { rank: 4, player: "かぐや", assets: 31_300, revenue: 8_400, destinations: 3 },
+  { rank: 1, player: "いーゆー", assets: 128_400, revenue: 23_500, destinations: 9 },
+  { rank: 2, player: "ぽんた", assets: 97_200, revenue: 18_100, destinations: 7 },
+  { rank: 3, player: "あかねまみ", assets: 64_850, revenue: 12_900, destinations: 5 },
+  { rank: 4, player: "おーたか", assets: 31_300, revenue: 8_400, destinations: 3 },
 ];
 
 const yen = (value: number) => `${value.toLocaleString("ja-JP")}万円`;
@@ -23,7 +23,7 @@ export const Standings = () => (
         width: "4rem",
         renderCell: (row) => `${row.rank}位`,
       },
-      { key: "player", header: "プレイヤー", rowHeader: true, renderCell: (row) => row.player },
+      { key: "player", header: "プレーヤー", rowHeader: true, renderCell: (row) => row.player },
       {
         key: "assets",
         header: "総資産",
@@ -54,9 +54,9 @@ export const Standings = () => (
 
 export const SortableCompact = () => (
   <DataTable<Row>
-    caption={{ content: "プレイヤー別の総資産" }}
+    caption={{ content: "プレーヤー別の総資産" }}
     columns={[
-      { key: "player", header: "プレイヤー", rowHeader: true, renderCell: (row) => row.player },
+      { key: "player", header: "プレーヤー", rowHeader: true, renderCell: (row) => row.player },
       {
         key: "assets",
         header: "総資産",
@@ -88,7 +88,7 @@ export const Empty = () => (
   <DataTable<Row>
     caption={{ content: "第13回 結果" }}
     columns={[
-      { key: "player", header: "プレイヤー", renderCell: (row) => row.player },
+      { key: "player", header: "プレーヤー", renderCell: (row) => row.player },
       { key: "assets", header: "総資産", align: "right", renderCell: (row) => yen(row.assets) },
     ]}
     emptyState="まだ試合結果が登録されていません。"

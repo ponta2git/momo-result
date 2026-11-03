@@ -8,7 +8,7 @@ const breakdown = [
 
 export const FramedOpen = () => (
   <Disclosure defaultOpen panelPadding="sm" presentation="framed" summary="収益と順位の詳細">
-    <FactList ariaLabel="ももたろうの内訳" items={breakdown} layout="inline" />
+    <FactList ariaLabel="いーゆーの内訳" items={breakdown} layout="inline" />
   </Disclosure>
 );
 
@@ -31,12 +31,7 @@ export const TriggerVariants = () => (
     <Disclosure presentation="framed" summary="補足：採点の考え方" triggerVariant="supporting">
       <p className="text-sm">詳細</p>
     </Disclosure>
-    <Disclosure
-      presentation="framed"
-      summary="計算式を表示"
-      triggerLayout="compact"
-      triggerVariant="compact"
-    >
+    <Disclosure presentation="framed" summary="計算式を表示" triggerVariant="supporting">
       <p className="text-sm">詳細</p>
     </Disclosure>
   </div>

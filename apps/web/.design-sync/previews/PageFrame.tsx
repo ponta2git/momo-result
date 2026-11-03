@@ -25,7 +25,7 @@ export const StandardPage = () => (
           columns={2}
           items={[
             { id: "matches", label: "試合数", value: "12試合" },
-            { id: "leader", label: "通算首位", value: "ももたろう（5勝）" },
+            { id: "leader", label: "通算首位", value: "いーゆー（5勝）" },
           ]}
         />
       </PageContentSurface>
@@ -33,12 +33,12 @@ export const StandardPage = () => (
   </div>
 );
 
-export const Narrow = () => (
+export const Readable = () => (
   <div className="p-4" style={{ background: "var(--color-canvas)" }}>
-    <PageFrame width="narrow">
+    <PageFrame width="readable">
       <PageHeader
-        description="プレイヤー名は順位表と実績に表示されます。"
-        title="プレイヤーを追加"
+        description="プレーヤー名は順位表と実績に表示されます。"
+        title="プレーヤーを追加"
       />
       <PageContentSurface>
         <p className="text-sm">狭い幅は入力フォームや確認画面に使います。</p>

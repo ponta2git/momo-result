@@ -7,7 +7,7 @@ export const MatchSummary = () => (
     items={[
       { id: "date", label: "開催日", value: "2026/10/24" },
       { id: "years", label: "プレイ年数", value: "30年" },
-      { id: "winner", label: "優勝", value: "ももたろう" },
+      { id: "winner", label: "優勝", value: "いーゆー" },
       { id: "assets", label: "優勝者の総資産", value: "128,400万円" },
     ]}
   />
@@ -15,7 +15,7 @@ export const MatchSummary = () => (
 
 export const Inline = () => (
   <FactList
-    ariaLabel="ももたろうの成績"
+    ariaLabel="いーゆーの成績"
     items={[
       { id: "rank", label: "最終順位", value: "1位" },
       { id: "assets", label: "総資産", value: "128,400万円" },

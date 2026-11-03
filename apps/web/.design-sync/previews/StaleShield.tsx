@@ -7,7 +7,7 @@ const Summary = () => (
     items={[
       { id: "date", label: "開催日", value: "2026/10/24" },
       { id: "years", label: "プレイ年数", value: "30年" },
-      { id: "winner", label: "優勝", value: "ももたろう" },
+      { id: "winner", label: "優勝", value: "いーゆー" },
       { id: "assets", label: "優勝者の総資産", value: "128,400万円" },
     ]}
   />

@@ -28,6 +28,8 @@ export type FilterBarProps = {
  * Owns the cross-feature filter operation group: labeled scope, primary controls, one detail
  * disclosure whose summary owns active hidden conditions, and stable reset/action placement.
  * Query and cache behavior deliberately remain with the feature composition.
+ * Keep it beside the data surface it scopes. Summaries name only non-default hidden values,
+ * never visible primary controls or sort, and an unknown `meta` count reads as unknown, not 0.
  */
 export function FilterBar({
   action,

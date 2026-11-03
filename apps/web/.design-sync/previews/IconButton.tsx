@@ -3,7 +3,7 @@ import { IconButton } from "momo-result-ui";
 
 export const Variants = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <IconButton aria-label="ももたろうを編集" icon={<Pencil />} variant="secondary" />
+    <IconButton aria-label="いーゆーを編集" icon={<Pencil />} variant="secondary" />
     <IconButton
       aria-label="2026/10/24 の開催を削除"
       icon={<Trash2 />}
@@ -38,6 +38,6 @@ export const States = () => (
       pending
       pendingLabel="一覧を更新中"
     />
-    <IconButton aria-label="ももたろうを編集" disabled icon={<Pencil />} />
+    <IconButton aria-label="いーゆーを編集" disabled icon={<Pencil />} />
   </div>
 );

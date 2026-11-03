@@ -64,10 +64,14 @@
     --ref-series-5: oklch(58% 0.15 340);
     --ref-series-6: oklch(57% 0.105 115);
 
+    /* Only first place carries the celebratory gold. Fourth place stays a calm slate so a
+       result never reads as an error; the danger hue is reserved for status. */
     --ref-rank-1: oklch(64% 0.155 88);
     --ref-rank-2: oklch(64% 0.035 235);
     --ref-rank-3: oklch(50% 0.085 55);
-    --ref-rank-4: oklch(56% 0.145 28);
+    --ref-rank-4: oklch(49% 0.055 272);
+
+    --ref-search-match: oklch(91% 0.075 95);
 
     --ref-gold-50: oklch(97% 0.028 88);
     --ref-gold-300: oklch(79% 0.075 80);
@@ -201,8 +205,9 @@
   --color-achievement-premium-foreground: var(--ref-gold-800);
   --color-achievement-premium-surface: var(--ref-gold-50);
   --color-achievement-premium-border: var(--ref-gold-300);
-  /* Marks the searched words inside matched text; the text color stays primary. */
-  --color-search-match-surface: color-mix(in oklab, var(--ref-rank-1) 30%, transparent);
+  /* Marks the searched words inside matched text; the text color stays primary. It owns its
+     reference value so rank colors can change without moving search highlights. */
+  --color-search-match-surface: var(--ref-search-match);
   --color-chart-segment-separator: var(--color-surface);
   --color-tray-assets: var(--ref-tray-assets);
   --color-tray-revenue: var(--ref-tray-revenue);

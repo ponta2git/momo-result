@@ -15,7 +15,7 @@ export const MatchRow = () => (
     }
   >
     <p className={contentText.heading}>第12回 桃鉄リーグ</p>
-    <p className={contentText.supporting}>2026/10/24・30年・優勝 ももたろう</p>
+    <p className={contentText.supporting}>2026/10/24・30年・優勝 いーゆー</p>
   </ContentWithActions>
 );
 

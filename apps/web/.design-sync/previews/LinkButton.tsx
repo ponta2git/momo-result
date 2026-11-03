@@ -44,7 +44,7 @@ export const WithIcon = () => (
       to="/achievements?player=momotaro"
       variant="secondary"
     >
-      ももたろうの実績
+      いーゆーの実績
     </LinkButton>
     <LinkButton href="/exports/held-event-12.csv" icon={<Download aria-hidden="true" />}>
       CSVをダウンロード

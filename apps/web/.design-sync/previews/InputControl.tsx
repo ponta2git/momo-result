@@ -3,7 +3,7 @@ import { InputControl } from "momo-result-ui";
 export const Default = () => (
   <div className="grid gap-3">
     <InputControl aria-label="開催名" defaultValue="第12回 桃鉄リーグ" />
-    <InputControl aria-label="プレイヤー名" placeholder="プレイヤー名を入力" />
+    <InputControl aria-label="プレーヤー名" placeholder="プレーヤー名を入力" />
   </div>
 );
 
@@ -26,25 +26,25 @@ export const States = () => (
 export const Tones = () => (
   <div className="grid gap-3 sm:grid-cols-2">
     <InputControl
-      aria-label="ももたろう の総資産"
+      aria-label="いーゆー の総資産"
       defaultValue="128,400"
       textAlign="end"
       tone="action"
     />
     <InputControl
-      aria-label="きんたろう の総資産"
+      aria-label="ぽんた の総資産"
       defaultValue="97,200"
       textAlign="end"
       tone="review"
     />
     <InputControl
-      aria-label="うらしま の総資産"
+      aria-label="あかねまみ の総資産"
       defaultValue="64,850"
       textAlign="end"
       tone="success"
     />
     <InputControl
-      aria-label="かぐや の総資産"
+      aria-label="おーたか の総資産"
       defaultValue="31,300"
       textAlign="end"
       tone="warning"

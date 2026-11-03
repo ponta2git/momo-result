@@ -12,7 +12,10 @@ export const contentText = {
   supporting: "text-xs/4 font-plain text-[var(--color-text-muted)]",
 } as const;
 
-/** Field labels and validation remain readable while users operate a control. */
+/**
+ * Field labels and validation remain readable while users operate a control. Field, fieldset,
+ * and custom inputs share this recipe; small metadata text never stands in for a label or error.
+ */
 export const fieldText = {
   label: "text-sm/5 font-plain text-[var(--color-text-primary)]",
   description: contentText.supporting,

@@ -13,7 +13,10 @@ type AppliedConditionChipsProps<Key extends string> = {
   onRemove: (condition: Key) => void;
 };
 
-/** Each applied condition is one removable chip, so the current scope reads in one line. */
+/**
+ * Each applied condition is one removable chip, so the current scope reads in one line.
+ * Pass only conditions that no visible control already shows; that control owns its value.
+ */
 export function AppliedConditionChips<Key extends string>({
   conditions,
   disabled = false,

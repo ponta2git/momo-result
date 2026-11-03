@@ -49,8 +49,8 @@ export const WithDetailsOpen = () => (
       columns: 2,
       controls: (
         <>
-          <Field htmlFor="filter-player" label="プレイヤー名">
-            <InputControl defaultValue="ももたろう" id="filter-player" type="search" />
+          <Field htmlFor="filter-player" label="プレーヤー名">
+            <InputControl defaultValue="いーゆー" id="filter-player" type="search" />
           </Field>
           <SelectField label="マップ" options={mapOptions} value="japan" onValueChange={noop} />
         </>
@@ -62,7 +62,7 @@ export const WithDetailsOpen = () => (
         </span>
       ),
       open: true,
-      summary: "ももたろう・日本マップ",
+      summary: "いーゆー・日本マップ",
     }}
     primary={
       <SelectField

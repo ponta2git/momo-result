@@ -17,4 +17,4 @@ export const InlineProgress = () => (
   </div>
 );
 
-export const InBadge = () => <StatusBadge busy label="OCR解析中" tone="info" />;
+export const InBadge = () => <StatusBadge busy label="OCR解析中" tone="progress" />;

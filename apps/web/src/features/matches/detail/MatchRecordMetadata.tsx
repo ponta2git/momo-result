@@ -63,7 +63,7 @@ export function MatchRecordMetadata({
                   }
                   disabled={Boolean(deleteDisabledReason)}
                   size="sm"
-                  variant="danger"
+                  variant="dangerQuiet"
                   onClick={openDeleteDialog}
                 >
                   削除

@@ -18,7 +18,7 @@ describe("MatchConfirmDialog", () => {
           actions: { onClose: vi.fn(), onConfirm: vi.fn() },
           feedback: { validationMessage: "" },
           pending: false,
-          review: { changedCount: 2, totalCount: 3, unresolvedCount: 1 },
+          review: { unresolvedCount: 1 },
           summary: {
             gameTitleName: "桃太郎電鉄2",
             heldEvent: undefined,
@@ -31,9 +31,9 @@ describe("MatchConfirmDialog", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
-    expect(within(dialog).getByText("修正 2件")).toBeInTheDocument();
-    expect(within(dialog).getByText("確認済み2件／全3件")).toBeInTheDocument();
-    expect(within(dialog).getByText(/未確認の強調項目が1件あります/u)).toBeInTheDocument();
+    // Only the caution that can change the decision; review tallies are not this dialog's subject.
+    expect(within(dialog).getByText(/未確認の読み取りが1件あります/u)).toBeInTheDocument();
+    expect(within(dialog).queryByText("OCR確認状況")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "12,345" })).toBeInTheDocument();
     expect(within(dialog).getByRole("cell", { name: "-678" })).toBeInTheDocument();
     expect(

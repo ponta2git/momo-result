@@ -98,20 +98,31 @@ const playerField = (value: unknown, confidence = 0.96) => ({
   warnings: [],
 });
 
+const incidentReading = (counts: readonly number[]) =>
+  Object.fromEntries(
+    ["目的地", "プラス駅", "マイナス駅", "カード駅", "カード売り場", "スリの銀次"].map(
+      (name, index) => [name, playerField(counts[index] ?? 0)],
+    ),
+  );
+
+/** A complete reading of all four players, so a review starts with every value read. */
 export const draftPayload = {
   category_payload: {},
   detected_screen_type: "total_assets",
   players: [
-    {
-      incidents: {},
-      member_id: "member_ponta",
-      play_order: playerField(1),
-      rank: playerField(1),
-      raw_player_name: playerField("ぽんた"),
-      revenue_man_yen: playerField(100),
-      total_assets_man_yen: playerField(1000),
-    },
-  ],
+    ["member_ponta", "ぽんた", 1000, 100, [2, 8, 4, 6, 1, 0]],
+    ["member_akane_mami", "あかねまみ", 800, 80, [1, 7, 5, 5, 2, 1]],
+    ["member_otaka", "おーたか", 600, 60, [0, 5, 6, 4, 3, 0]],
+    ["member_eu", "いーゆー", 400, 40, [1, 4, 7, 3, 1, 2]],
+  ].map(([memberId, rawName, totalAssets, revenue, incidents], index) => ({
+    incidents: incidentReading(incidents as number[]),
+    member_id: memberId,
+    play_order: playerField(index + 1),
+    rank: playerField(index + 1),
+    raw_player_name: playerField(rawName),
+    revenue_man_yen: playerField(revenue),
+    total_assets_man_yen: playerField(totalAssets),
+  })),
   profile_id: "momotetsu_2.total_assets.v1",
   raw_snippets: null,
   requested_screen_type: "total_assets",

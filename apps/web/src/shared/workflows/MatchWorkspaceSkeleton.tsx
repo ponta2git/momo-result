@@ -4,7 +4,10 @@ import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { controlSkeletonHeightClass } from "@/shared/ui/forms/controlPresentation";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { StatusBadge } from "@/shared/ui/status/StatusBadge";
-import { workspaceSampleStatus } from "@/shared/workflows/matchWorkspacePresentation";
+import {
+  matchWorkspaceSideBySideColumnsClass,
+  workspaceSampleStatus,
+} from "@/shared/workflows/matchWorkspacePresentation";
 
 export type MatchWorkspaceSkeletonProps = {
   mode: "create" | "edit" | "review";
@@ -14,8 +17,8 @@ export type MatchWorkspaceSkeletonProps = {
 
 /**
  * Mirrors the editor's slots that the URL already decides: the setup and achievement
- * triggers, the score section, the note field outside editing, the source panel when the
- * page reserves the workspace width, and the final action panel. Notices that depend on the
+ * triggers, the result and achievement tabs, the score section, the note field outside editing,
+ * the source panel when the page reserves the workspace width, and the final action panel. Notices that depend on the
  * loaded data are not guessed. The route fallback and the workspace's own loading share it.
  */
 export function MatchWorkspaceSkeleton({ mode, sample, sourcePanel }: MatchWorkspaceSkeletonProps) {
@@ -33,24 +36,24 @@ export function MatchWorkspaceSkeleton({ mode, sample, sourcePanel }: MatchWorks
         <div className="grid min-w-0">
           <div className="grid min-h-11 gap-1 px-3 py-2">
             <Skeleton className="h-5 w-32" />
-            {/* A new match opens with conditions still to choose, a 14px prompt in place of
-                the 12px summary that review and edit show. */}
-            <Skeleton className={cn("w-full max-w-80", mode === "create" ? "h-5" : "h-4")} />
+            <Skeleton className="h-4 w-full max-w-80" />
           </div>
           {mode === "create" ? <SetupFieldsSkeleton /> : null}
+        </div>
+        {/* The result and achievement views, the result opening first. */}
+        <div className="flex min-h-11 items-end gap-2 border-b border-[var(--color-border)] pointer-fine:min-h-9">
+          <Skeleton className="mb-2 h-5 w-20" />
+          <Skeleton className="mb-2 h-5 w-24" />
         </div>
         <div className="@container/match-editor min-w-0">
           <div
             className={cn(
               "grid min-w-0 grid-cols-1 gap-4",
-              sourcePanel ? "@min-[97rem]/match-editor:grid-cols-[minmax(0,1fr)_32rem]" : "",
+              sourcePanel ? matchWorkspaceSideBySideColumnsClass : "",
             )}
           >
-            <div className="order-2 grid min-w-0 gap-4 @min-[97rem]/match-editor:order-none">
+            <div className="order-2 grid min-w-0 gap-4 @min-[79rem]/match-editor:order-none">
               <ScoreSectionSkeleton />
-              <div className="flex min-h-11 items-center px-3">
-                <Skeleton className="h-5 w-40" />
-              </div>
               {mode === "edit" ? null : (
                 <div className="grid gap-2">
                   <div className="grid gap-1">
@@ -61,21 +64,16 @@ export function MatchWorkspaceSkeleton({ mode, sample, sourcePanel }: MatchWorks
                 </div>
               )}
             </div>
-            <div className="contents @min-[97rem]/match-editor:grid @min-[97rem]/match-editor:h-fit @min-[97rem]/match-editor:gap-4">
-              {sourcePanel ? (
-                <div className="order-1 @min-[97rem]/match-editor:order-none">
-                  <SourcePanelSkeleton />
-                </div>
-              ) : null}
-              <div className="order-3 @min-[97rem]/match-editor:order-none">
-                <div className={taskActionPanelClass}>
-                  <div className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                    <Skeleton className="h-5 w-full max-w-56" />
-                    <Skeleton className="h-[3.125rem] w-40 rounded-sm" />
-                  </div>
-                </div>
+            {sourcePanel ? (
+              <div className="order-1 @min-[79rem]/match-editor:order-none">
+                <SourcePanelSkeleton />
               </div>
-            </div>
+            ) : null}
+          </div>
+        </div>
+        <div className={taskActionPanelClass}>
+          <div className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <Skeleton className="h-[3.125rem] w-40 rounded-sm sm:col-start-2" />
           </div>
         </div>
       </div>

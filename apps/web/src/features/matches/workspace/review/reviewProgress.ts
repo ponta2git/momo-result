@@ -11,6 +11,7 @@ import type {
   ReviewFieldEvidence,
   ReviewFieldKey,
 } from "@/features/matches/workspace/review/reviewWarningModel";
+import { unreadFieldsOf } from "@/features/matches/workspace/review/unreadFields";
 import { incidentDefinitions } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
 
@@ -66,6 +67,14 @@ export function buildReviewItems(args: {
     }
     const playerName = memberDisplayName(player.memberId);
     const incidentEvidence = args.incidentByPlayOrder?.get(player.playOrder)?.evidence ?? {};
+    // An unread value asks for input, not for confirming a reading.
+    const unread = new Set<string>(
+      unreadFieldsOf({
+        incidentByPlayOrder: args.incidentByPlayOrder,
+        original,
+        playOrder: player.playOrder,
+      }),
+    );
     const candidates = [
       toReviewItem({
         evidence: original.evidence.member,
@@ -106,37 +115,8 @@ export function buildReviewItems(args: {
         }),
       ),
     ];
-    return candidates.filter((item): item is ReviewItem => item !== null);
+    return candidates.filter(
+      (item): item is ReviewItem => item !== null && !unread.has(item.field),
+    );
   });
-}
-
-export function countChangedReviewCells(args: {
-  incidentByPlayOrder: Map<number, IncidentLookupEntry> | undefined;
-  originalPlayers: readonly OriginalPlayerSnapshot[] | undefined;
-  players: MatchFormValues["players"];
-}): number {
-  if (!args.originalPlayers) {
-    return 0;
-  }
-  let changed = 0;
-  args.players.forEach((player, row) => {
-    const original = args.originalPlayers?.[row];
-    if (!original) {
-      return;
-    }
-    if (player.memberId !== original.memberId) changed += 1;
-    if (player.playOrder !== original.playOrder) changed += 1;
-    if (player.rank !== original.rank) changed += 1;
-    if (player.totalAssetsManYen !== original.totalAssetsManYen) changed += 1;
-    if (player.revenueManYen !== original.revenueManYen) changed += 1;
-
-    const incidentOriginal = args.incidentByPlayOrder?.get(player.playOrder)?.counts;
-    for (const definition of incidentDefinitions) {
-      const originalValue = incidentOriginal?.[definition.label] ?? 0;
-      if (player.incidents[definition.key] !== originalValue) {
-        changed += 1;
-      }
-    }
-  });
-  return changed;
 }

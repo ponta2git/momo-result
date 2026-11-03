@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { MatchAchievementSelection } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchSetupValues } from "@/features/matches/workspace/matchFormTypes";
@@ -21,7 +21,6 @@ export function useMatchAchievementFields({
   values,
   onChange,
 }: MatchAchievementFieldsProps) {
-  const [open, setOpen] = useState(values.length > 0);
   const catalog = useQuery(achievementCatalogQueryOptions(setup.gameTitleId || undefined));
   const catalogItems = useMemo(
     () => new Map(catalog.data?.items.map((item) => [item.achievementId, item])),
@@ -87,8 +86,6 @@ export function useMatchAchievementFields({
       },
     ]);
   return {
-    open,
-    setOpen,
     loading: catalog.isLoading,
     refreshing: catalog.isFetching,
     failed: catalog.isError,

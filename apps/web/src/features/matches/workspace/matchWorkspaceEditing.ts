@@ -9,6 +9,10 @@ import type { MatchNumericDrafts } from "@/features/matches/workspace/matchNumer
 import { buildReviewItems } from "@/features/matches/workspace/review/reviewProgress";
 import { reviewCellId } from "@/features/matches/workspace/review/reviewWarningModel";
 import type { ReviewFieldKey } from "@/features/matches/workspace/review/reviewWarningModel";
+import {
+  unreadFieldsOf,
+  withEmptyUnreadInputs,
+} from "@/features/matches/workspace/review/unreadFields";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import {
   emptyIncidentCountsByKey,
@@ -33,6 +37,10 @@ export type MatchWorkspaceEdit =
       type: "change-setup";
       field: Exclude<keyof MatchSetupValues, "heldEventId">;
       value: string | number;
+    }
+  | {
+      type: "fill-setup";
+      patch: Partial<Pick<MatchSetupValues, "gameTitleId" | "mapMasterId" | "seasonMasterId">>;
     }
   | { type: "change-note"; value: string }
   | { type: "change-achievements"; value: MatchAchievementSelection[] }
@@ -142,6 +150,10 @@ export function transitionMatchWorkspaceEditing(
             : { [edit.field]: edit.value }),
         },
       };
+    case "fill-setup":
+      // Defaults fill empty conditions together, so a filled 作品 keeps the シーズン and マップ
+      // filled with it; a user's change of 作品 still clears them through change-setup.
+      return { ...state, values: { ...state.values, ...edit.patch } };
     case "change-note":
       return {
         ...state,
@@ -185,11 +197,13 @@ export function transitionMatchWorkspaceEditing(
     }
     case "change-play-order": {
       const incidentByPlayOrder = state.initialData?.incidentByPlayOrder;
+      // Without any incident reading there is nothing to follow; the row keeps what was entered.
+      const syncIncidents = incidentByPlayOrder !== undefined && incidentByPlayOrder.size > 0;
       const source = incidentByPlayOrder?.get(edit.value);
       let values = updatePlayer(state.values, edit.index, (player) => ({
         ...player,
         playOrder: edit.value,
-        ...(incidentByPlayOrder
+        ...(syncIncidents
           ? {
               incidents: source
                 ? incidentCountsByLabelToKey(source.counts)
@@ -197,14 +211,23 @@ export function transitionMatchWorkspaceEditing(
             }
           : {}),
       }));
-      // OCR incidents replace the row's visible incident input, including unfinished text.
-      if (incidentByPlayOrder) {
+      // OCR incidents replace the row's visible incident input, including unfinished text, and
+      // the counts that column left unread start empty again.
+      if (syncIncidents) {
         values = replaceNumericDrafts(
           values,
-          Object.fromEntries(
-            Object.entries(values.numericDrafts ?? {}).filter(
-              ([path]) => !path.startsWith(`players.${edit.index}.incidents.`),
+          withEmptyUnreadInputs(
+            Object.fromEntries(
+              Object.entries(values.numericDrafts ?? {}).filter(
+                ([path]) => !path.startsWith(`players.${edit.index}.incidents.`),
+              ),
             ),
+            edit.index,
+            unreadFieldsOf({
+              incidentByPlayOrder,
+              original: state.initialData?.originalPlayers[edit.index],
+              playOrder: edit.value,
+            }).filter((field) => field.startsWith("incident.")),
           ),
         );
       }
@@ -217,10 +240,12 @@ export function transitionMatchWorkspaceEditing(
         {
           ...state,
           values,
-          lastIncidentSyncPlayerIndex: incidentByPlayOrder
+          lastIncidentSyncPlayerIndex: syncIncidents
             ? edit.index
             : state.lastIncidentSyncPlayerIndex,
-          acknowledgedCellIds: state.acknowledgedCellIds.filter((id) => !invalidated.has(id)),
+          acknowledgedCellIds: syncIncidents
+            ? state.acknowledgedCellIds.filter((id) => !invalidated.has(id))
+            : state.acknowledgedCellIds,
         },
         reviewCellId(edit.index, "playOrder"),
       );

@@ -143,9 +143,15 @@ describe("validateMatchForm", () => {
   });
 
   it.each([
-    { path: "players.0.rank", input: "", message: "数値を入力してください" },
     { path: "players.1.revenueManYen", input: "-", message: "数値を入力してください" },
     { path: "players.2.incidents.destination", input: "-1" },
+    // An empty input names the player and value it is missing among the four players' values.
+    { path: "players.0.rank", input: "", message: "ぽんたの順位を入力してください" },
+    {
+      path: "players.3.incidents.cardShop",
+      input: "",
+      message: "いーゆーのカード売り場を入力してください",
+    },
   ])(
     "validates the visible $path draft instead of its previous valid number",
     ({ path, input, message }) => {

@@ -86,6 +86,11 @@ export function resolvePlayOrders(entries: ReadonlyArray<OcrPlayerEntry | undefi
   );
 }
 
+export function hasNumberValue(field: OcrField<number> | undefined): boolean {
+  const value = field?.value;
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 export function numberValue(field: OcrField<number> | undefined, fallback: number): number {
   const value = field?.value;
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;

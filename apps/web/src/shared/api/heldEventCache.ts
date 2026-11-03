@@ -13,6 +13,17 @@ export function mergeHeldEventItems(
     : heldEvents;
 }
 
+/** An event read on its own for a record's defaults replaces its possibly older list entry. */
+export function preferHeldEventItem(
+  heldEvents: HeldEventResponse[],
+  event: HeldEventResponse | undefined,
+): HeldEventResponse[] {
+  if (!event) return heldEvents;
+  return heldEvents.some((candidate) => candidate.id === event.id)
+    ? heldEvents.map((candidate) => (candidate.id === event.id ? event : candidate))
+    : [event, ...heldEvents];
+}
+
 /** Seed the committed event without inventing membership or counts for a server-owned page. */
 export async function syncHeldEventCreatedCache(
   queryClient: QueryClient,

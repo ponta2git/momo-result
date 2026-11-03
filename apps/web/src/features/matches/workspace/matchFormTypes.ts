@@ -4,6 +4,7 @@ import type {
   ReviewFieldEvidence,
   ReviewPlayerEvidence,
 } from "@/features/matches/workspace/review/reviewWarningModel";
+import type { UnreadPlayerField } from "@/features/matches/workspace/review/unreadFields";
 import type { OcrDraftResponse } from "@/shared/api/ocrDrafts";
 import { emptyIncidentCountsByKey } from "@/shared/domain/incidents";
 import type { IncidentKey, IncidentLabel } from "@/shared/domain/incidents";
@@ -19,6 +20,8 @@ export type IncidentLookupEntry = {
   confidence: Partial<Record<IncidentLabel, number | null>>;
   counts: ReviewIncidentCounts;
   evidence: Partial<Record<IncidentLabel, ReviewFieldEvidence>>;
+  /** Counts the incident log left without a reading; their `counts` entry is only a placeholder. */
+  unread?: readonly IncidentLabel[];
 };
 
 export type OriginalPlayerSnapshot = {
@@ -35,6 +38,8 @@ export type OriginalPlayerSnapshot = {
   rawPlayerName?: string | undefined;
   revenueManYen: number;
   totalAssetsManYen: number;
+  /** Values the OCR result left without a reading; the matching numbers are only placeholders. */
+  unread?: readonly UnreadPlayerField[];
   warnings: string[];
   evidence: ReviewPlayerEvidence;
 };

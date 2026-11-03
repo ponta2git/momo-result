@@ -6,6 +6,10 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormTypes";
 import { mergeDrafts } from "@/features/matches/workspace/review/reviewViewModel";
+import {
+  unreadFieldsOf,
+  withEmptyUnreadInputs,
+} from "@/features/matches/workspace/review/unreadFields";
 import { incidentCountsByLabelToKey } from "@/shared/domain/incidents";
 import type { MemberAliasDirectory } from "@/shared/domain/memberDirectory";
 
@@ -55,6 +59,19 @@ export function draftToMatchForm(input: {
     })) as MatchFormValues["players"],
     seasonMasterId: input.draftSummary?.seasonMasterId ?? "",
   };
+  const numericDrafts = values.players.reduce(
+    (drafts, player, row) =>
+      withEmptyUnreadInputs(
+        drafts,
+        row,
+        unreadFieldsOf({
+          incidentByPlayOrder: merged.incidentByPlayOrder,
+          original: merged.players[row],
+          playOrder: player.playOrder,
+        }),
+      ),
+    {},
+  );
 
   return {
     initialData: {
@@ -63,6 +80,6 @@ export function draftToMatchForm(input: {
       originalPlayers: merged.players,
       warnings: merged.warnings,
     },
-    values,
+    values: Object.keys(numericDrafts).length > 0 ? { ...values, numericDrafts } : values,
   };
 }

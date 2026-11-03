@@ -26,19 +26,23 @@ export function MatchFormActions({ view, primaryActionRef }: MatchFormActionsPro
       ) : null}
       {/* Same columns and action size as the OCR start panel, the other final execution step. */}
       <div className="grid gap-x-4 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <p className={cn(contentText.body, "text-pretty", readableTextWidthClass)}>
-          {view.feedback.message}
-        </p>
-        <Button
-          ref={primaryActionRef}
-          disabled={view.availability.disabled || view.availability.pending}
-          pending={view.availability.pending}
-          pendingLabel={view.action.label === "保存" ? "保存中…" : "送信中…"}
-          size="lg"
-          onClick={view.action.onRun}
-        >
-          {view.action.label}
-        </Button>
+        {view.feedback.message ? (
+          <p className={cn(contentText.body, "text-pretty", readableTextWidthClass)}>
+            {view.feedback.message}
+          </p>
+        ) : null}
+        <div className="sm:col-start-2">
+          <Button
+            ref={primaryActionRef}
+            disabled={view.availability.disabled || view.availability.pending}
+            pending={view.availability.pending}
+            pendingLabel={view.action.label === "保存" ? "保存中…" : "送信中…"}
+            size="lg"
+            onClick={view.action.onRun}
+          >
+            {view.action.label}
+          </Button>
+        </div>
       </div>
     </section>
   );

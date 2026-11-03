@@ -29,6 +29,8 @@ export function useOcrSetup({
     heldEventNotFound: heldEventContext === "notFound",
     heldEvents,
     mapMasters,
+    previousMatchSetup: options.previousMatchSetup,
+    recordContextPending: options.recordContextPending,
     seasonMasters,
     value,
   });

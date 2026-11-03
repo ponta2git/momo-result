@@ -26,8 +26,20 @@ export function useMatchWorkspaceValidation({
   const validatedValues = settled ? deferredValues : values;
   const validation = useMemo(() => validateMatchForm(validatedValues), [validatedValues]);
   const emptyErrorPathSet = useMemo(() => new Set<string>(), []);
-  const visibleErrorPathSet =
-    ready && (showValidationErrors || mode !== "create") ? validation.pathSet : emptyErrorPathSet;
+  // Loaded values show their problems at once, but an input still waiting for its first entry
+  // (an unread OCR value) is not an error until the user tries to proceed.
+  const drafts = validatedValues.numericDrafts;
+  const loadedErrorPathSet = useMemo(
+    () => new Set([...validation.pathSet].filter((path) => drafts?.[path] !== "")),
+    [drafts, validation.pathSet],
+  );
+  const visibleErrorPathSet = ready
+    ? showValidationErrors
+      ? validation.pathSet
+      : mode === "create"
+        ? emptyErrorPathSet
+        : loadedErrorPathSet
+    : emptyErrorPathSet;
 
   return { validation, visibleErrorPathSet };
 }

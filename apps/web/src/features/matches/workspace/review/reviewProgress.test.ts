@@ -2,10 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { draftToMatchForm } from "@/features/matches/workspace/draftToMatchForm";
-import {
-  buildReviewItems,
-  countChangedReviewCells,
-} from "@/features/matches/workspace/review/reviewProgress";
+import { buildReviewItems } from "@/features/matches/workspace/review/reviewProgress";
 import { createSampleDraftMap } from "@/features/matches/workspace/review/sampleDrafts";
 
 function preparedSample() {
@@ -31,20 +28,5 @@ describe("reviewProgress", () => {
     ]);
     expect(items[0]?.message).toBe("既知エイリアスで解決");
     expect(items[1]?.message).toBe("順位の視認性が低い");
-  });
-
-  it("counts only values that differ from their OCR source", () => {
-    const prepared = preparedSample();
-    const changedPlayers = structuredClone(prepared.values.players);
-    changedPlayers[0]!.totalAssetsManYen += 1;
-    changedPlayers[0]!.incidents.destination += 1;
-
-    expect(
-      countChangedReviewCells({
-        incidentByPlayOrder: prepared.initialData.incidentByPlayOrder,
-        originalPlayers: prepared.initialData.originalPlayers,
-        players: changedPlayers,
-      }),
-    ).toBe(2);
   });
 });

@@ -180,8 +180,6 @@ export function MatchWorkspacePersistence({
         cancelDraftConfirmOpen,
         operationError,
         validationMessage,
-        valid: validation.validation.success,
-        firstValidationMessage: validation.validation.firstMessage,
       }),
     [
       mode,
@@ -192,8 +190,6 @@ export function MatchWorkspacePersistence({
       cancelDraftConfirmOpen,
       operationError,
       validationMessage,
-      validation.validation.success,
-      validation.validation.firstMessage,
     ],
   );
   const interaction = useMemo(
@@ -266,11 +262,7 @@ export function MatchWorkspacePersistence({
             },
             feedback: { validationMessage: validationMessage },
             pending: submitFlow.confirmation.pending,
-            review: {
-              changedCount: confirmationSnapshot.changedCount,
-              totalCount: confirmationSnapshot.totalCount,
-              unresolvedCount: confirmationSnapshot.unresolvedCount,
-            },
+            review: { unresolvedCount: confirmationSnapshot.unresolvedCount },
             summary: {
               gameTitleName: view.selectedGameTitle?.name,
               heldEvent: view.selectedHeldEvent,

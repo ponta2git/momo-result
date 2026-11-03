@@ -5,7 +5,7 @@ import {
   resolveHeldEventContext,
 } from "@/features/ocrCapture/setup/ocrSetupModel";
 import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
-import { mergeHeldEventItems } from "@/shared/api/heldEventCache";
+import { preferHeldEventItem } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -16,7 +16,6 @@ import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
 import { shouldShowQueryError } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventSummaryQueryOptions,
   heldEventsQueryOptions,
   mapMastersQueryOptions,
   seasonMastersQueryOptions,
@@ -25,6 +24,7 @@ import {
   heldEventPickerPageSize,
   useHeldEventPickerDirectory,
 } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import { useRecordContext } from "@/shared/heldEvents/useRecordContext";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type OcrSetupOptionsParams = {
@@ -79,10 +79,9 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
     ...heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
     enabled,
   });
-  const preferredHeldEventQuery = useQuery({
-    ...heldEventSummaryQueryOptions(value.heldEventId, Boolean(value.heldEventId)),
-    enabled: enabled && Boolean(value.heldEventId),
-  });
+  // The chosen held event is read with its matches: its next number and previous match decide
+  // the defaults by the same rule as manual entry.
+  const recordContext = useRecordContext(value.heldEventId, enabled);
   const mapMastersQuery = useQuery({
     ...mapMastersQueryOptions(value.gameTitleId, Boolean(value.gameTitleId)),
     enabled: enabled && Boolean(value.gameTitleId),
@@ -93,9 +92,9 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   });
 
   const gameTitles = gameTitlesQuery.data?.items ?? emptyGameTitles;
-  const heldEvents = mergeHeldEventItems(
+  const heldEvents = preferHeldEventItem(
     heldEventsQuery.data?.items ?? emptyHeldEvents,
-    preferredHeldEventQuery.data,
+    recordContext.event,
   );
   const mapMasters = mapMastersQuery.data?.items ?? emptyMapMasters;
   const seasonMasters = seasonMastersQuery.data?.items ?? emptySeasonMasters;
@@ -108,18 +107,20 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   });
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const heldEventsLoadFailed = shouldShowQueryError(heldEventsQuery);
-  const preferredHeldEventLoadFailed = shouldShowQueryError(preferredHeldEventQuery);
+  const preferredHeldEventLoadFailed = recordContext.showError && !recordContext.notFound;
   const mapMastersLoadFailed = shouldShowQueryError(mapMastersQuery);
   const seasonMastersLoadFailed = shouldShowQueryError(seasonMastersQuery);
-  const preferredHeldEventStatus = preferredHeldEventLoadFailed
-    ? normalizeUnknownApiError(preferredHeldEventQuery.error).status
-    : undefined;
+  const preferredHeldEventStatus = recordContext.notFound
+    ? 404
+    : preferredHeldEventLoadFailed
+      ? normalizeUnknownApiError(recordContext.error).status
+      : undefined;
   const heldEventContext = resolveHeldEventContext({
     detailErrorStatus: preferredHeldEventStatus,
     detailFailed: preferredHeldEventLoadFailed,
     directoryFailed: heldEventsLoadFailed,
     enabled,
-    fetching: heldEventsQuery.isFetching || preferredHeldEventQuery.isFetching,
+    fetching: heldEventsQuery.isFetching || recordContext.fetching,
     selected: Boolean(selectedHeldEvent),
     selectedId: value.heldEventId,
   });
@@ -129,6 +130,7 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   const loading =
     gameTitlesQuery.isLoading ||
     heldEventContextLoading ||
+    recordContext.pending ||
     (Boolean(value.gameTitleId) && (mapMastersQuery.isLoading || seasonMastersQuery.isLoading));
   const refreshing =
     gameTitlesQuery.isFetching ||
@@ -157,7 +159,7 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
       gameTitlesQuery.refetch(),
       heldEventsQuery.refetch({ cancelRefetch: false }),
       heldEventPicker.refresh(),
-      ...(value.heldEventId ? [preferredHeldEventQuery.refetch({ cancelRefetch: false })] : []),
+      ...(value.heldEventId ? [recordContext.retry({ cancelRefetch: false })] : []),
       mapMastersQuery.refetch(),
       seasonMastersQuery.refetch(),
     ]);
@@ -178,6 +180,8 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
     heldEvents,
     heldEventContext,
     heldEventPicker,
+    previousMatchSetup: recordContext.previous,
+    recordContextPending: recordContext.pending,
     hasError: useRetryNotice(
       hasError,
       refreshing,
@@ -187,12 +191,12 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
       heldEventContextNotFound
         ? "選択した開催は見つかりませんでした。"
         : heldEventContextFailed
-          ? (queryErrorMessage(preferredHeldEventQuery.error ?? heldEventsQuery.error) ??
+          ? (queryErrorMessage(recordContext.error ?? heldEventsQuery.error) ??
             "選択した開催を読み込めません。")
           : heldEventsLoadFailed
             ? queryErrorMessage(heldEventsQuery.error)
             : undefined,
-      heldEventsQuery.isFetching || preferredHeldEventQuery.isFetching,
+      heldEventsQuery.isFetching || recordContext.fetching,
       `${enabled}:${value.heldEventId ?? ""}`,
     ),
     heldEventsPlaceholder: gameTitlesPlaceholder({

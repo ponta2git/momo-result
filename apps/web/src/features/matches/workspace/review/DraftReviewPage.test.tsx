@@ -19,6 +19,7 @@ import { MatchDetailPage } from "@/features/matches/detail/MatchDetailPage";
 import { DraftReviewPage } from "@/features/matches/workspace/DraftReviewPage";
 import { matchWorkspaceSessionDraftKey } from "@/features/matches/workspace/matchWorkspaceSessionDraft";
 import type { AuthMeResponse } from "@/shared/api/auth";
+import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { matchKeys } from "@/shared/api/queryKeys";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
@@ -27,6 +28,7 @@ import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeHeldEventResponse, makeMatchDetail } from "@/test/factories";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
+import { draftPayload } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -171,6 +173,73 @@ describe("DraftReviewPage", () => {
       }),
     );
     expect(await screen.findByText("試合詳細")).toBeInTheDocument();
+  });
+
+  it("asks for a value OCR could not read instead of presenting it as 0", async () => {
+    setDevUser();
+    let submitted: ConfirmMatchRequest | undefined;
+    const review = makeMatchDraftReviewResponse("session-unread");
+    const unreadRevenue = structuredClone(draftPayload);
+    unreadRevenue.players[1]!.revenue_man_yen.value = null as unknown as number;
+    server.use(
+      http.get("/api/match-drafts/:draftId/review", () =>
+        HttpResponse.json({
+          ...review,
+          ocrDrafts: review.ocrDrafts?.map((draft) => ({ ...draft, payloadJson: unreadRevenue })),
+        }),
+      ),
+      http.post("/api/matches", async ({ request }) => {
+        submitted = (await request.json()) as ConfirmMatchRequest;
+        return HttpResponse.json({
+          createdAt: "2026-01-01T00:00:00.000Z",
+          heldEventId: "held-1",
+          matchId: "match-unread",
+          matchNoInEvent: 3,
+        });
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/review/session-unread"]}>
+          <Routes>
+            <Route path="/review/:matchSessionId" element={<DraftReviewPage />} />
+            <Route path="/matches/:matchId" element={<p>試合詳細</p>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitForReviewWorkspaceReady();
+    const revenue = screen.getByLabelText("あかねまみ 収益（万円）");
+    expect(revenue).toHaveValue("");
+    expect(revenue).toHaveAccessibleDescription(expect.stringContaining("未読み取り"));
+    // Waiting for its first entry is not an error yet.
+    expect(revenue).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("ぽんた 収益（万円）")).toHaveValue("100");
+
+    // The execution area serves both views; a missing result value reopens the result view.
+    await user.click(screen.getByRole("tab", { name: /^実績（任意）/u }));
+    expect(revenue).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    await waitFor(() => expect(revenue).toHaveFocus());
+    expect(screen.getByRole("tab", { name: "試合結果" })).toHaveAttribute("aria-selected", "true");
+    expect(revenue).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getAllByText("あかねまみの収益を入力してください")).not.toHaveLength(0);
+
+    await user.type(revenue, "55");
+    await user.tab();
+    expect(revenue).toHaveAccessibleDescription(expect.stringContaining("手入力"));
+    await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
+    const dialog = await screen.findByRole("dialog", { name: "この内容で確定しますか？" });
+    expect(within(dialog).queryByText(/未確認の読み取り/u)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "確定する" }));
+    await waitFor(() =>
+      expect(submitted?.players).toContainEqual(
+        expect.objectContaining({ memberId: "member_akane_mami", revenueManYen: 55 }),
+      ),
+    );
   });
 
   it("redirects to the confirmed match when the draft is already confirmed on load", async () => {
@@ -794,7 +863,8 @@ describe("DraftReviewPage", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("一覧にない開催を追加する");
+    // The sample carries no conditions; the lone candidates fill them, so the panel opens closed.
+    await user.click(await screen.findByRole("button", { name: "条件を変更" }));
     await user.click(screen.getByText("一覧にない開催を追加する"));
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
 
@@ -837,9 +907,11 @@ describe("DraftReviewPage", () => {
     );
 
     await waitForSampleWorkspaceReady();
+    await user.clear(screen.getByLabelText("あかねまみ 総資産（万円）"));
     await user.click(screen.getByRole("button", { name: "確定前の確認へ進む" }));
 
-    await waitFor(() => expect(screen.getByRole("combobox", { name: /作品/u })).toHaveFocus());
+    await waitFor(() => expect(screen.getByLabelText("あかねまみ 総資産（万円）")).toHaveFocus());
+    expect(screen.getAllByText("あかねまみの総資産を入力してください")).not.toHaveLength(0);
     expect(
       screen.queryByRole("dialog", { name: "この内容で確定しますか？" }),
     ).not.toBeInTheDocument();

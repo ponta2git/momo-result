@@ -15,7 +15,11 @@ type MatchResultLedgerRow = MatchPerformanceContextRow & {
   details?: ReactNode;
 };
 
-type MatchResultLedgerContextStatus = "loading" | "ready" | "unavailable";
+/**
+ * `loading` is an in-flight read that ends by itself. `calculating` waits for a queued or running
+ * analysis that this page does not track, so it must not read as loading.
+ */
+type MatchResultLedgerContextStatus = "loading" | "calculating" | "ready" | "unavailable";
 type MatchResultLedgerPresentation = "embedded" | "standalone";
 
 export const matchResultLedgerRowClass = "grid min-w-0 content-start gap-4 p-4";
@@ -105,6 +109,9 @@ function AverageRankChange({
 }) {
   if (contextStatus === "loading") {
     return <span className={contentText.supporting}>比較データを読み込み中</span>;
+  }
+  if (contextStatus === "calculating") {
+    return <span className={contentText.supporting}>集計待ち</span>;
   }
   if (
     contextStatus === "unavailable" ||

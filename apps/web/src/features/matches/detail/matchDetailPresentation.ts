@@ -83,14 +83,17 @@ export function buildMatchAnalysisView({
       ? context
       : undefined;
   const performanceContext = matchPerformanceContextFromArtifact(matchingContext);
-  const loading =
-    statusLoading ||
-    contextLoading ||
-    calculationStatus === "queued" ||
-    calculationStatus === "running";
+  const loading = statusLoading || contextLoading;
+  const calculating = calculationStatus === "queued" || calculationStatus === "running";
   return {
     comparisonContextStatus:
-      performanceContext === undefined ? (loading ? "loading" : "unavailable") : "ready",
+      performanceContext !== undefined
+        ? "ready"
+        : loading
+          ? "loading"
+          : calculating
+            ? "calculating"
+            : "unavailable",
     // Only an in-flight read reserves space for its results; a queued calculation has no end here.
     contextPending: matchingContext === undefined && (statusLoading || contextLoading),
     badges: buildMatchFeatureBadges({

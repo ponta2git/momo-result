@@ -48,10 +48,11 @@ const matchFeatureDefinitions = {
     label: "借金あり",
     tone: "notice",
   },
+  // The analysis feature lists each member who reached no destination, like negative_assets.
   no_destination: {
-    description: "全社長の目的地到着数が0回だった試合です。",
+    description: "目的地到着数が0回の社長がいた試合です。",
     id: "no_destination",
-    label: "目的地なし決着",
+    label: "目的地0回の社長あり",
     tone: "neutral",
   },
 } satisfies Record<MatchFeatureId, MatchFeatureDefinition>;

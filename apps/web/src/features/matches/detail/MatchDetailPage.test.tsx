@@ -526,7 +526,7 @@ describe("MatchDetailPage", () => {
     expect(screen.getByText("物件収益ねじれ")).toBeInTheDocument();
     expect(screen.getByText("スリの銀次多発")).toBeInTheDocument();
     expect(screen.getByText("借金あり")).toBeInTheDocument();
-    expect(screen.getByText("目的地なし決着")).toBeInTheDocument();
+    expect(screen.getByText("目的地0回の社長あり")).toBeInTheDocument();
     expect(screen.getByText("大差")).toBeInTheDocument();
     expect(screen.getByText(/同じ作品・シーズン・マップの初戦から集計/u)).toBeInTheDocument();
     const contextParams = new URLSearchParams(contextSearches.at(-1));
@@ -671,7 +671,8 @@ describe("MatchDetailPage", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findAllByText("比較データを読み込み中")).toHaveLength(4);
+    expect(await screen.findAllByText("集計待ち")).toHaveLength(4);
+    expect(screen.queryByText("比較データを読み込み中")).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "試合の特徴" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /特徴を/u })).not.toBeInTheDocument();
     expect(statusAttempts).toBe(1);

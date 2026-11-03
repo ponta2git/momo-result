@@ -1,6 +1,5 @@
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { memo } from "react";
-import { useSearchParams } from "react-router-dom";
 
 import { CameraCapture } from "@/features/ocrCapture/CameraCapture";
 import { CaptureRail } from "@/features/ocrCapture/CaptureRail";
@@ -15,10 +14,9 @@ import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import {
   OcrCaptureSetupProvider,
   OcrCaptureSetupSection,
+  useOcrCaptureExitHref,
 } from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
-import { trimSearchParam } from "@/shared/lib/searchParams";
-import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
 import { inlineActionGroupClass, taskActionPanelClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
@@ -32,29 +30,27 @@ import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function OcrCapturePage() {
   const auth = useOcrCaptureAuth();
-  const [searchParams] = useSearchParams();
-  // A capture started from a held event's hub returns there; without one, to the matches.
-  const startedFrom = trimSearchParam(searchParams.get("heldEventId"));
-  const exitHref = startedFrom ? heldEventDetailHref(startedFrom) : "/matches";
   return (
     <OcrCaptureSetupProvider authReady={auth.ready} key={auth.accountId ?? "unresolved"}>
       <PageFrame>
         <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-          <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to={exitHref}
-              variant="quiet"
-            >
-              取り込みをやめる
-            </LinkButton>
-          </nav>
+          <OcrCaptureExit />
           <OcrCaptureSetupSection />
           <OcrCaptureWorkspace />
         </PageContentSurface>
       </PageFrame>
     </OcrCaptureSetupProvider>
+  );
+}
+
+function OcrCaptureExit() {
+  const exitHref = useOcrCaptureExitHref();
+  return (
+    <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+      <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={exitHref} variant="quiet">
+        取り込みをやめる
+      </LinkButton>
+    </nav>
   );
 }
 

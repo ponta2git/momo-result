@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 
-export type LatestHeldEventView =
+type LatestHeldEventView =
   | { readonly kind: "loading" }
   | { readonly kind: "failed"; readonly retry: () => void; readonly retrying: boolean }
   | { readonly kind: "none" }

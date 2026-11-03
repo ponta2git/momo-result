@@ -41,6 +41,7 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | 通常・invalid の境界 recipe と control の tone 優先順位 | `shared/ui/forms/controlPresentation` |
 | 状態 tone の枠・面の強さ | `styles.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
 | 分類・特徴など小さな標章の寸法・角丸・tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `compactBadgeToneClass` |
+| ブラウザー title と主ナビの現在地（route の意味） | `app/router.tsx` の各 route の `handle`（`app/routeHandle.ts` の `RouteHandle` の `title` / `navArea`） |
 | global navigation の下で止める sticky の位置 | `styles.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |

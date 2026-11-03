@@ -7,6 +7,7 @@ import { OcrSetupPanel } from "@/features/ocrCapture/setup/OcrSetupPanel";
 import { defaultOcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { useOcrSetup } from "@/features/ocrCapture/setup/useOcrSetup";
 import { trimSearchParam } from "@/shared/lib/searchParams";
+import { recordExitHref } from "@/shared/navigation/matchLinks";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
@@ -75,6 +76,14 @@ export function useOcrCaptureSetupSubmission() {
   const setup = useContext(SetupSubmissionContext);
   if (!setup) throw new Error("OCR setup is unavailable");
   return setup;
+}
+
+/** Leaving a capture returns to the held event it records into, like leaving a manual entry. */
+export function useOcrCaptureExitHref(): string {
+  const setup = useContext(SetupDisplayContext);
+  if (!setup) throw new Error("OCR setup is unavailable");
+  const { selectedHeldEvent, value } = setup.panel.fields.heldEvent;
+  return recordExitHref(value || undefined, selectedHeldEvent?.publicId);
 }
 
 export function OcrCaptureSetupSection() {

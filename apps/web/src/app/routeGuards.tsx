@@ -78,16 +78,15 @@ function LoginAuthLoading() {
 }
 
 /** Holds the requested route's structural skeleton, so a session check keeps width and slots. */
-function AuthLoading({ message, standalone = false }: { message: string; standalone?: boolean }) {
+function AuthLoading({ message }: { message: string }) {
   const location = useLocation();
-  const fallback = (
+  return (
     <RouteSuspenseFallback
       loadingLabel={message}
       pathname={location.pathname}
       search={location.search}
     />
   );
-  return standalone ? <StandaloneRouteMain>{fallback}</StandaloneRouteMain> : fallback;
 }
 
 function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () => void }) {

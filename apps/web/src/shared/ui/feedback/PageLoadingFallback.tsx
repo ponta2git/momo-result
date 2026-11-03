@@ -31,7 +31,7 @@ export type PageLoadingKind =
 
 type PageLoadingActionShape = {
   actionSize?: "sm" | "md" | undefined;
-  actionSlots?: 0 | 1 | 2 | 3 | undefined;
+  actionSlots?: 0 | 1 | 2 | undefined;
   actionWidths?: readonly PageLoadingActionWidth[] | undefined;
 };
 

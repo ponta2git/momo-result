@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link, useMatch, useResolvedPath } from "react-router-dom";
 
-import { buttonClassName } from "@/shared/ui/actions/actionRecipes";
+import { ActionLink } from "@/shared/ui/actions/ActionLink";
+import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
 import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
@@ -18,6 +19,9 @@ export type GlobalNavItem = {
 };
 
 const emptyNavItems: readonly GlobalNavItem[] = [];
+
+/** The current location's mark, shared by destinations and the action while it is in use. */
+const navCurrentClass = "momo-surface-nav-current border-[var(--color-action)]/60";
 
 type GlobalNavProps = {
   /**
@@ -52,7 +56,7 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
       className={cn(
         "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
         current
-          ? "momo-surface-nav-current border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
+          ? cn(navCurrentClass, "text-[var(--color-text-primary)]")
           : "text-[var(--color-text-secondary)]",
       )}
     >
@@ -66,24 +70,20 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
 
 /** An operation rather than a destination: framed like a secondary action, marked while in use. */
 function NavActionLink({ item }: { item: GlobalNavItem }) {
-  const surfaceRef = useSurfaceFeedback<HTMLAnchorElement>();
   const current = item.current ?? false;
   return (
-    <Link
-      ref={surfaceRef}
-      to={item.to}
+    <ActionLink
       aria-current={current ? "page" : undefined}
       className={cn(
         buttonClassName({ size: "sm", variant: "secondary" }),
         "shrink-0",
-        current && "momo-surface-nav-current border-[var(--color-action)]/60",
+        current && navCurrentClass,
       )}
+      to={item.to}
     >
-      <span aria-hidden="true" className="[&_svg]:size-4">
-        {item.icon}
-      </span>
+      <DecorativeActionIcon>{item.icon}</DecorativeActionIcon>
       <span>{item.label}</span>
-    </Link>
+    </ActionLink>
   );
 }
 

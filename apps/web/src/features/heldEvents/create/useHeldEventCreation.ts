@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { parseHeldEventCreate } from "@/features/heldEvents/create/heldEventCreate";
@@ -15,18 +15,23 @@ import { showToast } from "@/shared/ui/feedback/Toast";
 
 const initialCreateState = { version: 0 };
 
+export type HeldEventCreation = {
+  readonly clearError: () => void;
+  /**
+   * A failure that arrives after its dialog closed, for the screen to report until another action
+   * ends; while the dialog is open it reports its own failure.
+   */
+  readonly closedErrorMessage: string;
+  readonly form: HeldEventCreateForm;
+  readonly navigationGuard: UnsavedChangesGuardModel;
+  readonly open: () => void;
+};
+
 /**
  * Owns the creation dialog and its write. A created held event is reconciled into the cache before
  * the screen moves to its hub, where its first match is recorded.
  */
-export function useHeldEventCreation(): {
-  /** A failure reported after its dialog closed stays on the screen until another action ends. */
-  readonly clearError: () => void;
-  readonly errorMessage: string;
-  readonly form: HeldEventCreateForm;
-  readonly navigationGuard: UnsavedChangesGuardModel;
-  readonly open: () => void;
-} {
+export function useHeldEventCreation(): HeldEventCreation {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const idempotencyKeys = useIdempotencyKeyStore();
@@ -70,33 +75,35 @@ export function useHeldEventCreation(): {
       return previous;
     }
   }, initialCreateState);
-  const updateCreateOpen = useCallback((open: boolean) => {
-    setCreateOpen(open);
-    if (open) {
-      navigationAllowedRef.current = false;
-      setErrorMessage("");
-    }
+  const open = useCallback(() => {
+    navigationAllowedRef.current = false;
+    setErrorMessage("");
+    setCreateOpen(true);
   }, []);
-  const open = useCallback(() => updateCreateOpen(true), [updateCreateOpen]);
-
+  const close = useCallback(() => setCreateOpen(false), []);
   const clearError = useCallback(() => setErrorMessage(""), []);
+  // Stable, so a guard on a page that re-renders while polling keeps its listeners in place.
+  const navigationGuard = useMemo<UnsavedChangesGuardModel>(
+    () => ({
+      dirty: false,
+      isNavigationAllowed: () => navigationAllowedRef.current,
+      onDiscard: close,
+    }),
+    [close],
+  );
 
   return {
     clearError,
-    errorMessage,
+    closedErrorMessage: createOpen ? "" : errorMessage,
     form: {
       action: createAction,
       errorMessage,
       formKey: createState.version,
       open: createOpen,
       pending: createPending,
-      close: () => updateCreateOpen(false),
+      close,
     },
-    navigationGuard: {
-      dirty: false,
-      isNavigationAllowed: () => navigationAllowedRef.current,
-      onDiscard: () => setCreateOpen(false),
-    },
+    navigationGuard,
     open,
   };
 }

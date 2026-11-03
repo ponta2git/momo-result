@@ -10,6 +10,7 @@ import {
   NotFoundRoute,
   PublicOnlyRoute,
 } from "@/app/routeGuards";
+import type { RouteHandle } from "@/app/routeHandle";
 import {
   LoginPage,
   loadAchievementsPage,
@@ -27,6 +28,7 @@ import {
   loadOcrCapturePage,
   loadSeriesComparisonPage,
   loadSeriesAnalysisAdminPage,
+  preloadRouteModule,
 } from "@/app/routeModules";
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 
@@ -36,7 +38,11 @@ const AchievementsPage = lazy(() => loadLazyModule(loadAchievementsPage));
 const ExportPage = lazy(() => loadLazyModule(loadExportPage));
 const HeldEventDetailPage = lazy(() => loadLazyModule(loadHeldEventDetailPage));
 const HeldEventsPage = lazy(() => loadLazyModule(loadHeldEventsPage));
-const LatestHeldEventRedirect = lazy(() => loadLazyModule(loadLatestHeldEventRedirect));
+// The entry always lands on a hub, so that module loads alongside the newest event's read.
+const LatestHeldEventRedirect = lazy(() => {
+  preloadRouteModule(loadHeldEventDetailPage);
+  return loadLazyModule(loadLatestHeldEventRedirect);
+});
 const MastersPage = lazy(() => loadLazyModule(loadMastersPage));
 const MatchCreatePage = lazy(() => loadLazyModule(loadMatchCreatePage));
 const MatchDetailPage = lazy(() => loadLazyModule(loadMatchDetailPage));
@@ -53,7 +59,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         path: "login",
-        handle: { title: "ログイン" },
+        handle: { title: "ログイン" } satisfies RouteHandle,
         element: (
           <PublicOnlyRoute>
             <LoginPage />
@@ -70,82 +76,82 @@ export const appRoutes: RouteObject[] = [
           {
             // Opening the app shows the newest held event, where tonight's record continues.
             index: true,
-            handle: { title: "最新の開催" },
+            handle: { navArea: "heldEvents", title: "最新の開催" } satisfies RouteHandle,
             element: <LatestHeldEventRedirect />,
           },
           {
             path: "achievements",
-            handle: { title: "実績達成" },
+            handle: { navArea: "achievements", title: "実績達成" } satisfies RouteHandle,
             element: <AchievementsPage />,
           },
           {
             path: "matches",
-            handle: { title: "試合一覧" },
+            handle: { navArea: "matches", title: "試合一覧" } satisfies RouteHandle,
             element: <MatchesListPage />,
           },
           {
             path: "drafts",
-            handle: { title: "確定前の下書き" },
+            handle: { navArea: "record", title: "確定前の下書き" } satisfies RouteHandle,
             element: <DraftsPage />,
           },
           {
             path: "held-events",
-            handle: { title: "開催履歴" },
+            handle: { navArea: "heldEvents", title: "開催履歴" } satisfies RouteHandle,
             element: <HeldEventsPage />,
           },
           {
             path: "held-events/:heldEventId",
-            handle: { title: "開催詳細" },
+            handle: { navArea: "heldEvents", title: "開催詳細" } satisfies RouteHandle,
             element: <HeldEventDetailPage />,
           },
           {
             path: "e/:publicId",
-            handle: { title: "開催詳細" },
+            handle: { navArea: "heldEvents", title: "開催詳細" } satisfies RouteHandle,
             element: <HeldEventDetailPage />,
           },
           {
             path: "matches/new",
-            handle: { title: "試合を手入力" },
+            handle: { navArea: "record", title: "試合を手入力" } satisfies RouteHandle,
             element: <MatchCreatePage />,
           },
           {
             path: "matches/:matchId",
-            handle: { title: "試合詳細" },
+            handle: { navArea: "matches", title: "試合詳細" } satisfies RouteHandle,
             element: <MatchDetailPage />,
           },
           {
             path: "m/:publicId",
-            handle: { title: "試合詳細" },
+            handle: { navArea: "matches", title: "試合詳細" } satisfies RouteHandle,
             element: <MatchDetailPage />,
           },
           {
             path: "matches/:matchId/edit",
-            handle: { title: "試合を編集" },
+            handle: { navArea: "matches", title: "試合を編集" } satisfies RouteHandle,
             element: <MatchEditPage />,
           },
           {
             path: "ocr/new",
-            handle: { title: "結果画像を読み取る" },
+            handle: { navArea: "record", title: "結果画像を読み取る" } satisfies RouteHandle,
             element: <OcrCapturePage />,
           },
           {
             path: "review/:matchSessionId",
-            handle: { title: "読み取り結果を確認" },
+            handle: { navArea: "record", title: "読み取り結果を確認" } satisfies RouteHandle,
             element: <DraftReviewPage />,
           },
           {
             path: "exports",
-            handle: { title: "戦績を出力" },
+            handle: { navArea: "matches", title: "戦績を出力" } satisfies RouteHandle,
             element: <ExportPage />,
           },
           {
             path: "analytics/series",
-            handle: { title: "戦績比較" },
+            handle: { navArea: "analytics", title: "戦績比較" } satisfies RouteHandle,
             element: <SeriesComparisonPage />,
           },
           {
             path: "admin/analysis",
-            handle: { title: "分析管理" },
+            handle: { navArea: "adminAnalysis", title: "分析管理" } satisfies RouteHandle,
             element: (
               <OperationsRoute>
                 <SeriesAnalysisAdminPage />
@@ -154,7 +160,7 @@ export const appRoutes: RouteObject[] = [
           },
           {
             path: "admin/masters",
-            handle: { title: "設定管理" },
+            handle: { navArea: "adminMasters", title: "設定管理" } satisfies RouteHandle,
             element: (
               <OperationsRoute>
                 <MastersPage />
@@ -165,7 +171,7 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "*",
-        handle: { title: "ページが見つかりません" },
+        handle: { title: "ページが見つかりません" } satisfies RouteHandle,
         element: <NotFoundRoute />,
       },
     ],

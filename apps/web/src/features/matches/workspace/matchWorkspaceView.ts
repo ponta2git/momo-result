@@ -16,7 +16,8 @@ import type {
 } from "@/shared/api/matchDrafts";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
-import { heldEventDetailHref, matchDetailHref } from "@/shared/navigation/publicIdentifiers";
+import { recordExitHref } from "@/shared/navigation/matchLinks";
+import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noHeldEvents: HeldEventResponse[] = [];
@@ -66,9 +67,7 @@ export function buildMatchWorkspaceView({
     exitHref:
       mode === "edit" && matchId
         ? matchDetailHref(matchId, matchDetail?.publicId)
-        : values.heldEventId
-          ? heldEventDetailHref(values.heldEventId, selectedHeldEvent?.publicId)
-          : "/matches",
+        : recordExitHref(values.heldEventId, selectedHeldEvent?.publicId),
     canCancelDraft:
       mode !== "edit" &&
       !useSampleDrafts &&

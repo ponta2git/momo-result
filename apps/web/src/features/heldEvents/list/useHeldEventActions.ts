@@ -29,8 +29,7 @@ export function useHeldEventActions(): {
     clearError();
     showToast({ title: "開催を削除しました。", tone: "success" });
   }, [clearError]);
-  const writes = useHeldEventWrites(onRemoved);
-  const { removing: deletePending, remove: deleteEvent } = writes;
+  const { removing: deletePending, remove: deleteEvent } = useHeldEventWrites(onRemoved);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -51,7 +50,7 @@ export function useHeldEventActions(): {
       pending: deletePending,
       target: deleteTarget ? { heldAt: deleteTarget.heldAt } : null,
     },
-    errorMessage: creation.errorMessage,
+    errorMessage: creation.closedErrorMessage,
     navigationGuard: creation.navigationGuard,
     openCreate: creation.open,
     requestDelete: (event) => setDeleteTarget({ id: event.id, heldAt: event.heldAt }),

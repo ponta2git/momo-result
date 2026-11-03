@@ -44,6 +44,11 @@ export type HeldEventDetailReadyView = {
     };
     readonly currentDateTime: string;
     readonly exportHref: string;
+    /**
+     * Where this event stands among all held events, from its confirmed neighbors: the newest one
+     * is where the app opens; an older one points there; unknown neighbors claim neither.
+     */
+    readonly recency: "latest" | "older" | "unknown";
     readonly manualEntryHref: string;
     readonly ocrCaptureHref: string;
   };
@@ -119,6 +124,7 @@ export function buildHeldEventDetailView({
       },
       currentDateTime: formatNavigationDateTime(detail.heldAt, peers),
       exportHref: `/exports?heldEventId=${encodedHeldEventId}&format=csv`,
+      recency: !available ? "unknown" : next ? "older" : "latest",
       manualEntryHref: matchRecordHref(detail.id, "manual"),
       ocrCaptureHref: matchRecordHref(detail.id, "ocr"),
     },

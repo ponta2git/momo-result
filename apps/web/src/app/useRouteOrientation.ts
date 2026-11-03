@@ -1,19 +1,15 @@
 import { useLayoutEffect, useRef } from "react";
-import { useLocation, useMatches, useNavigationType } from "react-router-dom";
+import { useLocation, useNavigationType } from "react-router-dom";
 
+import { useRouteHandle } from "@/app/routeHandle";
 import { adjacentNavigationState } from "@/shared/ui/navigation/AdjacentNavigation";
 
 /** Route metadata owns browser orientation; query state and adjacent visits own their own focus. */
 export function useRouteOrientation() {
   const location = useLocation();
   const navigationType = useNavigationType();
-  const matches = useMatches();
   const previousPath = useRef(location.pathname);
-  const handle: unknown = matches.at(-1)?.handle;
-  const title =
-    handle && typeof handle === "object" && "title" in handle && typeof handle.title === "string"
-      ? handle.title
-      : "momo-result";
+  const title = useRouteHandle()?.title ?? "momo-result";
 
   useLayoutEffect(() => {
     document.title = `${title} | 桃鉄戦績台帳`;

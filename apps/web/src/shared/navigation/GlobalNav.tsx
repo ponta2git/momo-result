@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link, useMatch, useResolvedPath } from "react-router-dom";
 
+import { ActionLink } from "@/shared/ui/actions/ActionLink";
+import { buttonClassName, DecorativeActionIcon } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
 import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
@@ -18,7 +20,15 @@ export type GlobalNavItem = {
 
 const emptyNavItems: readonly GlobalNavItem[] = [];
 
+/** The current location's mark, shared by destinations and the action while it is in use. */
+const navCurrentClass = "momo-surface-nav-current border-[var(--color-action)]/60";
+
 type GlobalNavProps = {
+  /**
+   * The app's main operation, kept apart from the destinations at the first row's end so it stays
+   * in view on every width instead of scrolling away with them.
+   */
+  action?: GlobalNavItem | undefined;
   brandLabel?: ReactNode;
   brandTo: string;
   /** The current page's width; navigation aligns its edges with that page content. */
@@ -46,7 +56,7 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
       className={cn(
         "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
         current
-          ? "momo-surface-nav-current border-[var(--color-action)]/60 text-[var(--color-text-primary)]"
+          ? cn(navCurrentClass, "text-[var(--color-text-primary)]")
           : "text-[var(--color-text-secondary)]",
       )}
     >
@@ -55,6 +65,25 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
       </span>
       <span>{item.label}</span>
     </Link>
+  );
+}
+
+/** An operation rather than a destination: framed like a secondary action, marked while in use. */
+function NavActionLink({ item }: { item: GlobalNavItem }) {
+  const current = item.current ?? false;
+  return (
+    <ActionLink
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        buttonClassName({ size: "sm", variant: "secondary" }),
+        "shrink-0",
+        current && navCurrentClass,
+      )}
+      to={item.to}
+    >
+      <DecorativeActionIcon>{item.icon}</DecorativeActionIcon>
+      <span>{item.label}</span>
+    </ActionLink>
   );
 }
 
@@ -84,6 +113,7 @@ function revealActiveDestination(scroller: HTMLDivElement, activeLink: HTMLAncho
 }
 
 export function GlobalNav({
+  action,
   brandLabel = "momo-result",
   brandTo,
   contentWidth = "default",
@@ -149,8 +179,19 @@ export function GlobalNav({
               </span>
             ) : null}
           </div>
-          {endContent ? (
-            <div className="ml-auto min-w-0 lg:col-start-3 lg:row-start-1">{endContent}</div>
+          {endContent || action ? (
+            <div className="ml-auto flex min-w-0 items-center justify-end gap-3 lg:col-start-3 lg:row-start-1">
+              {action ? (
+                <div
+                  aria-hidden={itemsPending || undefined}
+                  className={cn("shrink-0", itemsPending && "invisible")}
+                  inert={itemsPending || undefined}
+                >
+                  <NavActionLink item={action} />
+                </div>
+              ) : null}
+              {endContent ? <div className="min-w-0">{endContent}</div> : null}
+            </div>
           ) : null}
         </div>
         <div

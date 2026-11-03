@@ -1,4 +1,4 @@
-import { PencilLine, PenSquare, RefreshCw, ScanLine } from "lucide-react";
+import { PencilLine, RefreshCw } from "lucide-react";
 
 import type { DraftItemView } from "@/features/matches/drafts/draftsTypes";
 import type { DraftsListView } from "@/features/matches/drafts/useDraftsList";
@@ -6,7 +6,6 @@ import { useDraftsList } from "@/features/matches/drafts/useDraftsList";
 import { formatDateTimeCompact } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { DraftStatusBadge } from "@/shared/matches/DraftStatusBadge";
-import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -209,36 +208,16 @@ export function DraftsPage() {
               ? "確定前の下書き"
               : `確定前の下書き ${totalItems.toLocaleString()}件`}
           </p>
-          <div className={cn(inlineActionGroupClass, "items-center justify-end")}>
-            <IconButton
-              aria-label="最新情報に更新"
-              disabled={loading || refresh.pending}
-              icon={<RefreshCw />}
-              pending={toolbarPending}
-              pendingLabel="一覧を更新中"
-              tooltip={refresh.pending ? "更新中…" : "最新情報に更新"}
-              variant="quiet"
-              onClick={refresh.run}
-            />
-            <div aria-label="試合を登録" className={inlineActionGroupClass} role="group">
-              <LinkButton
-                icon={<ScanLine aria-hidden="true" />}
-                size="sm"
-                to="/ocr/new"
-                variant="secondary"
-              >
-                OCR取り込み
-              </LinkButton>
-              <LinkButton
-                icon={<PenSquare aria-hidden="true" />}
-                size="sm"
-                to="/matches/new"
-                variant="secondary"
-              >
-                手入力で作成
-              </LinkButton>
-            </div>
-          </div>
+          <IconButton
+            aria-label="最新情報に更新"
+            disabled={loading || refresh.pending}
+            icon={<RefreshCw />}
+            pending={toolbarPending}
+            pendingLabel="一覧を更新中"
+            tooltip={refresh.pending ? "更新中…" : "最新情報に更新"}
+            variant="quiet"
+            onClick={refresh.run}
+          />
         </div>
 
         {refresh.refreshFailed ? (

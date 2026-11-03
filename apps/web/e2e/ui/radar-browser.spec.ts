@@ -97,9 +97,9 @@ test("keeps canceled edits, waits for discard, and browses another title's immut
   await page.getByRole("button", { name: "調整を始める" }).click();
   await expect(threshold).toHaveValue("4.9");
   await threshold.fill("-");
-  await page.getByRole("link", { name: "出力", exact: true }).click();
+  await page.getByRole("link", { name: "試合", exact: true }).click();
   await leave.getByRole("button", { name: "破棄して移動" }).click();
-  await expect(page.getByRole("region", { name: "出力条件" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
   expect(radar.commands.map((command) => command.kind)).toEqual(["manual", "withdraw"]);
 });
 

@@ -3,12 +3,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildHeldEventDetailView,
   buildHeldEventPlayerRecaps,
   buildHeldEventDraftActionView,
   heldEventDraftScopeLabel,
   heldEventScopeLabel,
 } from "@/features/heldEvents/detail/heldEventDetailPresentation";
+import type { DetailNavigation, HeldEventNeighbor } from "@/shared/api/detailReadResult";
 import type { HeldEventDraftResponse, HeldEventMatchResponse } from "@/shared/api/heldEvents";
+import { makeHeldEventDetailResponse } from "@/test/factories/heldEvents";
 
 const match = (
   matchNoInEvent: number,
@@ -46,7 +49,44 @@ const draft = (status: string): HeldEventDraftResponse => ({
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
 
+function recordingHintFor(
+  navigation: DetailNavigation<HeldEventNeighbor>,
+  records: Pick<Parameters<typeof makeHeldEventDetailResponse>[0] & object, "drafts" | "matches">,
+) {
+  const view = buildHeldEventDetailView({
+    heldEventId: "held-1",
+    detail: makeHeldEventDetailResponse(records),
+    navigation,
+    notFound: false,
+    error: undefined,
+    pending: false,
+    initialPending: false,
+    stale: false,
+    refresh: { pending: false, run: () => undefined },
+  });
+  return view.kind === "ready" ? view.navigation.recordingHint : "not ready";
+}
+
 describe("held event detail presentation", () => {
+  it("records into the newest held event, and offers a new one only beside its records", () => {
+    const newer = { id: "held-2", heldAt: "2026-01-08T13:00:00.000Z" };
+    const newest = { kind: "available", previous: undefined, next: undefined } as const;
+    // An older night points to the newest event, whatever it holds.
+    expect(
+      recordingHintFor({ kind: "available", previous: undefined, next: newer }, { matches: [] }),
+    ).toEqual({ kind: "toNewest", href: "/" });
+    // An empty newest event, like the one Summit prepares before play, takes the night's matches.
+    expect(recordingHintFor(newest, { matches: [] })).toBeNull();
+    expect(recordingHintFor(newest, { matches: [match(1, 1, 2)] })).toEqual({
+      kind: "offerNewEvent",
+    });
+    expect(recordingHintFor(newest, { drafts: [draft("draft_ready")], matches: [] })).toEqual({
+      kind: "offerNewEvent",
+    });
+    // Without its neighbors the hub cannot tell where it stands, so it claims neither.
+    expect(recordingHintFor({ kind: "unavailable" }, { matches: [match(1, 1, 2)] })).toBeNull();
+  });
+
   it("builds player recap in canonical result order and match-number order", () => {
     const recaps = buildHeldEventPlayerRecaps([match(2, 3, 1), match(1, 1, 4)]);
 

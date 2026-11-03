@@ -1,8 +1,8 @@
 import { CalendarPlus } from "lucide-react";
 import { useState } from "react";
 
-import { parseHeldEventCreate } from "@/features/heldEvents/list/heldEventActions";
-import type { HeldEventCreateForm } from "@/features/heldEvents/list/heldEventActions";
+import { parseHeldEventCreate } from "@/features/heldEvents/create/heldEventCreate";
+import type { HeldEventCreateForm } from "@/features/heldEvents/create/heldEventCreate";
 import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";

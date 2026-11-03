@@ -1,7 +1,7 @@
 import { CalendarDays, CalendarPlus, Filter, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
-import { CreateHeldEventDialog } from "@/features/heldEvents/list/CreateHeldEventDialog";
+import { CreateHeldEventDialog } from "@/features/heldEvents/create/CreateHeldEventDialog";
 import { DeleteHeldEventDialog } from "@/features/heldEvents/list/DeleteHeldEventDialog";
 import { describeHeldEventListConditions } from "@/features/heldEvents/list/heldEventListConditions";
 import {

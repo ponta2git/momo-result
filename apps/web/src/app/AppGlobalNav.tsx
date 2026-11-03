@@ -4,52 +4,58 @@ import {
   BarChart3,
   CalendarDays,
   Database,
-  Download,
   LogOut,
-  ScanLine,
+  NotebookPen,
   Trophy,
 } from "lucide-react";
-import { useLocation, useMatch } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
+import { useRouteHandle } from "@/app/routeHandle";
+import type { NavArea } from "@/app/routeHandle";
 import { routePageWidth } from "@/app/RouteSuspenseFallback";
 import { hasOperationsRole } from "@/shared/auth/permissions";
 import { useAuthSession } from "@/shared/auth/useAuthSession";
 import { GlobalNav } from "@/shared/navigation/GlobalNav";
 import type { GlobalNavItem } from "@/shared/navigation/GlobalNav";
+import { recordEntryHref } from "@/shared/navigation/matchLinks";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { fieldText } from "@/shared/ui/typography";
 
+type AreaNavItem = GlobalNavItem & { readonly area: NavArea };
+
+// Destinations are the recorded objects (開催 ⊃ 試合) and the views across them. Ways of recording
+// (OCR取り込み・手入力) live inside 記録する, and 出力 is reached from the records it carries out.
 const primaryItems = [
-  { icon: <Trophy />, label: "試合", to: "/matches" },
-  { icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
-  { icon: <Award />, label: "実績", to: "/achievements" },
-  { icon: <ScanLine />, label: "OCR", to: "/ocr/new" },
-  { icon: <CalendarDays />, label: "開催", to: "/held-events" },
-  { icon: <Download />, label: "出力", to: "/exports" },
-] as const satisfies readonly GlobalNavItem[];
+  { area: "heldEvents", icon: <CalendarDays />, label: "開催", to: "/held-events" },
+  { area: "matches", icon: <Trophy />, label: "試合", to: "/matches" },
+  { area: "analytics", icon: <BarChart3 />, label: "戦績比較", to: "/analytics/series" },
+  { area: "achievements", icon: <Award />, label: "実績", to: "/achievements" },
+] as const satisfies readonly AreaNavItem[];
+
+/** Opens the newest held event's hub, where the next match is recorded or a new event starts. */
+const recordAction = {
+  icon: <NotebookPen />,
+  label: "記録する",
+  to: recordEntryHref,
+} as const satisfies GlobalNavItem;
 
 const managementItems = [
-  { icon: <Activity />, label: "分析", to: "/admin/analysis" },
-  { icon: <Database />, label: "設定", to: "/admin/masters" },
-] as const satisfies readonly GlobalNavItem[];
+  { area: "adminAnalysis", icon: <Activity />, label: "分析", to: "/admin/analysis" },
+  { area: "adminMasters", icon: <Database />, label: "設定", to: "/admin/masters" },
+] as const satisfies readonly AreaNavItem[];
+
+/** Each route declares its area, so the current location never depends on a path prefix. */
+function markCurrent(items: readonly AreaNavItem[], area: NavArea | undefined): GlobalNavItem[] {
+  return items.map(({ area: itemArea, ...item }) => ({ ...item, current: itemArea === area }));
+}
 
 const noManagementItems: readonly GlobalNavItem[] = [];
 
 export function AppGlobalNav() {
   const auth = useAuthSession();
   const location = useLocation();
-  const reviewingMatch = useMatch("/review/:matchSessionId") !== null;
-  // Drafts are unconfirmed matches, so they belong to the matches area.
-  const draftList = useMatch("/drafts") !== null;
-  const publicMatch = useMatch("/m/:publicId") !== null;
-  const publicHeldEvent = useMatch("/e/:publicId") !== null;
-  const currentArea =
-    reviewingMatch || publicMatch || draftList
-      ? "/matches"
-      : publicHeldEvent
-        ? "/held-events"
-        : undefined;
+  const area = useRouteHandle()?.navArea;
   const canLogout = import.meta.env.DEV && auth.isAuthenticated && Boolean(auth.logout);
   const logoutFailed = Boolean(auth.logoutError);
   const sessionLabel =
@@ -64,7 +70,8 @@ export function AppGlobalNav() {
 
   return (
     <GlobalNav
-      brandTo="/matches"
+      action={{ ...recordAction, current: area === "record" }}
+      brandTo={recordEntryHref}
       contentWidth={routePageWidth(location.pathname, location.search)}
       endContent={
         <div className="grid max-w-full min-w-0 justify-items-end gap-1">
@@ -103,17 +110,13 @@ export function AppGlobalNav() {
       }
       environmentLabel={import.meta.env.DEV ? "DEV" : undefined}
       itemsPending={auth.isChecking}
-      items={
-        currentArea
-          ? primaryItems.map((item) => ({ ...item, current: item.to === currentArea }))
-          : primaryItems
-      }
+      items={markCurrent(primaryItems, area)}
       managementItems={
         auth.isAuthenticated &&
         !auth.error &&
         !auth.isRefetching &&
         hasOperationsRole(auth.auth?.role)
-          ? managementItems
+          ? markCurrent(managementItems, area)
           : noManagementItems
       }
     />

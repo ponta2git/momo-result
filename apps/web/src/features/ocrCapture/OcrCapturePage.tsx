@@ -14,6 +14,7 @@ import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import {
   OcrCaptureSetupProvider,
   OcrCaptureSetupSection,
+  useOcrCaptureExitHref,
 } from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
@@ -33,21 +34,23 @@ export function OcrCapturePage() {
     <OcrCaptureSetupProvider authReady={auth.ready} key={auth.accountId ?? "unresolved"}>
       <PageFrame>
         <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
-          <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
-            <LinkButton
-              icon={<ArrowLeft aria-hidden="true" />}
-              size="sm"
-              to="/matches"
-              variant="quiet"
-            >
-              取り込みをやめる
-            </LinkButton>
-          </nav>
+          <OcrCaptureExit />
           <OcrCaptureSetupSection />
           <OcrCaptureWorkspace />
         </PageContentSurface>
       </PageFrame>
     </OcrCaptureSetupProvider>
+  );
+}
+
+function OcrCaptureExit() {
+  const exitHref = useOcrCaptureExitHref();
+  return (
+    <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+      <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={exitHref} variant="quiet">
+        取り込みをやめる
+      </LinkButton>
+    </nav>
   );
 }
 

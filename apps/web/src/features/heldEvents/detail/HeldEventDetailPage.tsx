@@ -1,6 +1,7 @@
 import { ArrowLeft, Camera, Keyboard } from "lucide-react";
 import type { Ref } from "react";
 
+import { useHeldEventCreation } from "@/features/heldEvents/create/useHeldEventCreation";
 import { HeldEventDetailHeaderActions } from "@/features/heldEvents/detail/HeldEventDetailHeaderActions";
 import type { HeldEventDetailReadyView } from "@/features/heldEvents/detail/heldEventDetailPresentation";
 import {
@@ -10,6 +11,10 @@ import {
 import { HeldEventDraftsSection } from "@/features/heldEvents/detail/HeldEventDraftsSection";
 import { HeldEventMatchTimeline } from "@/features/heldEvents/detail/HeldEventMatchTimeline";
 import { HeldEventPlayerRecap } from "@/features/heldEvents/detail/HeldEventPlayerRecap";
+import {
+  NewerHeldEventHint,
+  NewHeldEventOffer,
+} from "@/features/heldEvents/detail/HeldEventRecordingHints";
 import { useHeldEventDetail } from "@/features/heldEvents/detail/useHeldEventDetail";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
@@ -55,6 +60,8 @@ function HeldEventDetailReadyContent({
 }) {
   const { event, freshness, navigation, refresh } = view;
   const { detail, drafts, emphasizeNewMatch, matches, playerRecaps } = event;
+  const { recordingHint } = navigation;
+  const creation = useHeldEventCreation();
 
   return (
     <PageFrame className="min-w-0" width="analysis">
@@ -106,6 +113,9 @@ function HeldEventDetailReadyContent({
             <h2 className={contentText.heading} id="held-event-next-match-heading">
               {formatMatchNoInEvent(detail.nextMatchNo)}を記録
             </h2>
+            {recordingHint?.kind === "toNewest" ? (
+              <NewerHeldEventHint href={recordingHint.href} />
+            ) : null}
             <div className={inlineActionGroupClass}>
               <LinkButton
                 icon={<Camera aria-hidden="true" />}
@@ -122,6 +132,10 @@ function HeldEventDetailReadyContent({
                 手入力
               </LinkButton>
             </div>
+            <NewHeldEventOffer
+              creation={creation}
+              offered={recordingHint?.kind === "offerNewEvent"}
+            />
           </section>
 
           <HeldEventDraftsSection drafts={drafts} />

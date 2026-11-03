@@ -1,8 +1,6 @@
+import type { HeldEventCreateForm } from "@/features/heldEvents/create/heldEventCreate";
 import { canDeleteHeldEvent } from "@/features/heldEvents/list/heldEventActions";
-import type {
-  HeldEventCreateForm,
-  HeldEventDeleteConfirmation,
-} from "@/features/heldEvents/list/heldEventActions";
+import type { HeldEventDeleteConfirmation } from "@/features/heldEvents/list/heldEventActions";
 import type {
   HeldEventListItemResponse,
   HeldEventListPlayerResultResponse,
@@ -149,6 +147,7 @@ export function buildHeldEventsActionView({
 }) {
   return {
     dialogPending: create.pending || deleteDialog.pending,
-    errorMessage: !create.open && !deleteDialog.target ? errorMessage : "",
+    // The creation failure arrives only while its dialog is closed.
+    errorMessage: deleteDialog.target ? "" : errorMessage,
   } as const;
 }

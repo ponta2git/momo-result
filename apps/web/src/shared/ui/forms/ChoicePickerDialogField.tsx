@@ -45,6 +45,9 @@ type ChoicePickerDialogFieldProps = Omit<
  * expose. The field owns the visible current value, dialog, radio semantics, and optional paging.
  * A read-only candidate request never owns dialog dismissal; scopeChanging keeps the previous
  * page mounted but inert until the requested page is ready.
+ * The dialog title also names the radio group, so callers add no synonymous heading; optional
+ * "all" / "none" values are ordinary options. The value and selectedLabel survive paging even
+ * when the selection is off-page, and refresh status stays in the header slot beside close.
  */
 export function ChoicePickerDialogField({
   "aria-describedby": ariaDescribedBy,

@@ -19,7 +19,7 @@ export const HeldEventSearch = () => (
       conditions={[
         { key: "period", label: "期間: 2026/4/1〜2026/6/30" },
         { key: "matchCount", label: "確定試合数: 3試合以上" },
-        { key: "metric", label: "ももたろう: 開催平均順位 2.00以下" },
+        { key: "metric", label: "いーゆー: 開催平均順位 2.00以下" },
       ]}
       onRemove={ignore}
     />

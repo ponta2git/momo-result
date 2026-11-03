@@ -1,40 +1,40 @@
 import { SelectControl } from "momo-result-ui";
 
 const players = [
-  { label: "ももたろう", value: "momotaro" },
-  { label: "きんたろう", value: "kintaro" },
-  { label: "うらしま", value: "urashima" },
-  { label: "かぐや", value: "kaguya" },
+  { label: "いーゆー", value: "momotaro" },
+  { label: "ぽんた", value: "kintaro" },
+  { label: "あかねまみ", value: "urashima" },
+  { label: "おーたか", value: "kaguya" },
 ];
 
 export const Selected = () => (
   <div className="w-64">
-    <SelectControl aria-label="プレイヤー" defaultValue="momotaro" options={players} />
+    <SelectControl aria-label="プレーヤー" defaultValue="momotaro" options={players} />
   </div>
 );
 
 export const Tones = () => (
   <div className="grid w-64 gap-2">
     <SelectControl
-      aria-label="1位のプレイヤー"
+      aria-label="1位のプレーヤー"
       defaultValue="momotaro"
       options={players}
       tone="action"
     />
     <SelectControl
-      aria-label="2位のプレイヤー"
+      aria-label="2位のプレーヤー"
       defaultValue="kintaro"
       options={players}
       tone="review"
     />
     <SelectControl
-      aria-label="3位のプレイヤー"
+      aria-label="3位のプレーヤー"
       defaultValue="urashima"
       options={players}
       tone="success"
     />
     <SelectControl
-      aria-label="4位のプレイヤー"
+      aria-label="4位のプレーヤー"
       defaultValue="kaguya"
       options={players}
       tone="warning"
@@ -55,7 +55,7 @@ export const CompactAndInvalid = () => (
         { label: "4位", value: "4" },
       ]}
     />
-    <SelectControl aria-label="プレイヤー" invalid options={players} />
+    <SelectControl aria-label="プレーヤー" invalid options={players} />
   </div>
 );
 

@@ -35,7 +35,11 @@ const textAlignClass = {
   start: "text-start",
 } as const satisfies Record<ControlTextAlign, string>;
 
-/** Shared outlines for editable fields, grouped choices, and dialog-backed selection fields. */
+/**
+ * Shared outlines for editable fields, grouped choices, and dialog-backed selection fields.
+ * The default outline is deliberately subtle and does not promise 3:1; choice marks, select
+ * arrows, focus, and invalid/tone frames carry the 3:1 identification independently of it.
+ */
 export const controlBorderClass = {
   default: "border-[var(--color-control-border)]",
   invalid: "border-[var(--color-control-border-invalid)]",

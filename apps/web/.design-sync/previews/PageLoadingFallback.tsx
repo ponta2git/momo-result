@@ -5,7 +5,7 @@ export const List = () => (
     contentToolbar={{ actionSize: "sm", actionSlots: 2, actionWidths: ["standard", "wide"] }}
     kind="list"
     loadingLabel="試合一覧を読み込み中"
-    width="standard"
+    width="default"
   />
 );
 

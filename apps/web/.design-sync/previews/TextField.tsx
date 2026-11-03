@@ -21,9 +21,9 @@ export const WithDescription = () => (
 export const RequiredWithError = () => (
   <div className="w-72">
     <TextField
-      error="プレイヤー名を入力してください。"
-      label="プレイヤー名"
-      placeholder="例: ももたろう"
+      error="プレーヤー名を入力してください。"
+      label="プレーヤー名"
+      placeholder="例: いーゆー"
       required
     />
   </div>

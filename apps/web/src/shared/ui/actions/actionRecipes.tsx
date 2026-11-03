@@ -11,6 +11,8 @@ export type IconActionVariant = "secondary" | "quiet" | "danger";
 const actionBaseClass =
   "momo-surface momo-surface-press inline-flex items-center justify-center rounded-sm border";
 
+// Framed secondary actions share the subtle field outline color; the primary action is told
+// apart by fill, and quiet actions never gain a permanent frame.
 const surfaceVariantClass = {
   secondary: "momo-surface-neutral border-[var(--color-secondary-border)]",
   quiet: "border-transparent text-[var(--color-text-secondary)]",

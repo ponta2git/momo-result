@@ -17,6 +17,7 @@ type CaptureSlotPreviewProps = {
   onDragStartCapture: DragEventHandler<HTMLDivElement>;
 };
 
+/** Shares the camera preview's 16:9 contain frame, so a capture is checked whole in its framing. */
 export function CaptureSlotPreview({
   isWorking,
   label,

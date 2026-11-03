@@ -12,6 +12,7 @@ const toastVisible = { opacity: 1 } as const;
 const toastHidden = { opacity: 0 } as const;
 type ToastItem = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
+/** A closing or over-limit toast leaves interaction and the accessibility tree at once. */
 function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; toast: ToastItem }) {
   const isPresent = useIsPresent();
   const inactive = !isPresent || toast.limited || toast.transitionStatus === "ending";

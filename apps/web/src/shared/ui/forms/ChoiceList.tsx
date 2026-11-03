@@ -37,6 +37,9 @@ export type ChoiceListProps<Value extends string = string> = {
 /**
  * Presents descriptive, mutually exclusive choices. It owns native radio semantics,
  * selected/pending feedback, and keeps option-specific actions outside the radio label.
+ * The whole row is the label; its visually hidden input's focus is drawn once as an inset
+ * outline so clipped list edges never cut it. Selection shows through the check mark and its
+ * border, not the row tint alone, so it survives forced colors.
  */
 export function ChoiceList<Value extends string>({
   "aria-labelledby": labelledBy,

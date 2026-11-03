@@ -56,6 +56,7 @@ export function CameraCapture({
           />
         </div>
       ) : null}
+      {/* The tray and source image keep this 16:9 contain frame, so one screen keeps its framing. */}
       <div
         aria-label={`${slotLabel}の16:9カメラ画像枠`}
         className="relative aspect-video w-full overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-media-canvas)]"

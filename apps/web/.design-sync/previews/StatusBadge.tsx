@@ -4,7 +4,7 @@ import { StatusBadge } from "momo-result-ui";
 export const Tones = () => (
   <div className="flex flex-wrap items-center gap-2">
     <StatusBadge label="確定" tone="neutral" />
-    <StatusBadge label="取り込み済み" tone="info" />
+    <StatusBadge label="読み取り中" tone="progress" />
     <StatusBadge label="要確認" tone="attention" />
     <StatusBadge label="ログイン許可" tone="success" />
     <StatusBadge label="ログイン停止" tone="warning" />
@@ -21,7 +21,7 @@ export const WithIcon = () => (
 
 export const Busy = () => (
   <div className="flex flex-wrap items-center gap-2">
-    <StatusBadge busy label="OCR解析中" tone="info" />
+    <StatusBadge busy label="OCR解析中" tone="progress" />
     <StatusBadge busy label="再計算中" note="残り2件" />
   </div>
 );

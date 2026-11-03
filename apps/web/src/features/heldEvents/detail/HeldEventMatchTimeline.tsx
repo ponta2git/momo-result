@@ -33,6 +33,8 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
       ) : (
         // Records are 48px apart. Each connector runs from its marker's center (16px down)
         // across that gap to the next marker's center, so it derives its length from the gap.
+        // This is the single axis: records add no frame or parallel rule, and groups inside a
+        // record stay closer than the gap between records.
         <ol aria-label="試合の流れ" className="grid gap-(--timeline-gap) [--timeline-gap:3rem]">
           {matches.map((match, index) => (
             <li key={match.matchId} className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-4">

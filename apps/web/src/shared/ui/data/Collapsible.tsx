@@ -63,6 +63,11 @@ type DisclosureProps = {
   triggerVariant?: DisclosureTriggerVariant | undefined;
 };
 
+/**
+ * Opens and closes information; it is neither a selection nor an inset. The panel never paints
+ * its own background, so only an inner state, notice, or separate control area may be tinted.
+ * Every enabled trigger shares one transient hover regardless of its text variant.
+ */
 export function Disclosure({
   ariaLabel,
   children,

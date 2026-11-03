@@ -18,6 +18,10 @@ export type SegmentedControlProps = {
   value: string;
 };
 
+/**
+ * A few short exclusive modes that change a value without swapping the content around it.
+ * When each choice swaps a corresponding panel, use Tabs; tab semantics require real panels.
+ */
 export function SegmentedControl({
   disabled = false,
   label,

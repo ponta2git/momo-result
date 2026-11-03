@@ -83,7 +83,10 @@ function UnderlineSelectionIndicator() {
 
 /**
  * Owns the shared visual grammar for a related set of views. Feature code still
- * supplies the accessible name and decides whether arrow-key focus activates a tab.
+ * supplies the accessible name and decides whether arrow-key focus activates a tab;
+ * activate manually whenever a switch starts a fetch or other costly work. `filled` is the
+ * page-local primary set; views nested in its panel use `underline` so two levels never
+ * compete with the same fill.
  */
 export function TabsList({ children, ref, variant = "filled", wrap, ...props }: TabsListProps) {
   const shouldWrap = wrap ?? variant === "filled";

@@ -7,7 +7,7 @@ export const InDialog = () => (
     title="到着回数を設定"
   >
     <div className="grid gap-4">
-      <p className="text-sm">きんたろう：目的地 7 回 → 9 回</p>
+      <p className="text-sm">ぽんた：目的地 7 回 → 9 回</p>
       <DialogFooter>
         <Button variant="quiet">キャンセル</Button>
         <Button variant="primary">この回数を使う</Button>

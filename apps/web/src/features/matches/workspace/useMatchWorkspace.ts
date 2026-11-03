@@ -143,6 +143,7 @@ export function useMatchWorkspace(input: {
           heldEventPicker,
           heldEvents: view.heldEvents,
           mapItems: view.mapItems,
+          mastersPending: load.mastersPending,
           seasonItems: view.seasonItems,
         },
       },

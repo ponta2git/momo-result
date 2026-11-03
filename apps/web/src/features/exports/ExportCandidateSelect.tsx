@@ -36,6 +36,19 @@ function labelForScope(scope: ExportScope): string {
   return "候補";
 }
 
+/** Season selection has no picker dialog to report checks, so it keeps its own status line. */
+const candidateStatusLineClass = cn(contentText.body, "min-h-5");
+
+/** Loading, failure, and empty states keep the field label that the scope tab already fixes. */
+function CandidateFieldState({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <div className="grid gap-2">
+      <p className={fieldText.label}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
 export function ExportCandidateSelect({
   disabled,
   onChange,
@@ -58,32 +71,43 @@ export function ExportCandidateSelect({
     onRetry();
   };
   if (view.kind === "hidden") return null;
+  const label = labelForScope(scope);
+  const hasStatusLine = scope === "season";
 
   if (view.kind === "loading") {
     return (
-      <div aria-label={`${labelForScope(scope)}候補を読み込み中`} className="grid" role="status">
-        <div className="grid gap-2">
-          <p className={fieldText.label}>{labelForScope(scope)}</p>
-          <Skeleton className="h-11 w-full" />
-        </div>
-        <p className={cn(contentText.supporting, "mt-1")}>候補を読み込んでいます。</p>
+      <div aria-label={`${label}候補を読み込み中`} className="grid gap-1" role="status">
+        <CandidateFieldState label={label}>
+          <Skeleton className="h-11 w-full rounded-sm pointer-fine:h-10" />
+        </CandidateFieldState>
+        <p className={hasStatusLine ? candidateStatusLineClass : "sr-only"}>
+          候補を読み込んでいます。
+        </p>
       </div>
     );
   }
 
   if (view.kind === "error") {
     return (
-      <Notice
-        action={
-          <Button pending={refreshing} pendingLabel="再読み込み中" size="sm" onClick={onRetry}>
-            再読み込み
-          </Button>
-        }
-        tone="danger"
-        title={view.message}
-      >
-        通信状態を確認して、もう一度お試しください。
-      </Notice>
+      <CandidateFieldState label={label}>
+        <Notice
+          action={
+            <Button
+              pending={refreshing}
+              pendingLabel="再読み込み中"
+              size="sm"
+              variant="secondary"
+              onClick={onRetry}
+            >
+              再読み込み
+            </Button>
+          }
+          tone="danger"
+          title={view.message}
+        >
+          通信状態を確認して、もう一度お試しください。
+        </Notice>
+      </CandidateFieldState>
     );
   }
 
@@ -100,12 +124,14 @@ export function ExportCandidateSelect({
 
     return (
       <div className="grid gap-4">
-        <EmptyState
-          action={action}
-          description={view.message}
-          placement="embedded"
-          title={view.title}
-        />
+        <CandidateFieldState label={label}>
+          <EmptyState
+            action={action}
+            description={view.message}
+            placement="embedded"
+            title={view.title}
+          />
+        </CandidateFieldState>
         {view.supportIssue ? (
           <CandidateSupportNotice
             issue={view.supportIssue}
@@ -144,27 +170,26 @@ export function ExportCandidateSelect({
         />
       );
     } else if (view.selectionState === "resolved") {
+      // With nothing else to choose, the value keeps the field's frame, height, and text.
       selector = (
-        <div className="grid gap-2">
-          <p className={fieldText.label}>{labelForScope(scope)}</p>
+        <CandidateFieldState label={label}>
           <p
             className={cn(
-              contentText.body,
-              "min-h-11 rounded-sm border px-3 py-2",
+              "flex min-h-11 items-center rounded-sm border px-3 py-2 pointer-fine:min-h-10",
+              "font-plain text-base leading-6 text-pretty text-[var(--color-text-primary)] sm:text-sm sm:leading-5",
               controlBorderClass.default,
             )}
           >
             {view.selectedLabel}
           </p>
-        </div>
+        </CandidateFieldState>
       );
     }
   } else {
     selector = (
       <SelectField
-        controlHeight="touch"
         disabled={disabled}
-        label={labelForScope(scope)}
+        label={label}
         options={options.map((option) => ({
           label: candidateDisplayLabel(option),
           value: option.value,
@@ -179,13 +204,14 @@ export function ExportCandidateSelect({
     <div className="grid gap-4">
       <div className="grid gap-1 empty:hidden">
         {selector}
-        {refreshing &&
-        !scopeChanging &&
-        scope === "season" &&
-        !view.supportIssue &&
-        view.selectionState !== "load-failed" ? (
-          <p className={contentText.body} role="status">
-            出力対象を確認しています。
+        {hasStatusLine ? (
+          <p className={candidateStatusLineClass} role="status">
+            {refreshing &&
+            !scopeChanging &&
+            !view.supportIssue &&
+            view.selectionState !== "load-failed"
+              ? "出力対象を確認しています。"
+              : null}
           </p>
         ) : null}
       </div>
@@ -199,10 +225,10 @@ export function ExportCandidateSelect({
             )
           }
           tone="warning"
-          title={`指定された${labelForScope(scope)}が見つかりません`}
+          title={`指定された${label}が見つかりません`}
         >
           {canChooseAnother
-            ? `候補から別の${labelForScope(scope)}を選んでください。`
+            ? `候補から別の${label}を選んでください。`
             : "出力対象を選べないため、出力範囲を変更してください。"}
         </Notice>
       ) : null}
@@ -213,13 +239,14 @@ export function ExportCandidateSelect({
               pending={refreshing && retryOwner === "selection"}
               pendingLabel="再確認中"
               size="sm"
+              variant="secondary"
               onClick={retrySelection}
             >
               指定対象を再確認
             </Button>
           }
           tone="danger"
-          title={`指定された${labelForScope(scope)}を確認できませんでした`}
+          title={`指定された${label}を確認できませんでした`}
         >
           通信状態を確認して、同じ対象をもう一度確認するか、別の対象を選んでください。
         </Notice>

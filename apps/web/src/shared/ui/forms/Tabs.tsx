@@ -119,25 +119,19 @@ export function TabsTab({ ref, ...props }: TabsTabProps) {
       ref={surfaceRef}
       className={(state) =>
         cn(
-          "momo-surface momo-surface-press inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap focus-visible:outline-2 focus-visible:outline-[var(--color-action)] pointer-fine:min-h-9 pointer-fine:py-1",
+          "momo-surface momo-surface-press inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap pointer-fine:min-h-9 pointer-fine:py-1",
           variant === "filled"
             ? cn(
-                "rounded-sm focus-visible:outline-offset-2",
+                "rounded-sm",
                 state.active
                   ? "momo-surface-selected text-[var(--color-text-primary)]"
-                  : cn(
-                      "text-[var(--color-text-secondary)]",
-                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
-                    ),
+                  : "text-[var(--color-text-secondary)]",
               )
             : cn(
-                "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-2px]",
+                "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-3px]",
                 state.active
                   ? "momo-surface-underline-selected border-transparent text-[var(--color-text-primary)]"
-                  : cn(
-                      "text-[var(--color-text-secondary)]",
-                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
-                    ),
+                  : "text-[var(--color-text-secondary)]",
               ),
           state.disabled ? "cursor-not-allowed opacity-60" : "",
         )

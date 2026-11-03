@@ -23,6 +23,12 @@ const heightClass = {
   touch: "min-h-11",
 } as const satisfies Record<ControlHeight, string>;
 
+/**
+ * Loading stand-in for a default-height control. Below `sm` a fine pointer still sees the 16px
+ * input line (24px leading, 8px block padding, 1px borders), which is taller than the minimum.
+ */
+export const controlSkeletonHeightClass = "h-11 pointer-fine:h-10.5 sm:pointer-fine:h-10";
+
 const textAlignClass = {
   center: "text-center",
   end: "text-end",
@@ -44,7 +50,7 @@ const toneClass = {
 } as const satisfies Record<ControlTone, string>;
 
 const baseControlClass =
-  "w-full min-w-0 rounded-sm border momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-70 sm:text-sm sm:leading-5";
+  "w-full min-w-0 rounded-sm border momo-surface momo-surface-neutral py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-subtle)] disabled:text-[var(--color-text-muted)] disabled:opacity-60 sm:text-sm sm:leading-5";
 const invalidControlClass = cn(controlBorderClass.invalid, "momo-surface-control-invalid");
 
 type ResolvedControlPresentation = {

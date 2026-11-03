@@ -37,7 +37,7 @@ export function MatchAchievements({
       }))
       .filter(({ players }) => players.length > 0) ?? [];
   return (
-    <section aria-labelledby="match-achievements-heading" className="grid min-w-0 gap-3">
+    <section aria-labelledby="match-achievements-heading" className="grid min-w-0 gap-2">
       <h2 id="match-achievements-heading" className={cn(contentText.heading, "text-balance")}>
         この試合・開催の実績
       </h2>
@@ -53,14 +53,14 @@ export function MatchAchievements({
         <p className={contentText.body}>この試合・開催を根拠とする実績はありません。</p>
       ) : null}
       {entries.length > 0 ? (
-        <ul className="grid max-w-3xl gap-6">
+        <ul className="grid max-w-3xl gap-4">
           {entries.map(({ item, players }) => (
             <li key={item.achievementId} className="grid min-w-0 gap-2">
               <div className="flex min-w-0 items-start justify-between gap-4">
                 <h3 className={cn(contentText.body, "min-w-0 text-pretty")}>{item.name}</h3>
                 <AchievementDifficulty stars={item.stars} />
               </div>
-              <ul aria-label={`${item.name}の達成者`} className="flex flex-wrap gap-x-4 gap-y-2">
+              <ul aria-label={`${item.name}の達成者`} className="flex flex-wrap gap-2">
                 {players.map((player) => (
                   <li key={player.memberId}>
                     <LinkButton

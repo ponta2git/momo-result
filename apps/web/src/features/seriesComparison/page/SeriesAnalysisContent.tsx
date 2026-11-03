@@ -27,13 +27,13 @@ import {
   purposeTabId,
   PurposeTabs,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
+import { AnalysisSectionsSkeleton } from "@/features/seriesComparison/page/SeriesComparisonSkeletons";
 import type {
   SeriesAnalysisDrilldownMetricId,
   SeriesAnalysisQuery,
 } from "@/shared/api/seriesAnalysis";
 import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
 
 const loadOverviewView = () =>
@@ -328,7 +328,7 @@ function AnalysisViewContent({
         <Dialog
           description="比較に使った試合を確認します。"
           open={drilldown.open}
-          popupClassName="max-w-[64rem]"
+          popupClassName="max-w-5xl"
           title={drilldownTitle(drilldown.selection.metricId)}
           onOpenChange={(open) => {
             if (!open) {
@@ -351,16 +351,10 @@ function AnalysisViewContent({
 
 function AnalysisViewLoading({ view }: { view: SeriesAnalysisBundle["view"] }) {
   return (
-    <div
-      aria-labelledby={analysisTabId(view)}
-      className="grid gap-8"
-      id={analysisPanelId(view)}
-      role="tabpanel"
-    >
-      <div aria-label="分析を読み込み中" className="grid gap-8" role="status">
+    <div aria-labelledby={analysisTabId(view)} id={analysisPanelId(view)} role="tabpanel">
+      <div aria-label="分析を読み込み中" role="status">
         <span className="sr-only">分析を読み込み中</span>
-        <Skeleton className="min-h-24" />
-        <Skeleton className="min-h-64" />
+        <AnalysisSectionsSkeleton view={view} />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
-import { pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
+import { pageFrameSiblingGapClass, pageViewportGutterClass } from "@/shared/ui/layout/PageFrame";
 import { SkipLink } from "@/shared/ui/layout/SkipLink";
 
 type AppPageCanvasProps = Pick<
@@ -22,6 +22,7 @@ export function AppPageCanvas({ children, navigation, ...eventHandlers }: AppPag
         <main
           className={cn(
             "mx-auto flex w-full flex-1 flex-col py-4 sm:py-6",
+            pageFrameSiblingGapClass,
             pageViewportGutterClass,
           )}
           id="main-content"

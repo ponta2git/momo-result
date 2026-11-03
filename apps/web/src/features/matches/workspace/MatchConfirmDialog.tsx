@@ -1,4 +1,4 @@
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import type { MatchWorkspaceConfirmationDialogView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
@@ -12,6 +12,7 @@ import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchConfirmSummaryProps = {
@@ -127,16 +128,17 @@ function OcrReviewSummary({
   }
   const reviewedCount = totalCount - unresolvedCount;
   return (
-    <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
-        <span className="font-plain text-[var(--color-text-primary)]">OCR確認状況</span>
-        <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
-        <span className="text-[var(--color-text-secondary)]">
+    <div className="grid gap-2 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      {/* The title names the panel; the counts are the values and keep the body strength. */}
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 tabular-nums">
+        <span className={contentText.heading}>OCR確認状況</span>
+        <span className={contentText.body}>修正 {changedCount}件</span>
+        <span className={contentText.body}>
           確認済み{reviewedCount}件／全{totalCount}件
         </span>
       </div>
       {unresolvedCount > 0 ? (
-        <p className="mt-2 flex gap-2 text-sm leading-5 text-[var(--color-text-primary)]">
+        <p className={cn(contentText.body, "flex gap-2")}>
           <AlertTriangle
             aria-hidden="true"
             className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
@@ -146,12 +148,7 @@ function OcrReviewSummary({
             件あります。このまま確定できますが、元画像との照合を推奨します。
           </span>
         </p>
-      ) : (
-        <p className="mt-2 flex items-center gap-2 text-sm text-[var(--color-success)]">
-          <Check aria-hidden="true" className="size-4" />
-          強調された項目はすべて確認済みです
-        </p>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -184,7 +181,7 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
           </section>
         ) : null}
         {view.values.noteBody.trim().length > 0 ? (
-          <section aria-labelledby="confirm-match-note-heading" className="grid gap-1">
+          <section aria-labelledby="confirm-match-note-heading" className="grid gap-2">
             <h3 className={contentText.heading} id="confirm-match-note-heading">
               試合メモ
             </h3>
@@ -196,12 +193,9 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
         <OcrReviewSummary {...view.review} />
 
         {view.feedback.validationMessage ? (
-          <div
-            className="rounded-sm border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
-            role="alert"
-          >
+          <Notice presentation="nested" role="alert" tone="warning">
             {view.feedback.validationMessage}
-          </div>
+          </Notice>
         ) : null}
 
         <ConfirmActionButtons pending={view.pending} onCancel={view.actions.onClose} />

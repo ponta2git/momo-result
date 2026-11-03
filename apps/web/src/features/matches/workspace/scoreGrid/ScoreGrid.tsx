@@ -20,6 +20,7 @@ import type {
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { cn } from "@/shared/ui/cn";
+import { TableScrollArea } from "@/shared/ui/data/TableScrollArea";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
@@ -196,19 +197,19 @@ const ScoreGridContent = memo(function ScoreGridContent({
   }, []);
 
   return (
-    <section data-validation-path="players" tabIndex={-1}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className={contentText.heading}>4人分の結果を確認・修正</h2>
-          {isNarrowViewport ? null : (
-            <p className={cn(contentText.supporting, "mt-1 text-pretty")}>
-              選択欄はEnter・上下キーで候補を開き、Tab・左右キーで欄を移動します。数値欄はEnter・矢印キーで移動し、Escキーで編集を元に戻せます。
-            </p>
-          )}
-        </div>
+    <section className="grid min-w-0 gap-4" data-validation-path="players" tabIndex={-1}>
+      <div className="grid gap-1">
+        <h2 className={contentText.heading} id="score-grid-heading">
+          4人分の結果を確認・修正
+        </h2>
+        {isNarrowViewport ? null : (
+          <p className={cn(contentText.supporting, "text-pretty")}>
+            選択欄はEnter・上下キーで候補を開き、Tab・左右キーで欄を移動します。数値欄はEnter・矢印キーで移動し、Escキーで編集を元に戻せます。
+          </p>
+        )}
       </div>
 
-      <div className="mt-4 empty:hidden">
+      <div className="empty:hidden">
         <ScoreGridReviewToolbar
           activeItem={activeItem}
           activeReviewed={Boolean(activeItem && acknowledgedCellIdSet.has(activeItem.cellId))}
@@ -220,8 +221,24 @@ const ScoreGridContent = memo(function ScoreGridContent({
         />
       </div>
 
-      {isNarrowViewport ? null : (
-        <div className="mt-4 overflow-x-auto pb-2">
+      {isNarrowViewport ? (
+        <ScoreGridMobileCards
+          errorPathSet={errorPathSet}
+          rows={rows}
+          expandedMobilePlayer={expandedMobilePlayer}
+          handleIncidentNumericCommit={handleIncidentNumericCommit}
+          handlePlayerNumericCommit={handlePlayerNumericCommit}
+          onNumericDraftChange={onNumericDraftChange}
+          getCellId={getCellId}
+          registerCellRef={registerCellRef}
+          onPlayerChange={onPlayerChange}
+          onPlayOrderChange={onPlayOrderChange}
+          onPreferImageKindChange={onPreferImageKindChange}
+          onReviewCellFocus={onReviewCellFocus}
+          onTogglePlayer={handleToggleMobilePlayer}
+        />
+      ) : (
+        <TableScrollArea labelledBy="score-grid-heading">
           <ScoreGridDesktopTable
             errorPathSet={errorPathSet}
             rows={rows}
@@ -236,28 +253,8 @@ const ScoreGridContent = memo(function ScoreGridContent({
             onPreferImageKindChange={onPreferImageKindChange}
             onReviewCellFocus={onReviewCellFocus}
           />
-        </div>
+        </TableScrollArea>
       )}
-
-      {isNarrowViewport ? (
-        <div className="mt-4">
-          <ScoreGridMobileCards
-            errorPathSet={errorPathSet}
-            rows={rows}
-            expandedMobilePlayer={expandedMobilePlayer}
-            handleIncidentNumericCommit={handleIncidentNumericCommit}
-            handlePlayerNumericCommit={handlePlayerNumericCommit}
-            onNumericDraftChange={onNumericDraftChange}
-            getCellId={getCellId}
-            registerCellRef={registerCellRef}
-            onPlayerChange={onPlayerChange}
-            onPlayOrderChange={onPlayOrderChange}
-            onPreferImageKindChange={onPreferImageKindChange}
-            onReviewCellFocus={onReviewCellFocus}
-            onTogglePlayer={handleToggleMobilePlayer}
-          />
-        </div>
-      ) : null}
     </section>
   );
 });

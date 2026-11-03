@@ -7,11 +7,12 @@ import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { AppPageCanvas } from "@/app/AppPageCanvas";
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { preloadRouteForPath } from "@/app/routeModules";
-import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
+import { routePageWidth, RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
+import { PageFrame } from "@/shared/ui/layout/PageFrame";
 
 function shouldPreloadAnchor(anchor: HTMLAnchorElement): boolean {
   if (anchor.target === "_blank" || anchor.hasAttribute("download")) {
@@ -117,7 +118,7 @@ export function AppShell() {
         onPointerOverCapture={handlePreloadIntent}
       >
         {auth.error && !location.pathname.startsWith("/admin/") ? (
-          <div className="mb-6">
+          <PageFrame width={routePageWidth(location.pathname, location.search)}>
             <Notice
               action={
                 <Button
@@ -133,7 +134,7 @@ export function AppShell() {
             >
               入力内容を保持しています。通信状態を確認して、ログイン状態を再確認してください。
             </Notice>
-          </div>
+          </PageFrame>
         ) : null}
         <QueryErrorResetBoundary key={auth.auth?.accountId ?? "anonymous"}>
           {({ reset }) => (

@@ -4,6 +4,7 @@ import {
   niceCeil,
   numberTicks,
 } from "@/features/seriesComparison/charts/dataViz/scales";
+import { useChartWidth } from "@/features/seriesComparison/charts/dataViz/useChartWidth";
 import {
   DataVizLegend,
   DataVizPointMark,
@@ -45,7 +46,7 @@ export function DataVizLineChart({
   yAxisLabel: string;
   yTicks?: number[] | undefined;
 }) {
-  const width = 760;
+  const { containerRef, width } = useChartWidth(760, 980);
   const height = 320;
   const padding = { bottom: 48, left: 76, right: 24, top: 28 };
   const plottedSeries = series.map((item) => ({
@@ -80,13 +81,14 @@ export function DataVizLineChart({
 
   return (
     <figure className="grid max-w-full min-w-0 gap-2">
-      <div className="max-w-full min-w-0 overflow-x-auto pb-1">
+      <div className="max-w-full min-w-0 overflow-x-auto pb-1" ref={containerRef}>
         <svg
           aria-label={ariaLabel}
-          className="mx-auto block w-[760px] max-w-none min-w-[760px] rounded-sm bg-[var(--color-surface)] md:w-full md:max-w-[980px]"
+          className="block max-w-none rounded-sm bg-[var(--color-surface)]"
+          height={height}
           role="img"
-          style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}
+          width={width}
         >
           <line
             stroke="var(--color-border-strong)"
@@ -161,7 +163,7 @@ export function DataVizLineChart({
               key={value}
               textAnchor={value === 1 ? "start" : value === maxIndex ? "end" : "middle"}
               x={x(value)}
-              y={height - 12}
+              y={height - padding.bottom + 20}
             >
               {formatIndex(value)}
             </text>
@@ -221,7 +223,7 @@ export function DataVizLineChart({
             fontSize="12"
             textAnchor="middle"
             x={padding.left + chartWidth / 2}
-            y={height - 2}
+            y={height - 6}
           >
             {xAxisLabel}
           </text>
@@ -297,6 +299,7 @@ function LineValues({
           ),
         },
         ...seriesIdentity.map((identity) => ({
+          align: "right" as const,
           key: identity.id,
           header: identity.label,
           tabular: true,

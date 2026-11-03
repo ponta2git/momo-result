@@ -73,6 +73,7 @@ type MatchWorkspaceReads = {
       onRetry: () => void;
     };
     initializationFailed: boolean;
+    mastersPending: boolean;
     preferredHeldEventPending: boolean;
     sourceImagesLoading: boolean;
   };
@@ -240,6 +241,9 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
         onRetry: retryEdit,
       },
       initializationFailed,
+      // A failed read is reported by the base errors, not left as a pending selection.
+      mastersPending:
+        Boolean(gameTitleId) && (mapMastersQuery.isPending || seasonMastersQuery.isPending),
       preferredHeldEventPending: Boolean(
         preferredHeldEventId && !preferredHeldEventQuery.data && preferredHeldEventQuery.isFetching,
       ),

@@ -40,7 +40,7 @@ export function MasterCreateForm({
 
   return (
     <form
-      className="grid gap-x-2 gap-y-2 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
+      className="grid gap-4 md:grid-cols-[1fr_auto] md:grid-rows-[auto_auto_auto] md:gap-y-0 md:[&>[data-field-root]]:row-span-3"
       key={formKey}
       onSubmit={(event) => {
         event.preventDefault();

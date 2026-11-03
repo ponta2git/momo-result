@@ -47,10 +47,17 @@ export function ScopedMasterPanel({
       </header>
 
       {loading ? (
-        <div aria-busy="true" aria-label={`${labels.itemLabel}を読み込み中`} className="grid gap-2">
-          <Skeleton className="h-12 rounded-sm" />
-          <Skeleton className="h-12 rounded-sm" />
-          <Skeleton className="h-12 rounded-sm" />
+        // Rows match the ready list: 8px block padding around 44px actions, divided by rules.
+        <div
+          aria-busy="true"
+          aria-label={`${labels.itemLabel}を読み込み中`}
+          className="divide-y divide-[var(--color-border)]"
+        >
+          {["row-1", "row-2", "row-3"].map((id) => (
+            <div key={id} className="py-2">
+              <Skeleton className="h-11 rounded-sm" />
+            </div>
+          ))}
         </div>
       ) : loadBlocked ? (
         <div>

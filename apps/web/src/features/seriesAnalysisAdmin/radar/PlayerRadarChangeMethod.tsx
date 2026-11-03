@@ -54,7 +54,7 @@ export function PlayerRadarChangeMethod({
       </Dialog>
       {editor.active ? null : (
         <section aria-label="採点基準の変更" className="grid min-w-0 gap-4">
-          <div className="grid max-w-2xl gap-4">
+          <div className="max-w-readable grid gap-4">
             {administration.previousBasis || currentSource ? (
               <ChoiceList
                 legend="変更方法"

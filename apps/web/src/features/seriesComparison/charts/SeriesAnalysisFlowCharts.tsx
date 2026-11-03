@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
 import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
-import { MomentumRateSummary } from "@/features/seriesComparison/charts/SeriesAnalysisMomentumRateSummary";
+import { momentumRateFact } from "@/features/seriesComparison/charts/SeriesAnalysisMomentumRateSummary";
 import { RankTransitionMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisRankTransitionMatrix";
 import {
   formatDecimal,
@@ -11,7 +11,7 @@ import {
 import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
 import { contentText } from "@/shared/ui/typography";
 
 type TrendChart = Pick<
@@ -98,8 +98,8 @@ export function SeriesTrendCharts({
   return (
     <div className="grid gap-6">
       {trendCharts[variant].map(({ kind, title, ...chart }) => (
-        <div key={kind}>
-          {title ? <h3 className={cn(contentText.heading, "mb-2")}>{title}</h3> : null}
+        <div className="grid min-w-0 gap-2" key={kind}>
+          {title ? <h3 className={contentText.heading}>{title}</h3> : null}
           <DataVizLineChart
             {...chart}
             focusItemIds={focusedItemIds}
@@ -139,25 +139,32 @@ export function MomentumMatrices({
         {entries.map((entry) => {
           return (
             <article
-              className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+              className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
               key={entry.memberId}
             >
-              <h3 className={cn(contentText.heading, "mb-4")}>
+              <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}
                 </MemberSequenceLabel>
               </h3>
-              <dl className="mb-6 grid gap-4 sm:grid-cols-3">
-                <MomentumRateSummary label="下位の次に入賞" rate={entry.afterLower} />
-                <MomentumRateSummary label="4位の次に入賞" rate={entry.afterFourth} />
-                <MomentumRateSummary label="入賞の次に下位" rate={entry.afterPodium} />
-              </dl>
-              <RankTransitionMatrix
-                ariaLabel={`${entry.displayName}の順位の切り替わり`}
-                cells={entry.cells}
-                focusedItemIds={focusedItemIds}
-                kind="momentum"
-              />
+              <div className="grid min-w-0 gap-4">
+                <FactList
+                  ariaLabel={`${entry.displayName}の切り替わりの割合`}
+                  columns={3}
+                  items={[
+                    momentumRateFact("after-lower", "下位の次に入賞", entry.afterLower),
+                    momentumRateFact("after-fourth", "4位の次に入賞", entry.afterFourth),
+                    momentumRateFact("after-podium", "入賞の次に下位", entry.afterPodium),
+                  ]}
+                  layout="plain"
+                />
+                <RankTransitionMatrix
+                  ariaLabel={`${entry.displayName}の順位の切り替わり`}
+                  cells={entry.cells}
+                  focusedItemIds={focusedItemIds}
+                  kind="momentum"
+                />
+              </div>
             </article>
           );
         })}

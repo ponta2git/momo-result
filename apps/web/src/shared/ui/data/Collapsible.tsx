@@ -7,25 +7,21 @@ import { cn } from "@/shared/ui/cn";
 import { politeMotionTransition } from "@/shared/ui/motion/transitions";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 
-type DisclosureTriggerVariant = "compact" | "default" | "supporting";
+type DisclosureTriggerVariant = "default" | "supporting";
 type DisclosurePresentation = "framed" | "plain";
 type DisclosurePanelSpacing = "none" | "sm" | "md";
 type DisclosurePanelPadding = "none" | "xs" | "sm" | "md";
-type DisclosureTriggerLayout = "compact" | "default" | "flush" | "flush-horizontal" | "section";
 
 const triggerVariantClass = {
-  compact: "text-xs font-plain text-[var(--color-text-secondary)]",
   default: "text-sm font-plain text-[var(--color-text-primary)]",
   supporting: "text-sm font-plain text-[var(--color-text-secondary)]",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
 
-const triggerLayoutClass = {
-  compact: "px-2 py-2",
-  default: "px-3 py-2",
-  flush: "p-0",
-  "flush-horizontal": "px-0 py-2",
-  section: "px-4 py-3",
-} as const satisfies Record<DisclosureTriggerLayout, string>;
+/**
+ * The trigger and its panel share one inline inset, so the summary, the chevron, and the
+ * revealed content keep the same start and end edges wherever a disclosure is placed.
+ */
+const disclosureInlineInsetClass = "px-3";
 
 const presentationClass = {
   framed: {
@@ -44,11 +40,12 @@ const panelSpacingClass = {
   md: "mt-3",
 } as const satisfies Record<DisclosurePanelSpacing, string>;
 
+/** Block padding only; the inline inset stays owned by the disclosure. */
 const panelPaddingClass = {
   none: "",
-  xs: "p-2",
-  sm: "p-3",
-  md: "p-4",
+  xs: "py-2",
+  sm: "py-3",
+  md: "py-4",
 } as const satisfies Record<DisclosurePanelPadding, string>;
 
 type DisclosureProps = {
@@ -63,7 +60,6 @@ type DisclosureProps = {
   panelSpacing?: DisclosurePanelSpacing | undefined;
   presentation?: DisclosurePresentation | undefined;
   summary: ReactNode;
-  triggerLayout?: DisclosureTriggerLayout | undefined;
   triggerVariant?: DisclosureTriggerVariant | undefined;
 };
 
@@ -79,7 +75,6 @@ export function Disclosure({
   panelSpacing = "none",
   presentation = "plain",
   summary,
-  triggerLayout = "default",
   triggerVariant = "default",
 }: DisclosureProps) {
   const surfaceRef = useSurfaceFeedback<HTMLElement>();
@@ -95,10 +90,11 @@ export function Disclosure({
         ref={surfaceRef}
         aria-label={ariaLabel}
         className={cn(
-          "momo-surface momo-surface-press group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 text-left data-disabled:cursor-default data-disabled:opacity-70",
+          "momo-surface momo-surface-press group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 py-2 text-left data-disabled:cursor-default data-disabled:opacity-60 pointer-fine:min-h-10",
+          disclosureInlineInsetClass,
           triggerVariantClass[triggerVariant],
-          triggerLayoutClass[triggerLayout],
-          presentation === "framed" || triggerLayout === "section" ? "rounded-none" : "rounded-sm",
+          // Inside a framed root the hover surface sits one radius step inside the frame.
+          presentation === "framed" ? "rounded-xs data-panel-open:rounded-b-none" : "rounded-sm",
         )}
         render={(triggerProps, state) => (
           <button {...triggerProps} type="button">
@@ -119,6 +115,7 @@ export function Disclosure({
         className={cn(
           presentationClass[presentation].panel,
           panelSpacingClass[panelSpacing],
+          disclosureInlineInsetClass,
           panelPaddingClass[panelPadding],
           // Panel presence may outlive open for a commit. Only the chevron animates here:
           // closing content must leave layout before a sibling receives focus.

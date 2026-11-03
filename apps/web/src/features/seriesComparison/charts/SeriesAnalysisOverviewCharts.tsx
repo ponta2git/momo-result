@@ -1,6 +1,10 @@
 import { useId } from "react";
 
 import {
+  compositionBarClass,
+  compositionSegmentSeparator,
+} from "@/features/seriesComparison/charts/chartPresentation";
+import {
   AnalysisMatrix,
   MatrixAxisHeader,
   MatrixCell,
@@ -18,8 +22,6 @@ import { colorMix, rankColor } from "@/shared/matches/rankPresentation";
 import { dataVizSeriesPresentation } from "@/shared/seriesAnalysis/seriesPresentation";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";
-
-const STACKED_SEGMENT_SEPARATOR = "inset 1px 0 var(--color-chart-segment-separator)";
 
 export function RankDistributionBars({
   focusedItemIds,
@@ -66,7 +68,7 @@ export function RankDistributionBars({
               </div>
               <div
                 aria-label={`${player.displayName}の順位分布`}
-                className="flex h-9 overflow-hidden rounded-xs bg-[var(--color-surface)]"
+                className={compositionBarClass}
                 role="group"
               >
                 {entry?.cells.map((cell, cellIndex) => (
@@ -80,7 +82,7 @@ export function RankDistributionBars({
                       flexBasis: `${(cell.rate ?? 0) * 100}%`,
                       flexGrow: 0,
                       flexShrink: 0,
-                      boxShadow: cellIndex === 0 ? undefined : STACKED_SEGMENT_SEPARATOR,
+                      boxShadow: cellIndex === 0 ? undefined : compositionSegmentSeparator,
                       outline: focusedItemIds.includes(cell.itemId)
                         ? "2px solid var(--color-action)"
                         : undefined,
@@ -131,10 +133,10 @@ export function CrownShareBars({
     .map((player) => `${player.displayName} ${formatPercent(shareByMemberId.get(player.memberId))}`)
     .join("、");
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       <div
         aria-label={`平均順位首位に残った比率。${chartLabel}`}
-        className="flex h-3 overflow-hidden rounded-full bg-[var(--color-surface-subtle)]"
+        className={compositionBarClass}
         role="img"
       >
         {players.map((player, playerIndex) => {
@@ -146,7 +148,7 @@ export function CrownShareBars({
               key={player.memberId}
               style={{
                 backgroundColor: dataVizSeriesPresentation(player.memberId).color,
-                boxShadow: playerIndex === 0 ? undefined : STACKED_SEGMENT_SEPARATOR,
+                boxShadow: playerIndex === 0 ? undefined : compositionSegmentSeparator,
                 flexBasis: `${share * 100}%`,
                 flexGrow: 0,
                 flexShrink: 0,
@@ -270,7 +272,7 @@ export function headToHeadCellStyle(
     ? "var(--color-analysis-negative)"
     : signal?.includes("advantage")
       ? "var(--color-analysis-positive)"
-      : "var(--color-tray-incident)";
+      : "var(--color-analysis-neutral)";
   const borderAlpha = alpha + 0.18 > 0.62 ? 0.62 : alpha + 0.18;
   return {
     backgroundColor: colorMix(color, alpha),

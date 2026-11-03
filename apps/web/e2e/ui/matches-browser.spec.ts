@@ -57,8 +57,8 @@ test("keeps the mobile search draft through layout changes and applies it only o
     status: "confirmed",
     q: "ボンビー",
   });
-  await expect(list.getByRole("link", { name: "第1試合 · 東日本編" })).toBeVisible();
-  await expect(list.getByRole("link", { name: "第2試合 · 東日本編" })).toHaveCount(0);
+  await expect(list.getByRole("link", { name: "第1試合・東日本編" })).toBeVisible();
+  await expect(list.getByRole("link", { name: "第2試合・東日本編" })).toHaveCount(0);
 
   await list.getByRole("link", { name: "第1試合をCSV/TSV出力" }).click();
   await expect(page).toHaveURL("/exports?matchId=match-1");
@@ -126,8 +126,8 @@ test("keeps keyboard filtering usable while stale results are protected and the 
 
   retryAllowed = true;
   await page.getByRole("button", { name: "一覧を再読み込み" }).click();
-  await expect(list.getByRole("link", { name: "第1試合 · 東日本編" })).toBeVisible();
-  await expect(list.getByRole("link", { name: "第2試合 · 東日本編" })).toBeVisible();
+  await expect(list.getByRole("link", { name: "第1試合・東日本編" })).toBeVisible();
+  await expect(list.getByRole("link", { name: "第2試合・東日本編" })).toBeVisible();
   await expect(page.getByText("試合一覧を読み込めません")).not.toBeVisible();
   expect(new URL(page.url()).searchParams.get("mapMasterId")).toBe(mapMasterId);
 });

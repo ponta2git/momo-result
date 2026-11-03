@@ -30,11 +30,13 @@ export function ExportScopeTabs({
   const headingId = useId();
 
   return (
-    <section aria-labelledby={headingId}>
-      <h2 className={cn(contentText.heading, "mb-2")} id={headingId}>
-        出力範囲
-      </h2>
-      <p className={cn(contentText.body, "mb-3 text-pretty")}>{exportExclusionNotice}</p>
+    <section aria-labelledby={headingId} className="grid gap-2">
+      <div className="grid gap-1">
+        <h2 className={contentText.heading} id={headingId}>
+          出力範囲
+        </h2>
+        <p className={cn(contentText.body, "text-pretty")}>{exportExclusionNotice}</p>
+      </div>
       <TabsRoot
         value={scope}
         onValueChange={(value) => {
@@ -51,8 +53,9 @@ export function ExportScopeTabs({
 
         {exportScopes.map((item) => (
           <TabsPanel keepMounted key={item.value} value={item.value}>
+            {/* Tabs own no panel spacing; a candidate view that renders nothing leaves no gap. */}
             {scope === item.value && item.value !== "all" ? (
-              <div className="mt-4">{children}</div>
+              <div className="mt-4 empty:hidden">{children}</div>
             ) : null}
           </TabsPanel>
         ))}

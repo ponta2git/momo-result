@@ -27,7 +27,12 @@
   2. **内容構造**: 見出し、整列、関係的余白、列でまとまりと順序を示し、それだけでは別の範囲と誤認する場合にだけ divider を補う。通常の section や説明を淡色面で囲わない。
   3. **局所標識**: 選択、現在状態、順位、分類、注意などを、短いラベル、marker、icon、compact な fill または border で走査可能にする。局所標識は対象の要素だけに付ける。
 - 文字の大きさ、ウェイト、コントラストの3つすべてを同時に最大にするのは、画面の主焦点に限る。ラベルは値より、補足は本文より、metadata は判断材料より明確に弱める。色を除いた grayscale と blur でも主焦点、比較群、補助情報の順序が残ることを先に成立させる。
-- 太字は、現在のタスクで読むべき主要結果、判断の核になる数値・短い文言、および見落とせない局所的な問題へ限定する。label、heading、button、link、selected、status、data value という種類だけでは太字にしない。内容構造は位置、文字サイズ、整列、関係的余白、操作・状態は既存の control、marker、文字、形で識別できるようにする。主要操作も塗りと配置を先に使い、補助操作を含めて通常ウェイトを既定とする。
+- 太字は、その画面に来た人が持ち帰るものに限り、次の3用途だけに使う。
+  - **答え**: 現在のタスクの問いに答える値・短い文言（順位、総資産、比較結果、見通しや振り返りの結論など）。一覧では、探している行を見分ける見出しも答えに含める。作業範囲ごとの最大強度は次項のとおり1群までとし、4人比較は1群として全員を同じ強さにする。
+  - **祝福**: 実績の達成と獲得ポイント。[製品の方向性](#製品の方向性と意味)の歓待として、達成した箇所だけに太字と compact な success の面・icon を併用してよい。
+  - **手当て**: 作業を止める問題について、何がどこで起きたかを示す一言。原因の説明と直し方は通常の太さで読みやすく示し、利用者を責める言い方にしない。
+- 最下位、後退、未達成、まだ記録がないなど個人の不調だけを取り出して太字にしない。比較群の一員として他の人と同じ強さで示すか、通常表示で淡々と示し、失敗として強調しない。
+- label、heading、button、link、選択中・現在地、status、data value という種類だけでは太字にしない。内容構造は位置、文字サイズ、整列、関係的余白、選択中・現在地などの操作・状態は既存の control、面、marker、文字、形で識別できるようにする。主要操作も塗りと配置を先に使い、補助操作を含めて通常ウェイトを既定とする。
 - 強調の総量を相対評価する。同一のタスク範囲で最大強度の表現は1つとし、新しい強調を足す場合は既存要素のいずれを弱めるかも決める。同じ判断に使う同格の内容は一つの比較群として扱い、共通・個別などの適用範囲だけを理由に強弱を変えない。初期表示範囲の独立した大きな淡色面は1つまでとし、例外的に同格比較へ反復する場合は、反復群全体を一つの錨として読み取れる構造にする。
 - 内容のまとまりは、利用者が答えを求める問いと作用する対象から決める。主情報、付随するメタ情報、内容を詳しく調べる操作、別候補への移動は、外形ではなく役割でまとめる。分類・件数・属性は対応する主情報の近くに置き、注意や解釈に必要な条件を含む場合は初期表示に含める。同じ説明を要約と詳細で反復する場合は、判断に必要な前提を残して説明の表示先を一つにする。
 - 内容のない kicker、section 番号、大文字ラベル、同じ強さの KPI card や CTA を反復しない。重要性は、その要素が伝える結果、状態、操作を第一視線で読めることで示し、面積や装飾はその補助に使う。
@@ -42,11 +47,12 @@
 - member sequence と play-order sequence は同じ4色の参照 palette へ対応してよいが、意味トークン、formatter、label、component は分離する。固定メンバー主体の結果・比較・グラフでは member sequence、番手や画像内の並びが主体の入力・分析では play-order sequence を使う。同じ行、表、比較群でプレーヤーとプレー順を同時に示す場合は play-order sequence だけが4色アクセントを所有し、プレーヤー名は neutral にする。名前と `プレー順N` の文字、marker の形または配置も併用し、どちらの順かを色以外でも判断できるようにする。
 - 順位は固定メンバー順やプレー順とは別の尺度であり、この4色順へ対応させない。rank は独立した意味トークンと `N位` の文字・形で示し、同じプレーヤーに付く member / play-order marker と区別できる表現にする。4色順の用途は2つの sequence に限り、member sequence は4人の固定メンバーを表す系列だけに使う（任意のグラフ系列、操作、状態、傾向、装飾には流用しない）。
 - 操作、状態、順位、汎用グラフ系列、member sequence、play-order sequence は別の意味トークンを持つ。参照値の共有は上記2つの sequence 間だけに明示的に限定する。error、warning、success は sequence 色と明確に区別できる範囲で赤、黄、緑の色相を使ってよいが、ラベル、アイコン、形を併用し、sequence 色と同時に表示して取り違えがないことを検証する。区別できない組み合わせは neutral を基調にする。
+- error、warning、success、要確認、処理中などの状態 tone は、通知、標章、toast、control のどこに現れても同じ枠と面の強さを使う。部品ごとに強弱を変えると同じ状態が別の重さに見えるためであり、枠の強さは control の意味枠に必要な 3:1 を基準にする。
 
 ### 淡色面・disclosure・標章
 
 - 淡色背景は、選択中または現在の scope、状態・通知・注意、入力や操作の inset、および compact な装飾ラベルに限定する。通常の要約、説明、見出し、重要情報は、重要という理由だけで淡色面へ置かない。面を追加するのは「何の選択・状態・操作領域・局所標識か」を答えられる場合に限る。
-- disclosure / collapsible は情報を開閉する操作であり、選択状態や inset とは別のものとして扱う。disclosure の展開 panel は自身の背景を持たず、周囲の面をそのまま使う（feature や filter からも panel 自体へ淡色背景を上書きしない）。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。enabled trigger は文字階層や用途 variant によらず同じ淡色 hover を持ち、行全体が操作可能であることを即時に返す。hover は enabled trigger の一時的な pointer feedback に限り、展開中の固定背景や panel の面とは分ける。
+- disclosure / collapsible は情報を開閉する操作であり、選択状態や inset とは別のものとして扱う。disclosure の展開 panel は自身の背景を持たず、周囲の面をそのまま使う（feature や filter からも panel 自体へ淡色背景を上書きしない）。実際の状態、注意、独立した操作領域を内包する場合だけ、その内側の該当要素へ淡色背景を付ける。enabled trigger は文字階層や用途 variant によらず同じ淡色 hover を持ち、行全体が操作可能であることを即時に返す。hover は enabled trigger の一時的な pointer feedback に限り、展開中の固定背景や panel の面とは分ける。trigger と展開 panel は同じ横方向の inset を共有し、disclosure 全体を周囲の内容から一段字下げする。summary、開閉の印、展開した内容の始端と終端を揃えるためであり、feature は panel の横余白を個別に補正しない。
 - `1位`、`2位`、分類名など、短く反復され、走査や識別を助けるラベルは局所的な標章として背景色、形、border を持ってよい。標章は文字だけでも意味が分かり、同じ種類で一貫した寸法と強度を持ち、clickable、selected、warning と区別できるようにする。装飾は標章の範囲に留め、badge は識別やリズムに寄与する場合に足す。
 
 ### 面と罫線の所有
@@ -79,7 +85,7 @@
   | --- | --- | --- |
   | 通常表示 | 400 | 本文、通常の値・入力値、form label、表の列・行見出し、補足、操作、navigation、tab、状態・順位の標識 |
   | 内容構造 | 500 | section・dialog の見出しなど、まとまりを示す短い文字。サイズと余白でも見出しを識別できること |
-  | 主要強調 | 600 | 主要な順位・金額・比較結果、判断の核となる短い文言、対応が必要な問題の要点 |
+  | 主要強調 | 600 | [太字の3用途](#現在地と視覚階層)。主要な順位・金額・比較結果と判断の核となる短い文言、実績の達成、作業を止める問題の要点 |
 
 - 端末フォントによって 500 は 400 と同じ face、600 は Bold の face へ対応し得る。見出しは 500 以外の手掛かりでも識別できるようにし、600 は太字として扱う。ウェイトは表の3段階に限り、英数字と日本語の描き分けが揃わない環境でも意味を保つ。
 - 文章を中心に読む内容と記録情報では、次の文字 recipe を基本とし、具体的な class の組み合わせは共通文字 recipe が所有する。主要情報・通常内容・補足の3つのサイズで階層を作り、内容構造は通常本文と同じサイズでも位置とウェイトで識別する。HTML の heading level は文書構造に従い、この文字役割とは別に選ぶ。
@@ -99,7 +105,7 @@
 ### 余白
 
 - 余白は基本 scale `4 / 8 / 12 / 16 / 20 / 24 / 32 / 48 / 64px` から選び、距離が表す関係を先に決める。page frame 直下、および一つの content surface 内で page scope を分ける主要 block は原則 `24px`、section または form の主要 sibling と同格の compact な card / record 間は `16px` とする。文章中心の内容では、関係の近い項目同士を `8px`、主情報・具体的内容・補助操作など問いの異なる群を `24px` で区切る。長い detail / analysis 内で見出しと scope が独立した最上位 section 同士に限り `32px` を許容し、通常の section や form の中間段階には使わない。
-- 複数の意味上の内容群または field 群を持つ独立 card / record の内余白は `16px`、一つの状態・値・操作を示す compact な bounded panel と走査密度を優先する data record の内余白は `12px` とする。一つの操作または状態を完結させる compact component 内では、`4 / 8px` では群境界が不足し `16px` では走査密度を損なう content cluster 間に限り `12px` を使ってよい。page-level content surface の default は狭い viewport で `16px`、`sm` 以上で `24px` を共通 primitive が所有し、理由を持って密度を保つ compact variant は viewport にかかわらず `16px` とする。
+- 複数の意味上の内容群または field 群を持つ独立 card / record の内余白は `16px`、一つの状態・値・操作を示す compact な bounded panel と走査密度を優先する data record の内余白は `12px` とする。一つの操作または状態を完結させる compact component 内では、`4 / 8px` では群境界が不足し `16px` では走査密度を損なう content cluster 間に限り `12px` を使ってよい。page-level content surface の内余白は狭い viewport で `16px`、`sm` 以上で `24px` とし、共通 primitive が所有する。
 - 独立した action 間と通常の inline item 間は原則 `8px`、compound control 内および一つの値・標識内で密接な要素間と、support text 同士および control から support text は `4px` とする。同じ対象を調べる quiet な補助操作を縦に並べる場合は、hit target 内の余白で文字が離れていれば外側の gap を重ねなくてよい。基本 scale 外の `2px` は一つの label / value 内の密接な文字関係と光学補正だけに使ってよい。`1px` は border、divider、underline の境界補正に限定する。`20px` は大型 control の内余白など component 内部、`48 / 64px` は原則として独立した empty / error など page-level 状態の外余白に使う。複数の内容群や可変長のメモを持つ detail 内の反復 record では、罫線を使わず読む単位を分けるために record 間の `48px` を許容する。通常の page や section の中間段階を増やすためには使わない。寸法、最小 hit target、scroll geometry は余白 scale と別に扱う。
 - 同じ grouping の包含階層では、外側の群ほど内側の群より同じか大きい余白を持たせる。長い detail / analysis の最上位 section 間隔はこの比較対象から除く。data table、chart、matrix、compact badge は走査と比較に必要な密度を優先し、その外側の section 間隔で呼吸を作る。狭幅の page gutter は `12px` を許容し、navigation の scroll bleed も同じ owner に従わせる。
 - sibling 間の余白は親 composition が自身の gap / space または自身が生成する slot wrapper で、component の内余白はその component、page gutter と page sibling 間隔は page layout primitive が所有する。再利用 child の API に外 margin を持たせて親の余白と二重化せず、loading、error、empty、ready の状態置換でも同じ owner と間隔を保つ。field は label から control を `8px`、control から description / error と support 同士を `4px` で関係付け、dialog は header、body、feedback、footer を別の群として構成する。safe area は fixed layer の viewport が左右両方を含めて所有し、child padding を画面端の位置補正に流用しない。
@@ -109,10 +115,11 @@
 - 初回 route loading、route-level error / access terminal、feature loading は、pathname と安全化済み query から確定する page width、専用 shell、戻る導線、detail で必要な header、content surface 内の常設 action / status、文脈 slot を ready と同じ順序で保持する。ここで常設 action とは、pathname / query だけで移動先まで確定する navigation action を指す。runtime callback や data 取得結果で初めて実行可否・移動先が決まる action / notice は推測して skeleton や terminal action を足さず、loading は確定済み slot の大きさと responsive な積み替え、terminal は確定済み chrome と回復操作を保つ。ready で page header を持たない route の loading / terminal だけに title skeleton、eyebrow、description または空の header slot を作らない。状態ごとの余白と route 判定は、同じ layout primitive、親 composition、route presentation を owner にする。状態の切替で作業領域や現在地が作り直され、layout が跳ねることを防ぐ。
 - page、data surface、workspace は一貫した外余白の内側で利用可能な横幅を使い、読み幅の制約は prose、単一 field 群など幅を狭める理由がある内容へ局所的に掛ける。長文になり得る page description、help、error、notice、empty state、narrative は、親の面を狭めず文字内容を共通の readable measure 以内へ制限する。短い label、metadata、table、chart、matrix、横比較にはこの measure を一律適用しない。画面全体を文章幅へ縮めず、試合間・プレーヤー間の走査や比較が速くなる表・図表は一貫して密にする。不規則な欠け、根拠のない非対称、任意の値や z-index を追加しない。
 - 縦 scroll が不要な page では、viewport の右端に scrollbar 用の空きを常時予約せず、global navigation と page が利用可能な幅を使う。必要な scrollbar はブラウザに任せ、dialog / select の scroll lock と幅補正は共通 primitive に任せる。
-- page 幅は内容形状に応じた少数の共通 variant に収束させる。単一の短い form / prose は readable measure の narrow、通常の一覧・管理・取り込みは standard、横比較・詳細分析は wide、source と editor を常時並置する編集 workspace だけは workspace を使う。同等の画面は同じ variant を使い、内部の短い prose や単一 field だけを局所的に狭める。
+- page 幅は内容が必要とする幅の用途名で選び、寸法名の variant を作らない。page 全体が短い form・案内・prose なら readable、一覧・管理・取り込みと source を伴わない単独入力は default、プレーヤーや指標の横比較・詳細分析は analysis、source image と editor を並置する入力（OCR 結果確認と下書きからの入力）だけは workspace を使う。用途は URL の path と query で決まる内容形状から選び、読み込み中・失敗時も同じ幅を保つ。global navigation は表示中の page と端を揃え、readable の page では default の幅を使う。同等の画面は同じ用途名を使い、内部の短い prose や単一 field だけを局所的に readable measure へ狭める。
 - 再利用部品の内部配置は intrinsic な折り返し、必要なら名前付き container query で割当幅に応じて切り替える。inline-size containment は親が幅を与える境界に置き、内容から幅が決まる badge・status まで一律に適用しない。page 全体の横 scroll は作らず、table、図表、source image など横方向の関係を保つ必要がある領域だけが、可視の案内とともに局所 scroll を所有してよい。
 - ID、URL、外部 error など切れ目のない長い値だけへ局所的な wrap または scroll を指定し、全画面へ `overflow-wrap: anywhere` を継承させない。見出しの balance や本文の pretty wrap も、data label、定義値、control label を含め役割ごとに指定する。
 - 一行として走査する control、status、action cluster、通常の table cell は中央、文字同士の短い label / value 行は baseline、heading と lead や主情報と metadata からなる可変高の複合 record は上端を揃える。field を横に並べる form row は control の下端を揃えてよい。table editor の上端、chart axis の下端など対応関係のための例外は局所的に明示し、画面ごとの任意な offset で調整しない。shared interactive primitive が文字サイズ、行高、responsive な高さを所有し、global element selector の font shorthand で上書きしない。
+- quiet な操作、disclosure、表の cell など内余白を持つ操作面や cell は、操作面または罫線の外端を周囲の内容端へ揃え、文字は内余白の分だけ字下げする。文字だけを揃えるために負の余白を使わない。sticky な要素は global navigation の実高の下で止め、navigation の高さを前提にした固定 offset を置かない。
 
 ### データ表現
 

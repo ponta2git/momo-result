@@ -1,34 +1,28 @@
-import { Settings2, Trash2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { useState } from "react";
 
+import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type {
-  MatchWorkspaceCancellationView,
   MatchWorkspaceMastersNavigationView,
   MatchWorkspaceSetupSectionView,
 } from "@/features/matches/workspace/matchWorkspacePanelViews";
-import { formatApiError } from "@/shared/api/problemDetails";
 import { formatMatchNoInEvent } from "@/shared/domain/matchLabels";
 import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { TextField } from "@/shared/ui/forms/TextField";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 type MatchSetupSectionProps = {
-  cancellation: MatchWorkspaceCancellationView;
   mastersNavigation: MatchWorkspaceMastersNavigationView;
+  mode: WorkspaceMode;
   view: MatchWorkspaceSetupSectionView;
 };
 
-export function MatchSetupSection({
-  cancellation,
-  mastersNavigation,
-  view,
-}: MatchSetupSectionProps) {
+export function MatchSetupSection({ mastersNavigation, mode, view }: MatchSetupSectionProps) {
   const { options, values } = view.fields;
   const selectedHeldEvent = options.heldEvents.find((event) => event.id === values.heldEventId);
   const selectedGameTitle = options.gameTitleItems?.find((item) => item.id === values.gameTitleId);
@@ -37,10 +31,22 @@ export function MatchSetupSection({
   const contextComplete = Boolean(
     selectedHeldEvent && selectedGameTitle && selectedSeason && selectedMap && values.playedAt,
   );
+  // Names that are still being fetched are not missing input; show what is known meanwhile.
+  const contextPending =
+    !contextComplete &&
+    (Boolean(options.mastersPending) ||
+      (Boolean(values.heldEventId) &&
+        !selectedHeldEvent &&
+        Boolean(options.heldEventPicker?.pending)));
+  const contextIncomplete = !contextComplete && !contextPending;
   const hasErrors = Object.keys(values).some((path) =>
     view.fields.validation.errorPathSet.has(path),
   );
-  const [editorOpen, setEditorOpen] = useState(!contextComplete || hasErrors);
+  // A new match starts by choosing its conditions. Review and edit inherit conditions chosen
+  // earlier, so the summary suffices until loaded values turn out incomplete or invalid; the
+  // decision waits for pending names so a warm or cold cache opens the same way.
+  const [editorOpen, setEditorOpen] = useState(mode === "create" || contextIncomplete || hasErrors);
+  const [previousIncomplete, setPreviousIncomplete] = useState(contextIncomplete);
   const [previousHasErrors, setPreviousHasErrors] = useState(hasErrors);
   const focusRequest = view.fields.validation.focusRequest;
   const [handledFocusRequest, setHandledFocusRequest] = useState(focusRequest);
@@ -48,12 +54,17 @@ export function MatchSetupSection({
     setHandledFocusRequest(focusRequest);
     if (focusRequest.path in values) setEditorOpen(true);
   }
+  if (previousIncomplete !== contextIncomplete) {
+    setPreviousIncomplete(contextIncomplete);
+    if (contextIncomplete) setEditorOpen(true);
+  }
   if (previousHasErrors !== hasErrors) {
     setPreviousHasErrors(hasErrors);
     if (hasErrors) setEditorOpen(true);
   }
-  const contextSummary = contextComplete
-    ? [
+  const contextSummary = contextIncomplete
+    ? "必須条件を設定してください"
+    : [
         selectedHeldEvent ? formatDateTimeLong(selectedHeldEvent.heldAt) : null,
         formatMatchNoInEvent(values.matchNoInEvent),
         selectedGameTitle?.name,
@@ -61,8 +72,7 @@ export function MatchSetupSection({
         selectedMap?.name,
       ]
         .filter(Boolean)
-        .join("・")
-    : "必須条件を設定してください";
+        .join("・");
   return (
     <section>
       <h2 className="sr-only">保存先と試合条件</h2>
@@ -74,12 +84,12 @@ export function MatchSetupSection({
         panelSpacing="md"
         summary={
           <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1">
-              <span className={cn(contentText.heading, "block")}>保存先と試合条件</span>
+            <span className="grid min-w-0 flex-1 gap-1">
+              <span className={contentText.heading}>保存先と試合条件</span>
               <span
                 className={cn(
-                  "mt-0.5 block tabular-nums",
-                  hasErrors || !contextComplete
+                  "tabular-nums",
+                  hasErrors || contextIncomplete
                     ? fieldText.error
                     : cn(contentText.supporting, "truncate"),
                 )}
@@ -88,23 +98,21 @@ export function MatchSetupSection({
                 {contextSummary}
               </span>
             </span>
-            <span className="shrink-0 text-sm text-[var(--color-text-secondary)]">
+            <span className={cn(contentText.body, "shrink-0")}>
               {editorOpen ? "条件を閉じる" : "条件を変更"}
             </span>
           </span>
         }
-        triggerLayout="flush-horizontal"
         onOpenChange={setEditorOpen}
       >
-        <MatchSetupFields view={view.fields} />
+        <div className="grid gap-4">
+          <MatchSetupFields view={view.fields} />
 
-        <div className="mt-4">
           <Disclosure
             keepMounted
             panelSpacing="sm"
             summary="一覧にない開催を追加する"
-            triggerLayout="compact"
-            triggerVariant="compact"
+            triggerVariant="supporting"
           >
             <div className="grid gap-2">
               <div
@@ -129,67 +137,30 @@ export function MatchSetupSection({
               </div>
               {view.eventCreation.feedback.error ? (
                 <Notice title={view.eventCreation.feedback.error.title} tone="danger">
-                  <p>{view.eventCreation.feedback.error.detail}</p>
-                  <p className="mt-1">{view.eventCreation.feedback.error.nextStep}</p>
+                  <div className="grid gap-1">
+                    <p>{view.eventCreation.feedback.error.detail}</p>
+                    <p>{view.eventCreation.feedback.error.nextStep}</p>
+                  </div>
                 </Notice>
               ) : null}
             </div>
           </Disclosure>
-        </div>
 
-        {mastersNavigation.show || cancellation.allowed || cancellation.error ? (
-          <div className="mt-6 grid gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                {mastersNavigation.show ? (
-                  <Button
-                    icon={<Settings2 aria-hidden="true" />}
-                    pending={mastersNavigation.pending}
-                    pendingLabel="移動中…"
-                    size="sm"
-                    variant="quiet"
-                    onClick={mastersNavigation.onNavigate}
-                  >
-                    設定管理へ
-                  </Button>
-                ) : null}
-              </div>
-              {cancellation.allowed ? (
-                <AlertDialog
-                  cancelLabel="キャンセル"
-                  confirmLabel="削除する"
-                  pendingLabel="削除中…"
-                  formatError={(error) =>
-                    formatApiError(error, "確定前の記録を削除できませんでした")
-                  }
-                  description="この確定前の記録を削除します。元に戻せません。"
-                  open={cancellation.dialog.open}
-                  pending={cancellation.dialog.pending}
-                  title="確定前の記録を削除しますか？"
-                  trigger={
-                    <Button
-                      disabled={cancellation.disabled}
-                      icon={<Trash2 aria-hidden="true" />}
-                      size="sm"
-                      variant="dangerQuiet"
-                      onClick={cancellation.onTrigger}
-                    >
-                      確定前の記録を削除
-                    </Button>
-                  }
-                  onConfirm={cancellation.dialog.onConfirm}
-                  onOpenChange={cancellation.dialog.onOpenChange}
-                />
-              ) : null}
+          {mastersNavigation.show ? (
+            <div>
+              <Button
+                icon={<Settings2 aria-hidden="true" />}
+                pending={mastersNavigation.pending}
+                pendingLabel="移動中…"
+                size="sm"
+                variant="quiet"
+                onClick={mastersNavigation.onNavigate}
+              >
+                設定管理へ
+              </Button>
             </div>
-            {cancellation.error && !cancellation.dialog.open ? (
-              <Notice title={cancellation.error.title} tone="danger">
-                <p>{cancellation.error.detail}</p>
-                <p className="mt-1">{cancellation.error.nextStep}</p>
-              </Notice>
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </Disclosure>
     </section>
   );

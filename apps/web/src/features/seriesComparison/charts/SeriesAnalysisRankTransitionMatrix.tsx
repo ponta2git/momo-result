@@ -1,4 +1,8 @@
 import {
+  focusedMetricLabelClass,
+  focusedMetricRingClass,
+} from "@/features/seriesComparison/charts/chartPresentation";
+import {
   AnalysisMatrix,
   MatrixAxisHeader,
   MatrixCell,
@@ -41,13 +45,12 @@ export function RankTransitionMatrix({
       <thead>
         <tr>
           <MatrixAxisHeader
-            className={revenue ? "w-[4.5rem] px-1" : "w-16 px-1"}
+            className={revenue ? "w-24" : "w-20"}
             columnLabel={revenue ? "最終順位" : "次戦"}
             rowLabel={revenue ? "収益順位" : "前戦"}
           />
           {SERIES_RANKS.map((rank) => (
             <MatrixColumnHeader
-              className="px-1 py-1 text-xs"
               key={rank}
               style={{ borderTopColor: rankBorderColor(rank), borderTopWidth: 3 }}
             >
@@ -60,7 +63,7 @@ export function RankTransitionMatrix({
       <tbody>
         {SERIES_RANKS.map((fromRank) => (
           <tr key={fromRank}>
-            <MatrixRowHeader className="px-1 text-xs">
+            <MatrixRowHeader>
               {revenue ? "収益" : "前"}
               {fromRank}位
             </MatrixRowHeader>
@@ -74,9 +77,8 @@ export function RankTransitionMatrix({
                 <MatrixCell
                   aria-label={`${label}、${cell ? `${cell.count}戦、${formatPercent(cell.rate)}${focused ? "、この試合" : ""}` : "対象なし"}`}
                   className={cn(
-                    "rounded-xs border px-1 py-2 text-center",
-                    focused &&
-                      "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]",
+                    "rounded-xs border px-2 py-2 text-center",
+                    focused && focusedMetricRingClass,
                   )}
                   data-focused-metric={focused ? "true" : undefined}
                   key={toRank}
@@ -100,10 +102,8 @@ export function RankTransitionMatrix({
                       <p className={cn(contentText.body, "tabular-nums")}>
                         {formatPercent(cell.rate)}
                       </p>
-                      {focused && revenue ? (
-                        <p className="font-plain mt-0.5 text-xs text-[var(--color-action)]">
-                          この試合
-                        </p>
+                      {focused ? (
+                        <p className={cn(focusedMetricLabelClass, "mt-0.5")}>この試合</p>
                       ) : null}
                     </>
                   ) : (

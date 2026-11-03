@@ -11,6 +11,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { CheckboxField } from "@/shared/ui/forms/CheckboxField";
+import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { contentText } from "@/shared/ui/typography";
 
 export function MatchAchievementFields({
@@ -37,7 +38,16 @@ export function MatchAchievementFields({
   return (
     <section aria-label="今回記録する実績" className="min-w-0">
       <Disclosure
-        summary={`実績を記録（任意）${values.length > 0 ? `・入力${values.length}件` : ""}`}
+        summary={
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span className={contentText.heading}>実績を記録（任意）</span>
+            {values.length > 0 ? (
+              <span className={cn(contentText.supporting, "tabular-nums")}>
+                入力{values.length}件
+              </span>
+            ) : null}
+          </span>
+        }
         ariaLabel="試合と一緒に実績を記録"
         panelSpacing="sm"
         open={open}
@@ -66,39 +76,45 @@ export function MatchAchievementFields({
           ) : null}
           {outdated.length > 0 ? (
             <Notice tone="warning" title="選択した実績を確認してください">
-              <p>
-                作品・マップ、または保存済みの実績が変わりました。入力を外すか、最新内容で選び直してください。
-              </p>
-              <ul className="mt-2 grid gap-2">
-                {outdated.map(({ selection: entry, currentItem }) => (
-                  <li
-                    key={`${entry.achievementId}:${entry.memberId}`}
-                    className="flex flex-wrap items-center gap-2"
-                  >
-                    <span>
-                      {entry.achievementName}・{memberDisplayName(entry.memberId)}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={disabled}
-                      onClick={() => remove(entry.achievementId, entry.memberId)}
-                    >
-                      入力を外す
-                    </Button>
-                    {currentItem ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={disabled}
-                        onClick={() => add(currentItem, entry.memberId)}
+              <div className="grid gap-2">
+                <p>
+                  作品・マップ、または保存済みの実績が変わりました。入力を外すか、最新内容で選び直してください。
+                </p>
+                <ul className="grid gap-2">
+                  {outdated.map(({ selection: entry, currentItem }) => (
+                    <li key={`${entry.achievementId}:${entry.memberId}`}>
+                      <ContentWithActions
+                        actions={
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={disabled}
+                              onClick={() => remove(entry.achievementId, entry.memberId)}
+                            >
+                              入力を外す
+                            </Button>
+                            {currentItem ? (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={disabled}
+                                onClick={() => add(currentItem, entry.memberId)}
+                              >
+                                最新内容で選び直す
+                              </Button>
+                            ) : null}
+                          </>
+                        }
                       >
-                        最新内容で選び直す
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+                        <p>
+                          {entry.achievementName}・{memberDisplayName(entry.memberId)}
+                        </p>
+                      </ContentWithActions>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </Notice>
           ) : null}
           {hasCatalog && setup.mapMasterId ? (

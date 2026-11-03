@@ -219,7 +219,8 @@ export function DataTable<Row>({
                     key={column.key}
                     data-highlighted={column.highlighted || undefined}
                     className={cn(
-                      "text-[var(--color-text-primary)]",
+                      // Values read as body text; only the row identity keeps the primary color.
+                      column.rowHeader ? "text-[var(--color-text-primary)]" : "",
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],

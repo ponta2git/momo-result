@@ -1,4 +1,8 @@
 import {
+  compositionBarClass,
+  compositionSegmentSeparator,
+} from "@/features/seriesComparison/charts/chartPresentation";
+import {
   defaultOwnerMetric,
   isOwnerMetricId,
   ownerMetricOptions,
@@ -18,6 +22,7 @@ import { DataTable } from "@/shared/ui/data/DataTable";
 import type { DataTableColumn } from "@/shared/ui/data/DataTable";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
+import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
 type OwnerRow = OwnerComparison["rows"][number];
@@ -51,7 +56,7 @@ export function SeriesAnalysisOwnerComparison({
       {hasMatches ? (
         <>
           {comparison.recordedOwnerCount === 1 ? (
-            <p className={cn(contentText.supporting, "max-w-2xl text-pretty")}>
+            <p className={cn(contentText.supporting, "text-pretty", readableTextWidthClass)}>
               この条件では、オーナーの記録は1人分です。
             </p>
           ) : null}
@@ -154,15 +159,21 @@ function OwnerValue({ cell, metric }: { cell: OwnerCell; metric: OwnerMetricId }
   if (metric === "rank.distribution")
     return (
       <div className="grid gap-2">
-        <div aria-hidden="true" className="flex h-2 overflow-hidden">
-          {cell.rank.distribution.map((rank) => (
+        <div aria-hidden="true" className={compositionBarClass}>
+          {cell.rank.distribution.map((rank, rankIndex) => (
             <span
               key={rank.rank}
-              style={{ backgroundColor: rankColor(rank.rank), width: `${(rank.rate ?? 0) * 100}%` }}
+              style={{
+                backgroundColor: rankColor(rank.rank),
+                boxShadow: rankIndex === 0 ? undefined : compositionSegmentSeparator,
+                flexBasis: `${(rank.rate ?? 0) * 100}%`,
+                flexGrow: 0,
+                flexShrink: 0,
+              }}
             />
           ))}
         </div>
-        <ul className={cn(contentText.compactPrimary, "grid gap-1 tabular-nums")}>
+        <ul className={cn(contentText.body, "grid gap-1 tabular-nums")}>
           {cell.rank.distribution.map((rank) => (
             <li key={rank.rank}>
               {rank.rank}位 {rank.count}回{" "}

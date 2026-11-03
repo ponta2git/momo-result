@@ -31,7 +31,7 @@ export function AchievementRadarSection({
   );
   if (radar)
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         <PlayerRadarSection radar={radar} achievements={players} achievementsHref={href} />
         {failed ? (
           <Notice tone="warning" title="実績達成の数値を取得できません">
@@ -48,7 +48,7 @@ export function AchievementRadarSection({
     );
   return (
     <AnalysisSection id="metric-player-radar" title="実績達成">
-      <div className="grid min-w-0 gap-3">
+      <div className="grid min-w-0 gap-4">
         <p className={contentText.supporting}>
           この比較範囲には、成績6軸の対象となる試合がありません。
         </p>
@@ -72,7 +72,7 @@ export function AchievementRadarSection({
           </Notice>
         ) : null}
         <div>
-          <LinkButton to={href} variant="secondary">
+          <LinkButton size="sm" to={href} variant="quiet">
             実績リストを開く
           </LinkButton>
         </div>

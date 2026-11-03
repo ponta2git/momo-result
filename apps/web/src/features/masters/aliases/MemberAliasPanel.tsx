@@ -45,14 +45,7 @@ export function MemberAliasPanel({
   const aliasesByMember = groupMemberAliases(aliases);
 
   return (
-    <section className="grid min-w-0 gap-4">
-      <header>
-        <h2 className={contentText.heading}>プレーヤー名の別名</h2>
-        <p className={cn(contentText.body, "mt-1")}>
-          画像から読み取られる表記を正式なプレーヤー名に紐づけます。
-        </p>
-      </header>
-
+    <div className="grid min-w-0 gap-4">
       <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
@@ -148,7 +141,7 @@ export function MemberAliasPanel({
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 

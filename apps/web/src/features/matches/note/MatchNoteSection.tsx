@@ -52,145 +52,155 @@ export function MatchNoteSection({ editor }: MatchNoteSectionProps) {
 
   return (
     <section aria-labelledby="match-note-heading" className="grid gap-4">
-      <ContentWithActions
-        actions={
-          editing ? null : (
-            <div
-              aria-label="試合メモの操作"
-              className="flex shrink-0 flex-wrap items-center gap-2"
-              role="group"
-            >
-              <Button
-                disabled={pending || editor.refreshing}
-                ref={editActionRef}
-                size="sm"
-                variant="secondary"
-                onClick={startEditing}
+      {/* Operation feedback stays 4px under the controls that produced it. */}
+      <div className="grid gap-1">
+        <ContentWithActions
+          actions={
+            editing ? null : (
+              <div
+                aria-label="試合メモの操作"
+                className="flex shrink-0 flex-wrap items-center gap-2"
+                role="group"
               >
-                {editor.savedNote.body ? "編集" : "メモを追加"}
-              </Button>
-              {editor.savedNote.body ? (
                 <Button
                   disabled={pending || editor.refreshing}
+                  ref={editActionRef}
                   size="sm"
-                  variant="dangerQuiet"
-                  onClick={requestDelete}
+                  variant="secondary"
+                  onClick={startEditing}
                 >
-                  メモを削除
+                  {editor.savedNote.body ? "編集" : "メモを追加"}
                 </Button>
-              ) : null}
-            </div>
-          )
-        }
-      >
-        <div className="grid min-w-0 gap-2">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className={contentText.heading} id="match-note-heading">
-              試合メモ
-            </h2>
-            {editing ? (
+                {editor.savedNote.body ? (
+                  <Button
+                    disabled={pending || editor.refreshing}
+                    size="sm"
+                    variant="dangerQuiet"
+                    onClick={requestDelete}
+                  >
+                    メモを削除
+                  </Button>
+                ) : null}
+              </div>
+            )
+          }
+        >
+          <div className="grid min-w-0 gap-2">
+            <div className="flex items-baseline justify-between gap-4">
+              <h2 className={contentText.heading} id="match-note-heading">
+                試合メモ
+              </h2>
+              {/* One polite slot: the character count while editing, then the completed write. */}
               <span
-                aria-live="polite"
-                className={cn(tooLong ? fieldText.error : contentText.supporting, "tabular-nums")}
+                className={cn(
+                  editing && tooLong ? fieldText.error : contentText.supporting,
+                  "tabular-nums",
+                )}
+                role="status"
               >
-                {count} / {matchNoteMaximumCharacters}
+                {editing ? `${count} / ${matchNoteMaximumCharacters}` : editor.successMessage}
               </span>
-            ) : null}
-          </div>
+            </div>
 
-          {editing ? (
-            <div className="grid gap-4">
+            {editing ? (
+              <div className="grid gap-4">
+                <div className="grid gap-1">
+                  <TextareaControl
+                    aria-label="試合メモ"
+                    aria-describedby={tooLong ? "match-note-detail-error" : undefined}
+                    disabled={pending}
+                    invalid={tooLong}
+                    minHeight="md"
+                    ref={inputRef}
+                    resize="vertical"
+                    textFlow="relaxed"
+                    value={draft}
+                    onChange={(event) => changeDraft(event.currentTarget.value)}
+                  />
+                  {tooLong ? (
+                    <p className={fieldText.error} id="match-note-detail-error" role="alert">
+                      試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
+                    </p>
+                  ) : null}
+                </div>
+                {conflict ? (
+                  <Notice tone="warning" title="別の利用者が先に更新しました">
+                    <div className="grid gap-4">
+                      <div className="grid gap-1">
+                        <p className={contentText.heading}>保存済みの最新版</p>
+                        <p
+                          className={cn(
+                            contentText.body,
+                            "break-words whitespace-pre-wrap",
+                            readableTextWidthClass,
+                          )}
+                        >
+                          {conflict.latestBody ?? "（メモなし）"}
+                        </p>
+                      </div>
+                      <div className="grid gap-1">
+                        <p className={contentText.heading}>あなたの入力</p>
+                        <p
+                          className={cn(
+                            contentText.body,
+                            "break-words whitespace-pre-wrap",
+                            readableTextWidthClass,
+                          )}
+                        >
+                          {conflict.draft}
+                        </p>
+                      </div>
+                    </div>
+                  </Notice>
+                ) : null}
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button disabled={pending} variant="quiet" onClick={cancel}>
+                    キャンセル
+                  </Button>
+                  <Button
+                    disabled={!canSave}
+                    pending={pending}
+                    pendingLabel="保存中…"
+                    onClick={save}
+                  >
+                    {conflict ? "この入力で再試行" : "保存"}
+                  </Button>
+                </div>
+              </div>
+            ) : editor.savedNote.body ? (
               <div className="grid gap-1">
-                <TextareaControl
-                  aria-label="試合メモ"
-                  aria-describedby={tooLong ? "match-note-detail-error" : undefined}
-                  disabled={pending}
-                  invalid={tooLong}
-                  minHeight="md"
-                  ref={inputRef}
-                  resize="vertical"
-                  textFlow="relaxed"
-                  value={draft}
-                  onChange={(event) => changeDraft(event.currentTarget.value)}
-                />
-                {tooLong ? (
-                  <p className={fieldText.error} id="match-note-detail-error" role="alert">
-                    試合メモは{matchNoteMaximumCharacters}字以内で入力してください。
+                <p
+                  className={cn(
+                    contentText.body,
+                    "break-words whitespace-pre-wrap",
+                    readableTextWidthClass,
+                  )}
+                >
+                  {editor.savedNote.body}
+                </p>
+                {editor.savedNote.updatedAt ? (
+                  <p className={contentText.supporting}>
+                    {editor.savedNote.updatedByDisplayName ?? "利用者"}が
+                    {formatDateTimeLong(editor.savedNote.updatedAt)}に更新
                   </p>
                 ) : null}
               </div>
-              {conflict ? (
-                <Notice tone="warning" title="別の利用者が先に更新しました">
-                  <div className="grid gap-4">
-                    <div>
-                      <p className={contentText.heading}>保存済みの最新版</p>
-                      <p
-                        className={cn(
-                          contentText.body,
-                          "mt-1 break-words whitespace-pre-wrap",
-                          readableTextWidthClass,
-                        )}
-                      >
-                        {conflict.latestBody ?? "（メモなし）"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className={contentText.heading}>あなたの入力</p>
-                      <p
-                        className={cn(
-                          contentText.body,
-                          "mt-1 break-words whitespace-pre-wrap",
-                          readableTextWidthClass,
-                        )}
-                      >
-                        {conflict.draft}
-                      </p>
-                    </div>
-                  </div>
-                </Notice>
-              ) : null}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button disabled={pending} variant="quiet" onClick={cancel}>
-                  キャンセル
-                </Button>
-                <Button disabled={!canSave} pending={pending} pendingLabel="保存中…" onClick={save}>
-                  {conflict ? "この入力で再試行" : "保存"}
-                </Button>
-              </div>
-            </div>
-          ) : editor.savedNote.body ? (
-            <div className="grid gap-1">
-              <p
-                className={cn(
-                  contentText.body,
-                  "break-words whitespace-pre-wrap",
-                  readableTextWidthClass,
-                )}
-              >
-                {editor.savedNote.body}
-              </p>
-              {editor.savedNote.updatedAt ? (
-                <p className={contentText.supporting}>
-                  {editor.savedNote.updatedByDisplayName ?? "利用者"}が
-                  {formatDateTimeLong(editor.savedNote.updatedAt)}に更新
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <p className={contentText.body}>まだメモはありません。</p>
-          )}
-        </div>
-      </ContentWithActions>
-
-      <p className={contentText.supporting} role="status">
-        {editor.successMessage}
-      </p>
-
-      {editor.refreshing ? (
-        <p className={contentText.supporting} role="status">
-          メモの最新表示を確認しています。
-        </p>
-      ) : null}
+            ) : (
+              <p className={contentText.body}>まだメモはありません。</p>
+            )}
+          </div>
+        </ContentWithActions>
+        {errorMessage ? (
+          <p className={fieldText.error} role="alert">
+            {errorMessage}
+          </p>
+        ) : null}
+        {editor.refreshing ? (
+          <p className={contentText.supporting} role="status">
+            メモの最新表示を確認しています。
+          </p>
+        ) : null}
+      </div>
       {editor.refreshFailed ? (
         <Notice
           action={
@@ -210,12 +220,6 @@ export function MatchNoteSection({ editor }: MatchNoteSectionProps) {
         >
           保存は完了しています。更新者と更新日時は、試合詳細を再取得すると確認できます。
         </Notice>
-      ) : null}
-
-      {errorMessage ? (
-        <p className={fieldText.error} role="alert">
-          {errorMessage}
-        </p>
       ) : null}
 
       <AlertDialog
@@ -269,12 +273,14 @@ export function MatchNoteRecovery({ editor }: { editor: MatchNoteEditor }) {
 
   return (
     <section aria-labelledby="unsaved-match-note-heading" className="grid gap-4">
-      <h2 className={contentText.heading} id="unsaved-match-note-heading">
-        未保存の試合メモ
-      </h2>
-      <p className={contentText.body}>
-        試合を取得できないため保存できません。入力した本文はこの画面に残しています。
-      </p>
+      <div className="grid gap-2">
+        <h2 className={contentText.heading} id="unsaved-match-note-heading">
+          未保存の試合メモ
+        </h2>
+        <p className={contentText.body}>
+          試合を取得できないため保存できません。入力した本文はこの画面に残しています。
+        </p>
+      </div>
       <TextareaControl
         aria-label="退避した未保存の試合メモ"
         minHeight="md"
@@ -284,15 +290,21 @@ export function MatchNoteRecovery({ editor }: { editor: MatchNoteEditor }) {
         textFlow="relaxed"
         value={editor.draft}
       />
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => void copy()} variant="secondary">
-          メモをコピー
-        </Button>
-        <Button disabled={editor.pending} onClick={editor.cancel} variant="dangerQuiet">
-          未保存のメモを破棄
-        </Button>
+      <div className="grid gap-1">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => void copy()} variant="secondary">
+            メモをコピー
+          </Button>
+          <Button disabled={editor.pending} onClick={editor.cancel} variant="dangerQuiet">
+            未保存のメモを破棄
+          </Button>
+        </div>
+        {copyMessage ? (
+          <p className={contentText.body} role="status">
+            {copyMessage}
+          </p>
+        ) : null}
       </div>
-      {copyMessage ? <p role="status">{copyMessage}</p> : null}
     </section>
   );
 }

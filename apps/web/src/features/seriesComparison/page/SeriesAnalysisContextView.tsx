@@ -16,7 +16,6 @@ import type { AnalysisViewProps } from "@/features/seriesComparison/model/series
 import {
   AnalysisSection,
   AnalysisSubsection,
-  MetricValue,
 } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
 import {
   analysisPanelId,
@@ -26,6 +25,7 @@ import {
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
 import { contentText } from "@/shared/ui/typography";
 
 export const ContextView = memo(function ContextView({
@@ -49,22 +49,24 @@ export const ContextView = memo(function ContextView({
     >
       <AnalysisTableOfContents view="context" />
       <AnalysisSection id="metric-play-order" title="番手比較">
-        <PlayOrderMatrix focusedItemIds={focusedItemIds} entries={response.playOrderComparison} />
-        <div className="mt-3 flex flex-wrap gap-2">
-          {response.playOrderComparison.map((entry) => (
-            <Button
-              key={entry.memberId}
-              size="sm"
-              variant="quiet"
-              onClick={() =>
-                onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
-              }
-            >
-              <MemberSequenceLabel accent={false} memberId={entry.memberId}>
-                {entry.displayName}の番手別推移を見る
-              </MemberSequenceLabel>
-            </Button>
-          ))}
+        <div className="grid gap-2">
+          <PlayOrderMatrix focusedItemIds={focusedItemIds} entries={response.playOrderComparison} />
+          <div className="flex flex-wrap gap-2">
+            {response.playOrderComparison.map((entry) => (
+              <Button
+                key={entry.memberId}
+                size="sm"
+                variant="quiet"
+                onClick={() =>
+                  onDrilldown({ memberId: entry.memberId, metricId: "playOrder.rankHistory" })
+                }
+              >
+                <MemberSequenceLabel accent={false} memberId={entry.memberId}>
+                  {entry.displayName}の番手別推移を見る
+                </MemberSequenceLabel>
+              </Button>
+            ))}
+          </div>
         </div>
       </AnalysisSection>
       <AnalysisSection id="metric-owner" title="オーナー比較">
@@ -83,44 +85,60 @@ export const ContextView = memo(function ContextView({
         />
       </AnalysisSection>
       <AnalysisSection id="metric-ginji" title="スリの銀次">
-        <div className="grid gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
-          {response.metricsByPlayer.map((metric) => (
-            <article className="min-w-0" key={metric.memberId}>
-              <div className="flex justify-between gap-2">
-                <h3 className={contentText.heading}>
-                  <MemberSequenceLabel memberId={metric.memberId}>
-                    {metric.displayName}
-                  </MemberSequenceLabel>
-                </h3>
-                <span className={cn(contentText.supporting, "tabular-nums")}>
-                  遭遇 {metric.ginji.encounterMatches}戦
-                </span>
-              </div>
-              <dl className="mt-2 grid grid-cols-2 gap-2">
-                <MetricValue label="遭遇率" value={formatPercent(metric.ginji.encounterRate)} />
-                <MetricValue label="合計回数" value={`${metric.ginji.count}回`} />
-                <MetricValue
-                  label="遭遇時平均順位"
-                  value={`${formatDecimal(metric.ginji.resilienceRankAverage)}位`}
+        <div className="grid gap-6">
+          <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
+            {response.metricsByPlayer.map((metric) => (
+              <article className="grid min-w-0 content-start gap-2" key={metric.memberId}>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <h3 className={contentText.heading}>
+                    <MemberSequenceLabel memberId={metric.memberId}>
+                      {metric.displayName}
+                    </MemberSequenceLabel>
+                  </h3>
+                  <span className={cn(contentText.supporting, "tabular-nums")}>
+                    遭遇 {metric.ginji.encounterMatches}戦
+                  </span>
+                </div>
+                <FactList
+                  ariaLabel={`${metric.displayName}のスリの銀次`}
+                  items={[
+                    {
+                      id: "encounter-rate",
+                      label: "遭遇率",
+                      value: formatPercent(metric.ginji.encounterRate),
+                    },
+                    { id: "count", label: "合計回数", value: `${metric.ginji.count}回` },
+                    {
+                      id: "rank-average",
+                      label: "遭遇時平均順位",
+                      value: `${formatDecimal(metric.ginji.resilienceRankAverage)}位`,
+                    },
+                    {
+                      id: "assets-average",
+                      label: "遭遇時平均資産",
+                      value: formatManYen(metric.ginji.resilienceAssetsAverage),
+                    },
+                    {
+                      id: "multi-encounter",
+                      label: "複数回遭遇した試合",
+                      value: `${metric.ginji.multiEncounterMatchCount}戦`,
+                    },
+                    {
+                      id: "max-in-match",
+                      label: "1試合の最多遭遇",
+                      value: `${metric.ginji.maxInSingleMatch}回`,
+                    },
+                    {
+                      id: "revenue-average",
+                      label: "遭遇時平均収益",
+                      value: formatManYen(metric.ginji.resilienceRevenueAverage),
+                    },
+                  ]}
+                  layout="inline"
                 />
-                <MetricValue
-                  label="遭遇時平均資産"
-                  value={formatManYen(metric.ginji.resilienceAssetsAverage)}
-                />
-                <MetricValue
-                  label="複数回遭遇した試合"
-                  value={`${metric.ginji.multiEncounterMatchCount}戦`}
-                />
-                <MetricValue label="1試合の最多遭遇" value={`${metric.ginji.maxInSingleMatch}回`} />
-                <MetricValue
-                  label="遭遇時平均収益"
-                  value={formatManYen(metric.ginji.resilienceRevenueAverage)}
-                />
-              </dl>
-            </article>
-          ))}
-        </div>
-        <div className="mt-6">
+              </article>
+            ))}
+          </div>
           <AnalysisSubsection id="metric-ginji-cumulative" title="累計遭遇回数">
             <SeriesTrendCharts
               focusedItemIds={focusedItemIds}

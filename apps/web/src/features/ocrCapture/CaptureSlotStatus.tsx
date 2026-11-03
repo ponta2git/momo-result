@@ -13,11 +13,11 @@ const captureStatusViews = {
   failed: { label: "要確認", tone: "danger" },
   queued: { label: "読み取り待ち", tone: "warning" },
   queueing: { label: "準備中", tone: "warning" },
-  running: { label: "読み取り中", tone: "info" },
+  running: { label: "読み取り中", tone: "progress" },
   selected: { label: "配置済み", tone: "neutral" },
   succeeded: { label: "確認待ち", tone: "success" },
-  uploaded: { label: "送信済み", tone: "info" },
-  uploading: { label: "画像送信中", tone: "info" },
+  uploaded: { label: "送信済み", tone: "progress" },
+  uploading: { label: "画像送信中", tone: "progress" },
 } as const satisfies Record<SlotStatus, CaptureStatusView>;
 
 export function CaptureStatusBadge({ status }: { status: SlotStatus }) {

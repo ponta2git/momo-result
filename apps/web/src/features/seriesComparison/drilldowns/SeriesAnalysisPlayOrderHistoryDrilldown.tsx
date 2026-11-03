@@ -165,6 +165,7 @@ export function PlayOrderHistoryDrilldown({
             renderCell: (row) => <PlayOrderMark playOrder={row.playOrder} />,
           },
           {
+            align: "right",
             tabular: true,
             header: "番手内",
             key: "occurrence",
@@ -176,6 +177,7 @@ export function PlayOrderHistoryDrilldown({
             renderCell: (row) => <RankBadge rank={row.rank} />,
           },
           {
+            align: "right",
             tabular: true,
             header: "番手別通算",
             key: "cumulative-average",
@@ -188,7 +190,7 @@ export function PlayOrderHistoryDrilldown({
               row.previousCumulativeAverageRank === null ? (
                 <ChangeBadge direction="first_observation" magnitude={null} />
               ) : (
-                <span className="inline-flex flex-wrap items-center gap-1">
+                <span className="inline-flex flex-wrap items-center gap-2">
                   <span className="tabular-nums">
                     {formatDecimal(row.previousCumulativeAverageRank)}位 →{" "}
                     {formatDecimal(row.cumulativeAverageRank)}位

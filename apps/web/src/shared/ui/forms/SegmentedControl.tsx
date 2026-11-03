@@ -31,7 +31,7 @@ export function SegmentedControl({
     <fieldset
       disabled={disabled}
       className={cn(
-        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-1 rounded-sm border bg-[var(--color-surface)] p-1",
+        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-0.5 rounded-sm border bg-[var(--color-surface)] p-0.5",
         controlBorderClass.default,
       )}
     >
@@ -70,9 +70,9 @@ function SegmentedChoice({
     <label
       ref={surfaceRef}
       className={cn(
-        "momo-surface momo-surface-press inline-flex min-h-11 min-w-[5ch] items-center justify-center rounded-xs px-3 py-2 text-sm font-plain text-[var(--color-text-secondary)] has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)] pointer-fine:min-h-9 pointer-fine:py-1 forced-colors:has-[:checked]:outline forced-colors:has-[:checked]:-outline-offset-2",
+        "momo-surface momo-surface-press inline-flex min-h-11 min-w-[5ch] items-center justify-center rounded-xs px-3 py-2 text-sm font-plain text-[var(--color-text-secondary)] has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)] pointer-fine:min-h-8.5 pointer-fine:py-1 forced-colors:has-[:checked]:outline forced-colors:has-[:checked]:-outline-offset-2",
         selected ? "momo-surface-selected text-[var(--color-text-primary)]" : "",
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
       )}
     >
       <input

@@ -94,31 +94,33 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const unresolvedCount = items.filter((item) => !reviewedCellIds.has(item.cellId)).length;
   return (
-    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
       <Disclosure
         open={expanded}
-        panelSpacing="md"
+        panelPadding="sm"
         summary={
           <span className="flex min-w-0 items-center justify-between gap-3">
             <span className="min-w-0">
               <span className={cn(contentText.body, "block truncate")}>
                 {memberDisplayName(player.memberId)}
               </span>
-              <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <span className="mt-1 flex flex-wrap items-center gap-2 tabular-nums">
                 <PlayOrderMark playOrder={player.playOrder} />
                 <RankBadge rank={player.rank} />
-                <span className={contentText.compactPrimary}>
-                  総資産 {player.totalAssetsManYen.toLocaleString()}万円
+                <span className="inline-flex items-baseline gap-1">
+                  <span className={contentText.supporting}>総資産</span>
+                  <span className={contentText.compactPrimary}>
+                    {player.totalAssetsManYen.toLocaleString()}万円
+                  </span>
                 </span>
-                {unresolvedCount > 0 ? <span>・未確認{unresolvedCount}件</span> : null}
+                {unresolvedCount > 0 ? (
+                  <span className={contentText.supporting}>・未確認{unresolvedCount}件</span>
+                ) : null}
               </span>
             </span>
-            <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-              {expanded ? "閉じる" : "詳細"}
-            </span>
+            <span className={cn(contentText.body, "shrink-0")}>{expanded ? "閉じる" : "詳細"}</span>
           </span>
         }
-        triggerLayout="flush"
         onOpenChange={(open) => {
           if (open !== expanded) {
             onTogglePlayer(index);

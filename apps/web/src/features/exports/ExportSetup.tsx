@@ -22,13 +22,8 @@ export function ExportSetup({ setup }: ExportSetupProps) {
     (view.candidate.kind === "ready" && view.candidate.selectionState === "resolved");
 
   return (
-    <PageFrame width="narrow">
-      <PageContentSurface
-        aria-label="出力条件"
-        className="grid gap-4"
-        padding="compact"
-        role="region"
-      >
+    <PageFrame width="readable">
+      <PageContentSurface aria-label="出力条件" className="grid gap-4" role="region">
         <ExportScopeTabs
           disabled={downloadPending}
           scope={view.scope}

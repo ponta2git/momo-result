@@ -31,16 +31,35 @@ import { contentText } from "@/shared/ui/typography";
 /** Below the smallest page size every event fits on one page, so the count moves to the toolbar. */
 const paginationThreshold = heldEventListPageSizeOptions[0];
 
+const skeletonRowIds = ["s1", "s2", "s3", "s4"];
+
+/** Mirrors the ready table (header and row rules, cell inset) or the compact record list. */
 function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
   return (
     <div aria-label="開催履歴を読み込み中" role="status">
       <span className="sr-only">開催履歴を読み込み中</span>
-      <div className="grid gap-3 border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] p-3">
-        {showDesktopTable ? <Skeleton className="min-h-10" /> : null}
-        {["s1", "s2", "s3", "s4"].map((id) => (
-          <Skeleton key={id} className={showDesktopTable ? "min-h-16" : "min-h-24"} />
-        ))}
-      </div>
+      {showDesktopTable ? (
+        <div className="border-y border-[var(--color-border-strong)]">
+          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+            <Skeleton className="h-4 w-full" />
+          </div>
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="px-3 py-3">
+              <Skeleton className="h-11" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]">
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="grid gap-2 py-3">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-13" />
+              <Skeleton className="h-11 w-1/3 justify-self-end" />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -60,8 +79,20 @@ export function HeldEventsPage() {
   const totalItems = list.pagination?.value.totalItems;
   const showPagination = totalItems !== undefined && totalItems > paginationThreshold;
   const ready = !list.loading && !list.loadFailed;
-  // An empty history offers creation in its empty state instead of the toolbar.
-  const showCreate = ready && (list.rows.length > 0 || filters.hasConditions);
+  // An empty history offers creation in its empty state instead of the toolbar. The button joins a
+  // row that exists from the first render (the search button's row on narrow screens, the list
+  // toolbar on wide ones, before the refresh icon), so it appears without moving anything visible.
+  const createAction =
+    ready && (list.rows.length > 0 || filters.hasConditions) ? (
+      <Button
+        icon={<CalendarPlus aria-hidden="true" />}
+        size="sm"
+        variant="secondary"
+        onClick={heldEvents.openCreate}
+      >
+        開催を作成
+      </Button>
+    ) : null;
   const showNoteMatch = list.memoQuery !== "" || list.rows.some((row) => row.noteMatch);
   const removeCondition = (condition: (typeof allConditions)[number]["key"]) =>
     filters.actions.onChange({ kind: "removeCondition", condition });
@@ -74,14 +105,13 @@ export function HeldEventsPage() {
         showPendingDialog={false}
       />
       <PageContentSurface aria-label="開催履歴" className="grid gap-6" role="region">
+        {/* Stays mounted while hidden at desktop width, so an open search sheet can still
+            return focus to its trigger after the layout changes back. */}
         <div
-          className={cn(
-            "flex min-w-0 flex-wrap items-center gap-2",
-            showDesktopTable ? "justify-end" : "justify-between",
-          )}
+          className="flex min-w-0 flex-wrap items-center justify-between gap-2"
+          hidden={showDesktopTable}
         >
           <Button
-            hidden={showDesktopTable}
             icon={<Filter aria-hidden="true" />}
             size="sm"
             variant="secondary"
@@ -89,16 +119,7 @@ export function HeldEventsPage() {
           >
             {allConditions.length > 0 ? `検索条件（${allConditions.length}）` : "検索条件"}
           </Button>
-          {showCreate ? (
-            <Button
-              icon={<CalendarPlus aria-hidden="true" />}
-              size="sm"
-              variant="secondary"
-              onClick={heldEvents.openCreate}
-            >
-              開催を作成
-            </Button>
-          ) : null}
+          {showDesktopTable ? null : createAction}
         </div>
 
         {actionView.errorMessage ? (
@@ -151,7 +172,7 @@ export function HeldEventsPage() {
           <div className="grid gap-3">
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
               {totalItems !== undefined && !showPagination && ready ? (
-                <p className={cn(contentText.compactPrimary, "tabular-nums")}>
+                <p className={cn(contentText.body, "tabular-nums")}>
                   {totalItems.toLocaleString()}開催
                 </p>
               ) : (
@@ -159,12 +180,13 @@ export function HeldEventsPage() {
               )}
               <div
                 aria-label="開催一覧の操作"
-                className="flex flex-wrap items-center justify-end gap-1"
+                className="flex flex-wrap items-center justify-end gap-2"
                 role="group"
               >
                 <PendingStatus pending={toolbarPending} spinner={false}>
                   一覧を更新中
                 </PendingStatus>
+                {showDesktopTable ? createAction : null}
                 <IconButton
                   aria-label="最新情報に更新"
                   disabled={refresh.disabled || listPending || list.loading}

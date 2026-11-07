@@ -51,9 +51,9 @@ caddy_build_info="$(
 )"
 for required_build_dependency in \
   $'go\tgo1.27.3' \
-  $'dep\tgolang.org/x/crypto\tv0.57.0\t' \
-  $'dep\tgolang.org/x/net\tv0.60.0\t' \
-  $'dep\tgolang.org/x/text\tv0.42.0\t' \
+  $'dep\tgolang.org/x/crypto\tv0.58.0\t' \
+  $'dep\tgolang.org/x/net\tv0.62.0\t' \
+  $'dep\tgolang.org/x/text\tv0.43.0\t' \
   $'dep\tgoogle.golang.org/grpc\tv1.83.2\t' \
   $'dep\tgithub.com/go-jose/go-jose/v4\tv4.1.6\t'; do
   if ! grep -Fq -- "${required_build_dependency}" <<<"${caddy_build_info}"; then

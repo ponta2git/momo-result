@@ -39,25 +39,40 @@ private[postgres] object PostgresIdentitySchema:
       name: String,
       columns: List[String]
   ) derives CanEqual
+  private[postgres] final case class PartialUniqueIndex(
+      table: String,
+      name: String,
+      columns: List[String],
+      predicate: String,
+      nullsNotDistinct: Boolean,
+  ) derives CanEqual
   private[postgres] final case class Shape(
       columns: List[Column],
       keys: List[Key],
       foreignKeys: List[ForeignKey],
       retainedChecks: List[RetainedCheck],
       navigationIndexes: List[NavigationIndex],
+      partialUniqueIndexes: List[PartialUniqueIndex],
   )
   private final case class Contract(
       formatVersion: Int,
       optionalTables: Set[String],
       legacy: Shape,
       canonical: Shape,
-  )
+  ):
+    private val shapes = List(legacy, canonical)
+    val checkNames: Set[String] = shapes.flatMap(_.retainedChecks.map(_.name)).toSet
+    val navigationIndexNames: Set[String] = shapes.flatMap(_.navigationIndexes.map(_.name)).toSet
+    val partialUniqueIndexNames: Set[String] =
+      shapes.flatMap(_.partialUniqueIndexes.map(_.name)).toSet
+    val indexNames: Set[String] = navigationIndexNames ++ partialUniqueIndexNames
 
   private given Decoder[Column] = deriveDecoder
   private given Decoder[Key] = deriveDecoder
   private given Decoder[ForeignKey] = deriveDecoder
   private given Decoder[RetainedCheck] = deriveDecoder
   private given Decoder[NavigationIndex] = deriveDecoder
+  private given Decoder[PartialUniqueIndex] = deriveDecoder
   private given Decoder[Shape] = deriveDecoder
   private given Decoder[Contract] = deriveDecoder
 
@@ -73,6 +88,7 @@ private[postgres] object PostgresIdentitySchema:
 
   private[postgres] def inspect: ConnectionIO[Shape] =
     for
+      contract <- loadedContract.leftMap(new IllegalStateException(_)).liftTo[ConnectionIO]
       _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
       columns <- sql"""
       SELECT relation.relname::text, attribute.attname::text,
@@ -131,6 +147,7 @@ private[postgres] object PostgresIdentitySchema:
       JOIN pg_catalog.pg_class relation ON relation.oid = definition.conrelid
       JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
       WHERE namespace.nspname = 'public' AND definition.contype = 'c'
+        AND definition.conname::text = ANY(${contract.checkNames.toArray})
         AND definition.convalidated
         AND COALESCE((to_jsonb(definition)->>'conenforced')::boolean, true)
     """.query[RetainedCheck].to[List]
@@ -145,20 +162,35 @@ private[postgres] object PostgresIdentitySchema:
              WHEN 1 THEN ' NULLS LAST' WHEN 2 THEN ' NULLS FIRST' ELSE '' END
           FROM generate_series(1, index.indnkeyatts) position
           LEFT JOIN pg_catalog.pg_collation index_collation ON index_collation.oid = index.indcollation[position - 1]
-          ORDER BY position)
+          ORDER BY position), index.indisunique, index.indnullsnotdistinct,
+        pg_catalog.pg_get_expr(index.indpred, index.indrelid)
       FROM pg_catalog.pg_index index
       JOIN pg_catalog.pg_class relation ON relation.oid = index.indrelid
       JOIN pg_catalog.pg_class index_relation ON index_relation.oid = index.indexrelid
       JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
       WHERE namespace.nspname = 'public' AND index.indisvalid AND index.indisready AND index.indislive
-    """.query[(String, String, Array[String])].to[List]
+        AND index_relation.relname::text = ANY(${contract.indexNames.toArray})
+        AND (NOT index.indisunique OR index.indimmediate)
+    """.query[(String, String, Array[String], Boolean, Boolean, Option[String])].to[List]
       shape = Shape(
         columns.map(column => column.copy(dataType = normalizeType(column.dataType))),
         keys,
         foreignKeys,
         checks.map(check => check.copy(expression = normalizeCheck(check.expression))),
-        indexes.map { case (table, name, terms) =>
-          NavigationIndex(table, name, terms.toList.map(normalizeIndex))
+        indexes.collect {
+          case (table, name, terms, _, _, _) if contract.navigationIndexNames.contains(name) =>
+            NavigationIndex(table, name, terms.toList.map(normalizeIndex))
+        },
+        indexes.collect {
+          case (table, name, terms, true, nullsNotDistinct, Some(predicate))
+              if contract.partialUniqueIndexNames.contains(name) =>
+            PartialUniqueIndex(
+              table,
+              name,
+              terms.toList.map(term => normalizeIndex(term).replace("(", "").replace(")", "")),
+              normalizeCheck(predicate),
+              nullsNotDistinct,
+            )
         },
       )
     yield shape
@@ -189,12 +221,18 @@ private[postgres] object PostgresIdentitySchema:
     val foreignKeys = expected.foreignKeys.filter(key => applicable(key.table))
     val checks = expected.retainedChecks.filter(check => applicable(check.table))
     val indexes = expected.navigationIndexes.filter(index => applicable(index.table))
+    val partialUniqueIndexes =
+      expected.partialUniqueIndexes.filter(index => applicable(index.table))
     List(
       "columns=" + columns.diff(actual.columns).take(8).mkString(","),
       "keys=" + keys.diff(actual.keys).take(8).mkString(","),
+      "unexpectedSessionKeys=" + actual.keys.filter(_.table == "sessions")
+        .diff(expected.keys).mkString(","),
       "foreignKeys=" + foreignKeys.diff(actual.foreignKeys).take(8).mkString(","),
       "checks=" + checks.diff(actual.retainedChecks).take(4).mkString(","),
-      "indexes=" + indexes.diff(actual.navigationIndexes).take(8).mkString(",")
+      "indexes=" + indexes.diff(actual.navigationIndexes).take(8).mkString(","),
+      "partialUniqueIndexes=" + partialUniqueIndexes.diff(actual.partialUniqueIndexes).take(4)
+        .mkString(",")
     ).mkString("; ")
 
   private def compatible(actual: Shape, expected: Shape, other: Shape)(using
@@ -210,21 +248,23 @@ private[postgres] object PostgresIdentitySchema:
     forbiddenTables.intersect(actualTables).isEmpty &&
     actual.columns.filter(column => expectedTables.contains(column.table)).toSet == columns &&
     expected.keys.filter(key => applicable(key.table)).forall(actual.keys.contains) &&
-    actual.foreignKeys.filter(key => expectedTables.contains(key.table)).toSet ==
+    actual.keys.filter(_.table == "sessions").toSet ==
+      expected.keys.filter(_.table == "sessions").toSet &&
+      actual.foreignKeys.filter(key => expectedTables.contains(key.table)).toSet ==
       expectedForeignKeys &&
       expected.retainedChecks.filter(check => applicable(check.table)).forall(
         actual.retainedChecks.contains
       ) &&
       expected.navigationIndexes.filter(index => applicable(index.table)).forall(
         actual.navigationIndexes.contains
+      ) &&
+      expected.partialUniqueIndexes.filter(index => applicable(index.table)).forall(
+        actual.partialUniqueIndexes.contains
       )
 
   private def normalizeType(value: String): String = value.replace("varchar", "character varying")
     .filterNot(_.isWhitespace)
 
-  private def normalizeCheck(value: String): String = value
-    .filterNot(character =>
-      character.isWhitespace || character == '(' || character == ')' || character == '"'
-    )
+  private def normalizeCheck(value: String): String = PostgresSchemaExpression.normalize(value)
 
   private def normalizeIndex(value: String): String = value.replace("\"", "").trim

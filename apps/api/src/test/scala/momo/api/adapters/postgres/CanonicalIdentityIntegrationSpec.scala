@@ -93,6 +93,8 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       shape <- PostgresIdentitySchema.inspect.transact(transactor)
     yield
       assertEquals(PostgresIdentitySchema.classify(shape), Right(identities))
+      assert(!shape.retainedChecks.exists(_.name == "sessions_status_check"))
+      assert(!shape.navigationIndexes.exists(_.name == "idx_sessions_status_deadline"))
       val missingAlias = shape.copy(columns =
         shape.columns.filterNot(column =>
           column.table == "members" && column.column == "legacy_id"
@@ -129,6 +131,74 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         foreignKeys = shape.foreignKeys.filterNot(_.table == "worker_execution_slots")
       )
       assertEquals(PostgresIdentitySchema.classify(optional), Right(identities))
+
+  test("startup rejects incomplete attendance multiplicity and weekly ownership contracts"):
+    for
+      shape <- PostgresIdentitySchema.inspect.transact(transactor)
+    yield
+      val partialNames = Set(
+        "sessions_candidate_date_unique",
+        "sessions_active_unique",
+        "sessions_weekly_auto_unique",
+      )
+      val checks = Set(
+        "sessions_source_check",
+        "sessions_origin_check",
+        "sessions_date_occupancy_check",
+        "sessions_parent_not_self_check",
+        "weekly_ask_schedules_outcome_check",
+        "weekly_ask_schedules_actor_check",
+        "discord_attendance_owner_check",
+      )
+      partialNames.foreach { name =>
+        val missing = shape.copy(partialUniqueIndexes =
+          shape.partialUniqueIndexes.filterNot(_.name == name)
+        )
+        val wrongPredicate = shape.copy(partialUniqueIndexes =
+          shape.partialUniqueIndexes.map(index =>
+            if index.name == name then index.copy(predicate = "false") else index
+          )
+        )
+        val wrongExpression = shape.copy(partialUniqueIndexes =
+          shape.partialUniqueIndexes.map(index =>
+            if index.name == name then index.copy(columns = List("id")) else index
+          )
+        )
+        List(missing, wrongPredicate, wrongExpression).foreach(value =>
+          assert(PostgresIdentitySchema.classify(value).isLeft, name)
+        )
+      }
+      checks.foreach { name =>
+        val missing = shape.copy(retainedChecks = shape.retainedChecks.filterNot(_.name == name))
+        val weakened = shape.copy(retainedChecks =
+          shape.retainedChecks.map(check =>
+            if check.name == name then check.copy(expression = "true") else check
+          )
+        )
+        List(missing, weakened).foreach(value =>
+          assert(PostgresIdentitySchema.classify(value).isLeft, name)
+        )
+      }
+      val missingWeek = shape.copy(columns =
+        shape.columns.filterNot(_.table == "weekly_ask_schedules")
+      )
+      val missingParent = shape.copy(foreignKeys =
+        shape.foreignKeys.filterNot(key =>
+          key.table == "sessions" && key.columns == "parent_session_id"
+        )
+      )
+      val missingOwner = shape.copy(foreignKeys =
+        shape.foreignKeys.filterNot(key =>
+          key.table == "discord_notification_attendance" && key.columns == "week_key"
+        )
+      )
+      val retainedWeekLimit = shape.copy(keys =
+        PostgresIdentitySchema.Key("sessions", "week_key,postpone_count", false, false) ::
+          shape.keys
+      )
+      List(missingWeek, missingParent, missingOwner, retainedWeekLimit).foreach(value =>
+        assert(PostgresIdentitySchema.classify(value).isLeft)
+      )
 
   test("production sessions keep the legacy principal, roster and nullable member snapshot"):
     val auth = AuthConfig.defaults(AppEnv.Prod)

@@ -52,6 +52,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 - mutable entity の保存 ID / FK は native UUID とし、既存の外部 ID は保存された `legacy_id` または保持用 `legacy_*` から復元する。入力 ID は exact alias lookup で解決し、未登録の参照や認証主体を hash で補完しない。新規の構造化 job / attempt ID の割当だけが、momo-db の固定 namespace と共有 fixture に従う mapper を使う。
 - immutable な分析 artifact / radar basis の payload・header・chunk・revision は従来の text ID と checksum を保持する。可変状態からの UUID 参照は型付き identity table を経由し、新規 artifact / basis と identity は同じ transaction で保存する。計算入力、整列、tie-breaker、snapshot は保存された旧 ID の byte 列を使う。mutable storage を UUID にしても、既存の外部 ID、冪等 replay、immutable 成果物の byte と checksum を保つためである。
 - Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態への write を拒否する。API は起動時の read-only snapshot で legacy / canonical の schema 契約を検証する（[API 規約](api-rule.md#bootstrap--http-execution)）。これらの実行時検査は canonical identity への切替手順の完了後も恒久の契約として継続する。API が受理する mode は対応する consumer 契約に従い、legacy mode の受理をやめる場合は、その検査と legacy 境界の証拠（[テスト実行設計](test-architecture.md#api--worker-の実行境界)）を同じ変更で見直す。
+- 出欠の週キーは Session の一意な所有者ではなく、週次自動実行予定を識別する。Session の親参照・操作 ID、週次予定への通知参照を共有 schema から読み、API の canonical 起動契約は日付占有・全体の active Session・週次自動 Session の部分一意 index と、出欠由来・週次通知 owner の CHECK を含む。週内の複数 Session を旧 `(week_key, postpone_count)` 制約で制限せず、これらの制約が欠けた中間 schema を受理しない。 CHECK と部分 index の式は生成契約が要求する対象だけを読み取り、論理式のグループと引用された値を区別して比較する。
 
 ### Notifications
 

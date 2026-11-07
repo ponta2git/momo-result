@@ -6,9 +6,9 @@ ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30f
 ARG GO_IMAGE=golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
 ARG CADDY_VERSION=v2.11.7
-ARG CADDY_X_CRYPTO_VERSION=v0.57.0
-ARG CADDY_X_NET_VERSION=v0.60.0
-ARG CADDY_X_TEXT_VERSION=v0.42.0
+ARG CADDY_X_CRYPTO_VERSION=v0.58.0
+ARG CADDY_X_NET_VERSION=v0.62.0
+ARG CADDY_X_TEXT_VERSION=v0.43.0
 ARG CADDY_GRPC_VERSION=v1.83.2
 ARG CADDY_GO_JOSE_VERSION=v4.1.6
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
@@ -179,7 +179,8 @@ ENV XDG_DATA_HOME=/tmp/momo-result/caddy/data
 ENV PATH="${JAVA_HOME}/bin:/opt/momo-result/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
 COPY --from=caddy-builder /out/caddy /usr/bin/caddy
-RUN apt-get update \
+RUN apt-get -o Acquire::Retries=0 update \
+  && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0 \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     libpcre2-8-0 \

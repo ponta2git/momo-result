@@ -3,11 +3,13 @@ package momo.api.adapters.postgres
 /** Normalizes the bounded identity/attendance CHECK vocabulary without losing boolean grouping. */
 private[postgres] object PostgresSchemaExpression:
   private val Literal = "'(?:''|[^'])*'".r
-  private val Operators = List("OR", "AND").map(operator => operator -> ("\\b" + operator + "\\b").r)
+  private val Operators =
+    List("OR", "AND").map(operator => operator -> ("\\b" + operator + "\\b").r)
 
   def normalize(value: String): String =
     // SQL literals are data: casts, spacing and parentheses inside them must remain exact.
-    val literals = Literal.findAllMatchIn(value).map(matched => matched.start -> matched.matched).toList
+    val literals =
+      Literal.findAllMatchIn(value).map(matched => matched.start -> matched.matched).toList
     val masked = Literal.replaceAllIn(value, matched => token(matched.start))
     literals.foldLeft(normalizeBoolean(masked.replaceAll("::text\\b", ""))) {
       case (normalized, (offset, literal)) => normalized.replace(token(offset), literal)

@@ -15,14 +15,18 @@ final class PostgresSchemaExpressionSpec extends munit.FunSuite:
       PostgresSchemaExpression.normalize(declared)
     )
     assertNotEquals(
-      PostgresSchemaExpression.normalize("(occupies_date OR source = 'legacy') AND status = 'SKIPPED'"),
+      PostgresSchemaExpression.normalize(
+        "(occupies_date OR source = 'legacy') AND status = 'SKIPPED'"
+      ),
       PostgresSchemaExpression.normalize(declared)
     )
 
   test("IN and PostgreSQL ANY use the same bounded literal set"):
     assertEquals(
       PostgresSchemaExpression.normalize("source IN ('manual','weekly_auto')"),
-      PostgresSchemaExpression.normalize("(source = ANY (ARRAY['manual'::text, 'weekly_auto'::text]))")
+      PostgresSchemaExpression.normalize(
+        "(source = ANY (ARRAY['manual'::text, 'weekly_auto'::text]))"
+      )
     )
 
   test("boolean words inside quoted values are not operators"):

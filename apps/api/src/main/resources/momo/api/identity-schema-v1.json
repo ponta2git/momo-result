@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "sourceSnapshots": [
     "0083_snapshot.json",
-    "0102_snapshot.json"
+    "0106_snapshot.json"
   ],
   "optionalTables": [
     "worker_execution_slots"
@@ -4844,7 +4844,8 @@
           "id"
         ]
       }
-    ]
+    ],
+    "partialUniqueIndexes": []
   },
   "canonical": {
     "columns": [
@@ -5133,6 +5134,12 @@
       {
         "table": "discord_notification_attendance",
         "column": "session_id",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
+        "table": "discord_notification_attendance",
+        "column": "week_key",
         "dataType": "text",
         "notNull": false
       },
@@ -8768,6 +8775,18 @@
       },
       {
         "table": "sessions",
+        "column": "occupies_date",
+        "dataType": "boolean",
+        "notNull": true
+      },
+      {
+        "table": "sessions",
+        "column": "parent_session_id",
+        "dataType": "uuid",
+        "notNull": false
+      },
+      {
+        "table": "sessions",
         "column": "postpone_count",
         "dataType": "integer",
         "notNull": true
@@ -8792,8 +8811,20 @@
       },
       {
         "table": "sessions",
+        "column": "request_id",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
+        "table": "sessions",
         "column": "revision",
         "dataType": "bigint",
+        "notNull": true
+      },
+      {
+        "table": "sessions",
+        "column": "source",
+        "dataType": "text",
         "notNull": true
       },
       {
@@ -8921,6 +8952,42 @@
         "column": "width",
         "dataType": "integer",
         "notNull": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "auto_session_id",
+        "dataType": "uuid",
+        "notNull": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "created_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "disabled_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "disabled_by",
+        "dataType": "text",
+        "notNull": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "updated_at",
+        "dataType": "timestampwithtimezone",
+        "notNull": true
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "column": "week_key",
+        "dataType": "text",
+        "notNull": true
       }
     ],
     "keys": [
@@ -8981,6 +9048,12 @@
       {
         "table": "discord_notification_attendance",
         "columns": "session_id,aggregate_revision,ordinal",
+        "primary": false,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "discord_notification_attendance",
+        "columns": "week_key,aggregate_revision,ordinal",
         "primary": false,
         "nullsNotDistinct": false
       },
@@ -9694,7 +9767,13 @@
       },
       {
         "table": "sessions",
-        "columns": "week_key,postpone_count",
+        "columns": "parent_session_id",
+        "primary": false,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "sessions",
+        "columns": "request_id",
         "primary": false,
         "nullsNotDistinct": false
       },
@@ -9719,6 +9798,18 @@
       {
         "table": "source_images",
         "columns": "object_key",
+        "primary": false,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "columns": "week_key",
+        "primary": true,
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "columns": "auto_session_id",
         "primary": false,
         "nullsNotDistinct": false
       }
@@ -9826,6 +9917,14 @@
         "targetTable": "discord_notifications",
         "targetColumns": "id",
         "onDelete": "c",
+        "onUpdate": "a"
+      },
+      {
+        "table": "discord_notification_attendance",
+        "columns": "week_key",
+        "targetTable": "weekly_ask_schedules",
+        "targetColumns": "week_key",
+        "onDelete": "r",
         "onUpdate": "a"
       },
       {
@@ -10589,9 +10688,25 @@
         "onUpdate": "a"
       },
       {
+        "table": "sessions",
+        "columns": "parent_session_id",
+        "targetTable": "sessions",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
         "table": "source_images",
         "columns": "owner_account_id",
         "targetTable": "momo_login_accounts",
+        "targetColumns": "id",
+        "onDelete": "r",
+        "onUpdate": "a"
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "columns": "auto_session_id",
+        "targetTable": "sessions",
         "targetColumns": "id",
         "onDelete": "r",
         "onUpdate": "a"
@@ -10602,6 +10717,11 @@
         "table": "app_sessions",
         "name": "app_sessions_member_legacy_null_check",
         "expression": "member_idISNULL=legacy_member_idISNULL"
+      },
+      {
+        "table": "discord_notification_attendance",
+        "name": "discord_attendance_owner_check",
+        "expression": "OR(session_idISNULL,week_keyISNULL)"
       },
       {
         "table": "match_drafts",
@@ -10652,6 +10772,36 @@
         "table": "series_radar_operations",
         "name": "series_radar_operations_job_legacy_null_check",
         "expression": "job_idISNULL=legacy_job_idISNULL"
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_source_check",
+        "expression": "source=ANYARRAY['manual','weekly_auto','postponed','legacy']"
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_origin_check",
+        "expression": "OR(source='legacy',AND(source=ANYARRAY['manual','weekly_auto'],postpone_count=0,parent_session_idISNULL),AND(source='postponed',postpone_count=1,parent_session_idISNOTNULL))"
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_date_occupancy_check",
+        "expression": "OR(occupies_date,AND(source='legacy',status='SKIPPED'))"
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_parent_not_self_check",
+        "expression": "OR(parent_session_idISNULL,parent_session_id<>id)"
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "name": "weekly_ask_schedules_outcome_check",
+        "expression": "OR(auto_session_idISNULL,disabled_atISNULL)"
+      },
+      {
+        "table": "weekly_ask_schedules",
+        "name": "weekly_ask_schedules_actor_check",
+        "expression": "OR(disabled_byISNULL,disabled_atISNOTNULL)"
       }
     ],
     "navigationIndexes": [
@@ -10750,6 +10900,35 @@
           "requested_at",
           "legacy_id"
         ]
+      }
+    ],
+    "partialUniqueIndexes": [
+      {
+        "table": "sessions",
+        "name": "sessions_candidate_date_unique",
+        "columns": [
+          "candidate_date_iso"
+        ],
+        "predicate": "occupies_date",
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_active_unique",
+        "columns": [
+          "true"
+        ],
+        "predicate": "status=ANYARRAY['ASKING','POSTPONE_VOTING','DECIDED','CANCELLED']",
+        "nullsNotDistinct": false
+      },
+      {
+        "table": "sessions",
+        "name": "sessions_weekly_auto_unique",
+        "columns": [
+          "week_key"
+        ],
+        "predicate": "source='weekly_auto'",
+        "nullsNotDistinct": false
       }
     ]
   }

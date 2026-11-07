@@ -23,6 +23,20 @@ const navigation = new Set([
   "series_analysis_jobs_claim_idx",
   "series_radar_operations_pending_idx",
 ]);
+const partialUnique = new Set([
+  "sessions_candidate_date_unique",
+  "sessions_active_unique",
+  "sessions_weekly_auto_unique",
+]);
+const attendanceChecks = new Set([
+  "sessions_source_check",
+  "sessions_origin_check",
+  "sessions_date_occupancy_check",
+  "sessions_parent_not_self_check",
+  "weekly_ask_schedules_outcome_check",
+  "weekly_ask_schedules_actor_check",
+  "discord_attendance_owner_check",
+]);
 const actions = {
   "no action": "a",
   restrict: "r",
@@ -31,7 +45,46 @@ const actions = {
   "set default": "d",
 };
 const withoutTable = (value) => value.replace(/"[^"]+"\./g, "");
-const normalizeCheck = (value) => withoutTable(value).replace(/[\s()"]/g, "");
+// Preserve AND/OR grouping while accepting PostgreSQL's redundant expression parentheses.
+const operators = ["OR", "AND"].map((operator) => [operator, new RegExp(`\\b${operator}\\b`, "g")]);
+const nesting = (value) => {
+  const depths = [0];
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    depths.push(depths.at(-1) + (character === "(" ? 1 : character === ")" ? -1 : 0));
+  }
+  return depths;
+};
+function normalizeBoolean(value) {
+  const text = value.trim();
+  const depths = nesting(text);
+  if (text.startsWith("(") && text.endsWith(")") && depths.slice(1, -1).every((depth) => depth > 0))
+    return normalizeBoolean(text.slice(1, -1));
+  for (const [operator, pattern] of operators) {
+    const positions = [...text.matchAll(pattern)]
+      .map((match) => match.index)
+      .filter((index) => depths[index] === 0);
+    if (positions.length > 0) {
+      const starts = [0, ...positions.map((index) => index + operator.length)];
+      const ends = [...positions, text.length];
+      return `${operator}(${starts.map((start, index) => normalizeBoolean(text.slice(start, ends[index]))).join(",")})`;
+    }
+  }
+  return text.replace(/\bIN\s*\(([^()]+)\)/g, "= ANY (ARRAY[$1])").replace(/[\s()"]/g, "");
+}
+const normalizeCheck = (value) => {
+  const literals = [];
+  const masked = value.replace(/'(?:''|[^'])*'/g, (literal) => {
+    const token = `\uE000${literals.length}\uE001`;
+    literals.push([token, literal]);
+    return token;
+  });
+  const normalized = normalizeBoolean(withoutTable(masked).replace(/::text\b/g, ""));
+  return literals.reduce(
+    (text, [token, literal]) => text.replaceAll(token, () => literal),
+    normalized,
+  );
+};
 const normalizeIndex = (column) => {
   let value = withoutTable(column.expression).replaceAll('"', "").trim();
   if (!column.asc) value += " DESC";
@@ -46,6 +99,7 @@ function shape(snapshot) {
     foreignKeys: [],
     retainedChecks: [],
     navigationIndexes: [],
+    partialUniqueIndexes: [],
   };
   for (const table of Object.values(snapshot.tables).sort((a, b) =>
     a.name.localeCompare(b.name, "en"),
@@ -89,6 +143,17 @@ function shape(snapshot) {
           primary: false,
           nullsNotDistinct: false,
         });
+      if (partialUnique.has(index.name)) {
+        if (!index.isUnique || !index.where)
+          throw new Error(`Expected a partial unique index: ${index.name}`);
+        result.partialUniqueIndexes.push({
+          table: table.name,
+          name: index.name,
+          columns: index.columns.map((column) => normalizeIndex(column).replace(/[()]/g, "")),
+          predicate: normalizeCheck(index.where),
+          nullsNotDistinct: false,
+        });
+      }
       if (navigation.has(index.name))
         result.navigationIndexes.push({
           table: table.name,
@@ -106,7 +171,7 @@ function shape(snapshot) {
         onUpdate: actions[key.onUpdate],
       });
     for (const check of Object.values(table.checkConstraints))
-      if (check.name.endsWith("_legacy_null_check"))
+      if (check.name.endsWith("_legacy_null_check") || attendanceChecks.has(check.name))
         result.retainedChecks.push({
           table: table.name,
           name: check.name,
@@ -115,7 +180,7 @@ function shape(snapshot) {
   }
   return result;
 }
-const sourceSnapshots = ["0083_snapshot.json", "0102_snapshot.json"];
+const sourceSnapshots = ["0083_snapshot.json", "0106_snapshot.json"];
 const [legacy, canonical] = sourceSnapshots.map((name) =>
   shape(JSON.parse(readFileSync(resolve(migrations, "meta", name), "utf8"))),
 );

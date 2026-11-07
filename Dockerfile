@@ -171,7 +171,7 @@ ENV APP_ENV=prod
 ENV HTTP_HOST=127.0.0.1
 ENV HTTP_PORT=8081
 ENV JAVA_HOME=/opt/java/openjdk
-ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseG1GC -XX:+UseCompactObjectHeaders -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
+ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:TrimNativeHeapInterval=120000 -XX:MaxHeapFreeRatio=60 -XX:+UseCompactObjectHeaders -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
 ENV MOMO_CADDY_OUTPUT_PATH=/tmp/momo-result/caddy/Caddyfile
 ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=30
 ENV XDG_CONFIG_HOME=/tmp/momo-result/caddy/config

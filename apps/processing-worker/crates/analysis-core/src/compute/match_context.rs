@@ -16,6 +16,7 @@ use super::{
     metrics::revenue_asset_rate,
     presentation::{metric_evidence_json, scope_summary_json},
     signals::change_direction,
+    trends::AssetGapThresholds,
 };
 
 #[derive(Clone, Copy)]
@@ -94,11 +95,16 @@ impl<'a> MatchContextIndex<'a> {
     }
 }
 
+/// Builds one match context.
+///
+/// `gap_thresholds` come from every confirmed match of the title, so a match keeps the same
+/// close-finish and blowout features in every scope that contains it.
 pub(super) fn build(
     scope: &ScopeRef,
     group: &[&PlayerMatchInput],
     index: &MatchContextIndex<'_>,
     aggregate_item_ids: &AggregateItemIds,
+    gap_thresholds: AssetGapThresholds,
     match_id: &str,
     match_index: usize,
 ) -> Value {
@@ -197,17 +203,17 @@ pub(super) fn build(
             "playedAt": group.first().map(|row| &row.played_at),
             "players": players,
             "focusedItemIds": focused,
-            "features": match_features(group),
+            "features": match_features(group, gap_thresholds),
         },
     })
 }
 
-fn match_features(group: &[&PlayerMatchInput]) -> Vec<Value> {
+fn match_features(group: &[&PlayerMatchInput], gap_thresholds: AssetGapThresholds) -> Vec<Value> {
     let winner = group.iter().copied().find(|row| row.rank == 1);
     let second = group.iter().copied().find(|row| row.rank == 2);
     let last = group.iter().copied().find(|row| row.rank == 4);
     let max_revenue = group.iter().map(|row| row.revenue_man_yen).max();
-    let mut features = asset_gap_features(winner, second, last);
+    let mut features = asset_gap_features(winner, second, last, gap_thresholds);
     let revenue_no_win = group
         .iter()
         .filter(|row| max_revenue == Some(row.revenue_man_yen) && row.rank != 1)
@@ -280,10 +286,13 @@ fn asset_gap_features(
     winner: Option<&PlayerMatchInput>,
     second: Option<&PlayerMatchInput>,
     last: Option<&PlayerMatchInput>,
+    gap_thresholds: AssetGapThresholds,
 ) -> Vec<(i32, Value)> {
     let mut features = Vec::new();
     if winner.zip(second).is_some_and(|(winner, second)| {
-        i64::from(winner.total_assets_man_yen) - i64::from(second.total_assets_man_yen) <= 5_000
+        gap_thresholds.is_close_finish(
+            i64::from(winner.total_assets_man_yen) - i64::from(second.total_assets_man_yen),
+        )
     }) {
         features.push((
             10,
@@ -291,7 +300,9 @@ fn asset_gap_features(
         ));
     }
     if winner.zip(last).is_some_and(|(winner, last)| {
-        i64::from(winner.total_assets_man_yen) - i64::from(last.total_assets_man_yen) >= 100_000
+        gap_thresholds.is_asset_blowout(
+            i64::from(winner.total_assets_man_yen) - i64::from(last.total_assets_man_yen),
+        )
     }) {
         features.push((
             20,

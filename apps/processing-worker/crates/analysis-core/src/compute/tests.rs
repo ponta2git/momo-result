@@ -311,6 +311,116 @@ fn match_context_focus_is_complete_unique_and_within_the_aggregate() {
     assert!(focused_ids.contains("match:match-2"));
 }
 
+fn gap_feature_input(winner_gaps: &[i32]) -> AnalysisInput {
+    let player_matches = (1_i32..)
+        .zip(winner_gaps)
+        .flat_map(|(match_index, winner_gap)| {
+            (1..=4).map(move |player| {
+                let mut value = row(match_index, player);
+                if match_index > 2 {
+                    value.season_master_id = String::from("season-2");
+                }
+                value.total_assets_man_yen = match player {
+                    1 => 10_000 + winner_gap,
+                    2 => 10_000,
+                    3 => 5_000,
+                    _ => 0,
+                };
+                value
+            })
+        })
+        .collect();
+    AnalysisInput {
+        game_title_id: String::from("title-1"),
+        input_revision: 1,
+        player_matches,
+    }
+}
+
+fn gap_features(resources: &[ComputedResource], scope: &ScopeRef, match_id: &str) -> Vec<String> {
+    resources
+        .iter()
+        .find(|resource| {
+            resource.scope == *scope
+                && matches!(&resource.kind, ComputedResourceKind::MatchContext { match_id: id } if id == match_id)
+        })
+        .and_then(|resource| resource.payload.pointer("/match/features"))
+        .and_then(Value::as_array)
+        .map(|features| {
+            features
+                .iter()
+                .filter_map(|feature| feature.get("featureCode").and_then(Value::as_str))
+                .filter(|code| matches!(*code, "close_finish" | "asset_blowout"))
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[test]
+fn match_context_gap_features_use_title_wide_quartiles_in_every_scope() {
+    // First-to-second gaps 100..8,000 put P25 at 1,525; first-to-last gaps 10,100..18,000 put
+    // P75 at 15,000. Season 2 alone has two matches, so it still needs the title-wide cut points.
+    let resources = compute_all(&gap_feature_input(&[100, 2_000, 4_000, 8_000]));
+    let season = |id: &str| ScopeRef::Season {
+        season_master_id: String::from(id),
+    };
+
+    for scope in [ScopeRef::Overall, season("season-1")] {
+        assert_eq!(
+            gap_features(&resources, &scope, "match-1"),
+            ["close_finish"]
+        );
+        assert!(gap_features(&resources, &scope, "match-2").is_empty());
+    }
+    for scope in [ScopeRef::Overall, season("season-2")] {
+        assert!(gap_features(&resources, &scope, "match-3").is_empty());
+        assert_eq!(
+            gap_features(&resources, &scope, "match-4"),
+            ["asset_blowout"]
+        );
+    }
+
+    let overall_flags = resources
+        .iter()
+        .find(|resource| {
+            resource.scope == ScopeRef::Overall && resource.kind == ComputedResourceKind::Aggregate
+        })
+        .and_then(|resource| resource.payload.pointer("/matchDigest/recent"))
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .map(|row| {
+                    row.get("flags")
+                        .and_then(Value::as_array)
+                        .map(|flags| {
+                            flags
+                                .iter()
+                                .filter_map(Value::as_str)
+                                .filter(|code| matches!(*code, "close_finish" | "asset_blowout"))
+                                .map(String::from)
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let overall_features = (1..=4)
+        .map(|index| gap_features(&resources, &ScopeRef::Overall, &format!("match-{index}")))
+        .collect::<Vec<_>>();
+    assert_eq!(overall_flags, overall_features);
+}
+
+#[test]
+fn match_context_gap_features_need_three_title_matches() {
+    let resources = compute_all(&gap_feature_input(&[0, 200_000]));
+
+    for match_id in ["match-1", "match-2"] {
+        assert!(gap_features(&resources, &ScopeRef::Overall, match_id).is_empty());
+    }
+}
+
 #[test]
 fn match_context_players_are_presented_in_result_order() {
     let input = AnalysisInput {

@@ -29,6 +29,7 @@ use drilldown::build as build_drilldown;
 use grouping::{MatchGroup, group_player_matches};
 use match_context::{AggregateItemIds, MatchContextIndex, build as build_match_context};
 use review::build as build_review;
+use trends::AssetGapThresholds;
 
 #[cfg(test)]
 use crate::model::AnalysisInput;
@@ -162,6 +163,9 @@ pub fn try_for_each_resource<E: From<RadarError>>(
 ) -> Result<(), E> {
     consume(achievement_resource(input))?;
     let title_facts = TitleFacts::new(input);
+    let title_gap_thresholds = AssetGapThresholds::new(&group_player_matches(
+        &input.player_matches().iter().collect::<Vec<_>>(),
+    ));
     let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
     for (scope, player_matches) in input.scopes() {
         let analysis = match previous_analysis.take() {
@@ -243,6 +247,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
                     &group.player_matches,
                     &context_index,
                     &aggregate_item_ids,
+                    title_gap_thresholds,
                     group.match_id,
                     group_offset + 1,
                 ),

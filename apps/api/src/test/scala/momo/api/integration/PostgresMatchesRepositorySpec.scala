@@ -278,7 +278,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- seedSecondTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v13',
+        SET algorithm_version = 'series-analysis-v14',
             artifact_schema_version = 10,
             validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)

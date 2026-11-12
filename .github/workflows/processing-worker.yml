@@ -106,6 +106,10 @@ jobs:
             tesseract-ocr-eng \
             tesseract-ocr-jpn
 
+      # Runner images ship several LLVM releases. bindgen loads the newest libclang but takes
+      # header search paths from the clang on PATH; the two releases' builtin stdatomic.h then
+      # chain through include_next under one include guard, leaving atomic_int undefined for
+      # leptonica's environ.h. Use the libclang that shares the PATH clang's resource directory.
       - name: Use the libclang that matches clang
         run: |
           libclang_dir="$(dirname "$(dirname "$(clang -print-resource-dir)")")"

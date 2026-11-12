@@ -117,52 +117,6 @@ jobs:
         with:
           workspaces: apps/processing-worker
 
-      - name: Diagnose libclang selection (temporary)
-        continue-on-error: true
-        run: |
-          section() { printf '\n===== %s =====\n' "$1"; }
-          section "toolchain"
-          grep PRETTY_NAME /etc/os-release
-          uname -m
-          type -a clang llvm-config || true
-          readlink -f "$(command -v clang)"
-          clang --version | head -1
-          clang -print-resource-dir
-          ls -d /usr/lib/llvm-*/ || true
-          ls -l /usr/lib/llvm-*/lib/libclang*.so* || true
-          pkg-config --modversion lept
-          echo "LIBCLANG_PATH=${LIBCLANG_PATH:-<unset>}"
-          section "PATH clang C search list"
-          clang -E -x c - -v < /dev/null 2>&1 | sed -n '/search starts here/,/End of search/p'
-          sudo apt-get install -y --no-install-recommends strace > /dev/null
-          # Compile build dependencies first so each trace only covers leptonica-sys.
-          cargo build --locked -p leptonica-sys > /dev/null 2>&1 || true
-          trace_build() {
-            local label="$1"
-            shift
-            local trace="${RUNNER_TEMP}/${label}.strace"
-            section "${label}: ${*}"
-            cargo clean -p leptonica-sys > /dev/null 2>&1
-            if strace -f -qq -e trace=openat,execve -e signal=none -o "${trace}" \
-              env "$@" cargo build --locked -p leptonica-sys > "${RUNNER_TEMP}/${label}.log" 2>&1; then
-              echo "result: success"
-            else
-              echo "result: failure"
-              grep -E 'error:|warning: leptonica-sys' "${RUNNER_TEMP}/${label}.log" | head -10
-            fi
-            # clang-sys opens every candidate once to validate it; dlopen opens the chosen one
-            # again and pulls in its libLLVM.
-            echo "-- libclang / libLLVM opened (count):"
-            grep -E 'openat\(.*lib(clang|LLVM)[^/"]*\.so' "${trace}" | grep -v ENOENT |
-              grep -oE '"[^"]+"' | sort | uniq -c
-            echo "-- clang executed:"
-            grep -E 'execve\("[^"]*/(clang|llvm-config)[^/"]*"' "${trace}" | grep -v ENOENT | sed -E 's/^[0-9]+ +//; s/, \[.*//' | sort -u
-            echo "-- stdatomic.h opened (in order):"
-            grep -E 'openat\(.*stdatomic\.h"' "${trace}" | grep -v ENOENT | sed -E 's/^[0-9]+ +//'
-          }
-          trace_build baseline -u LIBCLANG_PATH
-          trace_build aligned "LIBCLANG_PATH=${LIBCLANG_PATH}"
-
       - name: Format check
         run: cargo fmt --all -- --check
 

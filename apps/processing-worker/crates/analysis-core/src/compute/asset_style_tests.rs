@@ -56,7 +56,7 @@ fn primary_kind_uses_the_contract_priority() {
             AssetStyleMetrics {
                 blowout_win_count: 10,
                 win_median_margin: Some(10_000.0),
-                low_asset_rate: Some(0.05),
+                low_asset_rate: Some(0.04),
                 podium_rate: Some(0.50),
                 ..AssetStyleMetrics::default()
             },
@@ -97,11 +97,11 @@ fn shape_and_tags_follow_the_contract_order() {
     let medians = medians();
     let metrics = AssetStyleMetrics {
         high_asset_rate: Some(0.20),
-        low_asset_rate: Some(0.12),
+        low_asset_rate: Some(0.14),
         second_rate: Some(0.35),
-        average_revenue_asset_rate: Some(0.11),
+        average_revenue_asset_rate: Some(0.13),
         destination_average: Some(1.1),
-        win_median_margin: Some(6_000.0),
+        win_median_margin: Some(2_000.0),
         ..AssetStyleMetrics::default()
     };
     let base = base(metrics);

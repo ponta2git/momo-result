@@ -20,6 +20,7 @@
 - git 管理外の `private/` は、ユーザーが参照を明示した範囲だけ必要時に読む。指定ファイルの分析依頼はその参照許可を含む。探索と参照は、指定された範囲と作業に必要な記録に限る。
 - 本番操作の承認は [公開運用規約](docs/ops/README.md) に従う。
 - `momo-db` の schema・migration・Drizzle 設定/script・DB の migration state を変更する場合は、実装・DB 操作前に対象 checkout の `docs/development.md` を全文読み、従う。checkout の特定は [DB 所有規約](docs/db-rule.md#ownership) を参照し、対象不明・不在・文書欠落・本規約との矛盾時はその DB 変更を止めて確認する。
+- コミットを適切な単位で適宜細かく打ち、レビューや手戻り時に作業しやすくすること。
 
 ## 検証と完了
 

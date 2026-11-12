@@ -398,7 +398,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         sql"""
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
-        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v13', 10,
+        VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v14', 10,
           'series-analysis-artifact-v10-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
@@ -436,7 +436,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
           artifact_schema_version, source_input_checksum, root_checksum, status,
           aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
           encoded_bytes, decoded_bytes, scope_keys)
-        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v13', 10,
+        SELECT 'artifact-scope-proof', $title, input_revision, 'series-analysis-v14', 10,
           'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
           'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
           'staging', 2, 0, 0, 1, 2, 2, ARRAY['overall', ${scope.key}]

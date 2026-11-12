@@ -1067,7 +1067,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         validation_contract_id, source_input_checksum, root_checksum, status,
         aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         outlook_summary_chunk_count, outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES ($artifactId, $title, 0, 'series-analysis-v13', 10, NULL,
+        VALUES ($artifactId, $title, 0, 'series-analysis-v14', 10, NULL,
           ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
           1, 0, 0, 0, 1, 4, ${size + 10}, ${size + 10}, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_analysis_scope_aggregate_artifacts

@@ -41,7 +41,10 @@ permissions:
 
 jobs:
   analysis-worker:
-    runs-on: ubuntu-latest
+    # This job builds the OCR crates against the host's apt leptonica. Keep the runner on the
+    # LTS line whose leptonica the pinned leptonica-sys bindings parse; the image build pins its
+    # own Debian base. ubuntu-26.04 ships leptonica 1.86, whose headers fail bindgen.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:

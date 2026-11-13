@@ -13,7 +13,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | 業務要件 / CSV / TSV | [基本要求]、用語・状態は [ドメイン規約] | 対象 usecase / export |
 | ログイン / ロール / 認可 | [基本要求] の認証・権限。分析操作は [分析 batch 要求]・[レーダー要求]。API の認証境界は [API 規約の Error / Auth](api-rule.md#error--auth)、Web の権限判断は [Web 実装規約の Server State](web-rule.md#server-state)、DB は [DB 規約] | 認証主体、API guard、アカウント管理、Web の権限制御 |
 | 技術構成 / 非機能 | [システム要求]。境界と依存方向は [アーキテクチャ]、運用は [公開運用規約]、release は [CI・リリース規約] | 設定・runtime 定義 |
-| Web / UI / UX / 文章 / IA | 対象画面の要求。表示・操作・文言は [UI 規約]、層・server state・motion・form の実装境界は [Web 実装規約]、wire は [API 規約の Wire Boundary](api-rule.md#wire-boundary)、用語は [ドメイン規約] | `apps/web/src/` の対象 component、global stylesheet、shared/ui、formatter |
+| Web / UI / UX / 文章 / IA | 対象画面の要求。体験方針・画面の型・表示・操作・文言は [UI 規約]、層・server state・motion・form の実装境界は [Web 実装規約]、wire は [API 規約の Wire Boundary](api-rule.md#wire-boundary)、用語は [ドメイン規約] | `apps/web/src/` の対象 component、global stylesheet、shared/ui、formatter |
 | API / usecase | 対象要求、[API 規約]、状態は [ドメイン規約]、DB は [DB 規約] | `apps/api/`、Tapir endpoint、対象 job |
 | Discord 通知 | 下表「複数文書にまたがる契約」の Discord 通知の分担 | NotificationSettings、管理画面、設定・取消の transaction、worker の notifications |
 | DB / repository | [DB 規約]、対象の業務・job 要求。`momo-db` 側の変更前には [AGENTS.md](../AGENTS.md#作業境界) の事前手順 | 対象 query、隔離 test 用の pinned migration |
@@ -43,7 +43,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | 文書 | 所有する判断 |
 | --- | --- |
 | [AGENTS.md](../AGENTS.md) | 横断する判断と並列作業、文脈の選び方、作業境界、検証と完了（PR / Linear の入口を含む） |
-| 要求（`requirements/`） | 目的、適用範囲、正常 / 失敗時の結果、受入条件。画面固有の目的・順序・指標（例外: [UI 規約の画面固有の要求](ui-rule.md#画面固有の要求) が正本とする2項目） |
+| 要求（`requirements/`） | 目的、適用範囲、正常 / 失敗時の結果、受入条件。画面固有の目的・順序・指標（例外: [UI 規約の画面固有の要求](ui-rule.md#画面固有の要求) が正本とする項目） |
 | [ドメイン規約] | 用語、不変条件、状態遷移、識別子の意味 |
 | [アーキテクチャ] | システム境界、依存方向、資源境界、script / tool の配置、runtime / security |
 | [API 規約] | wire、bootstrap、usecase / repository、transaction と wake、error / auth |
@@ -51,7 +51,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | [Worker 規約] | parent / child、runtime / listener / shutdown、資源予約、分析公開、OCR の役割、通知の準備と送信 |
 | [DB 規約] | 所有権、永続状態、consumer contract、DB contract evidence、migration、移行中の契約 |
 | [OCR job 契約] | API と Worker の非同期 job 契約 |
-| [UI 規約] | 意味表現、視覚階層、操作文法、文言、取得状態、4人の台帳、視覚レビューの観点、要求に正本がない画面固有の要求（明示した2項目） |
+| [UI 規約] | 判断の優先順位、体験方針、情報設計（対象・画面の型・導線）、意味表現、視覚階層、操作文法、文言、取得状態、節目の演出、4人の台帳、視覚レビューの観点、要求に正本がない画面固有の要求（明示した項目）。shared UI 部品の内部契約は各部品の doc comment と test |
 | [テスト・品質規約] | 品質証拠の採用・維持・削除、層と oracle、領域別 failure-mode catalog |
 | [テスト実行設計] | test size、coverage、実行境界、cross-system contract、並列性、CI artifact |
 | [開発作業規約] | 環境、ローカル起動、E2E suite、コマンド、変更 gate、並列実行、Git |

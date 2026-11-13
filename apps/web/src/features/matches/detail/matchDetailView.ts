@@ -25,7 +25,8 @@ export type MatchDeletionControls = {
 
 export type MatchDetailReadyView = {
   analysis: {
-    comparisonContextStatus: "loading" | "ready" | "unavailable";
+    comparisonContextStatus: "loading" | "calculating" | "ready" | "unavailable";
+    contextPending: boolean;
     badges: MatchFeatureBadge[];
     performanceContext: ReturnType<typeof matchPerformanceContextFromArtifact>;
   };

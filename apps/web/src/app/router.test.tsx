@@ -18,12 +18,14 @@ import { appRoutes } from "@/app/router";
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { getCsrfToken } from "@/shared/api/csrfTokenStore";
 import { adminAccountKeys, matchKeys } from "@/shared/api/queryKeys";
+import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { authMeQueryKey, authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
+import { makeHeldEventListItem } from "@/test/factories/heldEvents";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
@@ -120,10 +122,11 @@ describe("app routing", () => {
       expect(screen.queryByRole("region", { name: "ログイン" })).not.toBeInTheDocument();
       expect(attempts).toBe(1);
       await user.click(screen.getByRole("button", { name: "再試行" }));
-      expect(
-        await screen.findByRole("region", { name: entry === "/" ? "試合一覧" : "出力条件" }),
-      ).toBeVisible();
-      expect(router.state.location.pathname).toBe(entry === "/" ? "/matches" : "/exports");
+      const destination = entry === "/" ? "/held-events/held-1" : "/exports";
+      await waitFor(() => expect(router.state.location.pathname).toBe(destination));
+      if (entry !== "/") {
+        expect(await screen.findByRole("region", { name: "出力条件" })).toBeVisible();
+      }
     },
   );
 
@@ -132,7 +135,7 @@ describe("app routing", () => {
     renderApp("/matches");
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
     expect(document.title).toBe("試合一覧 | 桃鉄戦績台帳");
-    await user.click(screen.getByRole("link", { name: "出力" }));
+    await user.click(screen.getByRole("link", { name: "まとめて出力" }));
     expect(await screen.findByRole("region", { name: "出力条件" })).toBeVisible();
     expect(document.title).toBe("戦績を出力 | 桃鉄戦績台帳");
     expect(screen.getByRole("main")).toHaveFocus();
@@ -175,7 +178,11 @@ describe("app routing", () => {
           makeSeriesAnalysisAdminOverview().selectedTitle?.gameTitleId,
         ),
       );
-      await waitFor(() => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled());
+      // Refresh stays disabled until the title-scoped read after the handoff settles.
+      await waitFor(
+        () => expect(screen.getByRole("button", { name: "状態を更新" })).toBeEnabled(),
+        { timeout: 5000 },
+      );
       await user.click(screen.getByRole("button", { name: "状態を更新" }));
       expect(
         await screen.findByText("更新済みの処理履歴", {}, { timeout: 5000 }),
@@ -511,15 +518,123 @@ describe("app routing", () => {
     expect(router.state.location.pathname).toBe("/login");
   });
 
-  it("redirects / to /matches when authenticated", async () => {
+  it("opens the newest held event at / when authenticated", async () => {
     setDevUser();
     const { router } = renderApp("/");
 
     expect(
-      await screen.findByRole("region", { name: "試合一覧" }, { timeout: 3_000 }),
-    ).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/matches");
+      await screen.findByRole("heading", { name: "第1試合を記録" }, { timeout: 3_000 }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/held-events/held-1");
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeInTheDocument();
+    // The entry is replaced, so going back does not return to a page that only redirects.
+    expect(router.state.historyAction).toBe("REPLACE");
+  });
+
+  it("waits for its own read of the newest held event instead of a cached list", async () => {
+    setDevUser();
+    const read = createDeferred();
+    server.use(
+      http.get("/api/held-events", async () => {
+        await read.promise;
+        return HttpResponse.json({
+          items: [makeHeldEventListItem({ id: "held-tonight", heldAt: "2026-11-03T10:00:00Z" })],
+          latestHeldEventId: "held-tonight",
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 1,
+            totalItems: 1,
+            totalPages: 1,
+          },
+          totalMatchCount: 0,
+        });
+      }),
+    );
+    const { queryClient, router } = renderApp("/");
+    queryClient.setQueryData(
+      heldEventsQueryOptions({ page: 1, pageSize: 1, sort: "held_desc" }).queryKey,
+      {
+        items: [makeHeldEventListItem({ id: "held-last-week" })],
+        latestHeldEventId: "held-last-week",
+        pagination: {
+          hasNextPage: false,
+          hasPreviousPage: false,
+          page: 1,
+          pageSize: 1,
+          totalItems: 1,
+          totalPages: 1,
+        },
+        totalMatchCount: 0,
+      },
+    );
+    expect(await screen.findByLabelText("開催詳細を読み込み中")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/");
+    read.resolve();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/held-events/held-tonight"));
+  });
+
+  it("opens the held-event history at / before any held event exists", async () => {
+    setDevUser();
+    server.use(
+      http.get("/api/held-events", () =>
+        HttpResponse.json({
+          items: [],
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 1,
+            totalItems: 0,
+            totalPages: 0,
+          },
+          totalMatchCount: 0,
+        }),
+      ),
+    );
+    const { router } = renderApp("/");
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/held-events"));
+    expect(
+      await screen.findByRole("button", { name: "最初の開催を作成" }, { timeout: 3_000 }),
+    ).toBeVisible();
+  });
+
+  it("keeps / recoverable when the newest held event cannot be read", async () => {
+    setDevUser();
+    let attempts = 0;
+    server.use(
+      http.get("/api/held-events", () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 })
+          : HttpResponse.json({
+              items: [makeHeldEventListItem({ id: "held-1" })],
+              latestHeldEventId: "held-1",
+              pagination: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                page: 1,
+                pageSize: 1,
+                totalItems: 1,
+                totalPages: 1,
+              },
+              totalMatchCount: 0,
+            });
+      }),
+    );
+    const { router } = renderApp("/");
+
+    expect(
+      await screen.findByRole("heading", { name: "最新の開催を確認できませんでした" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "開催履歴へ" })).toHaveAttribute(
+      "href",
+      "/held-events",
+    );
+    await user.click(screen.getByRole("button", { name: "再読み込み" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/held-events/held-1"));
   });
 
   it("retains input for the same account but discards it when auth confirms another account", async () => {
@@ -744,12 +859,14 @@ describe("app routing", () => {
     expect(screen.getByRole("button", { name: "再試行" })).toBeEnabled();
   });
 
-  it("redirects /login to /matches when authenticated", async () => {
+  it("opens the newest held event from /login when authenticated", async () => {
     setDevUser();
     const { router } = renderApp("/login");
 
-    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/matches");
+    expect(
+      await screen.findByRole("heading", { name: "第1試合を記録" }, { timeout: 3_000 }),
+    ).toBeVisible();
+    expect(router.state.location.pathname).toBe("/held-events/held-1");
   });
 
   it("commits match detail navigation through the lazy route while the detail payload is loading", async () => {
@@ -771,7 +888,7 @@ describe("app routing", () => {
     expect(await screen.findByRole("region", { name: "試合一覧" })).toBeInTheDocument();
 
     const detailLinks = await screen.findAllByRole("link", {
-      name: "第1試合 · 東日本編",
+      name: "第1試合・東日本編",
     });
     const detailLink = detailLinks[0];
     if (!detailLink) throw new Error("expected a detail link");

@@ -471,7 +471,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v13",
+    "series-analysis-v14",
     10,
     Instant.parse("2026-08-09T00:00:00Z"),
   )

@@ -2,6 +2,7 @@ import { useActionState, useCallback, useLayoutEffect, useRef, useTransition } f
 import { useNavigate } from "react-router-dom";
 import type { NavigateOptions } from "react-router-dom";
 
+import { confirmedArrivalState } from "@/features/matches/confirmedArrival";
 import {
   toConfirmMatchRequest,
   toUpdateMatchRequest,
@@ -13,6 +14,7 @@ import type { WorkspaceNoticeTone } from "@/features/matches/workspace/matchWork
 import { useConfirmedDraftRedirect } from "@/features/matches/workspace/useConfirmedDraftRedirect";
 import { useMatchWorkspaceWrites } from "@/features/matches/workspace/useMatchWorkspaceWrites";
 import { formatApiError, normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import type { MatchRecordMethod } from "@/shared/navigation/matchLinks";
 import { heldEventDetailHref, matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 import { showToast } from "@/shared/ui/feedback/Toast";
 
@@ -28,6 +30,7 @@ export function useMatchWorkspaceSubmitFlow({
   heldEventPublicId,
   notify,
   onPersistedSuccess,
+  recordedWith,
   setConfirmOpen,
   setOperationError,
   setValidationMessage,
@@ -39,6 +42,8 @@ export function useMatchWorkspaceSubmitFlow({
   heldEventPublicId?: string | undefined;
   notify: (message: string, tone?: WorkspaceNoticeTone) => void;
   onPersistedSuccess: () => void;
+  /** How this workspace records a match, so the confirmed result can offer the same way next. */
+  recordedWith: MatchRecordMethod;
   setConfirmOpen: (open: boolean) => void;
   setOperationError: (error: MatchWorkspaceOperationError | null) => void;
   setValidationMessage: (message: string) => void;
@@ -87,11 +92,15 @@ export function useMatchWorkspaceSubmitFlow({
               : "試合を保存しました",
         tone: "success",
       });
-      if (result.kind === "confirm") setConfirmOpen(false);
       onPersistedSuccess();
-      navigateAfterSuccess(
-        matchDetailHref(result.matchId, result.kind === "update" ? matchPublicId : undefined),
-      );
+      if (result.kind === "confirm") {
+        setConfirmOpen(false);
+        navigateAfterSuccess(matchDetailHref(result.matchId), {
+          state: confirmedArrivalState({ matchId: result.matchId, recordedWith }),
+        });
+        return;
+      }
+      navigateAfterSuccess(matchDetailHref(result.matchId, matchPublicId));
     },
     failed: async (failure) => {
       if (!activeRef.current) return;

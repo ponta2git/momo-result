@@ -1,6 +1,7 @@
 import {
+  MastersEditError,
+  MastersEditPendingStatus,
   MastersEditStatusProvider,
-  MastersEditFeedback,
 } from "@/features/masters/MastersEditStatus";
 import type { MasterTabId } from "@/features/masters/mastersNavigation";
 import {
@@ -30,7 +31,7 @@ export function MastersPage() {
           </Notice>
         ) : null}
         <PageContentSurface aria-label="設定管理" className="grid gap-6" role="region">
-          <MastersEditFeedback />
+          <MastersEditError />
           {navigation.feedback.invalidTab ? (
             <Notice
               action={
@@ -53,13 +54,18 @@ export function MastersPage() {
             value={navigation.tabs.active}
             onValueChange={(value) => navigation.tabs.onChange(value as MasterTabId)}
           >
-            <TabsList aria-label="設定管理の表示切替" activateOnFocus={false}>
-              {navigation.tabs.items.map((tab) => (
-                <TabsTab key={tab.id} value={tab.id}>
-                  {tab.label}
-                </TabsTab>
-              ))}
-            </TabsList>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+              <TabsList aria-label="設定管理の表示切替" activateOnFocus={false}>
+                {navigation.tabs.items.map((tab) => (
+                  <TabsTab key={tab.id} value={tab.id}>
+                    {tab.label}
+                  </TabsTab>
+                ))}
+              </TabsList>
+              <div className="min-w-0 flex-[1_1_16rem]">
+                <MastersEditPendingStatus />
+              </div>
+            </div>
             <CatalogTab enabled={navigation.openedTabs.includes("catalog")} />
             <AchievementsTab enabled={navigation.openedTabs.includes("achievements")} />
             <AliasesTab {...adminAccess} enabled={navigation.openedTabs.includes("aliases")} />

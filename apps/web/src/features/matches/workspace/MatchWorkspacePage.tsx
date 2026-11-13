@@ -3,6 +3,10 @@ import type { Location } from "react-router-dom";
 
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { MatchWorkspaceBlockedNotice } from "@/features/matches/workspace/MatchWorkspaceBlockedNotice";
+import {
+  MatchWorkspaceCancellationAction,
+  MatchWorkspaceCancellationError,
+} from "@/features/matches/workspace/MatchWorkspaceCancellation";
 import { MatchWorkspaceEditor } from "@/features/matches/workspace/MatchWorkspaceEditor";
 import { MatchWorkspaceLoading } from "@/features/matches/workspace/MatchWorkspaceLoading";
 import { MatchWorkspacePersistence } from "@/features/matches/workspace/MatchWorkspacePersistence";
@@ -14,6 +18,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
+import { matchWorkspacePageWidth } from "@/shared/workflows/matchWorkspacePresentation";
 
 type MatchWorkspacePageProps = {
   matchDraftId?: string;
@@ -62,7 +67,13 @@ export function MatchWorkspacePage(props: MatchWorkspacePageProps) {
   const { auth, isChecking } = authorization.auth;
   const useSampleDrafts = props.mode === "review" && searchParams.get("sample") === "1";
   if (isChecking) {
-    return <MatchWorkspaceLoading sample={useSampleDrafts} />;
+    return (
+      <MatchWorkspaceLoading
+        mode={props.mode}
+        sample={useSampleDrafts}
+        width={matchWorkspacePageWidth({ ...props, sample: useSampleDrafts })}
+      />
+    );
   }
   return (
     <MatchWorkspacePageContent
@@ -100,16 +111,24 @@ function MatchWorkspacePageContent({
     preferredHeldEventId,
   });
   const { editor, editing, loading, toolbar, persistence, review } = workspace;
+  const width = matchWorkspacePageWidth({ matchDraftId, mode, sample: toolbar.sample });
 
   if (loading.edit.loading) {
-    return <MatchWorkspaceLoading loadingLabel="試合編集を読み込み中" sample={toolbar.sample} />;
+    return (
+      <MatchWorkspaceLoading
+        loadingLabel="試合編集を読み込み中"
+        mode={mode}
+        sample={toolbar.sample}
+        width={width}
+      />
+    );
   }
 
   if (loading.edit.failureKind) {
     const notFound = loading.edit.failureKind === "notFound";
     const title = notFound ? "試合が見つかりませんでした" : "試合編集を読み込めませんでした";
     return (
-      <PageFrame width="workspace">
+      <PageFrame width={width}>
         <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
           <MatchWorkspaceToolbar view={toolbar} />
           <Notice
@@ -147,20 +166,27 @@ function MatchWorkspacePageContent({
       >
         <MatchWorkspaceLoading
           loadingLabel={loading.workspace.copy.loadingLabel}
+          mode={mode}
           sample={toolbar.sample}
+          width={width}
         />
       </MatchWorkspacePersistence>
     );
   }
 
+  const editorShown = !loading.workspace.blocked && !review.blocked;
   return (
     <MatchWorkspacePersistence
       input={persistence}
       preservesInput={(current, next) => preservesWorkspaceInput(mode, current, next)}
     >
-      <PageFrame width="workspace">
+      <PageFrame width={width}>
         <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-          <MatchWorkspaceToolbar view={toolbar} />
+          <MatchWorkspaceToolbar
+            actions={editorShown ? <MatchWorkspaceCancellationAction /> : null}
+            view={toolbar}
+          />
+          {editorShown ? <MatchWorkspaceCancellationError /> : null}
           {loading.base.errors.length > 0 ? (
             <Notice
               action={
@@ -177,7 +203,7 @@ function MatchWorkspacePageContent({
               tone="danger"
               title="画面データを読み込めません"
             >
-              <ul className="grid list-disc gap-1 pl-5 text-sm">
+              <ul className="grid list-disc gap-1 pl-4">
                 {loading.base.errors.map((error) => (
                   <li className="momo-break-token" key={`${error.status}-${error.detail}`}>
                     <span className="font-emphasis">{error.title}</span>：{error.detail}

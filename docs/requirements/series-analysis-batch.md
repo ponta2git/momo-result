@@ -18,7 +18,7 @@
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
 
-artifact resource の JSON 本文は本書の Artifact Contract を意味の正本とし、shape、limit、canonicalization の機械可読な正本は本書の Artifact Contract で特定する。producer / reader validator はそれらを実装する。Tapir endpoint は HTTP envelope と取得経路だけを表し、raw JSON 本文の全ネストを代替しない。
+artifact resource の JSON 本文は本書の Artifact Contract を意味の正本とし、shape、limit、canonicalization の機械可読な正本は本書の Artifact Contract で特定する。producer / reader validator はそれらを実装する。API は Rust が所有する nested payload schema と API metadata を合成し、Tapir endpoint の HTTP response schema と取得経路を定義する。payload の意味と機械可読な正本の所有は Rust 側に保つ。
 
 provider固有値、費用、実測、昇格・復旧手順は public docs へ置かず、private release evidence / runbook を正本とする。
 
@@ -51,7 +51,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 初版の試合メモは分析入力に含めない。メモだけの作成、更新、削除は input revision を進めず、再計算 intent を作成しない。境界の詳細は `docs/requirements/match-note.md` を正本とする。
 - 作品 A から B へ移る更新は、変更前後の確定済み集合の和集合を対象とする。
 - 計算入力へ影響する master 変更は revision を進め、計算意味も変わる場合は algorithm version も進める。表示名・localeなど表示専用 metadata はAPIでhydrateし、revisionへ含めない。
-- 実績機能の追加時は、実績・項目・星などの変更も同じ input revision と再計算 intent の対象にする。開催構成変更の影響作品とマップ追加時の扱いは[実績達成管理の保存と再計算](player-achievements.md#7-保存と再計算)に従う。実績だけの変更で試合結果の版を進めず、試合結果変更の通知対象となる要求も作らない。
+- 実績・項目・星などの変更も同じ input revision と再計算 intent の対象にする。開催構成変更の影響作品とマップ追加時の扱いは[実績達成管理の保存と再計算](player-achievements.md#7-保存と再計算)に従う。実績だけの変更で試合結果の版を進めず、試合結果変更の通知対象となる要求も作らない。
 - algorithm / artifact schema 更新は受理時点の全登録作品、初回 backfill は確定試合または実績項目を持つ作品を永続 snapshot する。
 - 実績機能の初回投入では、確定試合がなくても項目・移行実績を持つ作品を計算対象に含める。通常比較の試合由来scopeとは分けて固定4人と実績の対象範囲を入力に持ち、6軸の採点基準がなくても成果物を公開できるようにする。
 - snapshot 展開は再開可能かつ冪等にし、途中停止で対象を失わない。snapshot 後の新規対象は通常 trigger で扱う。
@@ -172,8 +172,8 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 - [総合成績の見通し](series-rank-outlook.md#13-実績データと読取契約)の仮定からの条件計算と、保存済み実績例の利用者条件への適合判定は、上記の実績集計・行動プレイブックの候補採否と区別する。実績の生成・並び順・品質は引き続きWorkerが所有する。
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。
-- preemptionは失敗として表示せず `queued` と同じ扱いにする。対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
-- Webは初回表示と利用者の明示的な更新操作で状態を取得し、interval、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
+- 対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
+- Webは初回表示と利用者の明示的な更新操作で状態を取得し、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。intervalによる取得は、`queued` / `running` を集計待ちとして表示している画面が完了を確認する場合に限り、[Web 実装規約の Server State](../web-rule.md#server-state) の範囲で行う。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
 - artifact切替時に古いdrilldown / match contextを混在させない。ancillary resource failureで主表示の切替を無期限に待たない。
 - 選択試合表示と各指標の強調は、同じartifact・scope・試合の有効なcontextから導出する。切替中の旧表示を保護する場合も表と選択表示を一体で保持し、新bundleのcommitで一体に切り替える。選択解除後にownerだけを遅れて残さない。
 - 成功済みcontextがない取得失敗では強調を出さず、同じcontextの一時的な再取得失敗では有効な成功snapshotと更新失敗表示を維持してよい。現在のrequestの404（試合不存在）・410（artifact失効）またはrevision不一致等の除外はcached contextを無効とし、選択表示と全指標の強調を外す。別keyのerrorを混ぜず、新たな成功前に再取得中のcacheから復活させない。aggregateの表示・bounded recoveryは既存契約に従い、試合結果の保存済み本体は維持する。
@@ -191,7 +191,7 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 ## 7. Correctness / Resource / OCR
 
 - 文書化した数式、分母、同値、seed、境界を正本とし、同じ入力とalgorithm versionから同じ結果を生成する。
-- Scalaとの差異は高精度参照、手計算可能なgolden、propertyのいずれかで証明する。意図しない順序・丸め・seed差は不具合とし、意味変更はalgorithm versionを進める。
+- 数値の正しさは既存実装の値だけに頼らず、高精度参照、手計算可能なgolden、数学的性質のいずれかを独立したoracleとして用いて検証する。意図しない順序・丸め・seed差は不具合とし、意味変更はalgorithm versionを進める。
 - 性能fixtureは固定4名、全有効scope、現在データ量の2倍かつ最低500試合/作品を満たし、連続100回でOOM、runtime再起動、memory増加傾向を起こさない。
 - worker / child、API decode / response、browser parse / renderを別々に測る。機能test、health、配置成功をresource / performanceの証拠にしない。
 - childのhard memory limit超過時もparentが生存してterminal failureを保存できることを実runtimeで証明する。
@@ -199,7 +199,7 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 - artifact / response / temporary storageにbyte、件数、深さ、disk、concurrency上限を設ける。production timeoutは同等runtimeの通常・上限・cold・連続実行測定後に設定する。
 - job / queue / phase / memory / byte数を低cardinality metricと安全なstructured logで観測する。実測値とalert thresholdはprivateに置く。
 
-OCR同居を有効化する場合は、共通parent-child境界、processごとの資源予算と同時実行数1、待機OCRの優先と実行中の分析の継続、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。activationはversion固定datasetの項目別精度、native依存、object storage、process isolation、resourceを実runtimeで確認して判断する。
+OCR同居では、共通parent-child境界、processごとの資源予算と同時実行数1、待機OCRの優先と実行中の分析の継続、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。精度と実runtimeの品質証拠は[テスト・品質規約](../test-rule.md#processing-worker-evidence-catalog)と[OCR job契約の検証境界](../ocr-job-contract.md#compatibility-and-verification)に従う。
 
 ## 8. Compatibility / Release / Rollback
 

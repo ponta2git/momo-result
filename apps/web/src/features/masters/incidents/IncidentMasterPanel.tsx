@@ -19,12 +19,7 @@ export function IncidentMasterPanel({
   const countIssue = incidentMasterCountIssue(items.length, stale);
 
   return (
-    <section className="grid min-w-0 gap-4">
-      <header>
-        <h2 className="sr-only">事件簿</h2>
-        <p className={contentText.body}>現在は6項目固定です。追加・編集はできません。</p>
-      </header>
-
+    <div className="grid min-w-0 gap-4">
       <div className="empty:hidden">
         <MasterResourceRefreshNotice
           onRetry={onRetry}
@@ -37,7 +32,7 @@ export function IncidentMasterPanel({
       {countIssue ? (
         <div>
           <Notice tone="warning" title="事件簿の項目数を確認してください">
-            現在 {countIssue.actualCount} 件です。期待値は{countIssue.expectedCount}件です。
+            現在{countIssue.actualCount}件です。期待値は{countIssue.expectedCount}件です。
           </Notice>
         </div>
       ) : null}
@@ -49,7 +44,7 @@ export function IncidentMasterPanel({
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }
 

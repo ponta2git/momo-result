@@ -12,9 +12,10 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/detail/HeldEventDetailPage";
+import { completionCheckIntervalMs } from "@/shared/api/completionCheck";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -40,6 +41,15 @@ function renderPage() {
 
 let queryClient: QueryClient;
 let user: ReturnType<typeof userEvent.setup>;
+
+function ocrDraft(status: string) {
+  return {
+    matchDraftId: "draft-ocr-1",
+    matchNoInEvent: 1,
+    status,
+    updatedAt: "2026-01-01T01:00:00.000Z",
+  };
+}
 
 function LocationProbe() {
   const location = useLocation();
@@ -132,6 +142,82 @@ describe("HeldEventDetailPage", () => {
     expect(screen.getByText("開催履歴の起点")).toBeInTheDocument();
   });
 
+  it("records into the newest held event, pointing older ones to it and offering a new one only beside its records", async () => {
+    const lastNightMatch = {
+      gameTitleId: "gt_momotetsu_2",
+      mapMasterId: "map_east",
+      matchId: "match-last-night",
+      matchNoInEvent: 1,
+      ownerMemberId: "member_ponta",
+      playedAt: "2026-01-08T13:00:00.000Z",
+      seasonMasterId: "season_current",
+    };
+    const events: Array<{ id: string; heldAt: string }> = [
+      { id: "held-1", heldAt: "2026-01-01T13:00:00.000Z" },
+      { id: "held-2", heldAt: "2026-01-08T13:00:00.000Z" },
+    ];
+    server.use(
+      http.post("/api/held-events", async ({ request }) => {
+        const body = (await request.json()) as { heldAt: string };
+        events.push({ id: "held-created", heldAt: body.heldAt });
+        return HttpResponse.json({
+          id: "held-created",
+          heldAt: body.heldAt,
+          draftCount: 0,
+          matchCount: 0,
+          nextMatchNo: 1,
+        });
+      }),
+      http.get("/api/held-events/:heldEventId", ({ params }) => {
+        const index = events.findIndex((event) => event.id === params["heldEventId"]);
+        const current = events[index];
+        if (!current) return HttpResponse.json({ code: "NOT_FOUND" }, { status: 404 });
+        const previous = events[index - 1];
+        const next = events[index + 1];
+        const recorded = current.id === "held-2";
+        return HttpResponse.json(
+          makeHeldEventDetailResponse({
+            ...current,
+            matchCount: recorded ? 1 : 0,
+            matches: recorded ? [lastNightMatch] : [],
+            nextMatchNo: recorded ? 2 : 1,
+            navigation: { ...(previous ? { previous } : {}), ...(next ? { next } : {}) },
+          }),
+        );
+      }),
+    );
+    const router = renderNavigationPage("/held-events/held-1");
+    expect(await screen.findByRole("link", { name: /次の開催/u })).toBeInTheDocument();
+    // A page left open from an earlier night points to the newest event before anything else.
+    expect(screen.getByText("この開催より新しい開催があります")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "最新の開催へ" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("button", { name: "新しい開催を作成" })).not.toBeInTheDocument();
+
+    // The newest event already holds a record, so a night without a prepared event can start one.
+    await act(async () => {
+      await router.navigate("/held-events/held-2");
+    });
+    expect(await screen.findByText("最後の開催です")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "最新の開催へ" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "新しい開催を作成" }));
+    const dialog = screen.getByRole("dialog", { name: "新しい開催を作成" });
+    await user.clear(within(dialog).getByLabelText(/開催日時/u));
+    await user.type(within(dialog).getByLabelText(/開催日時/u), "2026-01-15T22:30");
+    await user.click(within(dialog).getByRole("button", { name: "開催を作成" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("現在のURL")).toHaveTextContent("/held-events/held-created"),
+    );
+    expect(await screen.findByRole("heading", { name: "第1試合を記録" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "OCR取り込み" })).toHaveAttribute(
+      "href",
+      "/ocr/new?heldEventId=held-created",
+    );
+    // An empty newest event, like the one Summit prepares before play, is where the night's
+    // first match goes; offering another event beside it would split the night.
+    expect(screen.queryByRole("button", { name: "新しい開催を作成" })).not.toBeInTheDocument();
+  });
+
   it("keeps a legacy response readable without claiming it has no neighboring events", async () => {
     const legacy = makeHeldEventDetailResponse();
     const { navigation: _navigation, ...legacyBody } = legacy;
@@ -155,6 +241,9 @@ describe("HeldEventDetailPage", () => {
     );
     expect(screen.getByRole("link", { name: "手入力" })).toBeInTheDocument();
     expect(screen.queryByText("最初の開催です")).not.toBeInTheDocument();
+    // Without its neighbors the hub cannot tell where it stands, so it claims neither.
+    expect(screen.queryByRole("button", { name: "新しい開催を作成" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "最新の開催へ" })).not.toBeInTheDocument();
     restored = true;
     await user.click(screen.getByRole("button", { name: "前後の開催を再取得" }));
     expect(await screen.findByRole("link", { name: /次の開催/u })).toHaveAttribute(
@@ -457,6 +546,47 @@ describe("HeldEventDetailPage", () => {
       expect(screen.queryByText("開催詳細を更新できませんでした")).not.toBeInTheDocument(),
     );
     expect(attempts).toBe(3);
+  });
+
+  it("follows a running OCR read until it can be reviewed, without reading as a user refresh", async () => {
+    let attempts = 0;
+    const recheck = createDeferred<void>();
+    server.use(
+      http.get("/api/held-events/:heldEventId", async () => {
+        attempts += 1;
+        if (attempts === 2) await recheck.promise;
+        return HttpResponse.json(
+          makeHeldEventDetailResponse({
+            draftCount: 1,
+            drafts: [ocrDraft(attempts < 3 ? "ocr_running" : "draft_ready")],
+          }),
+        );
+      }),
+    );
+    // Fake only the clock the completion check schedules on, and let real time drive the rest.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+
+      expect(await screen.findByRole("button", { name: "読み取り中" })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(attempts).toBe(2));
+      // A recheck in flight leaves the update control and the neighbors as they were.
+      expect(screen.getByRole("button", { name: "開催詳細を更新" })).toBeEnabled();
+      expect(screen.queryByText("前後の開催を確認しています。")).not.toBeInTheDocument();
+      recheck.resolve();
+
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByRole("link", { name: "内容を確認" })).toHaveAttribute(
+        "href",
+        "/review/draft-ocr-1",
+      );
+      expect(attempts).toBe(3);
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 5));
+      expect(attempts).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("replaces stale detail with the deleted state when a refresh confirms a 404", async () => {

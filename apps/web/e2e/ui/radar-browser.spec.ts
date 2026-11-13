@@ -83,8 +83,13 @@ test("keeps canceled edits, waits for discard, and browses another title's immut
     .toBe(radar.historyTitleId);
   await page.getByRole("button", { name: /の改訂詳細$/u }).click();
   const detail = page.getByRole("region", { name: "改訂詳細" });
-  await expect(detail.getByText("適用者: 適用時の担当者")).toBeVisible();
-  await expect(detail.getByText("案の保存者: 保存時の担当者")).toBeVisible();
+  // Each person is a term/definition pair, so the label and the name are read together.
+  await expect(detail.locator("dt", { hasText: "適用者" }).locator("+ dd")).toHaveText(
+    "適用時の担当者",
+  );
+  await expect(detail.locator("dt", { hasText: "案の保存者" }).locator("+ dd")).toHaveText(
+    "保存時の担当者",
+  );
 
   await page.getByRole("tab", { name: "現在の採点境界", exact: true }).click();
   await expect(page.getByRole("table", { name: "適用中の採点境界" })).toBeVisible();
@@ -92,9 +97,9 @@ test("keeps canceled edits, waits for discard, and browses another title's immut
   await page.getByRole("button", { name: "調整を始める" }).click();
   await expect(threshold).toHaveValue("4.9");
   await threshold.fill("-");
-  await page.getByRole("link", { name: "出力", exact: true }).click();
+  await page.getByRole("link", { name: "試合", exact: true }).click();
   await leave.getByRole("button", { name: "破棄して移動" }).click();
-  await expect(page.getByRole("region", { name: "出力条件" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
   expect(radar.commands.map((command) => command.kind)).toEqual(["manual", "withdraw"]);
 });
 

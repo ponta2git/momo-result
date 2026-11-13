@@ -13,7 +13,7 @@
 ## Authoring previews
 
 - Typecheck previews before building: `node_modules/.bin/tsc --noEmit -p .design-sync/tsconfig.previews.json` (maps `momo-result-ui` to entry.ts). The converter does NOT typecheck - e.g. StatusBadge takes `label`, not children, and silently rendered empty.
-- Content: Japanese UI, domain is 桃鉄 (Momotaro Dentetsu) match results - players (ももたろう/きんたろう/うらしま/かぐや), 総資産/収益 in 万円, 開催, 試合, 目的地.
+- Content: Japanese UI, domain is 桃鉄 (Momotaro Dentetsu) match results - the four fixed members in canonical order (いーゆー/ぽんた/あかねまみ/おーたか; write プレーヤー, not プレイヤー), 総資産/収益 in 万円, 開催, 試合, 目的地.
 - Overlays (Dialog, AlertDialog, DialogFooter, ToastHost) use `cardMode: single`; DataTable uses `cardMode: column`. Changing an override's viewport needs a full `package-build.mjs` (`preview-rebuild.mjs` refuses with `[CONFIG_STALE]`).
 - Only Tailwind utilities already used in `src/` exist in the compiled CSS; others silently no-op. Grep `.design-sync/.cache/pkg/app.css` (arbitrary values are escaped, e.g. `grep -F 'bg-\[var\(--color-surface\)\]'`) or use inline `style`. Seen missing: `w-80 w-96 pt-2 pt-3 pt-10 max-w-xs border-collapse bg-[var(--color-canvas)]`.
 - `src/styles.css` has `@source not "../.design-sync"`: Tailwind v4 auto-detects sources from every non-gitignored file, so without it class names written in NOTES.md/conventions.md/previews were generated into the app CSS (and made "missing" classes silently exist). Keep it; previews must still use only classes from `src/`.

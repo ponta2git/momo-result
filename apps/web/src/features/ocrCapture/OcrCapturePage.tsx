@@ -9,10 +9,12 @@ import type {
   OcrCaptureTrayView,
   OcrCaptureStartView,
 } from "@/features/ocrCapture/ocrCapturePresentation";
+import { OcrSectionHeading } from "@/features/ocrCapture/OcrSectionHeading";
 import { OcrStartDialog } from "@/features/ocrCapture/OcrStartDialog";
 import {
   OcrCaptureSetupProvider,
   OcrCaptureSetupSection,
+  useOcrCaptureExitHref,
 } from "@/features/ocrCapture/setup/OcrCaptureSetup";
 import { useOcrCaptureAuth, useOcrCapture } from "@/features/ocrCapture/useOcrCapture";
 import { UnsavedChangesGuard } from "@/shared/navigation/UnsavedChangesGuard";
@@ -23,28 +25,16 @@ import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { contentText } from "@/shared/ui/typography";
-
-const panelClass = "grid min-w-0 gap-4";
-const panelTitleClass = contentText.heading;
-const panelLeadClass = cn(contentText.body, "mt-1");
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function OcrCapturePage() {
   const auth = useOcrCaptureAuth();
   return (
     <OcrCaptureSetupProvider authReady={auth.ready} key={auth.accountId ?? "unresolved"}>
       <PageFrame>
-        <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
-          <LinkButton
-            icon={<ArrowLeft aria-hidden="true" />}
-            size="sm"
-            to="/matches"
-            variant="quiet"
-          >
-            取り込みをやめる
-          </LinkButton>
-        </nav>
         <PageContentSurface aria-label="OCR取り込み" className="grid gap-6" role="region">
+          <OcrCaptureExit />
           <OcrCaptureSetupSection />
           <OcrCaptureWorkspace />
         </PageContentSurface>
@@ -53,11 +43,22 @@ export function OcrCapturePage() {
   );
 }
 
+function OcrCaptureExit() {
+  const exitHref = useOcrCaptureExitHref();
+  return (
+    <nav aria-label="OCR取り込みの移動" className={inlineActionGroupClass}>
+      <LinkButton icon={<ArrowLeft aria-hidden="true" />} size="sm" to={exitHref} variant="quiet">
+        取り込みをやめる
+      </LinkButton>
+    </nav>
+  );
+}
+
 function OcrCaptureWorkspace() {
   const { camera, tray, start, navigation, dialog } = useOcrCapture();
   return (
     <>
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem] xl:items-start">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
         <OcrCaptureCamera view={camera} />
         <OcrCaptureTray view={tray} />
       </section>
@@ -82,17 +83,15 @@ function OcrCaptureWorkspace() {
 
 const OcrCaptureCamera = memo(function OcrCaptureCamera({ view }: { view: OcrCaptureCameraView }) {
   return (
-    <section className={panelClass} aria-labelledby="ocr-camera-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="ocr-camera-title" className={panelTitleClass}>
-            画面を撮影
-          </h2>
-          <p className={panelLeadClass}>ゲーム画面全体が入るようにカメラを合わせます。</p>
-        </div>
-      </div>
+    <section className="grid min-w-0 gap-4" aria-labelledby="ocr-camera-title">
+      <OcrSectionHeading
+        id="ocr-camera-title"
+        lead="ゲーム画面全体が入るようにカメラを合わせます。"
+        title="画面を撮影"
+      />
 
-      <div className="max-w-[56rem]">
+      {/* Beside the tray the camera uses its whole column; stacked, it stays within one view. */}
+      <div className="max-w-4xl xl:max-w-none">
         <CameraCapture
           actionVariant={view.actionVariant}
           disabled={view.disabled}
@@ -116,71 +115,68 @@ const OcrCaptureCamera = memo(function OcrCaptureCamera({ view }: { view: OcrCap
 
 const OcrCaptureTray = memo(function OcrCaptureTray({ view }: { view: OcrCaptureTrayView }) {
   return (
-    <aside className="grid gap-4 xl:sticky xl:top-20" aria-labelledby="ocr-tray-title">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 id="ocr-tray-title" className={panelTitleClass}>
-            分類トレイ
-          </h2>
-          <p className={panelLeadClass}>撮影先を選び、必要なら画像を入れ替えます。</p>
-        </div>
-        <span className={cn(contentText.supporting, "shrink-0")}>
-          配置済み{view.selectedImageCount}件／全{view.totalSlotCount}件
-        </span>
-      </div>
-      <div className="grid gap-1">
-        <CaptureRail
-          captureTargetKind={view.captureTargetKind}
-          layout="stack"
-          slots={view.slots}
-          onClear={view.clearImage}
-          onDropImage={view.swapImages}
-          onMoveImage={view.swapWithAdjacentSlot}
-          onRefreshStatus={view.refreshStatus}
-          onSelectCaptureTarget={view.selectTarget}
-        />
-        <p
-          aria-label="分類トレイの操作結果"
-          aria-atomic="true"
-          aria-live="polite"
-          className={cn(contentText.body, "min-h-5")}
-          role="status"
-        >
-          {view.actionFeedback}
-        </p>
-      </div>
+    <aside
+      className="grid gap-4 xl:sticky xl:top-(--sticky-below-nav) xl:w-md"
+      aria-labelledby="ocr-tray-title"
+    >
+      <OcrSectionHeading
+        id="ocr-tray-title"
+        lead="撮影先を選び、必要なら画像を入れ替えます。"
+        status={
+          <p className={cn(contentText.supporting, "tabular-nums")}>
+            配置済み{view.selectedImageCount}件／全{view.totalSlotCount}件
+          </p>
+        }
+        title="分類トレイ"
+      />
+      <CaptureRail
+        captureTargetKind={view.captureTargetKind}
+        layout="stack"
+        slots={view.slots}
+        onClear={view.clearImage}
+        onDropImage={view.swapImages}
+        onMoveImage={view.swapWithAdjacentSlot}
+        onRefreshStatus={view.refreshStatus}
+        onSelectCaptureTarget={view.selectTarget}
+      />
+      {/* The result covers the whole tray, so it keeps the tray's spacing rather than a card's. */}
+      <p
+        aria-label="分類トレイの操作結果"
+        aria-atomic="true"
+        aria-live="polite"
+        className={cn(contentText.body, "min-h-5")}
+        role="status"
+      >
+        {view.actionFeedback}
+      </p>
     </aside>
   );
 });
 
 const OcrCaptureStart = memo(function OcrCaptureStart({ view }: { view: OcrCaptureStartView }) {
   return (
+    // Variable-height feedback and the actions share a top edge, so an error never moves them.
     <section
-      className={cn(
-        taskActionPanelClass,
-        "momo-safe-bottom sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
-      )}
+      className={cn(taskActionPanelClass, "sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start")}
       aria-labelledby="ocr-start-title"
     >
-      <div className="min-w-0">
+      <div className="grid min-w-0 gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 id="ocr-start-title" className={panelTitleClass}>
+          <h2 id="ocr-start-title" className={contentText.heading}>
             読み取りの準備
           </h2>
-          <span className="font-plain rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 py-1 text-xs text-[var(--color-text-primary)]">
+          <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>
             {view.badgeLabel}
           </span>
         </div>
-        <p className={panelLeadClass}>{view.description}</p>
+        <p className={contentText.body}>{view.description}</p>
         {view.error ? (
-          <p className="text-sm text-[var(--color-danger)]" role="alert">
+          <p className={fieldText.error} role="alert">
             {view.error}
           </p>
         ) : null}
         {view.blockedReason ? (
-          <p className="font-emphasis mt-2 text-sm text-[var(--color-review)]">
-            {view.blockedReason}
-          </p>
+          <p className="font-emphasis text-sm/5 text-[var(--color-review)]">{view.blockedReason}</p>
         ) : null}
       </div>
 

@@ -260,7 +260,6 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
           </span>
         </span>
       }
-      triggerLayout="flush-horizontal"
     >
       <DataTable
         caption={{ content: `${rankSignalLabel(candidate.signal)}の開催別テスト結果` }}
@@ -273,12 +272,14 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
             rowHeader: true,
           },
           {
+            align: "right",
             tabular: true,
             header: "開催数",
             key: "event-count",
             renderCell: (row) => `${row.heldEventCount}開催`,
           },
           {
+            align: "right",
             tabular: true,
             header: "順位の2人組",
             key: "comparison-count",
@@ -290,6 +291,7 @@ function FoldDetails({ candidate }: { candidate: RankSignalCandidate }) {
             renderCell: (row) => (row.supported ? "支持" : "支持なし"),
           },
           {
+            align: "right",
             tabular: true,
             header: "重要度",
             key: "importance",

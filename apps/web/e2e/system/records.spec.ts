@@ -114,7 +114,7 @@ test("creates a held event, saves a result and finds it by its memo and player r
     const results = page.getByRole("region", { name: "確定済みの試合", exact: true });
     await expect(results.getByText("1試合", { exact: true })).toBeVisible();
     await expect(results.locator("mark")).toHaveText(note);
-    await results.getByRole("link", { name: `第1試合 · ${masters.mapName}`, exact: true }).click();
+    await results.getByRole("link", { name: `第1試合・${masters.mapName}`, exact: true }).click();
     await expect(page.getByText(note, { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "試合結果を編集" })).toHaveAttribute(
       "href",

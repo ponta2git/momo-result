@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -50,8 +50,12 @@ describe("Match achievement saves", () => {
           <RouterProvider router={router} />
         </QueryClientProvider>,
       );
+      // Editing inherits complete conditions, so the setup starts closed.
+      const setup = await screen.findByRole("button", { name: "条件を変更" });
+      await waitFor(() => expect(setup).toBeEnabled());
+      await user.click(setup);
       expect(await screen.findByRole("button", { name: "開催（必須）を変更" })).toBeEnabled();
-      await user.click(screen.getByRole("button", { name: "試合と一緒に実績を記録" }));
+      await user.click(screen.getByRole("tab", { name: /^実績（任意）/u }));
       await user.click(await screen.findByRole("checkbox", { name: "手入力のテスト実績・ぽんた" }));
       if (resultChanged) {
         await user.clear(screen.getByLabelText("試合番号"));

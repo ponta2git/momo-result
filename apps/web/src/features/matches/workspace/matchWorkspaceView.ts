@@ -16,7 +16,8 @@ import type {
 } from "@/shared/api/matchDrafts";
 import type { MatchDetailResponse } from "@/shared/api/matches";
 import { isCancelableDraftStatus } from "@/shared/domain/draftStatus";
-import { heldEventDetailHref, matchDetailHref } from "@/shared/navigation/publicIdentifiers";
+import { recordExitHref } from "@/shared/navigation/matchLinks";
+import { matchDetailHref } from "@/shared/navigation/publicIdentifiers";
 
 const noGameTitles: GameTitleResponse[] = [];
 const noHeldEvents: HeldEventResponse[] = [];
@@ -66,9 +67,7 @@ export function buildMatchWorkspaceView({
     exitHref:
       mode === "edit" && matchId
         ? matchDetailHref(matchId, matchDetail?.publicId)
-        : values.heldEventId
-          ? heldEventDetailHref(values.heldEventId, selectedHeldEvent?.publicId)
-          : "/matches",
+        : recordExitHref(values.heldEventId, selectedHeldEvent?.publicId),
     canCancelDraft:
       mode !== "edit" &&
       !useSampleDrafts &&
@@ -117,8 +116,6 @@ export function buildMatchWorkspaceSubmitView(input: {
   cancelDraftConfirmOpen: boolean;
   operationError: MatchWorkspaceOperationError | null;
   validationMessage: string;
-  valid: boolean;
-  firstValidationMessage: string | undefined;
 }): Omit<MatchWorkspaceSubmitView, "action"> & {
   label: MatchWorkspaceSubmitView["action"]["label"];
 } {
@@ -144,11 +141,10 @@ export function buildMatchWorkspaceSubmitView(input: {
         input.operationError?.kind === "cancelDraft"
           ? validationError
           : (operationError ?? validationError),
+      // A standing prompt for the next input would repeat the error shown after an attempt.
       message: input.createEventPending
         ? "開催の作成が完了すると、入力内容を保存・確定できます。"
-        : input.valid
-          ? "確定前の確認へ進めます"
-          : (input.firstValidationMessage ?? "入力内容に不足があります"),
+        : undefined,
     },
   };
 }

@@ -1,4 +1,5 @@
 import { Toast } from "@base-ui/react/toast";
+import { X } from "lucide-react";
 import { AnimatePresence, m, useIsPresent, useReducedMotionConfig } from "motion/react";
 
 import { IconButton } from "@/shared/ui/actions/IconButton";
@@ -11,6 +12,7 @@ const toastVisible = { opacity: 1 } as const;
 const toastHidden = { opacity: 0 } as const;
 type ToastItem = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 
+/** A closing or over-limit toast leaves interaction and the accessibility tree at once. */
 function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; toast: ToastItem }) {
   const isPresent = useIsPresent();
   const inactive = !isPresent || toast.limited || toast.transitionStatus === "ending";
@@ -35,14 +37,17 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
       >
         <Toast.Content>
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+            {/* Matches the dialog header: the text block centers on the 44px close action. */}
+            <div className="flex min-h-11 min-w-0 flex-col justify-center">
               <Toast.Title className={contentText.heading} />
               <Toast.Description className={cn(contentText.body, "mt-1 text-pretty")} />
             </div>
             <Toast.Close
               aria-hidden={false}
               aria-label="通知を閉じる"
-              render={<IconButton aria-label="通知を閉じる" icon="×" size="sm" variant="quiet" />}
+              render={
+                <IconButton aria-label="通知を閉じる" icon={<X />} size="sm" variant="quiet" />
+              }
             />
           </div>
         </Toast.Content>

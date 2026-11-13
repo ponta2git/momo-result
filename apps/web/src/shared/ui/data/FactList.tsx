@@ -34,33 +34,24 @@ export function FactList({ ariaLabel, columns = 1, items, layout = "plain" }: Fa
       <dl
         aria-label={ariaLabel}
         className={cn(
-          "grid min-w-0 grid-cols-1",
+          // Both layouts share one row rhythm; columns sit further apart than rows.
+          "grid min-w-0 grid-cols-1 gap-x-4 gap-y-2",
           columnsClass[columns],
-          layout === "inline" ? "gap-1" : "gap-2",
         )}
       >
         {items.map((item) => (
           <div
             className={cn(
               "min-w-0",
-              layout === "inline" && "flex items-baseline justify-between gap-4 py-1",
+              layout === "inline" && "flex items-baseline justify-between gap-4",
             )}
             key={item.id}
           >
-            <dt
-              className={cn(
-                "min-w-0",
-                layout === "plain"
-                  ? contentText.supporting
-                  : "font-plain text-xs text-[var(--color-text-secondary)]",
-              )}
-            >
-              {item.label}
-            </dt>
+            <dt className={cn("min-w-0", contentText.supporting)}>{item.label}</dt>
             <dd
               className={cn(
                 "min-w-0 break-words tabular-nums",
-                layout === "plain" ? contentText.body : "text-sm font-plain",
+                contentText.body,
                 layout === "inline" ? "" : "mt-0.5",
               )}
             >

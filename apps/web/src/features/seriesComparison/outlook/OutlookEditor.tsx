@@ -18,6 +18,7 @@ import type { OutlookEdit } from "@/features/seriesComparison/outlook/outlookEdi
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
 import type { OutlookEditorView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { OutlookRankIndex } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+import { rankColor } from "@/shared/matches/rankPresentation";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
@@ -245,8 +246,11 @@ function WholeCountEditor({ view, role, name, edit }: Props) {
                   aria-hidden="true"
                 >
                   <div
-                    className="h-full bg-[var(--color-series-1)]"
-                    style={{ width: `${rationalToNumber(value) * 5}%` }}
+                    className="h-full"
+                    style={{
+                      backgroundColor: rankColor(i + 1),
+                      width: `${rationalToNumber(value) * 5}%`,
+                    }}
                   />
                 </div>
               </dd>

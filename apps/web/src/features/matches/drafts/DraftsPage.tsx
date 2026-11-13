@@ -1,4 +1,4 @@
-import { PenSquare, RefreshCw, ScanLine } from "lucide-react";
+import { PencilLine, RefreshCw } from "lucide-react";
 
 import type { DraftItemView } from "@/features/matches/drafts/draftsTypes";
 import type { DraftsListView } from "@/features/matches/drafts/useDraftsList";
@@ -6,7 +6,6 @@ import { useDraftsList } from "@/features/matches/drafts/useDraftsList";
 import { formatDateTimeCompact } from "@/shared/lib/dateTime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { DraftStatusBadge } from "@/shared/matches/DraftStatusBadge";
-import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
@@ -18,7 +17,11 @@ import { Notice } from "@/shared/ui/feedback/Notice";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, fieldText } from "@/shared/ui/typography";
+
+// The list owns the dividers between records; its outer rules match the table's top and bottom.
+const compactListClass =
+  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
 
 type RowActionsProps = {
   item: DraftItemView;
@@ -31,7 +34,7 @@ function DraftRowActions({ item, navigation, remove }: RowActionsProps) {
   const checking = navigation.checkingIds.has(item.matchDraftId);
   const error = navigation.errors[item.matchDraftId];
   return (
-    <div className="grid justify-items-end gap-2">
+    <div className="grid justify-items-end gap-1">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {action ? (
           <Button
@@ -60,7 +63,7 @@ function DraftRowActions({ item, navigation, remove }: RowActionsProps) {
         ) : null}
       </div>
       {error ? (
-        <p className="text-xs text-[var(--color-danger)]" role="alert">
+        <p className={fieldText.error} role="alert">
           {error} 同じボタンから再試行できます。
         </p>
       ) : null}
@@ -136,12 +139,12 @@ function DraftGroupRows({
   return (
     <ul
       aria-label={title}
-      className="border-t border-[var(--color-border)]"
+      className={compactListClass}
       // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- Safari needs an explicit list role when Preflight removes markers.
       role="list"
     >
       {items.map((item) => (
-        <li key={item.id} className="grid gap-2 border-b border-[var(--color-border)] py-3">
+        <li key={item.id} className="grid gap-2 py-3">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <DraftIdentity item={item} />
             <DraftStatusBadge status={item.status} />
@@ -153,65 +156,92 @@ function DraftGroupRows({
   );
 }
 
+const skeletonRowIds = ["d1", "d2", "d3"];
+
+/** Mirrors one ready group: its heading and note, then the table or the compact record list. */
+function DraftsSkeleton({ showTable }: { showTable: boolean }) {
+  return (
+    <div aria-label="下書きを読み込み中" className="grid gap-2" role="status">
+      <span className="sr-only">下書きを読み込み中</span>
+      <div className="grid gap-1">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-4 w-full max-w-80" />
+      </div>
+      {showTable ? (
+        <div className="border-y border-[var(--color-border-strong)]">
+          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+            <Skeleton className="h-4 w-full" />
+          </div>
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="px-3 py-3">
+              <Skeleton className="h-10" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={compactListClass}>
+          {skeletonRowIds.map((id) => (
+            <div key={id} className="grid gap-2 py-3">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-11 w-1/2 justify-self-end" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DraftsPage() {
   const showTable = useMediaQuery("(min-width: 1024px)");
   const { groups, loadFailed, loading, navigation, refresh, remove, totalItems, truncated } =
     useDraftsList();
+  // While the failure notice offers the retry, it alone shows that retry's progress.
+  const toolbarPending = refresh.pending && !refresh.refreshFailed;
 
   return (
     <PageFrame>
       <PageContentSurface aria-label="確定前の下書き" className="grid gap-6" role="region">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-          <p className={cn(contentText.compactPrimary, "tabular-nums")}>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <p className={cn(contentText.body, "tabular-nums")}>
             {totalItems === undefined
               ? "確定前の下書き"
               : `確定前の下書き ${totalItems.toLocaleString()}件`}
           </p>
-          <div className={cn(inlineActionGroupClass, "items-center justify-end")}>
-            <IconButton
-              aria-label="最新情報に更新"
-              disabled={loading || refresh.pending}
-              icon={<RefreshCw />}
-              pending={refresh.pending}
-              pendingLabel="一覧を更新中"
-              tooltip={refresh.pending ? "更新中…" : "最新情報に更新"}
-              variant="quiet"
-              onClick={refresh.run}
-            />
-            <div aria-label="試合を登録" className={inlineActionGroupClass} role="group">
-              <LinkButton
-                icon={<ScanLine aria-hidden="true" />}
-                size="sm"
-                to="/ocr/new"
-                variant="secondary"
-              >
-                OCR取り込み
-              </LinkButton>
-              <LinkButton
-                icon={<PenSquare aria-hidden="true" />}
-                size="sm"
-                to="/matches/new"
-                variant="secondary"
-              >
-                手入力で作成
-              </LinkButton>
-            </div>
-          </div>
+          <IconButton
+            aria-label="最新情報に更新"
+            disabled={loading || refresh.pending}
+            icon={<RefreshCw />}
+            pending={toolbarPending}
+            pendingLabel="一覧を更新中"
+            tooltip={refresh.pending ? "更新中…" : "最新情報に更新"}
+            variant="quiet"
+            onClick={refresh.run}
+          />
         </div>
 
         {refresh.refreshFailed ? (
-          <Notice title="下書きを更新できませんでした" tone="warning">
-            <p>取得済みの下書きは表示したままです。通信状態を確認して更新してください。</p>
+          <Notice
+            action={
+              <Button
+                pending={refresh.pending}
+                pendingLabel="再読み込み中"
+                size="sm"
+                variant="secondary"
+                onClick={refresh.run}
+              >
+                下書きを再読み込み
+              </Button>
+            }
+            title="下書きを更新できませんでした"
+            tone="warning"
+          >
+            <p>取得済みの下書きは表示したままです。通信状態を確認して再読み込みしてください。</p>
           </Notice>
         ) : null}
 
         {loading ? (
-          <div aria-label="下書きを読み込み中" className="grid gap-3" role="status">
-            <span className="sr-only">下書きを読み込み中</span>
-            {["d1", "d2", "d3"].map((id) => (
-              <Skeleton key={id} className="min-h-14" />
-            ))}
-          </div>
+          <DraftsSkeleton showTable={showTable} />
         ) : loadFailed ? (
           <Notice
             action={
@@ -232,6 +262,7 @@ export function DraftsPage() {
               </LinkButton>
             }
             description="確定前の下書きはありません。登録した試合は試合一覧で確認できます。"
+            icon={<PencilLine />}
             placement="embedded"
             title="下書きはありません"
           />
@@ -241,7 +272,7 @@ export function DraftsPage() {
               <section
                 key={group.key}
                 aria-labelledby={`drafts-${group.key}`}
-                className="grid gap-3"
+                className="grid gap-2"
               >
                 <div className="grid gap-1">
                   <h2

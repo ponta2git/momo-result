@@ -18,6 +18,11 @@ export const loadHeldEventsPage = () =>
     default: module.HeldEventsPage,
   }));
 
+export const loadLatestHeldEventRedirect = () =>
+  import("@/features/heldEvents/latest/LatestHeldEventRedirect").then((module) => ({
+    default: module.LatestHeldEventRedirect,
+  }));
+
 export const loadHeldEventDetailPage = () =>
   import("@/features/heldEvents/detail/HeldEventDetailPage").then((module) => ({
     default: module.HeldEventDetailPage,
@@ -70,6 +75,11 @@ const routePreloaders: Array<{
   matches: (pathname: string) => boolean;
   preload: () => Promise<unknown>;
 }> = [
+  {
+    // The entry resolves to the newest held event's hub, so both arrive together.
+    matches: (pathname) => pathname === "/",
+    preload: () => Promise.all([loadLatestHeldEventRedirect(), loadHeldEventDetailPage()]),
+  },
   { matches: (pathname) => pathname === "/achievements", preload: loadAchievementsPage },
   { matches: (pathname) => pathname === "/matches", preload: loadMatchesListPage },
   { matches: (pathname) => pathname === "/drafts", preload: loadDraftsPage },

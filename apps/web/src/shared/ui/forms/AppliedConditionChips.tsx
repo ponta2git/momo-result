@@ -13,7 +13,10 @@ type AppliedConditionChipsProps<Key extends string> = {
   onRemove: (condition: Key) => void;
 };
 
-/** Each applied condition is one removable chip, so the current scope reads in one line. */
+/**
+ * Each applied condition is one removable chip, so the current scope reads in one line.
+ * Pass only conditions that no visible control already shows; that control owns its value.
+ */
 export function AppliedConditionChips<Key extends string>({
   conditions,
   disabled = false,
@@ -21,7 +24,7 @@ export function AppliedConditionChips<Key extends string>({
 }: AppliedConditionChipsProps<Key>) {
   if (conditions.length === 0) return null;
   return (
-    <ul aria-label="適用中の条件" className="flex min-w-0 flex-wrap gap-1.5">
+    <ul aria-label="適用中の条件" className="flex min-w-0 flex-wrap gap-2">
       {conditions.map((condition) => (
         <li key={condition.key} className="min-w-0">
           <Button
@@ -31,9 +34,9 @@ export function AppliedConditionChips<Key extends string>({
             variant="secondary"
             onClick={() => onRemove(condition.key)}
           >
-            <span className="inline-flex min-w-0 items-center gap-1 text-xs">
+            <span className="inline-flex min-w-0 items-center gap-1">
               <span className="min-w-0">{condition.label}</span>
-              <X aria-hidden="true" className="size-3.5 shrink-0" />
+              <X aria-hidden="true" className="size-4 shrink-0" />
             </span>
           </Button>
         </li>

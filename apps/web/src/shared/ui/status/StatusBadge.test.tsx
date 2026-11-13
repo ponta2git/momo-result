@@ -5,7 +5,7 @@ import { StatusBadge } from "@/shared/ui/status/StatusBadge";
 
 describe("StatusBadge", () => {
   it("announces busy state without requiring a domain status enum", () => {
-    render(<StatusBadge busy label="処理中" tone="info" />);
+    render(<StatusBadge busy label="処理中" tone="progress" />);
 
     const badge = screen.getByText("処理中").parentElement;
     expect(badge).toHaveAttribute("aria-busy", "true");
@@ -14,7 +14,9 @@ describe("StatusBadge", () => {
   });
 
   it("opts dynamic status transitions into a polite atomic live region", () => {
-    const { rerender } = render(<StatusBadge announceChanges busy label="処理中" tone="info" />);
+    const { rerender } = render(
+      <StatusBadge announceChanges busy label="処理中" tone="progress" />,
+    );
 
     let badge = screen.getByRole("status");
     expect(badge).toHaveAttribute("aria-atomic", "true");

@@ -95,6 +95,11 @@ export const dataTableHeaderCellClassName = cn(
 const highlightedColumnClassName =
   "after:pointer-events-none after:absolute after:inset-0 after:border-x-2 after:border-b-2 after:border-[var(--color-action)]";
 
+/**
+ * Rows only assist the reading position: a weaker hover than controls, and no pressed state,
+ * pointer cursor, or tab stop; child controls react on their own. A child's :focus-visible
+ * replaces the row paint at once instead of adding to hover, and aria-busy disables nothing.
+ */
 export function DataTableBodyRow({
   ref,
   ...props
@@ -110,6 +115,11 @@ export function DataTableBodyRow({
   );
 }
 
+/**
+ * Sits inside the parent surface's padding and shares its background. Only the table top, the
+ * header bottom, and the last row draw rules; no outer frame, radius, or rules between body rows.
+ * Owns caption, headers, and overflow; features pass row identity, cells, and order.
+ */
 export function DataTable<Row>({
   caption,
   columns,
@@ -219,7 +229,8 @@ export function DataTable<Row>({
                     key={column.key}
                     data-highlighted={column.highlighted || undefined}
                     className={cn(
-                      "text-[var(--color-text-primary)]",
+                      // Values read as body text; only the row identity keeps the primary color.
+                      column.rowHeader ? "text-[var(--color-text-primary)]" : "",
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],

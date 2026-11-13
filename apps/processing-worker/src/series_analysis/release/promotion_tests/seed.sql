@@ -17,7 +17,7 @@ WHERE t.legacy_id IN ('obsolete-title', 'current-title', 'stale-title') AND r.si
 ON CONFLICT DO NOTHING;
 UPDATE series_analysis_title_states
 SET algorithm_version = CASE (SELECT legacy_id FROM game_titles WHERE id=series_analysis_title_states.game_title_id)
-                          WHEN 'obsolete-title' THEN 'series-analysis-v7' ELSE 'series-analysis-v13' END,
+                          WHEN 'obsolete-title' THEN 'series-analysis-v7' ELSE 'series-analysis-v14' END,
     artifact_schema_version = CASE(SELECT fixture_parent.legacy_id
                                    FROM game_titles AS fixture_parent
                                    WHERE fixture_parent.id = series_analysis_title_states.game_title_id)
@@ -33,7 +33,7 @@ WITH fixture_insert AS (
        INSERT INTO series_analysis_artifacts (id, game_title_id, input_revision, algorithm_version,
                                               artifact_schema_version, source_input_checksum, root_checksum, aggregate_chunk_count, review_chunk_count,
                                               drilldown_chunk_count, match_context_chunk_count, encoded_bytes, decoded_bytes)
-       SELECT kind || '-' || position, kind || '-title', 0, CASE kind WHEN 'obsolete' THEN 'series-analysis-v7' ELSE 'series-analysis-v13' END, CASE kind
+       SELECT kind || '-' || position, kind || '-title', 0, CASE kind WHEN 'obsolete' THEN 'series-analysis-v7' ELSE 'series-analysis-v14' END, CASE kind
                 WHEN 'obsolete' THEN 3
                 ELSE 10
               END, 'sha256:' || repeat('a', 64), 'sha256:' || repeat('a', 64), 1, 0, 0, 0, 2, 2

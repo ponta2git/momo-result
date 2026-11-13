@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 
 import {
+  focusedMetricLabelClass,
+  focusedMetricRingClass,
+} from "@/features/seriesComparison/charts/chartPresentation";
+import {
   AnalysisMatrix,
   MatrixAxisHeader,
   MatrixCell,
@@ -18,6 +22,7 @@ import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
 import { colorMix } from "@/shared/matches/rankPresentation";
 import { cn } from "@/shared/ui/cn";
+import { FactList } from "@/shared/ui/data/FactList";
 import { contentText } from "@/shared/ui/typography";
 
 const PLAY_ORDERS = [1, 2, 3, 4] as const;
@@ -75,7 +80,10 @@ export function PlayOrderMatrix({
                 return (
                   <MatrixCell
                     aria-label={`${entry.displayName}、${cell.playOrder}番手、平均${formatDecimal(cell.rankAverage)}位、${cell.targetCount}戦${presentation.label ? `、${presentation.label}` : ""}${focused ? "、この試合" : ""}`}
-                    className={`rounded-xs border px-2 py-2 text-center ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                    className={cn(
+                      "rounded-xs border px-2 py-2 text-center",
+                      focused && focusedMetricRingClass,
+                    )}
                     data-focused-metric={focused ? "true" : undefined}
                     key={playOrder}
                     style={presentation.style}
@@ -93,6 +101,9 @@ export function PlayOrderMatrix({
                       >
                         {presentation.label}
                       </p>
+                    ) : null}
+                    {focused ? (
+                      <p className={cn(focusedMetricLabelClass, "mt-0.5")}>この試合</p>
                     ) : null}
                   </MatrixCell>
                 );
@@ -134,12 +145,12 @@ export function playOrderCellPresentation({
   const alpha = relativeIntensityAlpha(relativeIntensity);
   const accentColor =
     isBest && isWorst
-      ? "var(--color-tray-incident)"
+      ? "var(--color-analysis-neutral)"
       : isBest
         ? "var(--color-analysis-positive)"
         : isWorst
           ? "var(--color-analysis-negative)"
-          : "var(--color-tray-incident)";
+          : "var(--color-analysis-neutral)";
   return {
     accentColor,
     label: isBest && isWorst ? "同等" : isBest ? "得意" : isWorst ? "苦手" : null,
@@ -174,10 +185,10 @@ export function CardShopDestinationQuadrants({
     <div className="grid gap-4 lg:grid-cols-2">
       {entries.map((entry) => (
         <article
-          className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           key={entry.memberId}
         >
-          <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h3 className={contentText.heading}>
               <MemberSequenceLabel memberId={entry.memberId}>
                 {entry.displayName}
@@ -188,12 +199,15 @@ export function CardShopDestinationQuadrants({
               {formatPercent(entry.cardShopWithoutDestinationRate)}
             </span>
           </div>
-          <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {entry.quadrants.map((quadrant) => {
               const focused = focusedItemIds.includes(quadrant.itemId);
               return (
                 <div
-                  className={`min-w-0 ${focused ? "ring-2 ring-[var(--color-action)] ring-offset-1 ring-offset-[var(--color-surface)]" : ""}`}
+                  className={cn(
+                    "grid min-w-0 content-start gap-2",
+                    focused && focusedMetricRingClass,
+                  )}
                   data-focused-metric={focused ? "true" : undefined}
                   key={quadrant.itemId}
                 >
@@ -201,30 +215,41 @@ export function CardShopDestinationQuadrants({
                     {cardShopKindLabel(quadrant.kind)}
                     {focused ? "・この試合" : ""}
                   </h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-2">
-                    <Value label="対象" value={`${quadrant.targetCount}戦`} />
-                    <Value label="平均順位" value={`${formatDecimal(quadrant.averageRank)}位`} />
-                    <Value label="勝率" value={formatPercent(quadrant.winRate)} />
-                    <Value label="入賞率" value={formatPercent(quadrant.podiumRate)} />
-                    <Value label="平均資産" value={formatManYen(quadrant.averageAssets)} />
-                    <Value label="平均収益" value={formatManYen(quadrant.averageRevenue)} />
-                    <Value label="該当率" value={formatPercent(quadrant.rate)} />
-                  </dl>
+                  <FactList
+                    ariaLabel={`${entry.displayName}の${cardShopKindLabel(quadrant.kind)}`}
+                    items={[
+                      { id: "target", label: "対象", value: `${quadrant.targetCount}戦` },
+                      {
+                        id: "average-rank",
+                        label: "平均順位",
+                        value: `${formatDecimal(quadrant.averageRank)}位`,
+                      },
+                      { id: "win-rate", label: "勝率", value: formatPercent(quadrant.winRate) },
+                      {
+                        id: "podium-rate",
+                        label: "入賞率",
+                        value: formatPercent(quadrant.podiumRate),
+                      },
+                      {
+                        id: "average-assets",
+                        label: "平均資産",
+                        value: formatManYen(quadrant.averageAssets),
+                      },
+                      {
+                        id: "average-revenue",
+                        label: "平均収益",
+                        value: formatManYen(quadrant.averageRevenue),
+                      },
+                      { id: "rate", label: "該当率", value: formatPercent(quadrant.rate) },
+                    ]}
+                    layout="inline"
+                  />
                 </div>
               );
             })}
           </div>
         </article>
       ))}
-    </div>
-  );
-}
-
-function Value({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className={contentText.supporting}>{label}</dt>
-      <dd className={cn(contentText.body, "mt-0.5 tabular-nums")}>{value}</dd>
     </div>
   );
 }

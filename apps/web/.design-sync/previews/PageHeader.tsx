@@ -5,7 +5,6 @@ export const WithActions = () => (
   <PageHeader
     actions={<Button icon={<Plus aria-hidden="true" />}>試合を登録</Button>}
     description="開催ごとの試合結果と最終順位を確認できます。"
-    eyebrow="桃鉄リーグ 2026"
     title="試合結果"
   />
 );
@@ -25,11 +24,7 @@ export const WithStatus = () => (
 );
 
 export const WithMeta = () => (
-  <PageHeader
-    meta={<StatusBadge label="確定" tone="success" />}
-    eyebrow="第12回 桃鉄リーグ"
-    title="ももたろうの成績"
-  />
+  <PageHeader meta={<StatusBadge label="確定" tone="success" />} title="いーゆーの成績" />
 );
 
-export const TitleOnly = () => <PageHeader title="プレイヤー一覧" />;
+export const TitleOnly = () => <PageHeader title="プレーヤー一覧" />;

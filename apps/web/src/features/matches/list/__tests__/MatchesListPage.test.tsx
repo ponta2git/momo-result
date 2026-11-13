@@ -167,7 +167,7 @@ describe("MatchesListPage", () => {
 
       const title = await within(
         await screen.findByRole("region", { name: "確定済みの試合" }),
-      ).findByRole("link", { name: "第1試合 · 東日本編" });
+      ).findByRole("link", { name: "第1試合・東日本編" });
       expect(title).toHaveAttribute("href", "/matches/match-1");
       expect(Object.fromEntries(requests.at(-1)!)).toMatchObject({
         kind: "match",
@@ -257,7 +257,7 @@ describe("MatchesListPage", () => {
     );
     renderList();
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     if (visible) {
       expect(screen.getByText("確定前の下書き 3件")).toBeInTheDocument();
@@ -267,19 +267,15 @@ describe("MatchesListPage", () => {
     }
   });
 
-  it("offers registration when there are no matches yet", async () => {
+  it("sends a first record to a held event when there are no matches yet", async () => {
     server.use(http.get("/api/matches", () => HttpResponse.json(listResponse([]))));
     renderList();
 
     expect(await screen.findByText("試合はまだありません")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "OCR取り込み" }).at(-1)).toHaveAttribute(
-      "href",
-      "/ocr/new",
-    );
-    expect(screen.getAllByRole("link", { name: "手入力で作成" }).at(-1)).toHaveAttribute(
-      "href",
-      "/matches/new",
-    );
+    expect(screen.getByRole("link", { name: "記録する" })).toHaveAttribute("href", "/");
+    // Capture without a held event's context is not offered from the list.
+    expect(screen.queryByRole("link", { name: "OCR取り込み" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "手入力で作成" })).not.toBeInTheDocument();
   });
 
   it("clears conditions and paging from an empty search while keeping the sort", async () => {
@@ -307,7 +303,7 @@ describe("MatchesListPage", () => {
     );
     renderList();
 
-    await user.click(await screen.findByRole("link", { name: "第1試合 · 東日本編" }));
+    await user.click(await screen.findByRole("link", { name: "第1試合・東日本編" }));
 
     await waitFor(() => expect(location()).toHaveTextContent("/matches/match-1"));
     expect(await screen.findByLabelText("試合詳細を読み込み中")).toHaveAttribute(
@@ -346,7 +342,7 @@ describe("MatchesListPage", () => {
   it("puts a held event chosen in the detail conditions into the URL", async () => {
     renderList();
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     await user.click(screen.getByRole("button", { name: "詳細条件" }));
     await user.click(await screen.findByRole("button", { name: "開催を変更" }));
     await user.click(await screen.findByRole("radio", { name: /2026\/01\/01/u }));
@@ -382,7 +378,7 @@ describe("MatchesListPage", () => {
 
     const expectPage = async (page: number) => {
       expect(
-        await within(listRegion()).findByRole("link", { name: `第${page}試合 · 東日本編` }),
+        await within(listRegion()).findByRole("link", { name: `第${page}試合・東日本編` }),
       ).toHaveAttribute("href", `/matches/match-${page}`);
       expect(within(listRegion()).getAllByRole("rowheader")).toHaveLength(1);
     };
@@ -431,7 +427,7 @@ describe("MatchesListPage", () => {
     );
     renderList();
 
-    const firstRow = await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    const firstRow = await screen.findByRole("link", { name: "第1試合・東日本編" });
     expect(firstRow).toBeInTheDocument();
     const mapFilter = screen.getByLabelText("マップ");
     await selectOption(user, mapFilter, "map_east");
@@ -449,14 +445,14 @@ describe("MatchesListPage", () => {
     await waitFor(() => expect(listRegion().querySelector("[inert]")).toBeNull());
     expect(sortFilter).toHaveFocus();
     expect(
-      within(listRegion()).getByRole("link", { name: "第3試合 · 東日本編" }),
+      within(listRegion()).getByRole("link", { name: "第3試合・東日本編" }),
     ).toBeInTheDocument();
 
     await act(async () => mapGate.resolve());
     expect(
-      within(listRegion()).getByRole("link", { name: "第3試合 · 東日本編" }),
+      within(listRegion()).getByRole("link", { name: "第3試合・東日本編" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "第2試合 · 東日本編" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "第2試合・東日本編" })).not.toBeInTheDocument();
   });
 
   it("keeps same-scope list operations available and reports a cached refresh failure locally", async () => {
@@ -474,7 +470,7 @@ describe("MatchesListPage", () => {
     );
     renderList();
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
     await waitFor(() => expect(attempts).toBe(2));
 
@@ -490,7 +486,7 @@ describe("MatchesListPage", () => {
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
 
     expect(await screen.findByText("一覧を更新できませんでした")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第1試合 · 東日本編" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第1試合・東日本編" })).toBeInTheDocument();
     expect(screen.getByLabelText("並び順")).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "一覧を再読み込み" }));
@@ -531,7 +527,7 @@ describe("MatchesListPage", () => {
     );
     renderList("/matches?cursor=opaque-cursor");
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     expect(requestedCursors).toEqual(["opaque-cursor"]);
 
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
@@ -540,7 +536,7 @@ describe("MatchesListPage", () => {
 
     failedRefreshGate.resolve();
     expect(await screen.findByText("一覧を更新できませんでした")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第1試合 · 東日本編" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第1試合・東日本編" })).toBeInTheDocument();
     expect(location()).toHaveTextContent("/matches?cursor=opaque-cursor");
 
     await user.click(screen.getByRole("button", { name: "一覧を再読み込み" }));
@@ -549,7 +545,7 @@ describe("MatchesListPage", () => {
 
     successfulRefreshGate.resolve();
     await waitFor(() => expect(location()).toHaveTextContent(/^\/matches$/u));
-    expect(await screen.findByRole("link", { name: "第2試合 · 東日本編" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "第2試合・東日本編" })).toBeInTheDocument();
     expect(screen.queryByText("一覧を更新できませんでした")).not.toBeInTheDocument();
   });
 
@@ -568,7 +564,7 @@ describe("MatchesListPage", () => {
     );
     renderList("/matches?cursor=opaque-cursor");
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
     await waitFor(() => expect(cursorlessRefreshStarted).toBe(true));
 
@@ -597,7 +593,7 @@ describe("MatchesListPage", () => {
     );
     renderList("/matches?cursor=opaque-cursor", <GlobalNavigationButton />);
 
-    await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
     await user.click(screen.getByRole("button", { name: "最新情報に更新" }));
     await waitFor(() => expect(cursorlessRefreshStarted).toBe(true));
 
@@ -639,7 +635,7 @@ describe("MatchesListPage", () => {
     renderList();
 
     expect(await screen.findByText("検索条件の候補を一部読み込めません")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "第1試合 · 東日本編" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第1試合・東日本編" })).toBeInTheDocument();
     const listRequestsBeforeRetry = listRequests;
 
     failMaps = false;
@@ -717,7 +713,7 @@ describe("MatchesListPage", () => {
       );
       renderList("/matches?q=bonby");
 
-      await screen.findByRole("link", { name: "第1試合 · 東日本編" });
+      await screen.findByRole("link", { name: "第1試合・東日本編" });
       expect(listRegion().querySelector("mark")).toHaveTextContent("bonby");
       // Without visible controls, every applied condition is listed as a chip.
       expect(
@@ -752,7 +748,7 @@ describe("MatchesListPage", () => {
       // Retained rows must not be highlighted as if they belonged to the newly selected search.
       expect(listRegion().querySelector("mark")).toBeNull();
       appliedSearch.resolve();
-      await screen.findByRole("link", { name: "第2試合 · 東日本編" });
+      await screen.findByRole("link", { name: "第2試合・東日本編" });
       expect(listRegion().querySelector("mark")).toHaveTextContent("ginji");
     });
   });

@@ -5,6 +5,7 @@ import { AchievementOrderDialog } from "@/features/masters/achievements/Achievem
 import { useAchievementCatalogPanel } from "@/features/masters/achievements/useAchievementCatalogPanel";
 import { achievementRuleOptions } from "@/shared/achievements/achievementPresentation";
 import { normalizeUnknownApiError } from "@/shared/api/problemDetails";
+import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { AlertDialog, Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
@@ -15,7 +16,7 @@ import { TextareaControl } from "@/shared/ui/forms/Control";
 import { Field } from "@/shared/ui/forms/Field";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 import { TextField } from "@/shared/ui/forms/TextField";
-import { contentText } from "@/shared/ui/typography";
+import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   const {
@@ -51,8 +52,10 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
   } = useAchievementCatalogPanel({ enabled });
   const [ordering, setOrdering] = useState(false);
   return (
-    <div className="grid min-w-0 gap-6">
-      <div className="flex flex-wrap items-end gap-4">
+    <section className="grid min-w-0 gap-6">
+      {/* The selected tab label already names this panel visibly, as on the incidents tab. */}
+      <h2 className="sr-only">実績項目</h2>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
         <SelectField
           label="作品"
           value={gameTitleId ?? ""}
@@ -62,24 +65,26 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
           ]}
           onValueChange={changeTitle}
         />
-        <Button
-          disabled={!permission.allowed || !gameTitleId || !catalog}
-          onClick={() => startEditor()}
-        >
-          実績項目を追加
-        </Button>
-        <Button variant="secondary" disabled={!canReorder} onClick={() => setOrdering(true)}>
-          表示順を変更
-        </Button>
-        <Button
-          variant="secondary"
-          disabled={!permission.allowed}
-          pending={refreshing}
-          pendingLabel="更新中"
-          onClick={refresh}
-        >
-          表示を更新
-        </Button>
+        <div className={inlineActionGroupClass}>
+          <Button
+            disabled={!permission.allowed || !gameTitleId || !catalog}
+            onClick={() => startEditor()}
+          >
+            実績項目を追加
+          </Button>
+          <Button variant="secondary" disabled={!canReorder} onClick={() => setOrdering(true)}>
+            表示順を変更
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={!permission.allowed}
+            pending={refreshing}
+            pendingLabel="更新中"
+            onClick={refresh}
+          >
+            表示を更新
+          </Button>
+        </div>
       </div>
       {!permission.allowed && permission.retained ? (
         <Notice tone="info" title="管理権限を確認しています">
@@ -198,22 +203,25 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
                     description="後から追加するマップにも適用します。"
                   />
                   {!editor.form.common ? (
-                    <fieldset className="grid gap-1">
-                      <legend className={contentText.body}>対象マップ</legend>
-                      {(catalog?.maps ?? []).map((map) => (
-                        <CheckboxField
-                          key={map.mapMasterId}
-                          label={map.displayName}
-                          checked={editor.form.mapMasterIds.includes(map.mapMasterId)}
-                          onChange={(event) =>
-                            updateForm({
-                              mapMasterIds: event.target.checked
-                                ? [...editor.form.mapMasterIds, map.mapMasterId]
-                                : editor.form.mapMasterIds.filter((id) => id !== map.mapMasterId),
-                            })
-                          }
-                        />
-                      ))}
+                    <fieldset className="min-w-0">
+                      <legend className={fieldText.label}>対象マップ</legend>
+                      {/* A rendered legend sits outside the fieldset's grid, as in ChoiceList. */}
+                      <div className="mt-2 grid gap-1">
+                        {(catalog?.maps ?? []).map((map) => (
+                          <CheckboxField
+                            key={map.mapMasterId}
+                            label={map.displayName}
+                            checked={editor.form.mapMasterIds.includes(map.mapMasterId)}
+                            onChange={(event) =>
+                              updateForm({
+                                mapMasterIds: event.target.checked
+                                  ? [...editor.form.mapMasterIds, map.mapMasterId]
+                                  : editor.form.mapMasterIds.filter((id) => id !== map.mapMasterId),
+                              })
+                            }
+                          />
+                        ))}
+                      </div>
                     </fieldset>
                   ) : null}
                 </>
@@ -274,6 +282,6 @@ export function AchievementCatalogPanel({ enabled }: { enabled: boolean }) {
         }}
         onConfirm={retire}
       />
-    </div>
+    </section>
   );
 }

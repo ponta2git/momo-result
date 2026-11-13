@@ -1,4 +1,4 @@
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import type { MatchWorkspaceConfirmationDialogView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
@@ -12,6 +12,7 @@ import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { contentText } from "@/shared/ui/typography";
 
 type MatchConfirmSummaryProps = {
@@ -19,12 +20,6 @@ type MatchConfirmSummaryProps = {
   heldEvent: HeldEventResponse | undefined;
   mapName?: string | undefined;
   seasonName?: string | undefined;
-};
-
-type MatchConfirmReviewSummary = {
-  changedCount: number;
-  totalCount: number;
-  unresolvedCount: number;
 };
 
 function ConfirmActionButtons({ onCancel, pending }: { onCancel: () => void; pending: boolean }) {
@@ -117,42 +112,23 @@ function PlayerLedger({ values }: { values: MatchWorkspaceConfirmationDialogView
   );
 }
 
-function OcrReviewSummary({
-  changedCount,
-  totalCount,
-  unresolvedCount,
-}: MatchConfirmReviewSummary) {
-  if (totalCount === 0 && changedCount === 0) {
-    return null;
-  }
-  const reviewedCount = totalCount - unresolvedCount;
+/**
+ * The dialog confirms the conditions and the four results. Of the OCR review it only carries the
+ * one caution that can change the decision: readings still unconfirmed against the source image.
+ */
+function UnresolvedReadingsCaution({ unresolvedCount }: { unresolvedCount: number }) {
+  if (unresolvedCount === 0) return null;
   return (
-    <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm tabular-nums">
-        <span className="font-plain text-[var(--color-text-primary)]">OCR確認状況</span>
-        <span className="text-[var(--color-text-secondary)]">修正 {changedCount}件</span>
-        <span className="text-[var(--color-text-secondary)]">
-          確認済み{reviewedCount}件／全{totalCount}件
-        </span>
-      </div>
-      {unresolvedCount > 0 ? (
-        <p className="mt-2 flex gap-2 text-sm leading-5 text-[var(--color-text-primary)]">
-          <AlertTriangle
-            aria-hidden="true"
-            className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
-          />
-          <span>
-            未確認の強調項目が{unresolvedCount}
-            件あります。このまま確定できますが、元画像との照合を推奨します。
-          </span>
-        </p>
-      ) : (
-        <p className="mt-2 flex items-center gap-2 text-sm text-[var(--color-success)]">
-          <Check aria-hidden="true" className="size-4" />
-          強調された項目はすべて確認済みです
-        </p>
-      )}
-    </div>
+    <p className={cn(contentText.body, "flex gap-2 text-pretty")}>
+      <AlertTriangle
+        aria-hidden="true"
+        className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
+      />
+      <span>
+        未確認の読み取りが{unresolvedCount}
+        件あります。このまま確定できますが、元画像との照合をおすすめします。
+      </span>
+    </p>
   );
 }
 
@@ -184,7 +160,7 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
           </section>
         ) : null}
         {view.values.noteBody.trim().length > 0 ? (
-          <section aria-labelledby="confirm-match-note-heading" className="grid gap-1">
+          <section aria-labelledby="confirm-match-note-heading" className="grid gap-2">
             <h3 className={contentText.heading} id="confirm-match-note-heading">
               試合メモ
             </h3>
@@ -193,15 +169,12 @@ export function MatchConfirmDialog({ view }: { view: MatchWorkspaceConfirmationD
             </p>
           </section>
         ) : null}
-        <OcrReviewSummary {...view.review} />
+        <UnresolvedReadingsCaution unresolvedCount={view.review.unresolvedCount} />
 
         {view.feedback.validationMessage ? (
-          <div
-            className="rounded-sm border border-[var(--color-warning)]/65 bg-[var(--color-warning)]/18 px-3 py-2 text-sm text-[var(--color-text-primary)]"
-            role="alert"
-          >
+          <Notice presentation="nested" role="alert" tone="warning">
             {view.feedback.validationMessage}
-          </div>
+          </Notice>
         ) : null}
 
         <ConfirmActionButtons pending={view.pending} onCancel={view.actions.onClose} />

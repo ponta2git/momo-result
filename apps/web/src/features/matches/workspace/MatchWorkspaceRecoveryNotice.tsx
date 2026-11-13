@@ -14,11 +14,11 @@ export function MatchWorkspaceRecoveryNotice({ view }: { view: MatchWorkspaceRec
     <Notice
       action={
         <div className="flex flex-wrap gap-2">
-          <Button icon={<RotateCcw aria-hidden="true" />} onClick={view.onRestore}>
+          <Button icon={<RotateCcw aria-hidden="true" />} size="sm" onClick={view.onRestore}>
             一時保存を復元
           </Button>
-          <Button variant="secondary" onClick={view.onDiscard}>
-            一時保存を削除
+          <Button size="sm" variant="secondary" onClick={view.onDiscard}>
+            一時保存を破棄
           </Button>
         </div>
       }

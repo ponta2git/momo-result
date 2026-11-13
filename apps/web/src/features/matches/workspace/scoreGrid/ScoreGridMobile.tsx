@@ -89,36 +89,53 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
     items,
     acknowledgedCellIds,
     synced,
+    unreadFields,
   } = useWorkspaceSnapshot(row);
+  const unread = new Set<string>(unreadFields);
+  // The summary only shows numbers the inputs hold; an empty input has no number yet.
+  const emptyLabel = (field: "rank" | "totalAssetsManYen") =>
+    numericDrafts[keyToPath(index, field)] === ""
+      ? unread.has(field)
+        ? "未読み取り"
+        : "未入力"
+      : undefined;
+  const rankEmpty = emptyLabel("rank");
+  const totalEmpty = emptyLabel("totalAssetsManYen");
   const reviewItemByCellId = new Map(items.map((item) => [item.cellId, item]));
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const unresolvedCount = items.filter((item) => !reviewedCellIds.has(item.cellId)).length;
   return (
-    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
       <Disclosure
         open={expanded}
-        panelSpacing="md"
+        panelPadding="sm"
         summary={
           <span className="flex min-w-0 items-center justify-between gap-3">
             <span className="min-w-0">
               <span className={cn(contentText.body, "block truncate")}>
                 {memberDisplayName(player.memberId)}
               </span>
-              <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)] tabular-nums">
+              <span className="mt-1 flex flex-wrap items-center gap-2 tabular-nums">
                 <PlayOrderMark playOrder={player.playOrder} />
-                <RankBadge rank={player.rank} />
-                <span className={contentText.compactPrimary}>
-                  総資産 {player.totalAssetsManYen.toLocaleString()}万円
+                {rankEmpty ? null : <RankBadge rank={player.rank} />}
+                <span className="inline-flex items-baseline gap-1">
+                  <span className={contentText.supporting}>総資産</span>
+                  {totalEmpty ? (
+                    <span className={contentText.supporting}>{totalEmpty}</span>
+                  ) : (
+                    <span className={contentText.compactPrimary}>
+                      {player.totalAssetsManYen.toLocaleString()}万円
+                    </span>
+                  )}
                 </span>
-                {unresolvedCount > 0 ? <span>・未確認{unresolvedCount}件</span> : null}
+                {unresolvedCount > 0 ? (
+                  <span className={contentText.supporting}>・未確認{unresolvedCount}件</span>
+                ) : null}
               </span>
             </span>
-            <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-              {expanded ? "閉じる" : "詳細"}
-            </span>
+            <span className={cn(contentText.body, "shrink-0")}>{expanded ? "閉じる" : "詳細"}</span>
           </span>
         }
-        triggerLayout="flush"
         onOpenChange={(open) => {
           if (open !== expanded) {
             onTogglePlayer(index);
@@ -160,6 +177,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
                 draftValue={numericDrafts[keyToPath(index, "rank")]}
                 onDraftChange={onNumericDraftChange}
                 field="rank"
+                unread={unread.has("rank")}
                 focusImageKind="total_assets"
                 index={index}
                 originalValue={originalRow?.rank}
@@ -181,6 +199,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
               draftValue={numericDrafts[keyToPath(index, "totalAssetsManYen")]}
               onDraftChange={onNumericDraftChange}
               field="totalAssetsManYen"
+              unread={unread.has("totalAssetsManYen")}
               focusImageKind="total_assets"
               index={index}
               originalValue={originalRow?.totalAssetsManYen}
@@ -199,6 +218,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
               draftValue={numericDrafts[keyToPath(index, "revenueManYen")]}
               onDraftChange={onNumericDraftChange}
               field="revenueManYen"
+              unread={unread.has("revenueManYen")}
               focusImageKind="revenue"
               index={index}
               originalValue={originalRow?.revenueManYen}
@@ -238,6 +258,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
                   }
                   row={index}
                   showStateLabel
+                  unread={unread.has(`incident.${column.incidentKey}`)}
                   validationPath={keyToPath(index, `incident.${column.incidentKey}`)}
                   value={player.incidents[column.incidentKey]}
                   onIncidentCommit={handleIncidentNumericCommit}

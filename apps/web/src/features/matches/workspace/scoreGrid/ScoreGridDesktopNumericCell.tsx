@@ -30,6 +30,7 @@ type PlayerNumericDesktopCellProps = ScoreGridCellRegistry &
     rowIndex: number;
     reviewItem: ReviewItem | undefined;
     reviewed: boolean;
+    unread: boolean;
   };
 
 export function PlayerNumericDesktopCell({
@@ -51,6 +52,7 @@ export function PlayerNumericDesktopCell({
   rowIndex,
   reviewItem,
   reviewed,
+  unread,
 }: PlayerNumericDesktopCellProps) {
   return (
     <td className="px-2 py-3 align-top">
@@ -72,6 +74,7 @@ export function PlayerNumericDesktopCell({
         reviewMessage={reviewItem?.message}
         row={rowIndex}
         showStateLabel
+        unread={unread}
         validationPath={keyToPath(rowIndex, field)}
         value={player[field]}
         onKeyboard={handleKeyboard}

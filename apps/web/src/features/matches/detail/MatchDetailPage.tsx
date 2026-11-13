@@ -1,10 +1,13 @@
-import { Download, PenSquare } from "lucide-react";
+import { ArrowLeft, Camera, Download, Keyboard, PenSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useParams } from "react-router-dom";
 
+import { useConfirmedArrival } from "@/features/matches/confirmedArrival";
+import type { ConfirmedArrival } from "@/features/matches/confirmedArrival";
 import { MatchAchievements } from "@/features/matches/detail/MatchAchievements";
 import { MatchDetailAdjacentNavigation } from "@/features/matches/detail/MatchDetailAdjacentNavigation";
 import { MatchDetailIdentity } from "@/features/matches/detail/MatchDetailIdentity";
+import { matchIncidentFactsGridClass } from "@/features/matches/detail/matchDetailPresentation";
 import {
   MatchDetailLoadFailed,
   MatchDetailLoading,
@@ -21,12 +24,13 @@ import {
 } from "@/features/matches/note/MatchNoteProvider";
 import { incidentColumns } from "@/shared/domain/incidents";
 import { formatMatchNoInEvent, formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
-import { formatDateTimeLong } from "@/shared/lib/dateTime";
 import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
+import { matchRecordHref } from "@/shared/navigation/matchLinks";
 import { useAdjacentNavigationFocus } from "@/shared/navigation/useAdjacentNavigationFocus";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { cn } from "@/shared/ui/cn";
+import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { PageHeader } from "@/shared/ui/layout/PageHeader";
@@ -70,17 +74,24 @@ function MatchDetailReadyContent({
   titleRef: Ref<HTMLHeadingElement>;
 }) {
   const { analysis, identity, match, navigation } = view;
+  const confirmedArrival = useConfirmedArrival(match.matchId);
   const ledgerRows = view.ledgerRows.map(({ incidents, ...row }) => ({
     ...row,
     details: incidents ? (
-      <dl
-        aria-label={`${row.displayName}の事件簿`}
-        className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,5rem),1fr))] gap-2"
-      >
+      <dl aria-label={`${row.displayName}の事件簿`} className={matchIncidentFactsGridClass}>
         {incidentColumns.map(([key, label]) => (
           <div key={key} className="min-w-0">
             <dt className={contentText.supporting}>{label}</dt>
-            <dd className={cn(contentText.body, "mt-1 tabular-nums")}>{incidents[key]}回</dd>
+            {/* A repeated zero recedes so the incidents that happened stand out (UI rule). */}
+            <dd
+              className={cn(
+                contentText.body,
+                "mt-0.5 tabular-nums",
+                incidents[key] === 0 && "text-[var(--color-text-muted)]",
+              )}
+            >
+              {incidents[key]}回
+            </dd>
           </div>
         ))}
       </dl>
@@ -88,19 +99,21 @@ function MatchDetailReadyContent({
   }));
 
   return (
-    <PageFrame className="min-w-0" width="wide">
+    <PageFrame className="min-w-0" width="analysis">
       <div>
-        <LinkButton to={navigation.heldEventHref} size="sm" variant="quiet">
+        <LinkButton
+          icon={<ArrowLeft aria-hidden="true" />}
+          to={navigation.heldEventHref}
+          size="sm"
+          variant="quiet"
+        >
           この試合の開催を見る
         </LinkButton>
       </div>
       <PageHeader
         title={`${formatMatchNoInEvent(match.matchNoInEvent)}の結果`}
         titleRef={titleRef}
-        titleDescriptionId="match-current-datetime"
-        description={
-          <span id="match-current-datetime">対戦日時 {formatDateTimeLong(match.playedAt)}</span>
-        }
+        titleDescriptionId="match-detail-identity"
         actions={
           <nav aria-label="この試合の関連操作" className={inlineActionGroupClass}>
             <LinkButton
@@ -119,6 +132,9 @@ function MatchDetailReadyContent({
             >
               試合結果を編集
             </LinkButton>
+            {confirmedArrival ? (
+              <NextMatchRecordLink arrival={confirmedArrival} heldEventId={match.heldEventId} />
+            ) : null}
           </nav>
         }
       />
@@ -126,35 +142,44 @@ function MatchDetailReadyContent({
       <PageContentSurface className="grid gap-6">
         <div className="grid gap-4">
           <MatchDetailIdentity
+            id="match-detail-identity"
             gameTitle={identity.gameTitle}
             heldAt={identity.heldAt}
             map={identity.map}
             matchNoInEvent={match.matchNoInEvent}
             season={identity.season}
           />
-          <MatchFeatureSection badges={analysis.badges} />
+          <MatchFeatureSection badges={analysis.badges} loading={analysis.contextPending} />
         </div>
 
         <section aria-labelledby="match-result-ledger-heading" className="grid w-full gap-4">
-          <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0 flex-[1_1_16rem]">
-              <h2 className={contentText.heading} id="match-result-ledger-heading">
-                順位・総資産
-              </h2>
-              <p className={cn(contentText.supporting, "mt-1")}>
-                通算平均順位は、同じ作品・シーズン・マップの初戦から集計しています（この試合の前 →
-                後）。
-              </p>
+          <div className="grid gap-2">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+              <div className="grid min-w-0 flex-[1_1_16rem] gap-1">
+                <h2 className={contentText.heading} id="match-result-ledger-heading">
+                  順位・総資産
+                </h2>
+                <p className={contentText.supporting}>
+                  通算平均順位は、同じ作品・シーズン・マップの初戦から集計しています（この試合の前 →
+                  後）。
+                </p>
+              </div>
+              {analysis.contextPending ? (
+                <Skeleton as="span" className="block h-4 w-24 shrink-0" />
+              ) : analysis.performanceContext ? (
+                <p className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
+                  同条件内 {formatSeriesMatchIndex(analysis.performanceContext.matchIndex)}
+                </p>
+              ) : null}
             </div>
-            {analysis.performanceContext ? (
-              <p className={cn(contentText.supporting, "shrink-0 tabular-nums")}>
-                同条件内 {formatSeriesMatchIndex(analysis.performanceContext.matchIndex)}
-              </p>
-            ) : null}
+            <MatchResultLedger
+              celebrateWinner={confirmedArrival !== undefined}
+              contextStatus={analysis.comparisonContextStatus}
+              rows={ledgerRows}
+            />
           </div>
-          <MatchResultLedger contextStatus={analysis.comparisonContextStatus} rows={ledgerRows} />
           <div className="flex justify-end">
-            <LinkButton to={navigation.comparisonHref} variant="secondary">
+            <LinkButton to={navigation.comparisonHref} size="sm" variant="secondary">
               前後の戦績を見る
             </LinkButton>
           </div>
@@ -172,6 +197,35 @@ function MatchDetailReadyContent({
 
       <MatchDetailAdjacentNavigation view={view} />
     </PageFrame>
+  );
+}
+
+/**
+ * The confirmed result ends the recording task, so it offers the next match of the same event the
+ * way this one was recorded (UI rule: 有限のタスクループ). Other ways stay on the held event.
+ */
+function NextMatchRecordLink({
+  arrival,
+  heldEventId,
+}: {
+  arrival: ConfirmedArrival;
+  heldEventId: string;
+}) {
+  return (
+    <LinkButton
+      icon={
+        arrival.recordedWith === "ocr" ? (
+          <Camera aria-hidden="true" />
+        ) : (
+          <Keyboard aria-hidden="true" />
+        )
+      }
+      size="sm"
+      to={matchRecordHref(heldEventId, arrival.recordedWith)}
+      variant="primary"
+    >
+      次の試合を記録
+    </LinkButton>
   );
 }
 

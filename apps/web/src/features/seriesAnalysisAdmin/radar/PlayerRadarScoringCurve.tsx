@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import {
   radarCurveScale,
@@ -21,8 +21,13 @@ import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
-const plot = { left: 30, right: 386, top: 22, bottom: 202 };
-const scoreY = (score: number) => plot.bottom - ((score - 1) / 9) * (plot.bottom - plot.top);
+// Geometry is laid out in CSS pixels, so axis text stays at 12px at every column width.
+const maxChartWidth = 512;
+const plotTop = 22;
+const plotBottom = 202;
+const plotLeft = 30;
+const plotRightInset = 14;
+const scoreY = (score: number) => plotBottom - ((score - 1) / 9) * (plotBottom - plotTop);
 const currentColor = "var(--color-text-secondary)";
 const editedColor = "var(--color-action)";
 const surfaceColor = "var(--color-surface)";
@@ -45,6 +50,22 @@ export function PlayerRadarScoringCurve({
   after: PlayerRadarDisplay;
 }) {
   const id = useId();
+  const figureRef = useRef<HTMLElement>(null);
+  const [availableWidth, setAvailableWidth] = useState(400);
+  useLayoutEffect(() => {
+    const figure = figureRef.current;
+    if (!figure) return;
+    const measure = () => {
+      const nextWidth = figure.getBoundingClientRect().width;
+      if (nextWidth > 0) setAvailableWidth(nextWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(figure);
+    return () => observer.disconnect();
+  }, []);
+  const width = Math.floor(Math.min(maxChartWidth, availableWidth));
+  const plot = { left: plotLeft, right: width - plotRightInset };
   const axis = playerRadarSettingAxes.find((entry) => entry.id === axisId);
   const unit = axisId === "achievement" ? "pt" : axisId === "averageRank" ? "位" : "万円";
   const beforeCurve = playerRadarAchievementCurve(before);
@@ -114,7 +135,7 @@ export function PlayerRadarScoringCurve({
   const rawX = (value: number) => plot.left + scale.position(value) * (plot.right - plot.left);
   const height = 248 + players.length * 22;
   return (
-    <figure aria-labelledby={`${id}-caption`} className="grid min-w-0 gap-2">
+    <figure aria-labelledby={`${id}-caption`} className="grid min-w-0 gap-2" ref={figureRef}>
       <figcaption id={`${id}-caption`} className={contentText.heading}>
         {axis?.label}と点数の関係
       </figcaption>
@@ -144,8 +165,10 @@ export function PlayerRadarScoringCurve({
         role="img"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-description`}
-        viewBox={`0 0 400 ${height}`}
-        className="block w-full max-w-lg tabular-nums"
+        viewBox={`0 0 ${width} ${height}`}
+        width={width}
+        height={height}
+        className="block max-w-full tabular-nums"
       >
         <title id={`${id}-title`}>{axis?.label}の採点境界と選手の位置</title>
         <desc id={`${id}-description`}>
@@ -157,7 +180,7 @@ export function PlayerRadarScoringCurve({
             .join("。")}
           。番号から上へ伸びる線が各選手の実値です。点数がない選手は位置のみを示します。
         </desc>
-        <g aria-hidden="true" fontSize="16" fill="var(--color-text-secondary)">
+        <g aria-hidden="true" fontSize="12" fill="var(--color-text-secondary)">
           {[1, 2, 4, 6, 8, 10].map((score) => (
             <g key={score}>
               <path
@@ -173,7 +196,7 @@ export function PlayerRadarScoringCurve({
             <text
               key={value}
               x={rawX(value)}
-              y={plot.bottom + 21}
+              y={plotBottom + 21}
               textAnchor={
                 index === 0 ? "start" : index === scale.ticks.length - 1 ? "end" : "middle"
               }
@@ -211,7 +234,7 @@ export function PlayerRadarScoringCurve({
             return (
               <g key={player.memberId}>
                 <path
-                  d={`M${x} ${plot.top}V${laneY - 9}`}
+                  d={`M${x} ${plotTop}V${laneY - 9}`}
                   stroke="var(--color-text-muted)"
                   strokeDasharray="2 4"
                   opacity="0.5"

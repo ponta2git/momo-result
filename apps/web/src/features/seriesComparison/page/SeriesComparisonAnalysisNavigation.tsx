@@ -61,6 +61,15 @@ const analysisViews = [
   },
 ] satisfies AnalysisViewDefinition[];
 
+/** The analysis tabs and their table of contents are fixed by the URL, so loading keeps them. */
+export const analysisViewLabels = analysisViews.map(({ id, label }) => ({ id, label }));
+
+export function analysisViewSections(
+  view: AnalysisViewId,
+): ReadonlyArray<{ id: string; label: string }> {
+  return analysisViews.find((item) => item.id === view)?.sections ?? [];
+}
+
 export function purposeTabId(purpose: PurposeId): string {
   return `series-comparison-purpose-tab-${purpose}`;
 }
@@ -167,8 +176,8 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
   const definition = analysisViews.find((item) => item.id === view);
   if (!definition) return null;
   return (
-    <nav aria-label={`${definition.label}の目次`} className="min-w-0 py-1 text-xs">
-      <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-3 overflow-x-auto">
+    <nav aria-label={`${definition.label}の目次`} className="min-w-0 py-1 text-sm">
+      <ol className="flex min-w-0 flex-1 [scrollbar-width:thin] gap-x-2 overflow-x-auto">
         {definition.sections.map((section) => (
           <li className="shrink-0" key={section.id}>
             <Link

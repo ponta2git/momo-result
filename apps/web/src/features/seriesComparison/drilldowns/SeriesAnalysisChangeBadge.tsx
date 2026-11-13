@@ -2,6 +2,8 @@ import {
   directionLabel,
   formatDecimal,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
+import { cn } from "@/shared/ui/cn";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
 export type ChangeDirection =
   | "declined"
@@ -20,9 +22,7 @@ export function ChangeBadge({
   const absoluteMagnitude = magnitude !== null && magnitude < 0 ? -magnitude : magnitude;
   const value = absoluteMagnitude === null ? "" : `${formatDecimal(absoluteMagnitude)} `;
   return (
-    <span
-      className={`font-plain inline-flex min-h-7 w-fit items-center rounded-xs border px-2 py-0.5 text-xs tabular-nums ${changeTone(direction)}`}
-    >
+    <span className={cn(compactBadgeClass, "w-fit tabular-nums", changeTone(direction))}>
       {value}
       {directionLabel(direction)}
     </span>
@@ -47,6 +47,7 @@ export function rankDeltaLabel(delta: number | null): string {
   return `${delta < 0 ? -delta : delta}位・${delta < 0 ? "改善" : "後退"}`;
 }
 
+/** Improvement and decline keep the analysis colors; only their border and surface override the recipe. */
 function changeTone(direction: ChangeDirection): string {
   if (direction === "improved") {
     return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10";
@@ -54,5 +55,5 @@ function changeTone(direction: ChangeDirection): string {
   if (direction === "declined") {
     return "border-[var(--color-analysis-negative)]/45 bg-[var(--color-analysis-negative)]/10";
   }
-  return "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]";
+  return compactBadgeToneClass.neutral;
 }

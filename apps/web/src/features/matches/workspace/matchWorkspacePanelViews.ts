@@ -41,6 +41,8 @@ export type MatchWorkspaceSetupFieldsView = {
     heldEventPicker: HeldEventPickerDirectory;
     heldEvents: HeldEventResponse[];
     mapItems: MapMasterResponse[];
+    /** The selected title's seasons or maps are still being fetched for the first time. */
+    mastersPending?: boolean | undefined;
     seasonItems: SeasonMasterResponse[];
   };
   validation: {
@@ -86,7 +88,8 @@ export type MatchWorkspaceSubmitView = {
   availability: { disabled: boolean; pending: boolean };
   feedback: {
     error: MatchWorkspaceOperationErrorView | null;
-    message: string;
+    /** Only why the action waits; what to fix next is the error after an attempt. */
+    message: string | undefined;
   };
 };
 
@@ -97,7 +100,7 @@ export type MatchWorkspaceConfirmationDialogView = {
   };
   feedback: { validationMessage: string };
   pending: boolean;
-  review: { changedCount: number; totalCount: number; unresolvedCount: number };
+  review: { unresolvedCount: number };
   summary: {
     gameTitleName: string | undefined;
     heldEvent: HeldEventResponse | undefined;

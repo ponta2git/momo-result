@@ -72,7 +72,7 @@ export function HeldEventListSearchSheet({
       onOpenChange={onOpenChange}
     >
       <form
-        className="grid gap-4 px-2"
+        className="grid gap-4"
         id={formId}
         onSubmit={(event) => {
           event.preventDefault();
@@ -99,7 +99,7 @@ function SearchSheetFields({
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 [&>*:first-child]:col-span-2 [&>*:last-child]:col-span-2">
+      <div className="grid grid-cols-2 gap-4 [&>*:first-child]:col-span-2 [&>*:last-child]:col-span-2">
         <MatchSearchScopeFields
           candidates={candidates}
           gameTitleId={draft.gameTitleId}

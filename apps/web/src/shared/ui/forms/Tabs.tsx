@@ -83,7 +83,10 @@ function UnderlineSelectionIndicator() {
 
 /**
  * Owns the shared visual grammar for a related set of views. Feature code still
- * supplies the accessible name and decides whether arrow-key focus activates a tab.
+ * supplies the accessible name and decides whether arrow-key focus activates a tab;
+ * activate manually whenever a switch starts a fetch or other costly work. `filled` is the
+ * page-local primary set; views nested in its panel use `underline` so two levels never
+ * compete with the same fill.
  */
 export function TabsList({ children, ref, variant = "filled", wrap, ...props }: TabsListProps) {
   const shouldWrap = wrap ?? variant === "filled";
@@ -119,25 +122,19 @@ export function TabsTab({ ref, ...props }: TabsTabProps) {
       ref={surfaceRef}
       className={(state) =>
         cn(
-          "momo-surface momo-surface-press inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap focus-visible:outline-2 focus-visible:outline-[var(--color-action)] pointer-fine:min-h-9 pointer-fine:py-1",
+          "momo-surface momo-surface-press inline-flex min-h-11 shrink-0 items-center justify-center px-3 py-2 text-sm font-plain whitespace-nowrap pointer-fine:min-h-9 pointer-fine:py-1",
           variant === "filled"
             ? cn(
-                "rounded-sm focus-visible:outline-offset-2",
+                "rounded-sm",
                 state.active
                   ? "momo-surface-selected text-[var(--color-text-primary)]"
-                  : cn(
-                      "text-[var(--color-text-secondary)]",
-                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
-                    ),
+                  : "text-[var(--color-text-secondary)]",
               )
             : cn(
-                "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-2px]",
+                "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-3px]",
                 state.active
                   ? "momo-surface-underline-selected border-transparent text-[var(--color-text-primary)]"
-                  : cn(
-                      "text-[var(--color-text-secondary)]",
-                      state.disabled ? "" : "hover:text-[var(--color-text-primary)]",
-                    ),
+                  : "text-[var(--color-text-secondary)]",
               ),
           state.disabled ? "cursor-not-allowed opacity-60" : "",
         )

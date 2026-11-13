@@ -18,7 +18,7 @@ import { contentText } from "@/shared/ui/typography";
 
 export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEventMatchView[] }) {
   return (
-    <section aria-labelledby="held-event-timeline-heading" className="grid gap-4">
+    <section aria-labelledby="held-event-timeline-heading" className="grid gap-2">
       <h2 id="held-event-timeline-heading" className={contentText.heading}>
         試合の流れ
       </h2>
@@ -31,13 +31,17 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
           title="確定済みの試合はまだありません"
         />
       ) : (
-        <ol aria-label="試合の流れ" className="grid gap-12">
+        // Records are 48px apart. Each connector runs from its marker's center (16px down)
+        // across that gap to the next marker's center, so it derives its length from the gap.
+        // This is the single axis: records add no frame or parallel rule, and groups inside a
+        // record stay closer than the gap between records.
+        <ol aria-label="試合の流れ" className="grid gap-(--timeline-gap) [--timeline-gap:3rem]">
           {matches.map((match, index) => (
             <li key={match.matchId} className="relative grid grid-cols-[2rem_minmax(0,1fr)] gap-4">
               {index < matches.length - 1 ? (
                 <span
                   aria-hidden="true"
-                  className="absolute top-4 -bottom-16 left-4 w-px bg-[var(--color-border-strong)]"
+                  className="absolute top-4 -bottom-[calc(var(--timeline-gap)_+_1rem)] left-4 w-px -translate-x-1/2 bg-[var(--color-border-strong)]"
                   data-timeline-connector
                 />
               ) : null}
@@ -73,14 +77,15 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
                     </>
                   }
                 >
-                  <div className="min-w-0">
-                    <h3 className={cn(contentText.heading, "tabular-nums")}>
+                  <div className="grid min-w-0 gap-1">
+                    {/* The heading line shares the 32px marker's height, so their centers align. */}
+                    <h3
+                      className={cn(contentText.heading, "flex min-h-8 items-center tabular-nums")}
+                    >
                       {formatMatchNoInEvent(match.matchNoInEvent)}
                     </h3>
-                    <p className={cn(contentText.body, "mt-1 truncate")}>
-                      {heldEventScopeLabel(match)}
-                    </p>
-                    <p className={cn(contentText.supporting, "mt-1")}>
+                    <p className={contentText.body}>{heldEventScopeLabel(match)}</p>
+                    <p className={contentText.supporting}>
                       オーナー <span>{memberDisplayName(match.ownerMemberId)}</span>
                     </p>
                   </div>
@@ -89,7 +94,7 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
                 <div>
                   <ol
                     aria-label={`${formatMatchNoInEvent(match.matchNoInEvent)}の順位と総資産`}
-                    className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-4"
+                    className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-4"
                   >
                     {(match.players ?? [])
                       .toSorted(
@@ -99,7 +104,7 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
                           left.memberId.localeCompare(right.memberId),
                       )
                       .map((player) => (
-                        <li key={player.memberId} className="flex min-w-0 items-center gap-3">
+                        <li key={player.memberId} className="flex min-w-0 items-center gap-2">
                           <RankBadge rank={player.rank} />
                           <div className="min-w-0">
                             <p className={cn(contentText.body, "min-w-0")}>

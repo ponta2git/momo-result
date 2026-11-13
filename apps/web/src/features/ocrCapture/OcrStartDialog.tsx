@@ -4,7 +4,6 @@ import { memo } from "react";
 import { slotDefinitions } from "@/features/ocrCapture/captureState";
 import type { OcrStartDialogView, OcrStartSummary } from "@/features/ocrCapture/ocrStartState";
 import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog, DialogFooter } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
@@ -44,23 +43,23 @@ function TraySummary({ summary }: { summary: OcrStartSummary }) {
   const selectedKinds = new Set(summary.selectedKinds);
 
   return (
-    <ol aria-label="送信する分類" className="grid gap-2 sm:grid-cols-3">
+    <ol aria-label="送信する分類" className="grid gap-4 sm:grid-cols-3">
       {slotDefinitions.map((definition) => {
         const selected = selectedKinds.has(definition.kind);
         return (
           <li
             key={definition.kind}
-            className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] px-3 py-2 text-sm"
+            className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] p-3"
           >
             <span
               aria-hidden="true"
-              className={`font-plain flex size-7 shrink-0 items-center justify-center rounded-full text-xs text-[var(--color-text-primary)] ${definition.accentClass}`}
+              className={`font-plain flex size-7 shrink-0 items-center justify-center rounded-xs text-xs text-[var(--color-text-primary)] ${definition.accentClass}`}
             >
               {selected ? <Check className="size-4" /> : definition.stationLabel}
             </span>
-            <span className="min-w-0">
-              <span className={cn(contentText.body, "block")}>{definition.label}</span>
-              <span className={cn(contentText.supporting, "mt-0.5 block")}>
+            <span className="grid min-w-0 gap-0.5">
+              <span className={contentText.body}>{definition.label}</span>
+              <span className={contentText.supporting}>
                 {selected ? "送信する" : "今回は送信しない"}
               </span>
             </span>
@@ -71,15 +70,8 @@ function TraySummary({ summary }: { summary: OcrStartSummary }) {
   );
 }
 
-function ConfirmingContent({
-  onClose,
-  onConfirm,
-  summary,
-}: {
-  onClose: () => void;
-  onConfirm: () => Promise<void>;
-  summary: OcrStartSummary;
-}) {
+/** Settings, send targets, and the caution answer different questions, so they stay apart. */
+function ConfirmingContent({ summary }: { summary: OcrStartSummary }) {
   const isPartial = summary.selectedKinds.length < slotDefinitions.length;
 
   return (
@@ -91,14 +83,6 @@ function ConfirmingContent({
           <p>未配置の分類は読み取られません。あとから確認画面で手入力できます。</p>
         </Notice>
       ) : null}
-      <DialogFooter>
-        <Button variant="secondary" onClick={onClose}>
-          戻って確認
-        </Button>
-        <Button onClick={() => void onConfirm()}>
-          {summary.selectedKinds.length}件で読み取りを開始
-        </Button>
-      </DialogFooter>
     </div>
   );
 }
@@ -123,20 +107,18 @@ export const OcrStartDialog = memo(function OcrStartDialog({
         title="画像を送信しています"
       >
         <div className="grid gap-4">
-          <div className="flex items-start gap-3 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
-            <span
-              aria-hidden="true"
-              className="mt-0.5 flex size-5 shrink-0 text-[var(--color-action)]"
-            >
-              {progress.kind === "preparing" ? <SpinnerIcon size="lg" /> : null}
-            </span>
-            <div className="min-w-0">
-              <p className={contentText.compactPrimary}>{progress.label}</p>
-              <p className={cn(contentText.body, "mt-1")}>
-                誤送信を防ぐため、準備が終わるまで移動や再操作はできません。
-              </p>
-            </div>
-          </div>
+          {/* The dialog already reports busy; the label changes are not announced again. */}
+          <Notice
+            role="note"
+            title={
+              <span className="inline-flex items-center gap-2">
+                {progress.kind === "preparing" ? <SpinnerIcon /> : null}
+                {progress.label}
+              </span>
+            }
+          >
+            誤送信を防ぐため、準備が終わるまで移動や再操作はできません。
+          </Notice>
           {progress.kind === "determinate" ? (
             <ProgressBar
               aria-label="画像送信の進捗"
@@ -157,16 +139,7 @@ export const OcrStartDialog = memo(function OcrStartDialog({
         dismissible={false}
         description="受け付け済みの画像は保持されています。残りを再試行するか、記録を確認できます。"
         title="一部の読み取りを開始しました"
-      >
-        <div className="grid gap-4">
-          <Notice
-            tone="warning"
-            title={`${view.createdJobCount}件を開始・${view.failedJobCount}件は受付未確認`}
-          >
-            <p>
-              同じ内容で再試行すると、受け付け済みの画像を再送せずに続けられます。確認画面で手入力することもできます。
-            </p>
-          </Notice>
+        footer={
           <DialogFooter>
             <Button
               variant="secondary"
@@ -178,7 +151,16 @@ export const OcrStartDialog = memo(function OcrStartDialog({
             </Button>
             <Button onClick={() => void onConfirm()}>残りをもう一度試す</Button>
           </DialogFooter>
-        </div>
+        }
+      >
+        <Notice
+          tone="warning"
+          title={`${view.createdJobCount}件を開始・${view.failedJobCount}件は受付未確認`}
+        >
+          <p>
+            同じ内容で再試行すると、受け付け済みの画像を再送せずに続けられます。確認画面で手入力することもできます。
+          </p>
+        </Notice>
       </Dialog>
     );
   }
@@ -190,13 +172,7 @@ export const OcrStartDialog = memo(function OcrStartDialog({
         dismissible={false}
         title="この送信の受付は終了しました"
         description="受け付け済みの読み取りは記録から確認できます。"
-      >
-        <div className="grid gap-4">
-          <p className={contentText.body}>
-            {view.canRestart
-              ? "未受付の画像は、新しい読み取りとして送信できます。完了通知も別になります。"
-              : "この記録への送信は続けられません。記録の状態を確認してください。"}
-          </p>
+        footer={
           <DialogFooter>
             <Button
               variant="secondary"
@@ -210,7 +186,13 @@ export const OcrStartDialog = memo(function OcrStartDialog({
               <Button onClick={() => void onConfirm()}>未受付の画像を新しく送信</Button>
             ) : null}
           </DialogFooter>
-        </div>
+        }
+      >
+        <p className={contentText.body}>
+          {view.canRestart
+            ? "未受付の画像は、新しい読み取りとして送信できます。完了通知も別になります。"
+            : "この記録への送信は続けられません。記録の状態を確認してください。"}
+        </p>
       </Dialog>
     );
   }
@@ -231,11 +213,7 @@ export const OcrStartDialog = memo(function OcrStartDialog({
         title={
           view.canEdit ? "読み取りを開始できませんでした" : "読み取りの受付を確認できませんでした"
         }
-      >
-        <div className="grid gap-4">
-          <Notice tone="danger" title="送信を完了できませんでした">
-            <p>{view.message}</p>
-          </Notice>
+        footer={
           <DialogFooter>
             {view.canEdit ? (
               <Button variant="secondary" onClick={onClose}>
@@ -253,7 +231,11 @@ export const OcrStartDialog = memo(function OcrStartDialog({
             )}
             <Button onClick={() => void onConfirm()}>もう一度試す</Button>
           </DialogFooter>
-        </div>
+        }
+      >
+        <Notice tone="danger" title="送信を完了できませんでした">
+          <p>{view.message}</p>
+        </Notice>
       </Dialog>
     );
   }
@@ -266,8 +248,18 @@ export const OcrStartDialog = memo(function OcrStartDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
+            戻って確認
+          </Button>
+          <Button onClick={() => void onConfirm()}>
+            {view.summary.selectedKinds.length}件で読み取りを開始
+          </Button>
+        </DialogFooter>
+      }
     >
-      <ConfirmingContent summary={view.summary} onClose={onClose} onConfirm={onConfirm} />
+      <ConfirmingContent summary={view.summary} />
     </Dialog>
   );
 });

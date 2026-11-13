@@ -15,11 +15,7 @@ import { formatDateTimeCompact } from "@/shared/lib/dateTime";
 const groupDefinitions: Array<{ key: DraftGroupKey; note: string; title: string }> = [
   { key: "action", note: "内容を確認して確定すると、試合一覧に加わります。", title: "対応が必要" },
   { key: "failed", note: "手入力で続けるか、不要なら破棄します。", title: "読み取り失敗" },
-  {
-    key: "running",
-    note: "読み取りが終わると「対応が必要」へ移ります。最新の状態は更新で確認できます。",
-    title: "処理中",
-  },
+  { key: "running", note: "読み取りが終わると「対応が必要」へ移ります。", title: "処理中" },
 ];
 
 function groupOf(status: DraftStatusOrUnknown): DraftGroupKey | undefined {
@@ -86,7 +82,7 @@ export function toDraftItemView(item: MatchSummaryResponse): DraftItemView | und
     id: item.id,
     matchDraftId: item.matchDraftId,
     status,
-    title: `${formatMatchNoInEvent(item.matchNoInEvent || undefined)} · ${item.mapName || "マップ未設定"}`,
+    title: `${formatMatchNoInEvent(item.matchNoInEvent || undefined)}・${item.mapName || "マップ未設定"}`,
     updatedAt: item.updatedAt,
     ...compact({
       primaryAction: primaryAction(status, item.matchDraftId),

@@ -42,6 +42,11 @@ export type DialogLayerProps = SharedLayerProps & {
   footer?: ReactNode | undefined;
 };
 
+/**
+ * Below the fixed header, the content region is the dialog's only vertical scroller; its inline
+ * gutter keeps full-width focus rings unclipped, so forms add no compensation. On short
+ * viewports a dialog with a footer makes the whole surface the single scroller instead.
+ */
 function DialogContentFrame({
   children,
   contentClassName,
@@ -299,7 +304,7 @@ export function AlertDialogLayer({
                     <p
                       className={cn(
                         fieldText.error,
-                        "rounded-xs border border-[var(--color-danger)]/50 bg-[var(--color-danger)]/8 px-3 py-2",
+                        "rounded-sm border border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] p-3",
                         readableTextWidthClass,
                       )}
                       role="alert"

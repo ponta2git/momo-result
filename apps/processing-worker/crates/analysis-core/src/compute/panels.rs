@@ -11,15 +11,22 @@ use crate::{
     },
 };
 
-const ASSET_STYLE_RATE_SIGNAL_DELTA: f64 = 0.015;
-const ASSET_STYLE_LOW_RISK_RATE_DELTA: f64 = 0.025;
-const ASSET_STYLE_SECOND_RATE_DELTA: f64 = 0.07;
+// Asset-style and strategy deltas are distances from the four-player median. They are calibrated
+// on confirmed matches by exchanging the players at random within each match, which keeps every
+// match result but removes any player tendency. A tendency requires a distance that this chance
+// baseline exceeds in about one of four mature (50+ match) scope entries (P75). The low-risk
+// delta asserts a rarely reached downside and uses P90; the second two-tailed condition only
+// confirms the lower tail and uses P50.
+const ASSET_STYLE_RATE_SIGNAL_DELTA: f64 = 0.035;
+const ASSET_STYLE_LOW_RISK_RATE_DELTA: f64 = 0.05;
+const ASSET_STYLE_TWO_TAILED_LOW_RATE_DELTA: f64 = 0.02;
+const ASSET_STYLE_SECOND_RATE_DELTA: f64 = 0.05;
 const ASSET_STYLE_DESTINATION_AVERAGE_DELTA: f64 = 0.08;
-const ASSET_STYLE_WIN_MEDIAN_ASSETS_DELTA: f64 = 10_000.0;
-const ASSET_STYLE_WIN_MARGIN_DELTA: f64 = 3_000.0;
-const ASSET_STYLE_LOWER_GAP_DELTA: f64 = 4_000.0;
-const ASSET_STYLE_BLOWOUT_WIN_RATE_DELTA: f64 = 0.025;
-const STRATEGY_KIND_MEDIAN_DELTA: f64 = 0.0035;
+const ASSET_STYLE_WIN_MEDIAN_ASSETS_DELTA: f64 = 8_000.0;
+const ASSET_STYLE_WIN_MARGIN_DELTA: f64 = 7_000.0;
+const ASSET_STYLE_LOWER_GAP_DELTA: f64 = 6_500.0;
+const ASSET_STYLE_BLOWOUT_WIN_RATE_DELTA: f64 = 0.03;
+const STRATEGY_KIND_MEDIAN_DELTA: f64 = 0.025;
 
 #[derive(Clone, Debug, Default)]
 struct AssetStyleMetrics {
@@ -92,7 +99,7 @@ struct AssetStyleRows<'a> {
 
 use super::{
     metrics::revenue_asset_rate,
-    signals::{head_to_head_signal, relative_intensity, signal_intensity},
+    signals::{head_to_head_signal, momentum_signal_delta, relative_intensity, signal_intensity},
 };
 
 mod card_shop;
@@ -195,13 +202,14 @@ pub(super) fn momentum_switch(
             }
             let podium_baseline = rate(rows.iter().filter(|row| row.rank <= 2).count(), rows.len());
             let lower_baseline = rate(rows.iter().filter(|row| row.rank >= 3).count(), rows.len());
+            let signal_delta = momentum_signal_delta(rows.len());
             json!({
                 "memberId": member_id,
                 "denominator": rows.len(),
                 "transitionCount": transitions.len(),
-                "afterLower": momentum_rate(&transitions, |row| row.rank >= 3, |row| row.rank <= 2, podium_baseline, false),
-                "afterFourth": momentum_rate(&transitions, |row| row.rank == 4, |row| row.rank <= 2, podium_baseline, false),
-                "afterPodium": momentum_rate(&transitions, |row| row.rank <= 2, |row| row.rank >= 3, lower_baseline, true),
+                "afterLower": momentum_rate(&transitions, |row| row.rank >= 3, |row| row.rank <= 2, podium_baseline, false, signal_delta),
+                "afterFourth": momentum_rate(&transitions, |row| row.rank == 4, |row| row.rank <= 2, podium_baseline, false, signal_delta),
+                "afterPodium": momentum_rate(&transitions, |row| row.rank <= 2, |row| row.rank >= 3, lower_baseline, true, signal_delta),
                 "cells": cells,
             })
         })
@@ -214,6 +222,7 @@ fn momentum_rate(
     current: impl Fn(&PlayerMatchInput) -> bool,
     baseline: Option<f64>,
     inverse: bool,
+    signal_delta: f64,
 ) -> Value {
     let target = transitions
         .iter()
@@ -229,17 +238,17 @@ fn momentum_rate(
         "none"
     } else if delta.is_some_and(|value| {
         if inverse {
-            value <= -0.06
+            value <= -signal_delta
         } else {
-            value >= 0.06
+            value >= signal_delta
         }
     }) {
         "strength"
     } else if delta.is_some_and(|value| {
         if inverse {
-            value >= 0.06
+            value >= signal_delta
         } else {
-            value <= -0.06
+            value <= -signal_delta
         }
     }) {
         "risk"
@@ -304,9 +313,9 @@ pub(super) fn performance_profiles(
             let strategy = revenue.zip(revenue_median).map(|(value, median)| {
                 if bases.len() < 3 {
                     "balanced"
-                } else if value >= median + 0.0035 {
+                } else if value >= median + STRATEGY_KIND_MEDIAN_DELTA {
                     "property_focused"
-                } else if value <= median - 0.0035 {
+                } else if value <= median - STRATEGY_KIND_MEDIAN_DELTA {
                     "card_focused"
                 } else {
                     "balanced"
@@ -676,8 +685,11 @@ fn asset_style_shape_kind(
         metrics.high_asset_rate,
         medians.high_asset_rate,
         ASSET_STYLE_RATE_SIGNAL_DELTA,
-    ) && above(metrics.low_asset_rate, medians.low_asset_rate, 0.010)
-    {
+    ) && above(
+        metrics.low_asset_rate,
+        medians.low_asset_rate,
+        ASSET_STYLE_TWO_TAILED_LOW_RATE_DELTA,
+    ) {
         Some("two_tailed")
     } else if below(
         metrics.low_asset_rate,

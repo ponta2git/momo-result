@@ -129,6 +129,23 @@ test("reads an uploaded image with the native Worker, corrects it and saves the 
   await page.goto(notificationLink);
   await expect(page.getByLabel("ぽんた 総資産（万円）", { exact: true })).toHaveValue("400");
   await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("450");
+  // Only the total-assets image was read, so revenue and incident counts start empty, not as 0,
+  // and are entered before the match can be confirmed.
+  const unreadRevenue = page.getByLabel("ぽんた 収益（万円）", { exact: true });
+  await expect(unreadRevenue).toHaveValue("");
+  await expect(unreadRevenue).toHaveAccessibleDescription(/未読み取り/u);
+  for (const [index, name] of ["ぽんた", "おーたか", "いーゆー", "あかねまみ"].entries()) {
+    await page.getByLabel(`${name} 収益（万円）`, { exact: true }).fill(String(40 - index * 10));
+    for (const incident of [
+      "目的地",
+      "プラス駅",
+      "マイナス駅",
+      "カード駅",
+      "カード売り場",
+      "スリの銀次",
+    ])
+      await page.getByLabel(`${name} ${incident}`, { exact: true }).fill("0");
+  }
   await page.getByRole("button", { name: "確定前の確認へ進む" }).click();
   const confirmation = page.waitForResponse(
     (value) => value.url().endsWith("/api/matches") && value.request().method() === "POST",
@@ -155,13 +172,14 @@ test("reads an uploaded image with the native Worker, corrects it and saves the 
     result.players?.map((player) => ({
       memberId: player.memberId,
       rank: player.rank,
+      revenueManYen: player.revenueManYen,
       totalAssetsManYen: player.totalAssetsManYen,
     })),
   ).toEqual([
-    { memberId: "member_ponta", rank: 1, totalAssetsManYen: 450 },
-    { memberId: "member_otaka", rank: 2, totalAssetsManYen: 300 },
-    { memberId: "member_eu", rank: 3, totalAssetsManYen: 200 },
-    { memberId: "member_akane_mami", rank: 4, totalAssetsManYen: 100 },
+    { memberId: "member_ponta", rank: 1, revenueManYen: 40, totalAssetsManYen: 450 },
+    { memberId: "member_otaka", rank: 2, revenueManYen: 30, totalAssetsManYen: 300 },
+    { memberId: "member_eu", rank: 3, revenueManYen: 20, totalAssetsManYen: 200 },
+    { memberId: "member_akane_mami", rank: 4, revenueManYen: 10, totalAssetsManYen: 100 },
   ]);
 });
 

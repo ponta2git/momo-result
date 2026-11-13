@@ -1,6 +1,6 @@
 import { TableScrollArea } from "momo-result-ui";
 
-const players = ["ももたろう", "きんたろう", "うらしま", "かぐや"];
+const players = ["いーゆー", "ぽんた", "あかねまみ", "おーたか"];
 const seasons = Array.from({ length: 12 }, (_, index) => `第${index + 1}回`);
 const assets = [
   [128, 97, 64, 31, 112, 88, 140, 76, 59, 133, 101, 92],
@@ -16,7 +16,7 @@ const AssetTable = ({ rows = players }: { rows?: string[] }) => (
     <thead>
       <tr className="bg-[var(--color-surface-subtle)] text-left">
         <th className={`${cell} font-structure`} scope="col">
-          プレイヤー
+          プレーヤー
         </th>
         {seasons.map((season) => (
           <th className={`${cell} font-structure text-right`} key={season} scope="col">
@@ -63,7 +63,7 @@ export const FitsWithoutHint = () => (
             順位
           </th>
           <th className={`${cell} font-structure`} scope="col">
-            プレイヤー
+            プレーヤー
           </th>
         </tr>
       </thead>

@@ -57,113 +57,119 @@ export const OverviewView = memo(function OverviewView({
     >
       <AnalysisTableOfContents view="overview" />
       <AnalysisSection id="metric-basic" title="順位と基礎比較">
-        <div className="mb-3">
-          <LinkButton
-            size="sm"
-            variant="quiet"
-            to={{ pathname: location.pathname, search: `?${outlookSearch}`, hash: "" }}
-          >
-            総合成績の見通しを試す
-          </LinkButton>
-        </div>
-        <dl
-          aria-label="現在の順位差"
-          className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-        >
+        <div className="grid gap-6">
           <div>
-            <dt className={contentText.supporting}>平均順位の先頭</dt>
-            <dd className={cn(contentText.primary, "mt-1 flex flex-wrap gap-x-4 gap-y-2")}>
-              {leaders.length > 0
-                ? leaders.map((player) => (
-                    <MemberSequenceLabel key={player.memberId} memberId={player.memberId}>
-                      {player.displayName}
-                    </MemberSequenceLabel>
-                  ))
-                : "—"}
-            </dd>
+            <LinkButton
+              size="sm"
+              variant="quiet"
+              to={{ pathname: location.pathname, search: `?${outlookSearch}`, hash: "" }}
+            >
+              総合成績の見通しを試す
+            </LinkButton>
           </div>
-          <div className="sm:text-right">
-            <dt className={contentText.supporting}>先頭と最後尾の差</dt>
-            <dd className={cn(contentText.primary, "mt-1 tabular-nums")}>
-              {formatDecimal(response.summary.averageRankSpread)}位
-            </dd>
-          </div>
-        </dl>
-        <DataTable
-          caption={{ content: "プレーヤー別の順位と基礎比較" }}
-          columns={[
-            {
-              header: "プレーヤー",
-              key: "player",
-              renderCell: (metric) => (
-                <MemberSequenceLabel memberId={metric.memberId}>
-                  {metric.displayName}
-                </MemberSequenceLabel>
-              ),
-              rowHeader: true,
-            },
-            {
-              tabular: true,
-              header: "平均順位",
-              key: "average-rank",
-              renderCell: (metric) => (
-                <span className={contentText.compactPrimary}>
-                  {formatDecimal(metric.rank.average)}位
-                </span>
-              ),
-            },
-            {
-              tabular: true,
-              header: "順位のぶれ",
-              key: "rank-deviation",
-              renderCell: (metric) => formatDecimal(metric.rank.standardDeviation),
-            },
-            {
-              tabular: true,
-              header: "入賞率",
-              key: "podium-rate",
-              renderCell: (metric) => formatPercent(metric.podium.rate),
-            },
-            {
-              tabular: true,
-              header: "下位率",
-              key: "lower-half-rate",
-              renderCell: (metric) => formatPercent(metric.lowerHalf.rate),
-            },
-            {
-              tabular: true,
-              header: "平均総資産",
-              key: "average-assets",
-              renderCell: (metric) => formatManYen(metric.assets.average),
-            },
-            {
-              tabular: true,
-              header: "平均物件収益",
-              key: "average-revenue",
-              renderCell: (metric) => formatManYen(metric.revenue.average),
-            },
-            {
-              header: "推移",
-              key: "history",
-              renderCell: (metric) => (
-                <Button
-                  size="sm"
-                  variant="quiet"
-                  onClick={() =>
-                    onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
-                  }
-                >
-                  順位推移を見る
-                </Button>
-              ),
-            },
-          ]}
-          density="compact"
-          getRowKey={(metric) => metric.memberId}
-          minWidth="52rem"
-          rows={playerMetrics}
-        />
-        <div className="mt-6">
+          <dl
+            aria-label="現在の順位差"
+            className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+          >
+            <div>
+              <dt className={contentText.supporting}>平均順位の先頭</dt>
+              <dd className={cn(contentText.primary, "mt-1 flex flex-wrap gap-x-4 gap-y-2")}>
+                {leaders.length > 0
+                  ? leaders.map((player) => (
+                      <MemberSequenceLabel key={player.memberId} memberId={player.memberId}>
+                        {player.displayName}
+                      </MemberSequenceLabel>
+                    ))
+                  : "—"}
+              </dd>
+            </div>
+            <div className="sm:text-right">
+              <dt className={contentText.supporting}>先頭と最後尾の差</dt>
+              <dd className={cn(contentText.primary, "mt-1 tabular-nums")}>
+                {formatDecimal(response.summary.averageRankSpread)}位
+              </dd>
+            </div>
+          </dl>
+          <DataTable
+            caption={{ content: "プレーヤー別の順位と基礎比較" }}
+            columns={[
+              {
+                header: "プレーヤー",
+                key: "player",
+                renderCell: (metric) => (
+                  <MemberSequenceLabel memberId={metric.memberId}>
+                    {metric.displayName}
+                  </MemberSequenceLabel>
+                ),
+                rowHeader: true,
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "平均順位",
+                key: "average-rank",
+                renderCell: (metric) => (
+                  <span className={contentText.compactPrimary}>
+                    {formatDecimal(metric.rank.average)}位
+                  </span>
+                ),
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "順位のぶれ",
+                key: "rank-deviation",
+                renderCell: (metric) => formatDecimal(metric.rank.standardDeviation),
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "入賞率",
+                key: "podium-rate",
+                renderCell: (metric) => formatPercent(metric.podium.rate),
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "下位率",
+                key: "lower-half-rate",
+                renderCell: (metric) => formatPercent(metric.lowerHalf.rate),
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "平均総資産",
+                key: "average-assets",
+                renderCell: (metric) => formatManYen(metric.assets.average),
+              },
+              {
+                align: "right",
+                tabular: true,
+                header: "平均物件収益",
+                key: "average-revenue",
+                renderCell: (metric) => formatManYen(metric.revenue.average),
+              },
+              {
+                header: "推移",
+                key: "history",
+                renderCell: (metric) => (
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    onClick={() =>
+                      onDrilldown({ memberId: metric.memberId, metricId: "rank.averageHistory" })
+                    }
+                  >
+                    順位推移を見る
+                  </Button>
+                ),
+              },
+            ]}
+            density="compact"
+            getRowKey={(metric) => metric.memberId}
+            minWidth="52rem"
+            rows={playerMetrics}
+          />
           <RankDistributionBars
             focusedItemIds={focusedItemIds}
             players={response.players}
@@ -181,24 +187,29 @@ export const OverviewView = memo(function OverviewView({
         }
       />
       <AnalysisSection id="metric-crown-certainty" title="平均順位首位の確からしさ">
-        <CrownShareBars
-          players={response.players}
-          shares={response.rankAnalysis.crownCertainty.shares}
-        />
-        <div
-          className={cn(
-            contentText.supporting,
-            "mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums",
-          )}
-        >
-          <span>
-            根拠 {response.rankAnalysis.matchCount}戦・{response.rankAnalysis.heldEventCount}開催
-          </span>
-          {crownQualityAdvisory ? (
-            <SeriesAnalysisQualityAdvisory status={response.rankAnalysis.crownCertainty.status} />
-          ) : null}
-        </div>
-        <div className="mt-4">
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <CrownShareBars
+              players={response.players}
+              shares={response.rankAnalysis.crownCertainty.shares}
+            />
+            <div
+              className={cn(
+                contentText.supporting,
+                "flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums",
+              )}
+            >
+              <span>
+                根拠 {response.rankAnalysis.matchCount}戦・{response.rankAnalysis.heldEventCount}
+                開催
+              </span>
+              {crownQualityAdvisory ? (
+                <SeriesAnalysisQualityAdvisory
+                  status={response.rankAnalysis.crownCertainty.status}
+                />
+              ) : null}
+            </div>
+          </div>
           <AnalysisReadingGuide
             ariaLabel="平均順位首位の確からしさの読み方"
             items={[

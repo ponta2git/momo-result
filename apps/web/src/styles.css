@@ -45,6 +45,7 @@
     --ref-analysis-emphasis-700: oklch(51% 0.105 70);
     --ref-analysis-positive-700: oklch(49% 0.08 195);
     --ref-analysis-negative-700: oklch(50% 0.14 340);
+    --ref-analysis-neutral-700: oklch(52% 0.02 250);
     --ref-status-info-700: oklch(49% 0.12 285);
     --ref-status-success-700: oklch(49% 0.105 150);
     --ref-status-warning-700: oklch(55% 0.105 82);
@@ -63,14 +64,27 @@
     --ref-series-5: oklch(58% 0.15 340);
     --ref-series-6: oklch(57% 0.105 115);
 
+    /* Only first place carries the celebratory gold. Fourth place stays a calm slate so a
+       result never reads as an error; the danger hue is reserved for status. */
     --ref-rank-1: oklch(64% 0.155 88);
     --ref-rank-2: oklch(64% 0.035 235);
     --ref-rank-3: oklch(50% 0.085 55);
-    --ref-rank-4: oklch(56% 0.145 28);
+    --ref-rank-4: oklch(49% 0.055 272);
+
+    --ref-search-match: oklch(91% 0.075 95);
 
     --ref-gold-50: oklch(97% 0.028 88);
     --ref-gold-300: oklch(79% 0.075 80);
     --ref-gold-800: oklch(43% 0.085 75);
+
+    /* Milestone moments (UI rule: 節目の演出) own their warm palette, apart from rank and
+       achievement colors, so a celebration can be tuned without moving either scale. The
+       surface is a low-chroma champagne so muted labels on it stay above 4.5:1, and the mark
+       is an antique gold that holds 4.5:1 against the surface. */
+    --ref-celebration-surface: oklch(97.4% 0.022 82);
+    --ref-celebration-border: oklch(82% 0.06 80);
+    --ref-celebration-mark: oklch(54% 0.1 72);
+    --ref-celebration-shine: oklch(100% 0 0 / 0.75);
 
     --ref-tray-assets: oklch(60% 0.09 240);
     --ref-tray-revenue: oklch(61% 0.09 92);
@@ -84,6 +98,10 @@
     --z-toast: 60;
     --z-dialog: 80;
     --z-tooltip: 90;
+
+    /* The sticky global navigation publishes its height so sticky content can rest below it. */
+    --global-nav-height: 0px;
+    --sticky-below-nav: calc(var(--global-nav-height) + 1rem);
   }
 }
 
@@ -105,6 +123,12 @@
   --radius-lg: 12px;
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Widths are named by the content need they serve; consumers choose a purpose, not a size. */
+  --container-readable: 42rem;
+  --container-page-default: 96rem;
+  --container-page-analysis: 108rem;
+  --container-page-workspace: 120rem;
 }
 
 /* Runtime chart and sequence consumers need every semantic color in production CSS. */
@@ -138,14 +162,28 @@
   --color-control-border: var(--ref-neutral-border-strong);
   --color-choice-marker-border: var(--ref-neutral-choice-marker);
   --color-control-border-action: color-mix(in oklab, var(--color-action) 75%, transparent);
-  --color-control-border-review: color-mix(in oklab, var(--color-review) 80%, transparent);
-  --color-control-border-success: color-mix(in oklab, var(--color-success) 80%, transparent);
-  --color-control-border-warning: color-mix(in oklab, var(--color-warning) 95%, transparent);
-  --color-control-border-invalid: color-mix(in oklab, var(--color-danger) 75%, transparent);
+  --color-control-border-review: var(--color-tone-review-border);
+  --color-control-border-success: var(--color-tone-success-border);
+  --color-control-border-warning: var(--color-tone-warning-border);
+  --color-control-border-invalid: var(--color-tone-danger-border);
+  /* One border and surface pair per status tone. Notices, badges, toasts, and controls share
+     the same strength; borders keep the 3:1 contrast that tone-marked controls require. */
+  --color-tone-info-border: color-mix(in oklab, var(--color-status-info) 80%, transparent);
+  --color-tone-info-surface: color-mix(in oklab, var(--color-status-info) 12%, transparent);
+  --color-tone-review-border: color-mix(in oklab, var(--color-review) 80%, transparent);
+  --color-tone-review-surface: color-mix(in oklab, var(--color-review) 14%, transparent);
+  --color-tone-success-border: color-mix(in oklab, var(--color-success) 80%, transparent);
+  --color-tone-success-surface: color-mix(in oklab, var(--color-success) 12%, transparent);
+  --color-tone-warning-border: color-mix(in oklab, var(--color-warning) 95%, transparent);
+  --color-tone-warning-surface: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  --color-tone-danger-border: color-mix(in oklab, var(--color-danger) 75%, transparent);
+  --color-tone-danger-surface: color-mix(in oklab, var(--color-danger) 10%, transparent);
   --color-action: var(--ref-action-700);
   --color-analysis-emphasis: var(--ref-analysis-emphasis-700);
   --color-analysis-positive: var(--ref-analysis-positive-700);
   --color-analysis-negative: var(--ref-analysis-negative-700);
+  /* Even or middle comparisons: neither the positive nor the negative side. */
+  --color-analysis-neutral: var(--ref-analysis-neutral-700);
   --color-status-info: var(--ref-status-info-700);
   --color-success: var(--ref-status-success-700);
   --color-warning: var(--ref-status-warning-700);
@@ -176,8 +214,13 @@
   --color-achievement-premium-foreground: var(--ref-gold-800);
   --color-achievement-premium-surface: var(--ref-gold-50);
   --color-achievement-premium-border: var(--ref-gold-300);
-  /* Marks the searched words inside matched text; the text color stays primary. */
-  --color-search-match-surface: color-mix(in oklab, var(--ref-rank-1) 30%, transparent);
+  --color-celebration-surface: var(--ref-celebration-surface);
+  --color-celebration-border: var(--ref-celebration-border);
+  --color-celebration-mark: var(--ref-celebration-mark);
+  --color-celebration-shine: var(--ref-celebration-shine);
+  /* Marks the searched words inside matched text; the text color stays primary. It owns its
+     reference value so rank colors can change without moving search highlights. */
+  --color-search-match-surface: var(--ref-search-match);
   --color-chart-segment-separator: var(--color-surface);
   --color-tray-assets: var(--ref-tray-assets);
   --color-tray-revenue: var(--ref-tray-revenue);
@@ -236,10 +279,6 @@
     outline: 3px solid var(--color-action);
     outline-offset: 3px;
   }
-}
-
-@utility momo-safe-bottom {
-  bottom: max(calc(env(safe-area-inset-bottom) + 1rem), 1rem);
 }
 
 @utility momo-toast-viewport {
@@ -357,19 +396,19 @@
     --ui-surface-hover: color-mix(in oklab, var(--color-action) 13%, transparent);
   }
   .momo-surface-control-review {
-    --ui-surface-base: color-mix(in oklab, var(--color-review) 14%, transparent);
+    --ui-surface-base: var(--color-tone-review-surface);
     --ui-surface-hover: color-mix(in oklab, var(--color-review) 17%, transparent);
   }
   .momo-surface-control-success {
-    --ui-surface-base: color-mix(in oklab, var(--color-success) 12%, transparent);
+    --ui-surface-base: var(--color-tone-success-surface);
     --ui-surface-hover: color-mix(in oklab, var(--color-success) 15%, transparent);
   }
   .momo-surface-control-warning {
-    --ui-surface-base: color-mix(in oklab, var(--color-warning) 18%, transparent);
+    --ui-surface-base: var(--color-tone-warning-surface);
     --ui-surface-hover: color-mix(in oklab, var(--color-warning) 21%, transparent);
   }
   .momo-surface-control-invalid {
-    --ui-surface-base: color-mix(in oklab, var(--color-danger) 10%, transparent);
+    --ui-surface-base: var(--color-tone-danger-surface);
     --ui-surface-hover: color-mix(in oklab, var(--color-danger) 13%, transparent);
   }
   .momo-surface-underline {

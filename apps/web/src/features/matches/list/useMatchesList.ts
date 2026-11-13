@@ -8,6 +8,7 @@ import { useMatchListRefresh } from "@/features/matches/list/useMatchListRefresh
 import { useMatchListResource } from "@/features/matches/list/useMatchListResource";
 import { useMatchListSelection } from "@/features/matches/list/useMatchListSelection";
 import type { PaginationState } from "@/shared/lib/pagination";
+import { recordEntryHref } from "@/shared/navigation/matchLinks";
 
 type MatchListRefreshAction = {
   pending: boolean;
@@ -45,8 +46,8 @@ export type MatchesListView = {
   };
   navigation: {
     draftsHref: string;
-    manualCreateHref: string;
-    ocrHref: string;
+    /** Recording starts from a held event, so the list sends a first record to the newest one. */
+    recordHref: string;
   };
 };
 
@@ -97,8 +98,7 @@ export function useMatchesList(): MatchesListView {
     },
     navigation: {
       draftsHref: "/drafts",
-      manualCreateHref: "/matches/new",
-      ocrHref: "/ocr/new",
+      recordHref: recordEntryHref,
     },
   };
 }

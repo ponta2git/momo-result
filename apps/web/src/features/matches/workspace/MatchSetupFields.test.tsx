@@ -5,7 +5,10 @@ import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormType
 import { MatchSetupFields } from "@/features/matches/workspace/MatchSetupFields";
 import type { MatchWorkspaceSetupFieldsView } from "@/features/matches/workspace/matchWorkspacePanelViews";
 
-function createView(errorPathSet = new Set<string>()): MatchWorkspaceSetupFieldsView {
+function createView(
+  errorPathSet = new Set<string>(),
+  gameTitleId = "gt_momotetsu_2",
+): MatchWorkspaceSetupFieldsView {
   return {
     actions: { onSelectHeldEvent: vi.fn(), onChangeField: vi.fn() },
     options: {
@@ -25,7 +28,7 @@ function createView(errorPathSet = new Set<string>()): MatchWorkspaceSetupFields
       seasonItems: [],
     },
     validation: { errorPathSet },
-    values: createEmptyMatchForm("2026-01-01T09:00:00.000Z"),
+    values: { ...createEmptyMatchForm("2026-01-01T09:00:00.000Z"), gameTitleId },
   };
 }
 
@@ -57,6 +60,21 @@ describe("MatchSetupFields", () => {
     for (const control of controls) {
       expect(control).toHaveAttribute("aria-invalid", "true");
       expect(control).toHaveAccessibleDescription(expect.stringContaining("未入力です"));
+    }
+  });
+
+  it("reports a missing 作品 once, not again on the choices that wait for it", () => {
+    render(
+      <MatchSetupFields
+        view={createView(new Set(["gameTitleId", "seasonMasterId", "mapMasterId"]), "")}
+      />,
+    );
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getByLabelText("作品（必須）")).toHaveAttribute("aria-invalid", "true");
+    for (const name of ["シーズン（必須）", "マップ（必須）"]) {
+      expect(screen.getByLabelText(name)).toBeDisabled();
+      expect(screen.getByLabelText(name)).not.toHaveAttribute("aria-invalid", "true");
     }
   });
 

@@ -2,14 +2,15 @@ import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { OcrSectionHeading } from "@/features/ocrCapture/OcrSectionHeading";
 import { OcrSetupPanel } from "@/features/ocrCapture/setup/OcrSetupPanel";
 import { defaultOcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import { useOcrSetup } from "@/features/ocrCapture/setup/useOcrSetup";
 import { trimSearchParam } from "@/shared/lib/searchParams";
+import { recordExitHref } from "@/shared/navigation/matchLinks";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
-import { contentText } from "@/shared/ui/typography";
 
 type OcrSetup = ReturnType<typeof useOcrSetup>;
 const SetupDisplayContext = createContext<{
@@ -77,22 +78,29 @@ export function useOcrCaptureSetupSubmission() {
   return setup;
 }
 
+/** Leaving a capture returns to the held event it records into, like leaving a manual entry. */
+export function useOcrCaptureExitHref(): string {
+  const setup = useContext(SetupDisplayContext);
+  if (!setup) throw new Error("OCR setup is unavailable");
+  const { selectedHeldEvent, value } = setup.panel.fields.heldEvent;
+  return recordExitHref(value || undefined, selectedHeldEvent?.publicId);
+}
+
 export function OcrCaptureSetupSection() {
   const setup = useContext(SetupDisplayContext);
   if (!setup) throw new Error("OCR setup is unavailable");
   return (
     <section className="grid min-w-0 gap-4" aria-labelledby="ocr-record-destination">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 id="ocr-record-destination" className={contentText.heading}>
-          記録先
-        </h2>
-        <PendingStatus
-          idleLabel="読み取り結果に引き継ぐ試合設定"
-          pending={setup.options.refreshing && !setup.options.hasError}
-        >
-          試合設定の選択肢を確認中
-        </PendingStatus>
-      </div>
+      <OcrSectionHeading
+        id="ocr-record-destination"
+        lead="読み取り結果に引き継ぐ試合設定"
+        status={
+          <PendingStatus pending={setup.options.refreshing && !setup.options.hasError}>
+            試合設定の選択肢を確認中
+          </PendingStatus>
+        }
+        title="記録先"
+      />
       {setup.options.hasError ? (
         <Notice
           action={

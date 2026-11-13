@@ -6,9 +6,9 @@ export const WrappingDisclosure = () => (
       <FactList
         ariaLabel="目的地到着回数"
         items={[
-          { id: "momo", label: "ももたろう", value: "9回" },
-          { id: "kin", label: "きんたろう", value: "7回" },
-          { id: "ura", label: "うらしま", value: "5回" },
+          { id: "momo", label: "いーゆー", value: "9回" },
+          { id: "kin", label: "ぽんた", value: "7回" },
+          { id: "ura", label: "あかねまみ", value: "5回" },
         ]}
         layout="inline"
       />

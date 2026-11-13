@@ -28,17 +28,17 @@ export function SourceImagePreviewDialog({
 
   return (
     <Dialog
-      backdropClassName="bg-[var(--color-backdrop)]/65"
       popupClassName="max-w-none"
       open={open}
       onOpenChange={handleOpenChange}
       surfaceClassName="max-w-4xl"
       title={`${sourceImageKindLabels[kind]}の拡大表示`}
     >
-      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-2">
+      {/* The same bounded frame as the inline source image. */}
+      <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
         <img
           alt={`${sourceImageKindLabels[kind]}の元画像`}
-          className="mx-auto h-auto max-w-full object-contain"
+          className="mx-auto h-auto max-w-full rounded-xs object-contain"
           src={url}
         />
       </div>

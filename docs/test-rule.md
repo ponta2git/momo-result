@@ -63,7 +63,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ### Query / API Error
 
-- 自動再取得の契約は [Web 実装規約の Server State](web-rule.md#server-state) を正本とし、共通 QueryClient の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
+- 自動再取得の契約は [Web 実装規約の Server State](web-rule.md#server-state) を正本とし、共通 QueryClient と共通の完了確認の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
 - query key ごとの runtime data shape と、mutation 後の detail / list / selector cache の整合を検証する。
 
 ### Form / Interaction
@@ -143,10 +143,10 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - publication を evidence に選ぶ場合、意味 oracle は Worker 規約が定める Rust の full semantic validator とし、exact validation contract、published row の immutability、API の bounded shape / identity defense をそれぞれの境界で検証する。
-- analysis release の baseline migration、momo-db revision、default を変える場合の fresh baseline の確認は [DB 規約の Contract Evidence](db-rule.md#contract-evidence) に従う。移行中だけの契約と撤去条件は [Transitional Contracts](db-rule.md#transitional-contracts) に置く。
+- 移行中だけの契約と撤去条件は [Transitional Contracts](db-rule.md#transitional-contracts) に置く。
 - release promotion は 2 接続の実 PostgreSQL で、capability 検査後の非互換登録が commit まで待つこと、singleton lock 中の新規作品が commit 後の tuple を継承すること、登録作品 0 件が terminal になることを検証する。
 - 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、release 完了は enqueue 成功ではなく保守の完了で判定する。
-- 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。旧世代が保存した中断 intent は失敗回数非加算、旧 child 回収後の再実行を保つ。
+- 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。
 - resource / endurance gate は release build、production 相当の上限、代表 data で機能 gate と分けて実行する。
 - 分析通知の通常更新は追加・変更試合数だけでなく、比較対象となる既存履歴の量と DB 往復も含めて確認する。有限の設定競合待ち後に通知が成立すること、残時間不足・長期競合では業務成功を保ち通知を省略することを実 DB で区別する。
 - 分析通知の対象や比較元を変える場合は、純粋な差分 test に加えて要求の合流・release の参照切離し・公開成功を通す実 DB 経路を選ぶ。実送信はローカル receiver で固定本文と commit 後の状態を観測し、保守処理の抑止や設定・送信結果に依存しない入力基準を確認する。

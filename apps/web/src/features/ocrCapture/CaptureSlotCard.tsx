@@ -85,7 +85,7 @@ export function CaptureSlotCard({ actions, presentation, slot }: CaptureSlotCard
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
-            className={`h-6 w-1 shrink-0 rounded-full ${presentation.accentClass}`}
+            className={`h-6 w-1 shrink-0 rounded-xs ${presentation.accentClass}`}
           />
           <div className="min-w-0">
             <h3 className={contentText.heading} id={headingId}>

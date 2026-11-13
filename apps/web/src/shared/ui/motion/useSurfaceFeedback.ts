@@ -8,6 +8,8 @@ import { surfaceHoverTransition } from "@/shared/ui/motion/transitions";
  * Projects pointer presence onto a surface without owning activation or semantic state.
  * Native leave is deliberate: Motion's hover recognizer defers leave while pressed.
  * Color roles, pressed, unavailable and focus remain immediate CSS/native projections.
+ * Hover animates from its current value toward one 0/1 target, so re-entry never accumulates;
+ * reduced motion jumps instead, and touch never creates hover.
  */
 export function useSurfaceFeedback<Element extends HTMLElement>(forwardedRef?: Ref<Element>) {
   return useCallback(

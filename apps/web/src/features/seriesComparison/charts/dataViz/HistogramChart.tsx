@@ -1,6 +1,7 @@
 import { niceCeil, numberTicks } from "@/features/seriesComparison/charts/dataViz/scales";
 import { dataVizSeriesPresentation } from "@/shared/seriesAnalysis/seriesPresentation";
 import type { DataVizSeriesIdentity } from "@/shared/seriesAnalysis/seriesPresentation";
+import { contentText } from "@/shared/ui/typography";
 
 export function DataVizHistogramChart({
   ariaLabel,
@@ -17,8 +18,8 @@ export function DataVizHistogramChart({
   const countCeil = niceCeil(maximum, 1);
   const countsById = new Map(series.map((item) => [item.id, item.counts]));
   return (
-    <figure aria-label={ariaLabel} className="grid gap-3">
-      <div className="grid justify-items-center gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+    <figure aria-label={ariaLabel} className="grid gap-2">
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         {seriesIdentity.map((identity) => (
           <SingleHistogram
             bins={bins}
@@ -30,9 +31,7 @@ export function DataVizHistogramChart({
           />
         ))}
       </div>
-      <p className="text-xs leading-5 text-[var(--color-text-secondary)]">
-        4人とも同じ金額帯と件数目盛りで比較しています。
-      </p>
+      <p className={contentText.supporting}>4人とも同じ金額帯と件数目盛りで比較しています。</p>
       <DataVizTable
         label={ariaLabel}
         minWidth={seriesIdentity.length > 2 ? "36rem" : "24rem"}
@@ -41,6 +40,7 @@ export function DataVizHistogramChart({
         columns={[
           { key: "bin", header: "金額帯", rowHeader: true, renderCell: (bin) => bin.label },
           ...seriesIdentity.map((identity) => ({
+            align: "right" as const,
             key: identity.id,
             header: identity.label,
             tabular: true,
@@ -88,7 +88,7 @@ function SingleHistogram({
       <div className="overflow-x-auto pb-1">
         <svg
           aria-label={`${identity.label}の分布`}
-          className="mx-auto block w-[320px] max-w-none min-w-[320px] rounded-sm bg-[var(--color-surface)]"
+          className="block w-[320px] max-w-none min-w-[320px] rounded-sm bg-[var(--color-surface)]"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}

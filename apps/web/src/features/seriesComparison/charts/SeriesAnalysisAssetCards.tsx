@@ -17,6 +17,8 @@ import type { SeriesComparisonAggregate } from "@/shared/api/seriesAnalysis";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
+import { FactList } from "@/shared/ui/data/FactList";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function AssetComparisonCards({
@@ -34,14 +36,16 @@ export function AssetComparisonCards({
     (highlight) => highlight.metricId === "revenue.average",
   )?.leaderMemberIds;
   return (
-    <div className="grid items-stretch gap-6 md:grid-cols-2 xl:grid-cols-4">
+    // Each player spans the same seven rows, so matching sections line up across columns
+    // without fixed heights, and opening one player's details grows only the last row.
+    <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
       {assetStyleProfiles.entries.map((entry) => {
         const performance = performanceProfiles.entries.find(
           (candidate) => candidate.memberId === entry.memberId,
         );
         const metrics = metricsByPlayer.find((candidate) => candidate.memberId === entry.memberId);
         return (
-          <article className="flex h-full min-w-0 flex-col gap-6" key={entry.memberId}>
+          <article className="row-span-7 grid min-w-0 grid-rows-subgrid" key={entry.memberId}>
             <div className="flex items-start justify-between gap-2">
               <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
@@ -55,7 +59,7 @@ export function AssetComparisonCards({
                 <SeriesAnalysisQualityAdvisory status={entry.qualityStatus} />
               </span>
             </div>
-            <section className="md:min-h-36">
+            <section className="min-w-0">
               <h4 className={contentText.supporting}>総資産の出方</h4>
               <p className={cn(contentText.compactPrimary, "mt-1")}>
                 {assetStyleLabel(entry.primaryKind)}
@@ -69,20 +73,17 @@ export function AssetComparisonCards({
               {entry.tags.length > 0 ? (
                 <ul
                   aria-label={`${entry.displayName}の資産傾向タグ`}
-                  className="mt-2 flex flex-wrap gap-1"
+                  className="mt-2 flex flex-wrap gap-2"
                 >
                   {entry.tags.map((tag) => (
-                    <li
-                      className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-2 py-1 text-xs"
-                      key={tag}
-                    >
+                    <li className={cn(compactBadgeClass, compactBadgeToneClass.neutral)} key={tag}>
                       {assetTagLabel(tag)}
                     </li>
                   ))}
                 </ul>
               ) : null}
             </section>
-            <section className="md:min-h-20">
+            <section className="min-w-0">
               <h4 className={contentText.supporting}>総資産に占める物件収益の割合</h4>
               <p className={cn(contentText.body, "mt-1")}>
                 {profileLabel(performance?.strategyKind ?? null)}
@@ -91,7 +92,7 @@ export function AssetComparisonCards({
                 物件収益比率 {formatPercent(performance?.averageRevenueAssetRate)}
               </p>
             </section>
-            <section className="md:min-h-40">
+            <section className="min-w-0">
               <h4 className={contentText.supporting}>主要根拠</h4>
               <dl className="mt-2 grid gap-2">
                 {entry.evidence.map((evidence) => (
@@ -148,72 +149,86 @@ export function AssetComparisonCards({
                 panelPadding="none"
                 panelSpacing="sm"
                 summary="詳しい根拠"
-                triggerLayout="flush-horizontal"
                 triggerVariant="supporting"
               >
-                <dl className="grid grid-cols-2 gap-2">
-                  <AssetDetailFact
-                    label="資産の幅"
-                    value={formatManYen(entry.metrics.p90P10Spread)}
+                <div className="grid gap-2">
+                  <FactList
+                    ariaLabel={`${entry.displayName}の資産傾向の根拠の値`}
+                    items={[
+                      {
+                        id: "spread",
+                        label: "資産の幅",
+                        value: formatManYen(entry.metrics.p90P10Spread),
+                      },
+                      {
+                        id: "destination-positive",
+                        label: "目的地あり",
+                        value: formatPercent(entry.metrics.destinationPositiveRate),
+                      },
+                      {
+                        id: "win",
+                        label: "1位",
+                        value: `${entry.metrics.winCount}件・${formatPercent(entry.metrics.winRate)}`,
+                      },
+                      {
+                        id: "second",
+                        label: "2位",
+                        value: `${entry.metrics.secondCount}件・${formatPercent(entry.metrics.secondRate)}`,
+                      },
+                      {
+                        id: "lower-half",
+                        label: "下位率",
+                        value: formatPercent(entry.metrics.lowerHalfRate),
+                      },
+                      {
+                        id: "win-median-assets",
+                        label: "勝利時資産中央",
+                        value: formatManYen(entry.metrics.winMedianAssets),
+                      },
+                      {
+                        id: "win-median-margin",
+                        label: "勝利時の2位差中央",
+                        value: formatManYen(entry.metrics.winMedianMargin),
+                      },
+                      {
+                        id: "second-median-gap",
+                        label: "2位時の1位差中央",
+                        value: formatManYen(entry.metrics.secondMedianGap),
+                      },
+                      {
+                        id: "lower-half-median-gap",
+                        label: "下位時の1位差中央",
+                        value: formatManYen(entry.metrics.lowerHalfMedianGap),
+                      },
+                      {
+                        id: "blowout-win",
+                        label: "大勝",
+                        value: `${entry.metrics.blowoutWinCount}件`,
+                      },
+                      {
+                        id: "near-miss-second",
+                        label: "惜しい2位",
+                        value: `${entry.metrics.nearMissSecondCount}件`,
+                      },
+                      {
+                        id: "heavy-loss",
+                        label: "大敗",
+                        value: `${entry.metrics.heavyLossCount}件`,
+                      },
+                    ]}
+                    layout="inline"
                   />
-                  <AssetDetailFact
-                    label="目的地あり"
-                    value={formatPercent(entry.metrics.destinationPositiveRate)}
-                  />
-                  <AssetDetailFact
-                    label="1位"
-                    value={`${entry.metrics.winCount}件・${formatPercent(entry.metrics.winRate)}`}
-                  />
-                  <AssetDetailFact
-                    label="2位"
-                    value={`${entry.metrics.secondCount}件・${formatPercent(entry.metrics.secondRate)}`}
-                  />
-                  <AssetDetailFact
-                    label="下位率"
-                    value={formatPercent(entry.metrics.lowerHalfRate)}
-                  />
-                  <AssetDetailFact
-                    label="勝利時資産中央"
-                    value={formatManYen(entry.metrics.winMedianAssets)}
-                  />
-                  <AssetDetailFact
-                    label="勝利時の2位差中央"
-                    value={formatManYen(entry.metrics.winMedianMargin)}
-                  />
-                  <AssetDetailFact
-                    label="2位時の1位差中央"
-                    value={formatManYen(entry.metrics.secondMedianGap)}
-                  />
-                  <AssetDetailFact
-                    label="下位時の1位差中央"
-                    value={formatManYen(entry.metrics.lowerHalfMedianGap)}
-                  />
-                  <AssetDetailFact label="大勝" value={`${entry.metrics.blowoutWinCount}件`} />
-                  <AssetDetailFact
-                    label="惜しい2位"
-                    value={`${entry.metrics.nearMissSecondCount}件`}
-                  />
-                  <AssetDetailFact label="大敗" value={`${entry.metrics.heavyLossCount}件`} />
-                </dl>
-                <p className={cn(contentText.supporting, "mt-2")}>
-                  判定境界: 大勝 {formatManYen(assetStyleProfiles.blowoutWinThreshold)}・ 惜しい2位{" "}
-                  {formatManYen(assetStyleProfiles.nearMissSecondThreshold)}
-                  ・大敗 {formatManYen(assetStyleProfiles.heavyLossThreshold)}
-                </p>
+                  <p className={contentText.supporting}>
+                    判定境界: 大勝 {formatManYen(assetStyleProfiles.blowoutWinThreshold)}・惜しい2位{" "}
+                    {formatManYen(assetStyleProfiles.nearMissSecondThreshold)}・大敗{" "}
+                    {formatManYen(assetStyleProfiles.heavyLossThreshold)}
+                  </p>
+                </div>
               </Disclosure>
             </div>
           </article>
         );
       })}
-    </div>
-  );
-}
-
-function AssetDetailFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className={contentText.supporting}>{label}</dt>
-      <dd className={cn(contentText.body, "mt-0.5 break-words tabular-nums")}>{value}</dd>
     </div>
   );
 }
@@ -272,7 +287,12 @@ function AssetFact({
       {subLabel ? <p className={contentText.supporting}>{subLabel}</p> : null}
       <p className={cn(contentText.body, "mt-1 break-words tabular-nums")}>{value}</p>
       {badge ? (
-        <span className="font-plain mt-1 inline-flex rounded-full border border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 px-2 py-1 text-xs text-[var(--color-analysis-emphasis)]">
+        <span
+          className={cn(
+            compactBadgeClass,
+            "mt-1 border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 text-[var(--color-analysis-emphasis)]",
+          )}
+        >
           {badge}
         </span>
       ) : null}

@@ -26,7 +26,10 @@ type AdjacentNavigationProps = {
 const destinationClassName =
   "row-span-2 grid min-h-11 min-w-0 grid-cols-1 grid-rows-subgrid items-start gap-1 border border-transparent px-5 py-3 text-base font-plain whitespace-normal break-words text-[var(--color-text-secondary)]";
 
-/** Keeps each direction and its destination together, including known ends and temporary pauses. */
+/**
+ * Keeps each direction and its destination together, including known ends and temporary pauses.
+ * Descriptions wrap in full rather than truncate, so either side can be judged before moving.
+ */
 export function AdjacentNavigation({
   label,
   previous,
@@ -36,7 +39,7 @@ export function AdjacentNavigation({
 }: AdjacentNavigationProps) {
   return (
     <nav aria-label={label} className="grid min-w-0 gap-2">
-      <div className="grid min-w-0 grid-flow-col grid-cols-2 grid-rows-[auto_auto] gap-x-3 gap-y-1">
+      <div className="grid min-w-0 grid-flow-col grid-cols-2 grid-rows-[auto_auto] gap-x-2 gap-y-1">
         <Destination destination={previous} direction="previous" disabled={disabled} />
         <Destination destination={next} direction="next" disabled={disabled} />
       </div>

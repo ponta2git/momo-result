@@ -45,7 +45,7 @@ export function MatchRecordMetadata({
       ) : null}
       <ContentWithActions
         actions={
-          <div className="grid gap-2">
+          <div className="grid gap-1">
             <AlertDialog
               cancelLabel="キャンセル"
               confirmDisabled={Boolean(deleteDisabledReason)}
@@ -63,7 +63,7 @@ export function MatchRecordMetadata({
                   }
                   disabled={Boolean(deleteDisabledReason)}
                   size="sm"
-                  variant="danger"
+                  variant="dangerQuiet"
                   onClick={openDeleteDialog}
                 >
                   削除

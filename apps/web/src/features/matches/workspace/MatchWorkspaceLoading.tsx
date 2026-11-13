@@ -1,46 +1,22 @@
-import { actionRowClass } from "@/shared/ui/actions/actionGroup";
-import { cn } from "@/shared/ui/cn";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
+import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { StatusBadge } from "@/shared/ui/status/StatusBadge";
-import { workspaceSampleStatus } from "@/shared/workflows/matchWorkspacePresentation";
+import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
+import { MatchWorkspaceSkeleton } from "@/shared/workflows/MatchWorkspaceSkeleton";
 
 export function MatchWorkspaceLoading({
   loadingLabel = "試合フォームを読み込み中",
+  mode,
   sample = false,
+  width,
 }: {
   loadingLabel?: string;
+  mode: WorkspaceMode;
   sample?: boolean;
+  width: PageFrameWidth;
 }) {
   return (
-    <PageFrame aria-busy="true" aria-label={loadingLabel} width="workspace">
-      <PageContentSurface aria-label="試合内容" className="grid grid-cols-1 gap-6" role="region">
-        <div className={cn(actionRowClass, "justify-between")}>
-          <Skeleton className="h-11 w-32 max-w-full rounded-sm pointer-fine:h-9" />
-          {sample ? (
-            <div className="ms-auto">
-              <StatusBadge {...workspaceSampleStatus} />
-            </div>
-          ) : null}
-        </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          <Skeleton className="h-11 pointer-fine:h-10" />
-          <Skeleton className="h-11 pointer-fine:h-10" />
-          <Skeleton className="h-11 pointer-fine:h-10" />
-          <Skeleton className="h-11 pointer-fine:h-10" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {["player-a", "player-b", "player-c", "player-d"].map((id) => (
-            <div key={id} className="grid gap-4 rounded-sm border border-[var(--color-border)] p-4">
-              <Skeleton className="h-6 w-2/3" />
-              <Skeleton className="h-11 pointer-fine:h-10" />
-              <Skeleton className="h-11 pointer-fine:h-10" />
-              <Skeleton className="h-11 pointer-fine:h-10" />
-            </div>
-          ))}
-        </div>
-      </PageContentSurface>
+    <PageFrame aria-busy="true" aria-label={loadingLabel} width={width}>
+      <MatchWorkspaceSkeleton mode={mode} sample={sample} sourcePanel={width === "workspace"} />
     </PageFrame>
   );
 }

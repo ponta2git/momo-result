@@ -20,7 +20,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v13', artifact_schema_version = 10,
+      SET algorithm_version = 'series-analysis-v14', artifact_schema_version = 10,
           validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
@@ -133,7 +133,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         initial,
         (
           0L,
-          "series-analysis-v13",
+          "series-analysis-v14",
           10,
           Some("series-analysis-artifact-v10-full-validation-v1"),
           "initial"

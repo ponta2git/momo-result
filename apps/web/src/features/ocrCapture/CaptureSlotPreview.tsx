@@ -2,6 +2,7 @@ import type { DragEventHandler } from "react";
 
 import type { CaptureSlotView } from "@/features/ocrCapture/captureSlotView";
 import { cn } from "@/shared/ui/cn";
+import { compactBadgeClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 const sourceLabels = {
@@ -16,6 +17,7 @@ type CaptureSlotPreviewProps = {
   onDragStartCapture: DragEventHandler<HTMLDivElement>;
 };
 
+/** Shares the camera preview's 16:9 contain frame, so a capture is checked whole in its framing. */
 export function CaptureSlotPreview({
   isWorking,
   label,
@@ -47,7 +49,13 @@ export function CaptureSlotPreview({
             className="size-full object-contain"
           />
           {slot.source ? (
-            <span className="font-plain absolute bottom-2 left-2 rounded-xs border border-[var(--color-text-inverse)]/15 bg-[var(--color-surface-inverse)]/80 px-2 py-0.5 text-xs text-[var(--color-text-inverse)]">
+            <span
+              className={cn(
+                compactBadgeClass,
+                // Over the image a dark fill alone separates the label; no frame is needed.
+                "absolute bottom-2 left-2 border-transparent bg-[var(--color-surface-inverse)]/80 text-[var(--color-text-inverse)]",
+              )}
+            >
               {sourceLabels[slot.source]}
             </span>
           ) : null}

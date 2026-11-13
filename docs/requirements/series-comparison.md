@@ -8,8 +8,8 @@
 | --- | --- |
 | 本ページのscope、指標の意味、表示上の判断 | 本書 |
 | オーナー別比較の初版範囲、指標、件数・表示 | `docs/requirements/series-owner-comparison.md` |
-| プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定・未実装） | `docs/requirements/series-player-radar.md` |
-| 追加する実績軸の作品通算・対象マップ・0試合時の表示（未実装） | [実績達成管理](player-achievements.md) |
+| プレーヤーレーダーの6軸・万能性の比較・作品共通の固定採点基準（要求確定） | `docs/requirements/series-player-radar.md` |
+| 追加する実績軸の作品通算・対象マップ・0試合時の表示 | [実績達成管理](player-achievements.md) |
 | 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
@@ -90,7 +90,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - pale surfaceは `docs/ui-rule.md` の強調文法に従い、選択中または現在のscope、状態・通知、操作のinset、compactな標章に限定する。primary result、page-local navigation、label付きheader、primary hypothesisは、重要という理由だけで淡色面へ置かず、読み順、文字、余白、dividerを優先する。同格比較でfillを反復する場合は比較群を一つのanchorとして扱い、その外側へ同じ強さの面を重ねず、意味を持つfillには非色labelまたはmarkerを併用する。
 - chart / table 内だけに必要な横スクロールを閉じ込め、legendはplot外でwrapし、axis名とtick labelをplot境界内に収める。mobileのdialogは本文に1つの縦scroll領域を持つ。
 - parts-of-a-wholeは1本の100% compositionと値一覧で示し、単一候補は確率100%ではなく「候補はこの1件」と表現する。
-- 選択試合のresult ledgerを分析目的より前に共有し、根拠試合と比較をURL stateで往復できるようにする。markerは試合粒度で一意に対応できる場合だけ表示し、tab切替後もfocusを保持する。
+- 選択試合のresult ledgerは目的tabの直後、各目的の内容より前に置いて目的間で共有し、目的tabの位置を選択試合の有無で動かさない。根拠試合と比較をURL stateで往復できるようにする。markerは試合粒度で一意に対応できる場合だけ表示し、tab切替後もfocusを保持する。
 
 ## 5. Metric Semantics
 
@@ -142,7 +142,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 目的地なし売り場率 | 目的地0回かつカード売り場ありの試合数 / カード売り場ありの試合数 |
 
 - 切り替え力は選択scope内の前戦だけを使い、scope外の直前試合を混ぜない。条件対象0件は対象なし、1〜7件は参考とする。
-- 荒れ試合は、収益トップ未勝利、銀次複数回、相対的な僅差、相対的な大差を決定論的flagとして示す。相対flagは3試合未満のscopeで出さない。
+- 荒れ試合は、収益トップ未勝利、銀次複数回、相対的な僅差、相対的な大差を決定論的flagとして示す。相対flagは3試合未満のscopeで出さない。試合文脈の接戦・大差は同じ相対規則を作品内の全確定試合へ適用し、その試合を含むどのscopeでも同じ判定にする。
 - 「直近n戦と荒れ方」の横ストリップは古い試合を左、最新試合を右に置き、時系列順に読む。集計、累積推移、順位遷移に使う安定対戦順は反転させない。
 - 番手、銀次被害、目的地、カード売り場の条件別指標は対象件数を必ず併記し、偶発イベントを判断ミスとして扱わない。
 - 累積推移、分布、drilldown用明細は同じ対戦順・分母・同値規則を使う。

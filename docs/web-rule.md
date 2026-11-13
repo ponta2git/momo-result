@@ -1,6 +1,6 @@
 # Web 実装規約
 
-目的: `apps/web` の層、server state、React の更新境界、client lifecycle と motion、form / API client、build / test tooling の実装契約を定める。表示の意味、視覚階層、操作文法、文言は [UI 規約](ui-rule.md) が所有する。現在の component / module / token 名は実装を正本とし、主要な実装への入口は本書の [Implementation Entry Points](#implementation-entry-points) から辿れる。
+目的: `apps/web` の層、server state、React の更新境界、client lifecycle と motion、form / API client、build / test tooling の実装契約を定める。体験方針、情報設計、表示の意味、視覚階層、操作文法、文言は [UI 規約](ui-rule.md) が所有する。現在の component / module / token 名は実装を正本とし、主要な実装への入口は本書の [Implementation Entry Points](#implementation-entry-points) から辿れる。
 
 wire は [API 規約](api-rule.md#wire-boundary)、分析の Web state 契約は [分析 batch 要求](requirements/series-analysis-batch.md#web-state)、品質証拠は [テスト・品質規約](test-rule.md#web-evidence-catalog)、実行境界は [テスト実行設計](test-architecture.md#web-の実行境界) を参照する。
 
@@ -32,13 +32,17 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 
 | 役割（UI 規約の呼称） | 現在の実装入口 |
 | --- | --- |
-| page frame / page-level content surface と幅 variant（narrow / standard / wide / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`） |
-| 共通の readable measure | `max-w-2xl` |
+| page frame / page-level content surface と幅の用途（readable / default / analysis / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`）、幅の値は `styles.css` の `--container-readable` / `--container-page-*`、route ごとの用途は `routePagePresentation` |
+| 共通の readable measure | `readableTextWidthClass`（`--container-readable`） |
 | 文字色の呼称 `text-primary` / `text-body` / `text-secondary` / `text-muted` | `styles.css` の `--color-text-primary` / `--color-text-body` / `--color-text-secondary` / `--color-text-muted` |
 | 文字ウェイト token と utility | global stylesheet `styles.css` |
 | 共通文字 recipe（主要結論 `primary`、一覧用主要結果 `compactPrimary`、入力文字 `fieldText`） | `shared/ui/typography.ts` |
 | field / fieldset | `shared/ui/forms/Field.tsx` の `Field`、native `<fieldset>` |
 | 通常・invalid の境界 recipe と control の tone 優先順位 | `shared/ui/forms/controlPresentation` |
+| 状態 tone の枠・面の強さ | `styles.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
+| 分類・特徴など小さな標章の寸法・角丸・tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `compactBadgeToneClass` |
+| ブラウザー title と主ナビの現在地（route の意味） | `app/router.tsx` の各 route の `handle`（`app/routeHandle.ts` の `RouteHandle` の `title` / `navArea`） |
+| global navigation の下で止める sticky の位置 | `styles.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |
 | 確認 dialog | `AlertDialog` |
@@ -49,7 +53,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | 前後移動 primitive | `AdjacentNavigation` |
 | プレー順 marker、member sequence label | `PlayOrderMark`、`MemberSequenceLabel` |
 | 面の hover feedback hook | `useSurfaceFeedback` |
-| 共通 QueryClient と自動再取得の契約 | `app/queryClient.ts` の `queryClient` |
+| 開催から始める記録の初期値（開催・次の試合番号・直前の試合の条件、候補が一つの選択） | `shared/heldEvents/recordContext.ts` の `fillRecordSetup`、開催の読み直しは `useRecordContext` |
+| 共通 QueryClient と自動再取得の契約 | `app/queryClient.ts` の `queryClient`、受付済み処理の完了確認は `shared/api/completionCheck.ts` |
 | 共通の許可判断と本人情報 | `shared/auth` |
 | 画面をまたぐ toast の共通 host | `shared/ui/feedback/ToastHost.tsx` の `ToastHost`。`app/AppShell.tsx` が配置する |
 | Motion provider | 同期 `LazyMotion` + `domMin` + `strict` + `m` component、`MotionConfig` |
@@ -69,8 +74,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 - Web の本人情報は auth query を正本とし、管理機能の表示・query・明示 refetch・送信直前の command を `shared/auth` の共通の許可判断へ接続する。再確認の進行と操作の所有期間も同じ境界で扱い、一時失敗中に旧 role だけで操作を再開しない。ロール変更の再確認中は、許可が残り得る作業の未保存入力と進行中の操作を保ちつつ、権限外の情報を表示・送信しない。確定失権した scope の入力は終了し、別主体・別対象へ持ち越さない。
 - 確定失権した管理 read は cancel して cache を除去する。管理者権限だけの喪失ではアカウント・通知、運用権限も失った場合は分析管理・レーダーを対象にし、通常の master・分析結果等の共有参照は保持する。主体と許可の所有期間が変わった後の応答で保護 cache や新しい入力を復活・上書きせず、再付与を古い操作の継続と扱わない。同一主体が参照できる master の確定 mutation 結果の反映と、保護 refetch・画面の完了処理を分ける。
 - 管理用 query / command の権限拒否は一度の本人情報再確認へ集約し、処理済み・旧作業の拒否を起点に循環させない。本人情報と保護 query の 401 / 403 は自動 retry せず、許可継続後も拒否された read の再試行は利用者の操作に任せる。再確認・再表示で POST を再送せず、確認中に到着した受付結果は既存 mutation の owner に保持する。
-- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行が server state の取得を開始する。次項の受理済みレーダー作成・復元の完了確認を例外とし、それ以外では interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約する。
-- レーダー基準の作成・復元は、利用者が開始して受付が確定した操作に限り、待機表示から編集へ進むために完了状態を自動確認する。対象はその操作だけとし、完了・失敗・読取エラー・権限停止で止め、非表示ブラウザでは継続取得しない。読取失敗の再開は明示更新で行い、POST を再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
+- 初回表示、mutation 後の cache 整合、artifact 失効時の bounded recovery、利用者が実行した更新 / 再試行が server state の取得を開始する。次項の完了確認を例外とし、それ以外では interval、遅延 timer、window focus、tab visibility、network reconnect を起点に自動再取得しない。この契約は共通 QueryClient に集約する。
+- 利用者が開始して受付が確定した処理を、画面が結果や次の操作の代わりに待機として示している間に限り、その表示の read が完了を自動確認する。対象は、OCR の読み取りを処理中として示す開催詳細と下書き画面、集計待ちを示す試合詳細、待機表示から編集へ進むレーダー基準の作成・復元（受理した操作の状態だけを読む）とする。待機の終了、読取エラー、権限停止で止め、非表示ブラウザでは取得しない。OCR と集計は同じ待機が上限時間を超えても止め、間隔と上限は共通の完了確認が所有する。自動確認の取得を利用者の更新や読み込み中として表示しない。読取失敗と上限後の再開は明示更新か再表示で行い、POST を再送しない。通常の管理状態取得や手入力の正式比較には適用しない。
 - 分析の計算 payload が immutable でも、現在の名称や試合 revision に依存する HTTP projection は可変として扱う。master 変更は表示名を含む artifact response、試合訂正・削除はその試合の context と identity を更新する。手動更新は status で参照世代を確定してから必要な resource を読み、新旧 artifact を同時に再取得しない。
 - match-context の確定した不存在・失効は成功済み cache の利用を止め、一時的な更新失敗と区別する。比較画面と試合結果画面で共通の利用判定を使い、表示 bundle の選択試合と全マーカーを揃える。再取得中の復活を含む状態契約は [分析 batch 要求の Web State](requirements/series-analysis-batch.md#web-state) を正本とする。
 - React の concurrent / form API は cache、retry、認証、validation の既存契約を維持する範囲で使う。
@@ -86,7 +91,7 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | --- | --- | --- |
 | 試合一覧・開催一覧の条件変更 | 即時の選択 intent、遅延した一覧、古い対象への操作制限 | 続けて条件を変えながら表示を追従させる |
 | 戦績比較の view / scope / artifact | 整合した表示 bundle の遅延、図表の memo 境界 | 大きい図表更新を選択操作と分離する |
-| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える |
+| 試合入力 | workspace が所有する数値文字列、遅延検証、cell 単位の draft 射影 | 表示幅・入力欄の開閉でも未完成の入力を維持し、無関係な cell の描画を抑える。OCR が読み取れなかった値は空の数値文字列から始め、0 で補わない |
 | マスタ作成 | Action と局所的な楽観行、成功 response の確定反映 | 待ち時間中も追加を示し、失敗時に入力を回復する |
 | 保存・削除・OCR 開始・権限 / 通知変更・再計算・出力 | Action / mutation の pending と確定結果 | 検証、競合、副作用、生成結果を先取りしない |
 | 開催選択・出力候補のページ取得 | Query の前ページ保持と scope 表示 | ページ単位の取得は既存の待機境界で扱える |
@@ -119,8 +124,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 - Motion の宣言は、変化する pixel と semantic state を所有する shared UI primitive または feature の末端 visual component に置く。画面の合成 hook、resource / command / query hook、router は Motion を import しない。`Fade`、`Slide`、`Scale` のように effect 名だけを隠す pass-through wrapper は作らず、複数用途の accessibility、state mapping、interruption を一つの小さい契約で隠せる場合だけ shared abstraction にする。
 - application code は Motion の完了 callback を、data、cache、route、open、focus、pending、error、操作可能性を進める唯一の条件にしない。callback が所有してよいのは、中断または未実行でも application state を誤らせない冪等な表示上の後始末に限る。exit のため一時保持する node は非対話的かつ accessibility tree の対象外とし、先に確定した state と focus を巻き戻さない。
 - presence による一時保持は、shared dialog と toast が通常の close / remove 後に非対話的な exit snapshot を描く場合だけ許可する。親 subtree、route、artifact、view の identity が失われた場合は exit を省略してよく、表示補間のためにそれらの lifecycle を遅らせない。
-- 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。Motion 導入時は既存の有限 CSS transition もこの境界へ移し、CSS loop の feature 直書きを shared loading primitive へ集約する。
-- reduced motion では非必須の残存 motion を末端 component でも省略する。Motion の初回導入と feature bundle の変更では production build の bundle 差分を測る。
+- 処理時間が不定な Spinner / Skeleton の loop だけは shared loading primitive 内の CSS を使ってよい。それ以外の新しい有限 motion は Motion に統一し、同じ transition に CSS、timer、Web Animations API、別の motion engine を混ぜない。
+- reduced motion では非必須の残存 motion を末端 component でも省略する。feature bundle の変更では production build の bundle 差分を測る。
 
 ## Form / React 19 / API Client
 

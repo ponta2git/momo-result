@@ -107,7 +107,10 @@ test("settles an interrupted upload and lets a failed reread be completed by han
   const reopened = await context.newPage();
   await reopened.goto(`/review/${operation.draftId}`);
   await expect(reopened.getByRole("button", { name: "確定前の確認へ進む" })).toBeEnabled();
-  await expect(reopened.getByLabel("ぽんた 総資産（万円）", { exact: true })).toHaveValue("0");
+  // Nothing was read, so every value starts empty rather than as 0 and is entered by hand.
+  const unreadTotal = reopened.getByLabel("ぽんた 総資産（万円）", { exact: true });
+  await expect(unreadTotal).toHaveValue("");
+  await expect(unreadTotal).toHaveAccessibleDescription(/未読み取り/u);
   for (const [index, name] of ["ぽんた", "あかねまみ", "おーたか", "いーゆー"].entries()) {
     await reopened.getByLabel(`${name} 順位`, { exact: true }).fill(String(index + 1));
     await reopened
@@ -116,6 +119,15 @@ test("settles an interrupted upload and lets a failed reread be completed by han
     await reopened
       .getByLabel(`${name} 収益（万円）`, { exact: true })
       .fill(String((4 - index) * 10));
+    for (const incident of [
+      "目的地",
+      "プラス駅",
+      "マイナス駅",
+      "カード駅",
+      "カード売り場",
+      "スリの銀次",
+    ])
+      await reopened.getByLabel(`${name} ${incident}`, { exact: true }).fill("0");
   }
   await reopened.getByRole("button", { name: "確定前の確認へ進む" }).click();
   const confirmation = reopened.waitForResponse(

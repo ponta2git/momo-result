@@ -8,7 +8,10 @@ use crate::{
     stats::{average, median_i32, population_stddev, quality_status, rate},
 };
 
-use super::{grouping::MatchGroup, signals::relative_intensity};
+use super::{
+    grouping::MatchGroup,
+    signals::{play_order_spread_signal, relative_intensity},
+};
 
 const RECENT_WINDOW: usize = 20;
 
@@ -436,7 +439,7 @@ pub(super) fn play_order_comparison(
                 "bestPlayOrder": best.map(|value| value.0),
                 "worstPlayOrder": worst.map(|value| value.0),
                 "spread": spread,
-                "signal": spread.map_or("no_target", |value| if value >= 0.75 { "large" } else if value >= 0.35 { "visible" } else { "flat" }),
+                "signal": play_order_spread_signal(spread, rows.len()),
                 "cells": cells.into_iter().map(|(order, rank_average, count, target)| json!({
                     "itemId": format!("play-order:{member_id}:{order}"),
                     "playOrder": order,

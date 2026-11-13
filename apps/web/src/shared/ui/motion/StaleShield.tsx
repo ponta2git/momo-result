@@ -69,7 +69,7 @@ export function StaleShield({
             }`}
           >
             <span
-              className="font-plain inline-flex min-h-8 items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs text-[var(--color-text-muted)]"
+              className="font-plain inline-flex min-h-8 items-center gap-2 rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs/5 text-[var(--color-text-muted)]"
               role="status"
             >
               <SpinnerIcon size="sm" />

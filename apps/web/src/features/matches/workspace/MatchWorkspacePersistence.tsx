@@ -115,6 +115,7 @@ export function MatchWorkspacePersistence({
     heldEventPublicId: view.selectedHeldEvent?.publicId,
     notify: input.notifyToast,
     onPersistedSuccess: sessionDraft.markCommitted,
+    recordedWith: mode === "review" ? "ocr" : "manual",
     setConfirmOpen: setConfirmOpen,
     setOperationError: setOperationError,
     setValidationMessage: setValidationMessage,
@@ -153,6 +154,7 @@ export function MatchWorkspacePersistence({
   });
   const validation = useMatchWorkspaceValidation({
     mode,
+    ready: input.enabled,
     showValidationErrors: showValidationErrors,
     values: editingSnapshot.values,
   });
@@ -178,8 +180,6 @@ export function MatchWorkspacePersistence({
         cancelDraftConfirmOpen,
         operationError,
         validationMessage,
-        valid: validation.validation.success,
-        firstValidationMessage: validation.validation.firstMessage,
       }),
     [
       mode,
@@ -190,8 +190,6 @@ export function MatchWorkspacePersistence({
       cancelDraftConfirmOpen,
       operationError,
       validationMessage,
-      validation.validation.success,
-      validation.validation.firstMessage,
     ],
   );
   const interaction = useMemo(
@@ -264,11 +262,7 @@ export function MatchWorkspacePersistence({
             },
             feedback: { validationMessage: validationMessage },
             pending: submitFlow.confirmation.pending,
-            review: {
-              changedCount: confirmationSnapshot.changedCount,
-              totalCount: confirmationSnapshot.totalCount,
-              unresolvedCount: confirmationSnapshot.unresolvedCount,
-            },
+            review: { unresolvedCount: confirmationSnapshot.unresolvedCount },
             summary: {
               gameTitleName: view.selectedGameTitle?.name,
               heldEvent: view.selectedHeldEvent,

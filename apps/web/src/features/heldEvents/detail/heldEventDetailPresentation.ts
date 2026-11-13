@@ -1,4 +1,3 @@
-import { heldEventOcrCaptureHref } from "@/features/heldEvents/heldEventNavigation";
 import type { DetailNavigation, HeldEventNeighbor } from "@/shared/api/detailReadResult";
 import type {
   HeldEventDetailResponse,
@@ -8,6 +7,7 @@ import type {
 } from "@/shared/api/heldEvents";
 import { memberDisplayName, orderFixedMembers } from "@/shared/domain/members";
 import { formatDateTimeCompact, formatNavigationDateTime } from "@/shared/lib/dateTime";
+import { matchRecordHref, recordEntryHref } from "@/shared/navigation/matchLinks";
 import { heldEventDetailHref } from "@/shared/navigation/publicIdentifiers";
 import type { AdjacentDestination } from "@/shared/ui/navigation/AdjacentNavigation";
 
@@ -44,6 +44,17 @@ export type HeldEventDetailReadyView = {
     };
     readonly currentDateTime: string;
     readonly exportHref: string;
+    /**
+     * What the record section says about other held events. Summit usually creates the night's
+     * event before play, so the newest event is where a night's matches go: an older one points
+     * there, and only a newest one already holding records offers a new event for a night Summit
+     * did not prepare (beside an empty one it would split the night). Unknown neighbors claim
+     * neither.
+     */
+    readonly recordingHint:
+      | { readonly kind: "toNewest"; readonly href: string }
+      | { readonly kind: "offerNewEvent" }
+      | null;
     readonly manualEntryHref: string;
     readonly ocrCaptureHref: string;
   };
@@ -100,11 +111,12 @@ export function buildHeldEventDetailView({
     ...(next ? [next.heldAt] : []),
   ];
   const encodedHeldEventId = encodeURIComponent(detail.id);
+  const empty = drafts.length === 0 && matches.length === 0;
   return {
     event: {
       detail,
       drafts,
-      emphasizeNewMatch: drafts.length === 0 && matches.length === 0,
+      emphasizeNewMatch: empty,
       matches,
       playerRecaps: buildHeldEventPlayerRecaps(matches),
     },
@@ -119,8 +131,15 @@ export function buildHeldEventDetailView({
       },
       currentDateTime: formatNavigationDateTime(detail.heldAt, peers),
       exportHref: `/exports?heldEventId=${encodedHeldEventId}&format=csv`,
-      manualEntryHref: `/matches/new?heldEventId=${encodedHeldEventId}`,
-      ocrCaptureHref: heldEventOcrCaptureHref(detail.id),
+      recordingHint: !available
+        ? null
+        : next
+          ? { kind: "toNewest", href: recordEntryHref }
+          : empty
+            ? null
+            : { kind: "offerNewEvent" },
+      manualEntryHref: matchRecordHref(detail.id, "manual"),
+      ocrCaptureHref: matchRecordHref(detail.id, "ocr"),
     },
     refresh,
   };

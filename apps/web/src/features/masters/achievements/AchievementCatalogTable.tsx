@@ -5,6 +5,7 @@ import { formatDecimal, formatManYen } from "@/shared/lib/formatters";
 import { Button } from "@/shared/ui/actions/Button";
 import { LinkButton } from "@/shared/ui/actions/LinkButton";
 import { DataTable } from "@/shared/ui/data/DataTable";
+import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { contentText } from "@/shared/ui/typography";
 
 function ruleLabel(item: AchievementItem) {
@@ -38,6 +39,9 @@ export function AchievementCatalogTable({
   onEdit: (item: AchievementItem) => void;
   onRetire: (item: AchievementItem) => void;
 }) {
+  if (items.length === 0) {
+    return <EmptyState placement="embedded" title="実績項目はまだありません" />;
+  }
   return (
     <DataTable
       caption={{ content: retired ? "廃止した実績項目" : "実績項目の管理" }}
@@ -139,7 +143,6 @@ export function AchievementCatalogTable({
       rows={items}
       getRowKey={(item) => item.achievementId}
       verticalAlign="top"
-      emptyState={<p>実績項目はまだありません。</p>}
     />
   );
 }

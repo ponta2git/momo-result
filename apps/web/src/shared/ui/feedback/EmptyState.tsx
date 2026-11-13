@@ -23,7 +23,7 @@ export function EmptyState({
     <section
       className={
         placement === "standalone"
-          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           : "bg-transparent py-4"
       }
     >
@@ -43,7 +43,7 @@ export function EmptyState({
               {description}
             </div>
           ) : null}
-          {action ? <div className="mt-4">{action}</div> : null}
+          {action ? <div className="mt-3">{action}</div> : null}
         </div>
       </div>
     </section>

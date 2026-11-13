@@ -3,10 +3,10 @@ import { Notice, TabsList, TabsPanel, TabsRoot, TabsTab, TextField } from "momo-
 export const FormPanel = () => (
   <div className="max-w-md">
     <TabsRoot defaultValue="momotaro">
-      <TabsList aria-label="入力するプレイヤー" variant="underline">
-        <TabsTab value="momotaro">ももたろう</TabsTab>
-        <TabsTab value="kintaro">きんたろう</TabsTab>
-        <TabsTab value="urashima">うらしま</TabsTab>
+      <TabsList aria-label="入力するプレーヤー" variant="underline">
+        <TabsTab value="momotaro">いーゆー</TabsTab>
+        <TabsTab value="kintaro">ぽんた</TabsTab>
+        <TabsTab value="urashima">あかねまみ</TabsTab>
       </TabsList>
       <TabsPanel value="momotaro">
         <div className="mt-4 grid grid-cols-2 gap-4">

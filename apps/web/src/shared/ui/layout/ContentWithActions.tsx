@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 /**
  * Keeps related reading content independent of action height. The action group
  * follows the content when their combined widths no longer fit the parent slot.
+ * Page headers, fields, tabs, disclosures, and dialog headers keep their own primitives.
  */
 export function ContentWithActions({
   actions,

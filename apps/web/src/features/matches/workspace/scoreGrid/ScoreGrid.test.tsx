@@ -43,6 +43,7 @@ function ScoreGrid({
       items: data.review.items.filter((item) => item.row === index),
       acknowledgedCellIds: data.review.acknowledgedCellIds,
       synced: data.lastIncidentSyncPlayerIndex === index,
+      unreadFields: [],
     };
     return { getSnapshot: () => snapshot, subscribe: () => () => undefined };
   });

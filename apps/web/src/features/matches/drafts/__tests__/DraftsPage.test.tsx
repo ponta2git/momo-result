@@ -1,11 +1,12 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DraftsPage } from "@/features/matches/drafts/DraftsPage";
+import { completionCheckIntervalMs } from "@/shared/api/completionCheck";
 import type { MatchSummaryResponse } from "@/shared/api/matches";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -42,6 +43,10 @@ function draft(id: string, status: string, matchNoInEvent: number): MatchSummary
     status,
     updatedAt: "2026-01-02T00:00:00.000Z",
   };
+}
+
+function draftAfterRead(item: MatchSummaryResponse, id: string): MatchSummaryResponse {
+  return item.id === id ? { ...item, status: "draft_ready" } : item;
 }
 
 let drafts: MatchSummaryResponse[];
@@ -112,6 +117,49 @@ describe("DraftsPage", () => {
     expect(within(failed).getByRole("button", { name: "破棄" })).toBeInTheDocument();
     const running = screen.getByRole("region", { name: "処理中 1件" });
     expect(within(running).getByRole("button", { name: "読み取りを中止" })).toBeInTheDocument();
+  });
+
+  it("moves a finished OCR read into review on its own, without reading as a user refresh", async () => {
+    const recheck = createDeferred<void>();
+    let reads = 0;
+    server.use(
+      http.get("/api/matches", async () => {
+        reads += 1;
+        if (reads === 2) await recheck.promise;
+        const items =
+          reads < 3 ? drafts : drafts.map((item) => draftAfterRead(item, "draft-running"));
+        return HttpResponse.json({
+          items,
+          pagination: {
+            hasNextPage: false,
+            hasPreviousPage: false,
+            page: 1,
+            pageSize: 200,
+            totalItems: items.length,
+            totalPages: 1,
+          },
+        });
+      }),
+    );
+    // Fake only the clock the completion check schedules on, and let real time drive the rest.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderDrafts();
+
+      expect(await screen.findByRole("region", { name: "処理中 1件" })).toBeInTheDocument();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(reads).toBe(2));
+      expect(screen.getByRole("button", { name: "最新情報に更新" })).toBeEnabled();
+      recheck.resolve();
+
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByRole("region", { name: "対応が必要 2件" })).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: /^処理中/u })).not.toBeInTheDocument();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 5));
+      expect(reads).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("checks the draft status before opening the review", async () => {

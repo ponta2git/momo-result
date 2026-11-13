@@ -5,6 +5,7 @@ import { createEmptyMatchForm } from "@/features/matches/workspace/matchFormType
 import type {
   IncidentLookupEntry,
   MatchFormValues,
+  OriginalPlayerSnapshot,
 } from "@/features/matches/workspace/matchFormTypes";
 import {
   createMatchWorkspaceEditingState,
@@ -31,13 +32,28 @@ function entry(counts: Partial<IncidentLookupEntry["counts"]>): IncidentLookupEn
 
 function reviewState(
   values: MatchFormValues,
-  incidentByPlayOrder = new Map<number, IncidentLookupEntry>(),
+  incidentByPlayOrder = new Map<number, IncidentLookupEntry>([[1, entry({})]]),
+  originalPlayers: OriginalPlayerSnapshot[] = [],
 ) {
   return editWorkspace(createMatchWorkspaceEditingState(values), {
     type: "initialize",
     values,
-    initialData: { draftByKind: {}, incidentByPlayOrder, originalPlayers: [], warnings: [] },
+    initialData: { draftByKind: {}, incidentByPlayOrder, originalPlayers, warnings: [] },
   });
+}
+
+function originalOf(player: MatchFormValues["players"][number]): OriginalPlayerSnapshot {
+  return {
+    confidence: { incidents: {} },
+    evidence: { incidents: {} },
+    incidents: entry({}).counts,
+    memberId: player.memberId,
+    playOrder: player.playOrder,
+    rank: player.rank,
+    revenueManYen: player.revenueManYen,
+    totalAssetsManYen: player.totalAssetsManYen,
+    warnings: [],
+  };
 }
 
 describe("workspace editing transitions", () => {
@@ -84,20 +100,30 @@ describe("workspace editing transitions", () => {
     expect(next.values.players[2]!.incidents.destination).toBe(7);
   });
 
-  it("clears incidents when the chosen play order has no OCR incident row", () => {
+  it("empties the incidents the chosen play order's column did not read", () => {
     const seed = createEmptyMatchForm(baseIso);
     seed.players[2]!.incidents.destination = 7;
-    const initial = reviewState(seed);
+    const initial = reviewState(
+      seed,
+      new Map([
+        [1, entry({ 目的地: 2 })],
+        [2, { ...entry({ 目的地: 1 }), unread: ["プラス駅"] }],
+      ]),
+      seed.players.map(originalOf),
+    );
 
-    const next = editWorkspace(initial, {
+    const unreadColumn = editWorkspace(initial, { type: "change-play-order", index: 2, value: 2 });
+    expect(unreadColumn.values.players[2]!.incidents.destination).toBe(1);
+    expect(unreadColumn.values.numericDrafts).toEqual({ "players.2.incidents.plusStation": "" });
+
+    const missingColumn = editWorkspace(unreadColumn, {
       type: "change-play-order",
       index: 2,
       value: 4,
     });
-
-    expect(next.lastIncidentSyncPlayerIndex).toBe(2);
-    expect(next.values.players[2]!.playOrder).toBe(4);
-    expect(next.values.players[2]!.incidents).toEqual({
+    expect(missingColumn.lastIncidentSyncPlayerIndex).toBe(2);
+    expect(missingColumn.values.players[2]!.playOrder).toBe(4);
+    expect(missingColumn.values.players[2]!.incidents).toEqual({
       cardShop: 0,
       cardStation: 0,
       destination: 0,
@@ -105,6 +131,33 @@ describe("workspace editing transitions", () => {
       plusStation: 0,
       suriNoGinji: 0,
     });
+    expect(missingColumn.values.numericDrafts).toEqual({
+      "players.2.incidents.cardShop": "",
+      "players.2.incidents.cardStation": "",
+      "players.2.incidents.destination": "",
+      "players.2.incidents.minusStation": "",
+      "players.2.incidents.plusStation": "",
+      "players.2.incidents.suriNoGinji": "",
+    });
+  });
+
+  it("keeps entered incidents when no incident log was read", () => {
+    const seed = {
+      ...createEmptyMatchForm(baseIso),
+      numericDrafts: { "players.2.incidents.plusStation": "" },
+    };
+    seed.players[2]!.incidents.destination = 7;
+    const initial = editWorkspace(reviewState(seed, new Map()), {
+      type: "acknowledge",
+      cellId: "player-2-incident.destination",
+    });
+
+    const next = editWorkspace(initial, { type: "change-play-order", index: 2, value: 4 });
+
+    expect(next.lastIncidentSyncPlayerIndex).toBeNull();
+    expect(next.values.players[2]!.incidents.destination).toBe(7);
+    expect(next.values.numericDrafts).toEqual({ "players.2.incidents.plusStation": "" });
+    expect(next.acknowledgedCellIds).toContain("player-2-incident.destination");
   });
 
   it("atomically syncs one row and preserves other edits until that row is manually changed", () => {

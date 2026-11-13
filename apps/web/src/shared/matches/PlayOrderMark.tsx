@@ -44,6 +44,10 @@ export function playOrderPresentation(playOrder: number | null | undefined): Pla
   return unknownPresentation;
 }
 
+/**
+ * The only carrier of play-order color in tables and cards: a dot beside its numbered label, so
+ * color is never the sole cue. Rows and cards do not echo it with a single colored edge.
+ */
 export function PlayOrderMark({
   align = "start",
   playOrder,

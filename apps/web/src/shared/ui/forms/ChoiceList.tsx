@@ -37,6 +37,9 @@ export type ChoiceListProps<Value extends string = string> = {
 /**
  * Presents descriptive, mutually exclusive choices. It owns native radio semantics,
  * selected/pending feedback, and keeps option-specific actions outside the radio label.
+ * The whole row is the label; its visually hidden input's focus is drawn once as an inset
+ * outline so clipped list edges never cut it. Selection shows through the check mark and its
+ * border, not the row tint alone, so it survives forced colors.
  */
 export function ChoiceList<Value extends string>({
   "aria-labelledby": labelledBy,
@@ -122,13 +125,15 @@ function ChoiceOption<Value extends string>({
         "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
         option.trailingAction ? "divide-x divide-[var(--color-border)]" : "",
         selected ? "bg-[var(--color-surface-selected)]" : "bg-[var(--color-surface)]",
-        optionDisabled ? "opacity-65" : "",
+        optionDisabled ? "opacity-60" : "",
       )}
     >
       <label
         ref={surfaceRef}
         className={cn(
-          "momo-surface momo-surface-press grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2",
+          "momo-surface momo-surface-press grid min-h-11 min-w-0 grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-2 px-3 py-2",
+          // Variable-height options with a description align to the top of their first line.
+          option.description ? "items-start" : "items-center",
           selected ? "momo-surface-selected" : "",
           optionDisabled ? "cursor-not-allowed" : "cursor-pointer",
           "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]",

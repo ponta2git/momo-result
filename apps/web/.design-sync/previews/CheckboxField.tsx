@@ -2,9 +2,9 @@ import { CheckboxField, StatusBadge } from "momo-result-ui";
 
 export const States = () => (
   <div className="grid gap-2">
-    <CheckboxField defaultChecked label="ももたろう を参加者に含める" />
-    <CheckboxField label="きんたろう を参加者に含める" />
-    <CheckboxField disabled label="うらしま を参加者に含める（欠席）" />
+    <CheckboxField defaultChecked label="いーゆー を参加者に含める" />
+    <CheckboxField label="ぽんた を参加者に含める" />
+    <CheckboxField disabled label="あかねまみ を参加者に含める（欠席）" />
   </div>
 );
 

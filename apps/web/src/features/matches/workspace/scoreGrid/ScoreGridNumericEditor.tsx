@@ -51,6 +51,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
   reviewMessage,
   showStateLabel,
   synced,
+  unread,
   validationPath,
   value,
   onIncidentCommit,
@@ -92,6 +93,7 @@ export const ScoreGridNumericEditor = memo(function ScoreGridNumericEditor({
       row={row}
       showStateLabel={showStateLabel}
       synced={synced}
+      unread={unread}
       validationPath={validationPath}
       value={value}
       onCommit={commitValue}

@@ -12,6 +12,7 @@ import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
+import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisSelectedMatch({
@@ -63,7 +64,7 @@ export function SeriesAnalysisSelectedMatch({
         <ul aria-label="この試合の注目点" className="flex flex-wrap gap-2">
           {context.match.features.map((feature) => (
             <li
-              className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs"
+              className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}
               key={`${feature.priority}:${feature.featureCode}`}
             >
               {matchFeatureLabel(feature.featureCode)}

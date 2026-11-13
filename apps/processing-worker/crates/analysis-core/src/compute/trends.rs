@@ -404,33 +404,67 @@ pub(super) fn match_digest(groups: &[MatchGroup<'_>]) -> Value {
     })
 }
 
-fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
-    let gaps = groups
-        .iter()
-        .filter_map(|group| {
-            let winner = group.player_matches.iter().find(|row| row.rank == 1)?;
-            let second = group.player_matches.iter().find(|row| row.rank == 2)?;
-            let last = group.player_matches.iter().find(|row| row.rank == 4)?;
-            Some((
-                i64::from(winner.total_assets_man_yen) - i64::from(second.total_assets_man_yen),
-                i64::from(winner.total_assets_man_yen) - i64::from(last.total_assets_man_yen),
-            ))
+/// Relative asset-gap cut points for close finishes and blowouts.
+///
+/// A close finish has a first-to-second gap within the lowest quarter of the reference matches,
+/// and a blowout has a first-to-last gap within the highest quarter. Fewer than three reference
+/// matches produce no relative cut point.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct AssetGapThresholds {
+    close_finish: Option<f64>,
+    asset_blowout: Option<f64>,
+}
+
+impl AssetGapThresholds {
+    pub(super) fn new(groups: &[MatchGroup<'_>]) -> Self {
+        if groups.len() < 3 {
+            return Self::default();
+        }
+        let gaps = groups
+            .iter()
+            .filter_map(|group| {
+                let winner = group.player_matches.iter().find(|row| row.rank == 1)?;
+                let second = group.player_matches.iter().find(|row| row.rank == 2)?;
+                let last = group.player_matches.iter().find(|row| row.rank == 4)?;
+                Some((
+                    i64::from(winner.total_assets_man_yen) - i64::from(second.total_assets_man_yen),
+                    i64::from(winner.total_assets_man_yen) - i64::from(last.total_assets_man_yen),
+                ))
+            })
+            .collect::<Vec<_>>();
+        Self {
+            close_finish: percentile_f64(
+                &gaps
+                    .iter()
+                    .filter_map(|value| exact_i64_as_f64(value.0))
+                    .collect::<Vec<_>>(),
+                0.25,
+            ),
+            asset_blowout: percentile_f64(
+                &gaps
+                    .iter()
+                    .filter_map(|value| exact_i64_as_f64(value.1))
+                    .collect::<Vec<_>>(),
+                0.75,
+            ),
+        }
+    }
+
+    pub(super) fn is_close_finish(self, first_to_second: i64) -> bool {
+        self.close_finish.is_some_and(|threshold| {
+            exact_i64_as_f64(first_to_second).is_some_and(|value| value <= threshold)
         })
-        .collect::<Vec<_>>();
-    let close = percentile_f64(
-        &gaps
-            .iter()
-            .filter_map(|value| exact_i64_as_f64(value.0))
-            .collect::<Vec<_>>(),
-        0.25,
-    );
-    let blowout = percentile_f64(
-        &gaps
-            .iter()
-            .filter_map(|value| exact_i64_as_f64(value.1))
-            .collect::<Vec<_>>(),
-        0.75,
-    );
+    }
+
+    pub(super) fn is_asset_blowout(self, first_to_last: i64) -> bool {
+        self.asset_blowout.is_some_and(|threshold| {
+            exact_i64_as_f64(first_to_last).is_some_and(|value| value >= threshold)
+        })
+    }
+}
+
+fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
+    let gap_thresholds = AssetGapThresholds::new(groups);
     groups
         .iter()
         .enumerate()
@@ -469,18 +503,10 @@ fn timeline_rows(groups: &[MatchGroup<'_>]) -> Vec<Value> {
             if ginji >= 2 {
                 flags.push("ginji_storm");
             }
-            if groups.len() >= 3
-                && first_second.zip(close).is_some_and(|(gap, threshold)| {
-                    exact_i64_as_f64(gap).is_some_and(|value| value <= threshold)
-                })
-            {
+            if first_second.is_some_and(|gap| gap_thresholds.is_close_finish(gap)) {
                 flags.push("close_finish");
             }
-            if groups.len() >= 3
-                && first_last.zip(blowout).is_some_and(|(gap, threshold)| {
-                    exact_i64_as_f64(gap).is_some_and(|value| value >= threshold)
-                })
-            {
+            if first_last.is_some_and(|gap| gap_thresholds.is_asset_blowout(gap)) {
                 flags.push("asset_blowout");
             }
             json!({

@@ -15,6 +15,13 @@ export type MatchFeatureBadge = MatchFeatureDefinition & {
 };
 type AnalysisFeature = NonNullable<SeriesAnalysisMatchContextV3["match"]>["features"][number];
 
+/** The incident counts fill one row when the ledger card is wide enough; loading reuses it. */
+/**
+ * Six incidents sit as 3×2 or 6×1 by the card's width, so no single item is left on a line. The
+ * column gap matches the revenue breakdown above, so their column lines meet in both layouts.
+ */
+export const matchIncidentFactsGridClass = "grid grid-cols-3 gap-x-4 gap-y-2 @xl:grid-cols-6";
+
 export type MatchDetailLedgerRow = MatchPerformanceContextRow & {
   displayName: string;
   playOrder: number | undefined;
@@ -79,14 +86,19 @@ export function buildMatchAnalysisView({
       ? context
       : undefined;
   const performanceContext = matchPerformanceContextFromArtifact(matchingContext);
-  const loading =
-    statusLoading ||
-    contextLoading ||
-    calculationStatus === "queued" ||
-    calculationStatus === "running";
+  const loading = statusLoading || contextLoading;
+  const calculating = calculationStatus === "queued" || calculationStatus === "running";
   return {
     comparisonContextStatus:
-      performanceContext === undefined ? (loading ? "loading" : "unavailable") : "ready",
+      performanceContext !== undefined
+        ? "ready"
+        : loading
+          ? "loading"
+          : calculating
+            ? "calculating"
+            : "unavailable",
+    // Only an in-flight read reserves space for its results; a queued calculation has no end here.
+    contextPending: matchingContext === undefined && (statusLoading || contextLoading),
     badges: buildMatchFeatureBadges({
       features:
         matchingContext?.inclusion.status === "included"

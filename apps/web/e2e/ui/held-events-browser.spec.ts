@@ -52,7 +52,7 @@ test("keeps the mobile held-event search draft through layout changes and applie
     pageSize: "10",
     q: "ボンビー",
   });
-  await expect(list.getByText("第1試合 ·")).toBeVisible();
+  await expect(list.getByText("第1試合・")).toBeVisible();
   await expect(list.locator("mark")).toHaveText("ボンビー");
 
   await list.getByRole("link", { name: /をCSV出力$/u }).click();

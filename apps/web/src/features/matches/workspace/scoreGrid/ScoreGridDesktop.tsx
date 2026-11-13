@@ -7,8 +7,11 @@ import type {
 } from "@/features/matches/workspace/matchWorkspaceEditingStore";
 import {
   incidentScoreGridColumns,
+  incidentScoreGridInlineLabelClass,
+  incidentScoreGridLayoutClass,
   keyToPath,
   playerSlotKey,
+  scoreGridTableWidthClass,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import type { GridColumn } from "@/features/matches/workspace/scoreGrid/ScoreGridColumns";
 import { ScoreGridDesktopHeader } from "@/features/matches/workspace/scoreGrid/ScoreGridDesktopHeader";
@@ -28,7 +31,9 @@ import type {
 import { useWorkspaceSnapshot } from "@/features/matches/workspace/useWorkspaceSnapshot";
 import { canonicalResultMembers, memberDisplayName } from "@/shared/domain/members";
 import { PlayOrderMark } from "@/shared/matches/PlayOrderMark";
+import { cn } from "@/shared/ui/cn";
 import { SelectControl } from "@/shared/ui/forms/SelectControl";
+import { contentText } from "@/shared/ui/typography";
 
 type ScoreGridDesktopTableProps = Pick<ScoreGridData, "rows" | "errorPathSet"> &
   ScoreGridCellRegistry &
@@ -43,7 +48,13 @@ type ScoreGridDesktopTableProps = Pick<ScoreGridData, "rows" | "errorPathSet"> &
 
 export function ScoreGridDesktopTable({ rows, ...props }: ScoreGridDesktopTableProps) {
   return (
-    <table className="min-w-[64rem] table-fixed border-separate border-spacing-y-2 text-left text-sm">
+    // Isolation keeps the sticky member column's layers inside the table, under the global navigation.
+    <table
+      className={cn(
+        "isolate w-full table-fixed border-separate border-spacing-y-2 text-left text-sm",
+        scoreGridTableWidthClass,
+      )}
+    >
       <ScoreGridDesktopHeader />
       <tbody>
         {rows.map((row, rowIndex) => (
@@ -85,7 +96,9 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
     items,
     acknowledgedCellIds,
     synced,
+    unreadFields,
   } = useWorkspaceSnapshot(row);
+  const unread = new Set<string>(unreadFields);
   const reviewItemByCellId = new Map(items.map((item) => [item.cellId, item]));
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const memberCellId = getCellId(rowIndex, 0);
@@ -96,7 +109,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
   return (
     <tr className="bg-[var(--color-surface-subtle)]">
       <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-md bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
-        <div className="min-w-[10rem]">
+        <div className="min-w-0">
           <SelectControl
             ref={(node) => registerCellRef(memberCellId, node)}
             aria-describedby={memberReviewItem ? `${memberCellId}-review-status` : undefined}
@@ -203,6 +216,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
         draftValue={numericDrafts[keyToPath(rowIndex, "rank")]}
         onDraftChange={onNumericDraftChange}
         field="rank"
+        unread={unread.has("rank")}
         focusImageKind="total_assets"
         originalValue={originalRow?.rank}
         player={player}
@@ -222,6 +236,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
         draftValue={numericDrafts[keyToPath(rowIndex, "totalAssetsManYen")]}
         onDraftChange={onNumericDraftChange}
         field="totalAssetsManYen"
+        unread={unread.has("totalAssetsManYen")}
         focusImageKind="total_assets"
         originalValue={originalRow?.totalAssetsManYen}
         player={player}
@@ -242,6 +257,7 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
         draftValue={numericDrafts[keyToPath(rowIndex, "revenueManYen")]}
         onDraftChange={onNumericDraftChange}
         field="revenueManYen"
+        unread={unread.has("revenueManYen")}
         focusImageKind="revenue"
         originalValue={originalRow?.revenueManYen}
         player={player}
@@ -256,41 +272,58 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
         onReviewCellFocus={onReviewCellFocus}
       />
 
-      {incidentScoreGridColumns.map((column, incidentIndex) => {
-        const col = incidentIndex + 5;
-        const { incidentKey } = column;
-        const cellId = getCellId(rowIndex, col);
-        const reviewItem = reviewItemByCellId.get(cellId);
-        return (
-          <td key={incidentKey} className="px-2 py-3 align-top last:rounded-r-md">
-            <ScoreGridNumericEditor
-              allowSign={false}
-              ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
-              cellId={cellId}
-              col={col}
-              commitKind="incident"
-              draftValue={numericDrafts[keyToPath(rowIndex, `incident.${incidentKey}`)]}
-              onDraftChange={onNumericDraftChange}
-              error={errorPathSet.has(keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn))}
-              focusImageKind="incident_log"
-              incidentKey={incidentKey}
-              originalValue={originalByOrder?.incidents[column.header]}
-              registerCellRef={registerCellRef}
-              reviewField={`incident.${incidentKey}`}
-              reviewed={reviewedCellIds.has(cellId)}
-              reviewMessage={reviewItem?.message}
-              row={rowIndex}
-              showStateLabel
-              validationPath={keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn)}
-              value={player.incidents[incidentKey]}
-              onIncidentCommit={handleIncidentNumericCommit}
-              onKeyboard={handleKeyboard}
-              onPreferImageKindChange={onPreferImageKindChange}
-              onReviewCellFocus={onReviewCellFocus}
-            />
-          </td>
-        );
-      })}
+      <td className="px-2 py-3 align-top last:rounded-r-md">
+        <div className={incidentScoreGridLayoutClass}>
+          {incidentScoreGridColumns.map((column, incidentIndex) => {
+            const col = incidentIndex + 5;
+            const { incidentKey } = column;
+            const cellId = getCellId(rowIndex, col);
+            const reviewItem = reviewItemByCellId.get(cellId);
+            return (
+              <div key={incidentKey} className="min-w-0">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    contentText.supporting,
+                    "block pb-1",
+                    incidentScoreGridInlineLabelClass,
+                  )}
+                >
+                  {column.header}
+                </span>
+                <ScoreGridNumericEditor
+                  allowSign={false}
+                  ariaLabel={`${memberDisplayName(player.memberId)} ${column.header}`}
+                  cellId={cellId}
+                  col={col}
+                  commitKind="incident"
+                  draftValue={numericDrafts[keyToPath(rowIndex, `incident.${incidentKey}`)]}
+                  onDraftChange={onNumericDraftChange}
+                  error={errorPathSet.has(
+                    keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn),
+                  )}
+                  focusImageKind="incident_log"
+                  incidentKey={incidentKey}
+                  originalValue={originalByOrder?.incidents[column.header]}
+                  registerCellRef={registerCellRef}
+                  reviewField={`incident.${incidentKey}`}
+                  reviewed={reviewedCellIds.has(cellId)}
+                  reviewMessage={reviewItem?.message}
+                  row={rowIndex}
+                  showStateLabel
+                  unread={unread.has(`incident.${incidentKey}`)}
+                  validationPath={keyToPath(rowIndex, `incident.${incidentKey}` as GridColumn)}
+                  value={player.incidents[incidentKey]}
+                  onIncidentCommit={handleIncidentNumericCommit}
+                  onKeyboard={handleKeyboard}
+                  onPreferImageKindChange={onPreferImageKindChange}
+                  onReviewCellFocus={onReviewCellFocus}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </td>
     </tr>
   );
 });

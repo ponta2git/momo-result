@@ -50,7 +50,7 @@ caddy_build_info="$(
   docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" build-info
 )"
 for required_build_dependency in \
-  $'go\tgo1.27.3' \
+  $'go\tgo1.27.4' \
   $'dep\tgolang.org/x/crypto\tv0.58.0\t' \
   $'dep\tgolang.org/x/net\tv0.62.0\t' \
   $'dep\tgolang.org/x/text\tv0.43.0\t' \

@@ -2,65 +2,36 @@
 set -euo pipefail
 
 image_ref="${IMAGE_REF:?IMAGE_REF is required.}"
-origin_lock_token="${MOMO_ORIGIN_LOCK_TOKEN:?MOMO_ORIGIN_LOCK_TOKEN is required.}"
 
-if ! docker run --rm \
-  -e MOMO_ORIGIN_LOCK_TOKEN="${origin_lock_token}" \
-  "${image_ref}" \
-  /bin/sh -ec '
+# The API is the only long-lived process. CMD stays overridable for Fly's
+# release_command and the one-off diagnostics below.
+if ! docker image inspect "${image_ref}" --format '{{json .Config}}' | jq -e '
+  (.Entrypoint == null or .Entrypoint == []) and
+  .Cmd == ["/opt/java/openjdk/bin/java", "-cp", "/opt/momo-result/api/lib/*", "momo.api.Main"] and
+  .WorkingDir == "/opt/momo-result/api" and .User == "momo"
+' > /dev/null; then
+  echo "Runtime image must start the API directly with an overridable CMD." >&2
+  exit 1
+fi
+
+if ! docker run --rm "${image_ref}" /bin/sh -ec '
     test -d /opt/momo-result/api/lib
     test -x /opt/java/openjdk/bin/java
-    test -x /usr/bin/caddy
     test -x /opt/momo-result/bin/momo-runtime-tool
-    for command_name in python python3 pip pip3 uv momo-ocr supervisord; do
+    for command_name in caddy go node pnpm python python3 pip pip3 uv momo-ocr supervisord; do
       if command -v "${command_name}" >/dev/null 2>&1; then
         exit 1
       fi
     done
+    test ! -e /srv/momo-result/web
+    test ! -e /etc/caddy
     test ! -e /opt/momo-result/ocr-worker
     test ! -e /etc/supervisor
-    caddy_config="${MOMO_CADDY_OUTPUT_PATH:-/tmp/momo-result/caddy/Caddyfile}"
-    /opt/momo-result/bin/momo-runtime-tool render-caddy >/dev/null
-    caddy validate --config "${caddy_config}" --adapter caddyfile >/dev/null
-    caddy adapt --config "${caddy_config}" --adapter caddyfile
-  ' | jq -e '
-    [.logging.logs[]] as $logs |
-    (($logs | length) >= 2) and
-    all($logs[];
-      .encoder.format == "filter" and
-      .encoder.wrap.format == "json" and
-      .encoder.fields["request>uri"].filter == "delete" and
-      .encoder.fields["request>headers"].filter == "delete" and
-      .encoder.fields.resp_headers.filter == "delete"
-    )
-  ' > /dev/null; then
-  echo "Runtime image layout or Caddy log redaction validation failed." >&2
+    test -w /tmp/momo-result/uploads
+  '; then
+  echo "API runtime image layout validation failed." >&2
   exit 1
 fi
-
-caddy_version="$(
-  docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" version
-)"
-if [[ "${caddy_version}" != "v2.11.7" ]]; then
-  echo "Runtime image does not contain the required Caddy version." >&2
-  exit 1
-fi
-
-caddy_build_info="$(
-  docker run --rm --entrypoint /usr/bin/caddy "${image_ref}" build-info
-)"
-for required_build_dependency in \
-  $'go\tgo1.27.4' \
-  $'dep\tgolang.org/x/crypto\tv0.58.0\t' \
-  $'dep\tgolang.org/x/net\tv0.62.0\t' \
-  $'dep\tgolang.org/x/text\tv0.43.0\t' \
-  $'dep\tgoogle.golang.org/grpc\tv1.83.2\t' \
-  $'dep\tgithub.com/go-jose/go-jose/v4\tv4.1.6\t'; do
-  if ! grep -Fq -- "${required_build_dependency}" <<<"${caddy_build_info}"; then
-    echo "Runtime Caddy build is missing a required patched dependency." >&2
-    exit 1
-  fi
-done
 
 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/runtime-jvm-profile.sh" "${image_ref}"
 invalid_host_status=0

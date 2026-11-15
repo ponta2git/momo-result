@@ -55,9 +55,8 @@ case "$1" in
     fi
     ;;
   logs)
-    printf '%s\n' '{"message":"momo_result_api_stopping"}'
-    if [[ "${TEST_SCENARIO}" == "supervisor-failure" ]]; then
-      printf '%s\n' '{"event":"runtime_serve","status":"failed"}'
+    if [[ "${TEST_SCENARIO}" != "missing-drain" ]]; then
+      printf '%s\n' '{"message":"momo_result_api_stopping"}'
     fi
     ;;
   stop) ;;
@@ -104,6 +103,7 @@ fi
 grep -Fxq logs "${TEST_CALLS}"
 
 TEST_SCENARIO=running run_probe "${repo_root}/scripts/ci/runtime-shutdown-smoke.sh"
+TEST_SCENARIO=running TEST_EXIT_CODE=143 run_probe "${repo_root}/scripts/ci/runtime-shutdown-smoke.sh"
 TEST_SCENARIO=stopped assert_rejected "an already stopped container" \
   "${repo_root}/scripts/ci/runtime-shutdown-smoke.sh"
 if grep -Fxq stop "${TEST_CALLS}"; then
@@ -112,7 +112,7 @@ if grep -Fxq stop "${TEST_CALLS}"; then
 fi
 TEST_SCENARIO=running TEST_EXIT_CODE=137 assert_rejected "a killed container" \
   "${repo_root}/scripts/ci/runtime-shutdown-smoke.sh"
-TEST_SCENARIO=supervisor-failure assert_rejected "a failed supervisor shutdown" \
+TEST_SCENARIO=missing-drain TEST_EXIT_CODE=143 assert_rejected "an undrained JVM" \
   "${repo_root}/scripts/ci/runtime-shutdown-smoke.sh"
 
 echo "Runtime lifecycle collector tests passed."

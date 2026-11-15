@@ -17,24 +17,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 	}
 
 	switch args[0] {
-	case "serve":
-		if len(args) != 1 {
-			writeResult(stderr, failureResult(serveEvent, "InvalidArguments"))
-			return 2
-		}
-		return runServe(ctx, stdout, stderr)
 	case "preflight":
 		if len(args) != 1 {
 			writeResult(stderr, failureResult(preflightEvent, "InvalidArguments"))
 			return 2
 		}
 		return runPreflight(ctx, stdout, stderr)
-	case "render-caddy":
-		if len(args) != 1 {
-			writeResult(stderr, failureResult(renderCaddyEvent, "InvalidArguments"))
-			return 2
-		}
-		return runRenderCaddy(stdout, stderr)
 	case "smoke":
 		if len(args) < 2 {
 			writeResult(stderr, failureResult("runtime_smoke", "InvalidArguments"))

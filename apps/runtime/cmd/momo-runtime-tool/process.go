@@ -6,8 +6,7 @@ import (
 )
 
 var runtimeProcessMarkers = map[string][]string{
-	"api":   {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
-	"caddy": {"/usr/bin/caddy", "run", "--config"},
+	"api": {"/opt/java/openjdk/bin/java", "/opt/momo-result/api/lib/", "momo.api.Main"},
 }
 
 func missingRuntimeProcesses(commandLines []string) []string {

@@ -1,38 +1,10 @@
 # syntax=docker/dockerfile:1.25.0@sha256:0adf442eae370b6087e08edc7c50b552d80ddf261576f4ebd6421006b2461f12
 
-ARG NODE_IMAGE=node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
 ARG JAVA_JDK_IMAGE=eclipse-temurin:25-jdk-noble@sha256:5b14970485a676b41faa08f4a7bc8716cc20915daa1d581d7a75f37a8ebaf9a8
 ARG JAVA_JRE_IMAGE=eclipse-temurin:25-jre-noble@sha256:30772b161c319f9a10c82e30fd77b7b6702c6b051e44e0e9f3d7ab5dd389a5ab
 ARG GO_IMAGE=golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea
 ARG HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git
-ARG CADDY_VERSION=v2.11.7
-ARG CADDY_X_CRYPTO_VERSION=v0.58.0
-ARG CADDY_X_NET_VERSION=v0.62.0
-ARG CADDY_X_TEXT_VERSION=v0.43.0
-ARG CADDY_GRPC_VERSION=v1.83.2
-ARG CADDY_GO_JOSE_VERSION=v4.1.6
 ARG DEBIAN_RUNTIME_IMAGE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
-
-FROM ${NODE_IMAGE} AS web-deps
-WORKDIR /workspace
-ENV PNPM_STORE_DIR=/pnpm/store
-RUN corepack enable
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json apps/web/package.json
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
-  pnpm install --frozen-lockfile --store-dir "${PNPM_STORE_DIR}"
-
-FROM web-deps AS web-builder
-COPY apps/api/openapi.yaml apps/api/redocly.yaml apps/api/
-COPY apps/web/index.html apps/web/index.html
-COPY apps/web/tsconfig.json apps/web/tsconfig.json
-COPY apps/web/vite.config.ts apps/web/vite.config.ts
-COPY apps/web/public apps/web/public
-COPY apps/web/scripts/check-built-theme.mts apps/web/scripts/check-built-theme.mts
-COPY apps/web/scripts/generate-api.mts apps/web/scripts/generate-api.mts
-COPY apps/web/src apps/web/src
-RUN pnpm --filter web contract:check
-RUN pnpm --filter web build
 
 # Compile portable JVM artifacts natively, including when building an amd64 runtime on ARM.
 FROM --platform=$BUILDPLATFORM ${JAVA_JDK_IMAGE} AS api-deps
@@ -117,48 +89,6 @@ RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
   CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' \
     -o /out/momo-runtime-tool ./cmd/momo-runtime-tool
 
-FROM ${GO_IMAGE} AS caddy-builder
-ARG CADDY_VERSION
-ARG CADDY_X_CRYPTO_VERSION
-ARG CADDY_X_NET_VERSION
-ARG CADDY_X_TEXT_VERSION
-ARG CADDY_GRPC_VERSION
-ARG CADDY_GO_JOSE_VERSION
-WORKDIR /workspace/caddy
-RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
-  go mod download "github.com/caddyserver/caddy/v2@${CADDY_VERSION}" \
-  && cp -R "$(go env GOMODCACHE)/github.com/caddyserver/caddy/v2@${CADDY_VERSION}/." . \
-  && chmod -R u+w .
-RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
-  go get \
-    "golang.org/x/crypto@${CADDY_X_CRYPTO_VERSION}" \
-    "golang.org/x/net@${CADDY_X_NET_VERSION}" \
-    "golang.org/x/text@${CADDY_X_TEXT_VERSION}" \
-    "google.golang.org/grpc@${CADDY_GRPC_VERSION}" \
-    "github.com/go-jose/go-jose/v4@${CADDY_GO_JOSE_VERSION}"
-RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
-  go mod tidy
-RUN --mount=type=cache,id=caddy-go-mod,target=/go/pkg/mod,sharing=locked \
-  --mount=type=cache,id=caddy-go-build,target=/root/.cache/go-build,sharing=locked \
-  CGO_ENABLED=0 go build -trimpath \
-    -ldflags="-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=${CADDY_VERSION}" \
-    -o /out/caddy ./cmd/caddy \
-  && go version -m /out/caddy | awk -v module="golang.org/x/crypto" \
-    -v version="${CADDY_X_CRYPTO_VERSION}" \
-    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
-  && go version -m /out/caddy | awk -v module="golang.org/x/net" \
-    -v version="${CADDY_X_NET_VERSION}" \
-    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
-  && go version -m /out/caddy | awk -v module="golang.org/x/text" \
-    -v version="${CADDY_X_TEXT_VERSION}" \
-    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
-  && go version -m /out/caddy | awk -v module="google.golang.org/grpc" \
-    -v version="${CADDY_GRPC_VERSION}" \
-    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }' \
-  && go version -m /out/caddy | awk -v module="github.com/go-jose/go-jose/v4" \
-    -v version="${CADDY_GO_JOSE_VERSION}" \
-    '$1 == "dep" && $2 == module && $3 == version { found = 1 } END { exit !found }'
-
 FROM ${JAVA_JRE_IMAGE} AS java-runtime
 COPY deploy/java-blocked.certs /tmp/java-blocked.certs
 RUN grep -qx 'Algorithm=SHA-256' "${JAVA_HOME}/lib/security/blocked.certs" \
@@ -168,17 +98,12 @@ RUN grep -qx 'Algorithm=SHA-256' "${JAVA_HOME}/lib/security/blocked.certs" \
 
 FROM ${DEBIAN_RUNTIME_IMAGE} AS runtime
 ENV APP_ENV=prod
-ENV HTTP_HOST=127.0.0.1
-ENV HTTP_PORT=8081
+ENV HTTP_HOST=0.0.0.0
+ENV HTTP_PORT=8080
 ENV JAVA_HOME=/opt/java/openjdk
 ENV JAVA_TOOL_OPTIONS="-Xms32m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:CompressedClassSpaceSize=32m -XX:ReservedCodeCacheSize=48m -Xss512k -XX:+UseG1GC -XX:G1PeriodicGCInterval=60000 -XX:TrimNativeHeapInterval=120000 -XX:MaxHeapFreeRatio=60 -XX:+UseCompactObjectHeaders -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1 -XX:+ExitOnOutOfMemoryError -XX:NativeMemoryTracking=summary -XX:+UnlockDiagnosticVMOptions -XX:+PrintNMTStatistics -Djava.security.egd=file:/dev/./urandom"
-ENV MOMO_CADDY_OUTPUT_PATH=/tmp/momo-result/caddy/Caddyfile
-ENV MOMO_RUNTIME_STOP_GRACE_SECONDS=30
-ENV XDG_CONFIG_HOME=/tmp/momo-result/caddy/config
-ENV XDG_DATA_HOME=/tmp/momo-result/caddy/data
 ENV PATH="${JAVA_HOME}/bin:/opt/momo-result/bin:${PATH}"
 COPY --from=java-runtime /opt/java/openjdk /opt/java/openjdk
-COPY --from=caddy-builder /out/caddy /usr/bin/caddy
 RUN apt-get -o Acquire::Retries=0 update \
   && apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0 \
   && apt-get install -y --no-install-recommends \
@@ -192,23 +117,18 @@ RUN apt-get -o Acquire::Retries=0 update \
   && useradd --uid 10001 --gid momo --home-dir /nonexistent --shell /usr/sbin/nologin --no-create-home momo \
   && mkdir -p \
     /opt/momo-result/bin \
-    /srv/momo-result/web \
-    /tmp/momo-result/caddy/config \
-    /tmp/momo-result/caddy/data \
     /tmp/momo-result/uploads \
-  && chown -R momo:momo /opt/momo-result /srv/momo-result /tmp/momo-result
+  && chown -R momo:momo /opt/momo-result /tmp/momo-result
 
 COPY --from=api-builder --chown=momo:momo /workspace/apps/api/target/out/jvm/scala-*/momo-result-api/universal/stage /opt/momo-result/api
-COPY --from=web-builder --chown=momo:momo /workspace/apps/web/dist /srv/momo-result/web
 COPY --chown=momo:momo contracts/runtime-db-contract.json /opt/momo-result/contracts/runtime-db-contract.json
 COPY --from=http4s-builder --chown=momo:momo /opt/http4s-patch /opt/momo-result/contracts/http4s-patch
-COPY deploy/Caddyfile /etc/caddy/Caddyfile.template
 COPY --from=runtime-tool-builder --chown=momo:momo /out/momo-runtime-tool /opt/momo-result/bin/momo-runtime-tool
 RUN chmod 0755 /opt/momo-result/bin/momo-runtime-tool \
-  && /usr/bin/caddy version \
-  && /opt/java/openjdk/bin/java -XX:-PrintNMTStatistics -version \
-  && /opt/momo-result/bin/momo-runtime-tool smoke edge invalid_host >/dev/null 2>&1; test "$?" -eq 1
+  && /opt/java/openjdk/bin/java -XX:-PrintNMTStatistics -version
 
 EXPOSE 8080
+WORKDIR /opt/momo-result/api
 USER momo
-CMD ["/opt/momo-result/bin/momo-runtime-tool", "serve"]
+# Fly release_command replaces CMD; leave ENTRYPOINT unset so probes can run alone.
+CMD ["/opt/java/openjdk/bin/java", "-cp", "/opt/momo-result/api/lib/*", "momo.api.Main"]

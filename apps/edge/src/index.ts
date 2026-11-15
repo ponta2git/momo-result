@@ -5,6 +5,11 @@ interface Environment {
   MOMO_ALLOW_LOCAL_ORIGIN?: string;
 }
 
+// Workers uses the native stream's length to retain Content-Length on fetch.
+declare const FixedLengthStream: new (
+  length: number,
+) => ReadableWritablePair<Uint8Array, Uint8Array>;
+
 const securityHeaders = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -89,13 +94,40 @@ async function proxy(request: Request, env: Environment, path: string) {
   headers.set("X-Momo-Origin-Lock", env.MOMO_ORIGIN_LOCK_TOKEN);
   headers.set("X-Momo-Client-IP", clientIP);
   const headerDeadline = new AbortController();
-  const timer = setTimeout(() => headerDeadline.abort(), 30_000);
+  const upload = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let responseSettled = false;
+  const startHeaderDeadline = () => {
+    if (!responseSettled) timer = setTimeout(() => headerDeadline.abort(), 30_000);
+  };
   try {
+    let body: ReadableStream<Uint8Array> | null = null;
+    if (request.body) {
+      const lengthHeader = request.headers.get("Content-Length");
+      const length = lengthHeader === null ? undefined : Number(lengthHeader);
+      const stream =
+        length !== undefined && Number.isSafeInteger(length) && length >= 0
+          ? new FixedLengthStream(length)
+          : new TransformStream<Uint8Array, Uint8Array>();
+      body = stream.readable;
+      // pipeTo preserves backpressure. Its completion means the upload has
+      // reached EOF, so a slow client does not consume the response-header wait.
+      void request.body
+        .pipeTo(stream.writable, {
+          signal: AbortSignal.any([request.signal, upload.signal]),
+        })
+        .then(startHeaderDeadline, () => {
+          // The readable side passes upload errors to fetch; cancellation is
+          // expected when the origin responds before consuming the whole body.
+        });
+    } else startHeaderDeadline();
     // Manual redirects keep login cookies and credentials on the intended origin.
     // Forward streams directly: uploads and downloads are never buffered here.
     const outgoing = new Request(
       origin,
       new Request(request, {
+        method: request.method,
+        body,
         headers,
         redirect: "manual",
         cache: "no-store",
@@ -117,7 +149,9 @@ async function proxy(request: Request, env: Environment, path: string) {
   } finally {
     // Only the wait for response headers is timed. The incoming request signal
     // remains attached to fetch while its response body streams to the client.
+    responseSettled = true;
     clearTimeout(timer);
+    upload.abort();
   }
 }
 

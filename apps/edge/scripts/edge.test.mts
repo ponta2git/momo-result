@@ -23,6 +23,12 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
   let finishDownload: (() => void) | undefined;
   const stalledRequests = new Map<string, { started: () => void; closed: () => void }>();
   const upstream = createServer(async (request, response) => {
+    if (request.url === "/api/early-upload-rejection") {
+      request.on("error", () => {});
+      response.writeHead(413);
+      response.end();
+      return;
+    }
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     observed.push({
@@ -175,6 +181,7 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
       assert.equal(received.path, "/api/upload?name=a%2Fb&name=c");
       assert.equal(received.method, "POST");
       assert.deepEqual(received.body, body);
+      assert.equal(received.headers["content-length"], String(body.length));
       assert.equal(received.headers.cookie, "session=fixture");
       assert.equal(received.headers["x-csrf-token"], "fixture");
       assert.ok(received.headers["x-momo-origin-lock"] === token);
@@ -264,6 +271,59 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
         } finally {
           client.destroy();
         }
+      }
+    },
+  );
+
+  await t.test(
+    "slow uploads finish before the header wait starts and early rejection does not wait for EOF",
+    async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1]));
+          const timer = setTimeout(() => {
+            controller.enqueue(new Uint8Array([2]));
+            controller.close();
+          }, 31_000);
+          t.after(() => clearTimeout(timer));
+        },
+      });
+      const init = {
+        method: "POST",
+        body,
+        duplex: "half",
+        headers: { "CF-Connecting-IP": "127.0.0.1", "Content-Length": "2" },
+        signal: AbortSignal.timeout(40_000),
+      };
+      const response = await fetch(`${directOrigin}/api/slow-upload`, init);
+      assert.equal(response.status, 200);
+      assert.deepEqual(new Uint8Array(await response.arrayBuffer()), new Uint8Array([1, 2]));
+      assert.equal(observed.at(-1)!.headers["content-length"], "2");
+
+      let finishRejectedUpload = () => {};
+      const rejectedBody = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1]));
+          finishRejectedUpload = () => {
+            try {
+              controller.enqueue(new Uint8Array([2]));
+              controller.close();
+            } catch {
+              // The client may already have canceled after the early response.
+            }
+          };
+        },
+      });
+      try {
+        const rejected = await fetch(`${directOrigin}/api/early-upload-rejection`, {
+          ...init,
+          body: rejectedBody,
+          signal: AbortSignal.timeout(5_000),
+        });
+        assert.equal(rejected.status, 413);
+        await rejected.body?.cancel();
+      } finally {
+        finishRejectedUpload();
       }
     },
   );

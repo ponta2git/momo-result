@@ -2,6 +2,18 @@ name: web
 
 on:
   workflow_call:
+    inputs:
+      package_edge:
+        description: Package the verified Web and edge candidate for E2E and deployment
+        type: boolean
+        default: false
+    outputs:
+      edge_artifact_id:
+        value: ${{ jobs.test-build.outputs.edge_artifact_id }}
+      edge_artifact_digest:
+        value: ${{ jobs.test-build.outputs.edge_artifact_digest }}
+      edge_run_attempt:
+        value: ${{ jobs.test-build.outputs.edge_run_attempt }}
 
 permissions:
   contents: read
@@ -36,6 +48,10 @@ jobs:
     name: Test and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      edge_artifact_id: ${{ steps.edge-upload.outputs.artifact-id }}
+      edge_artifact_digest: ${{ steps.edge-upload.outputs.artifact-digest }}
+      edge_run_attempt: ${{ steps.edge-candidate.outputs.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,9 +92,31 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Build structured CI tool
-        if: always() && github.event_name == 'pull_request'
-        continue-on-error: true
         uses: ./.github/actions/setup-ci-tool
+
+      - name: Build and verify the deployable Web edge
+        run: pnpm edge:build && pnpm edge:check
+        timeout-minutes: 5
+      - name: Record immutable Web edge candidate
+        if: inputs.package_edge
+        id: edge-candidate
+        run: |
+          mkdir -p web-edge-candidate
+          cp -R apps/edge/dist web-edge-candidate/edge
+          scripts/ci/ci-tool.sh create-edge-candidate \
+            --artifact-dir web-edge-candidate --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --commit "${GITHUB_SHA}" \
+            > web-edge-candidate/candidate.json
+          printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+      - name: Upload verified Web edge candidate
+        if: inputs.package_edge
+        id: edge-upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: web-edge-${{ github.run_id }}-${{ github.run_attempt }}
+          path: web-edge-candidate/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}

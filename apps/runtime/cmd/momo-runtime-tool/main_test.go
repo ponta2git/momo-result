@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 type characterizationFixture struct {
@@ -18,16 +17,6 @@ type characterizationFixture struct {
 		RemovedColumn         *string        `json:"removedColumn"`
 		ExpectedMissingCounts map[string]int `json:"expectedMissingCounts"`
 	} `json:"preflight"`
-	RenderCaddy []struct {
-		Name                            string   `json:"name"`
-		AppEnv                          string   `json:"appEnv"`
-		CanonicalHost                   string   `json:"canonicalHost"`
-		ExtraAllowedHosts               string   `json:"extraAllowedHosts"`
-		OriginLockToken                 string   `json:"originLockToken"`
-		ExpectedStatus                  string   `json:"expectedStatus"`
-		ExpectedAllowedHosts            []string `json:"expectedAllowedHosts"`
-		ExpectedOptionalOriginLockHosts []string `json:"expectedOptionalOriginLockHosts"`
-	} `json:"renderCaddy"`
 	Smoke struct {
 		ProcessCases []struct {
 			Name            string   `json:"name"`
@@ -64,28 +53,6 @@ func TestCharacterizationFixture(t *testing.T) {
 		})
 	}
 
-	for _, testCase := range fixture.RenderCaddy {
-		t.Run("render-caddy/"+testCase.Name, func(t *testing.T) {
-			values, err := resolveCaddyRenderValues(caddyRenderConfig{
-				AppEnv:            testCase.AppEnv,
-				CanonicalHost:     testCase.CanonicalHost,
-				ExtraAllowedHosts: testCase.ExtraAllowedHosts,
-				OriginLockToken:   testCase.OriginLockToken,
-			})
-			status := "ok"
-			if err != nil {
-				status = "failed"
-			}
-			if status != testCase.ExpectedStatus {
-				t.Fatalf("status = %q, want %q", status, testCase.ExpectedStatus)
-			}
-			if status == "ok" {
-				assertStringsEqual(t, values.AllowedHosts, testCase.ExpectedAllowedHosts)
-				assertStringsEqual(t, values.OptionalOriginLockHosts, testCase.ExpectedOptionalOriginLockHosts)
-			}
-		})
-	}
-
 	for _, testCase := range fixture.Smoke.ProcessCases {
 		t.Run("smoke/processes/"+testCase.Name, func(t *testing.T) {
 			assertStringsEqual(t, missingRuntimeProcesses(testCase.CommandLines), testCase.ExpectedMissing)
@@ -103,81 +70,6 @@ func TestCharacterizationFixture(t *testing.T) {
 				t.Fatalf("valid health payload = %v, want %v", actual, testCase.ExpectedValid)
 			}
 		})
-	}
-}
-
-func TestRenderCaddyWritesExpectedConfigurationAndSafeResult(t *testing.T) {
-	templatePath := filepath.Join(t.TempDir(), "Caddyfile.template")
-	outputPath := filepath.Join(t.TempDir(), "Caddyfile")
-	template := allowedHostsPlaceholder + "\n" + optionalOriginLockRoutesPlaceholder + "\n" +
-		originLockTokenPlaceholder
-	if err := os.WriteFile(templatePath, []byte(template), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	secret := "0123456789abcdef0123456789abcdef"
-	t.Setenv("APP_ENV", "prod")
-	t.Setenv("MOMO_CANONICAL_HOST", "example.com")
-	t.Setenv("MOMO_EXTRA_ALLOWED_HOSTS", "api.example.com")
-	t.Setenv("MOMO_ORIGIN_LOCK_TOKEN", secret)
-	t.Setenv("MOMO_CADDY_TEMPLATE_PATH", templatePath)
-	t.Setenv("MOMO_CADDY_OUTPUT_PATH", outputPath)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	if exitCode := runRenderCaddy(&stdout, &stderr); exitCode != 0 {
-		t.Fatalf("exit code = %d, stderr = %s", exitCode, stderr.String())
-	}
-	rendered, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, expected := range []string{`"example.com" "api.example.com"`, `"` + secret + `"`} {
-		if !strings.Contains(string(rendered), expected) {
-			t.Fatalf("rendered config is missing %q", expected)
-		}
-	}
-	if strings.Contains(stdout.String(), secret) || strings.Contains(stderr.String(), secret) {
-		t.Fatal("origin lock token leaked to command output")
-	}
-	info, err := os.Stat(outputPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("rendered config mode = %o, want 600", info.Mode().Perm())
-	}
-}
-
-func TestCaddyTemplateRequiresEachPlaceholderExactlyOnce(t *testing.T) {
-	t.Parallel()
-	valid := allowedHostsPlaceholder + optionalOriginLockRoutesPlaceholder + originLockTokenPlaceholder
-	if err := validateCaddyTemplate(valid); err != nil {
-		t.Fatalf("valid template rejected: %v", err)
-	}
-	if err := validateCaddyTemplate(valid + allowedHostsPlaceholder); err == nil {
-		t.Fatal("duplicate placeholder accepted")
-	}
-	if err := validateCaddyTemplate(strings.ReplaceAll(valid, originLockTokenPlaceholder, "")); err == nil {
-		t.Fatal("missing placeholder accepted")
-	}
-}
-
-func TestCaddyOriginTokenMustBeLiteral(t *testing.T) {
-	t.Parallel()
-	for _, token := range []string{
-		strings.Repeat("*", 32),
-		"*0123456789abcdef0123456789abcdef",
-		"0123456789abcdef0123456789abcdef*",
-		"0123456789abcdef{$EXPANDED_VALUE}",
-		"0123456789abcdef{http.request.header.X-Other}",
-	} {
-		for _, appEnv := range []string{"prod", "dev", "test"} {
-			_, err := resolveCaddyRenderValues(caddyRenderConfig{
-				AppEnv: appEnv, CanonicalHost: "example.com", OriginLockToken: token,
-			})
-			if err == nil {
-				t.Errorf("%s accepted a nonliteral origin token", appEnv)
-			}
-		}
 	}
 }
 
@@ -216,34 +108,24 @@ func TestPreflightFailureDoesNotLeakDatabaseURL(t *testing.T) {
 
 func TestInvalidArgumentsReturnOneJSONResult(t *testing.T) {
 	t.Parallel()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	if exitCode := runCLI(context.Background(), []string{"unknown"}, &stdout, &stderr); exitCode != 2 {
-		t.Fatalf("exit code = %d, want 2", exitCode)
-	}
-	if stdout.Len() != 0 {
-		t.Fatalf("unexpected stdout: %s", stdout.String())
-	}
-	var result commandResult
-	if err := json.Unmarshal(stderr.Bytes(), &result); err != nil {
-		t.Fatalf("decode JSON result: %v", err)
-	}
-	if result.Status != "failed" || result.ErrorClass != "InvalidArguments" {
-		t.Fatalf("result = %#v", result)
-	}
-}
-
-func TestRuntimeStopGraceIsBounded(t *testing.T) {
-	t.Setenv(stopGraceEnvironmentName, "45")
-	grace, err := runtimeStopGrace()
-	if err != nil || grace != 45*time.Second {
-		t.Fatalf("grace=%s err=%v", grace, err)
-	}
-	for _, raw := range []string{"91", "9223372037", "18446744074"} {
-		t.Setenv(stopGraceEnvironmentName, raw)
-		if _, err := runtimeStopGrace(); err == nil {
-			t.Fatalf("unsafe stop grace %q accepted", raw)
-		}
+	for _, command := range []string{"unknown", "serve", "render-caddy"} {
+		t.Run(command, func(t *testing.T) {
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			if exitCode := runCLI(context.Background(), []string{command}, &stdout, &stderr); exitCode != 2 {
+				t.Fatalf("exit code = %d, want 2", exitCode)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("unexpected stdout: %s", stdout.String())
+			}
+			var result commandResult
+			if err := json.Unmarshal(stderr.Bytes(), &result); err != nil {
+				t.Fatalf("decode JSON result: %v", err)
+			}
+			if result.Status != "failed" || result.ErrorClass != "InvalidArguments" {
+				t.Fatalf("result = %#v", result)
+			}
+		})
 	}
 }
 

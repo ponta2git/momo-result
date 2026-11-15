@@ -8,15 +8,13 @@ import (
 	"testing"
 )
 
-func TestPostdeployBaselineAndLegacyVersion(t *testing.T) {
+func TestPostdeployBaseline(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "evidence.json")
 	data := fixture(t, "postdeploy.json")
-	for _, contents := range [][]byte{data, mutated(t, data, func(o object) { delete(o, "schemaVersion") })} {
-		writeFile(t, path, contents)
-		code, out, stderr := run(t, "postdeploy-evidence", []string{path, "--require-check", "publicEdge"}, "")
-		if code != 0 || out != "{\"schemaVersion\":1,\"status\":\"ok\"}\n" || stderr != "" {
-			t.Fatalf("%d %q %q", code, out, stderr)
-		}
+	writeFile(t, path, data)
+	code, out, stderr := run(t, "postdeploy-evidence", []string{path, "--require-check", "publicEdge"}, "")
+	if code != 0 || out != "{\"schemaVersion\":1,\"status\":\"ok\"}\n" || stderr != "" {
+		t.Fatalf("%d %q %q", code, out, stderr)
 	}
 	// The existing report contract permits extra evidence and future check names.
 	writeFile(t, path, mutated(t, data, func(o object) { o["extra"] = true; o["checks"] = append(o["checks"].([]any), "futureCheck") }))
@@ -32,11 +30,12 @@ func TestPostdeployFailureClassesAndOutputIsolation(t *testing.T) {
 		name, kind string
 		data       []byte
 	}{
-		{"missing-check", "MissingRequiredChecks", mutated(t, data, func(o object) { o["checks"] = []string{"database", "http", "processes", "web"} })},
+		{"missing-check", "MissingRequiredChecks", mutated(t, data, func(o object) { o["checks"] = []string{"database", "http", "processes"} })},
 		{"duplicate", "DuplicateChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), "http") })},
 		{"newline", "InvalidChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), "bad\n") })},
 		{"wrong-check-type", "InvalidChecks", mutated(t, data, func(o object) { o["checks"] = append(o["checks"].([]any), nil) })},
-		{"version", "UnsupportedSchemaVersion", mutated(t, data, func(o object) { o["schemaVersion"] = 2 })},
+		{"version", "UnsupportedSchemaVersion", mutated(t, data, func(o object) { o["schemaVersion"] = 1 })},
+		{"missing-version", "UnsupportedSchemaVersion", mutated(t, data, func(o object) { delete(o, "schemaVersion") })},
 		{"null-version", "UnsupportedSchemaVersion", mutated(t, data, func(o object) { o["schemaVersion"] = nil })},
 		{"status", "UnhealthyStatus", mutated(t, data, func(o object) { o["status"] = "failed" })},
 		{"checks-object", "InvalidChecks", mutated(t, data, func(o object) { o["checks"] = object{} })},

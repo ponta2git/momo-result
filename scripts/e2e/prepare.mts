@@ -86,6 +86,12 @@ export async function prepareE2eInputs(repoRoot: string, signal: AbortSignal) {
         await buildImage(images.MOMO_E2E_WORKER_IMAGE),
         await buildImage(images.MOMO_E2E_CONTROLLED_WORKER_IMAGE),
       ] as const)(),
+    runCommand("pnpm", ["edge:build"], {
+      cwd: repoRoot,
+      env,
+      label: "Edge artifact build",
+      signal,
+    }),
   ]);
   signal.throwIfAborted();
   await writeFile(
@@ -95,6 +101,7 @@ export async function prepareE2eInputs(repoRoot: string, signal: AbortSignal) {
       MOMO_E2E_WORKER_IMAGE: workerId,
       MOMO_E2E_CONTROLLED_WORKER_IMAGE: controlledWorkerId,
       MOMO_E2E_SESSION_FIXTURE_DIR: fixture,
+      MOMO_E2E_EDGE_DIR: join(repoRoot, "apps/edge/dist"),
     })
       .map(([name, value]) => `export ${name}=${shellQuote(value)}\n`)
       .join(""),

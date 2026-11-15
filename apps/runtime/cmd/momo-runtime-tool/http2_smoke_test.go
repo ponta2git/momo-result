@@ -1,6 +1,36 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+func TestDirectHTTP2ProbeAuthenticatesAndRejectsHTTP1(t *testing.T) {
+	t.Parallel()
+	for _, protocol := range []int{1, 2} {
+		client := newProbeHTTPClient(localHTTPTimeout, probeRoundTripper(func(request *http.Request) (*http.Response, error) {
+			if request.Host != "example.com" || request.URL.Host != "127.0.0.1:8080" ||
+				request.URL.Path != http2ProbePath || request.Header.Get("X-Momo-Origin-Lock") != "test-only-token" ||
+				request.Header.Get("X-Momo-Runtime-Probe") != "v1" {
+				t.Fatal("direct API probe did not carry the expected target and authentication")
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				ProtoMajor: protocol,
+				Body: io.NopCloser(strings.NewReader(
+					`{"httpVersion":"HTTP/2.0","startedNanos":1,"finishedNanos":2}`,
+				)),
+			}, nil
+		}))
+		_, err := requestHTTP2Probe(context.Background(), client, "example.com", "test-only-token")
+		if (err == nil) != (protocol == 2) {
+			t.Fatalf("HTTP/%d acceptance disagrees with the wire protocol: %v", protocol, err)
+		}
+	}
+}
 
 func TestHTTP2ConcurrencyRequiresOverlappingServerExecution(t *testing.T) {
 	t.Parallel()

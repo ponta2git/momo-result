@@ -7,6 +7,8 @@ kill_timeout = 90
   release_command = "/opt/momo-result/bin/momo-runtime-tool preflight"
 
 [env]
+  MOMO_CANONICAL_HOST = "momo-result.ponta.me"
+  MOMO_EXTRA_ALLOWED_HOSTS = "momo-result.fly.dev"
   ANALYSIS_API_DECODE_CONCURRENCY = "2"
   ANALYSIS_API_MAX_DECODED_BYTES = "8388608"
   ANALYSIS_API_MAX_ENCODED_BYTES = "8388608"
@@ -25,6 +27,7 @@ kill_timeout = 90
   SOURCE_IMAGE_STORAGE_MODE = "r2"
 
 [http_service]
+  internal_port = 8080
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true

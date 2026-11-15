@@ -24,7 +24,7 @@ expected() {
     value=false
     case " $* " in *" ${key} "*) value=true ;; esac
     if [[ " $* " == *" system_e2e "* ]]; then
-      case "${key}" in runtime | analysis | analysis_image) value=true ;; esac
+      case "${key}" in web | runtime | analysis | analysis_image) value=true ;; esac
     fi
     printf '%s=%s\n' "${key}" "${value}"
   done
@@ -167,6 +167,8 @@ assert_case processing-worker-script \
 assert_case series-analysis-script \
   "$(expected web analysis analysis_image system_e2e)" \
   scripts/e2e/series-analysis-control-plane-smoke.mts
+assert_case web-edge "$(expected web system_e2e)" apps/edge/src/index.ts
+assert_case web-edge-test "${web_only}" apps/edge/scripts/edge.test.mts
 assert_case runtime-tool "${runtime_go}" apps/runtime/cmd/momo-runtime-tool/main.go
 assert_case runtime-tool-go-mod "${runtime_go}" apps/runtime/go.mod
 assert_case runtime-tool-go-sum "${runtime_go}" apps/runtime/go.sum
@@ -180,9 +182,6 @@ assert_case runtime-tool-characterization \
 assert_case runtime-memory-smoke \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/runtime-memory-smoke.sh
-assert_case runtime-rollback-workflow \
-  "$(expected workflow actionlint)" \
-  .github/workflows/runtime-rollback.yml
 assert_case runtime-release-workflow \
   "$(expected workflow actionlint)" \
   .github/workflows/runtime-release.yml

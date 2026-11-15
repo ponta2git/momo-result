@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "commit": "0123456789abcdef0123456789abcdef01234567",
   "runId": "123456",
   "runAttempt": "3",
@@ -19,5 +19,12 @@
   "http4sPatchRepository": "https://github.com/ponta2git/http4s.git",
   "http4sPatchScalaVersion": "3.3.6",
   "http4sPatchSourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "http4sPatchVersion": "0.23.36-5-23a6bcd-SNAPSHOT"
+  "http4sPatchVersion": "0.23.36-5-23a6bcd-SNAPSHOT",
+  "edgeRunAttempt": "1",
+  "edgeArtifactName": "web-edge-123456-1",
+  "edgeArtifactId": "333",
+  "edgeArtifactDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "edgeTreeSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "edgeWorkerName": "fixture-web",
+  "edgeVersionId": "12345678-1234-1234-1234-123456789abc"
 }

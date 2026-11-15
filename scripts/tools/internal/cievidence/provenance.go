@@ -146,26 +146,25 @@ func parseRuntimeDeployment(data []byte, expected runIdentity) (object, string, 
 
 func validateRuntimeDeployment(deployment object, expected runIdentity) (object, string, error) {
 	fail := errors.New("Runtime deployment metadata failed its immutable provenance contract.")
-	if !expected.valid() {
+	if !expected.valid() || !deployment.numberEquals("schemaVersion", 4) {
 		return nil, "", fail
 	}
 	keys := []string{"commit", "configSha256", "imageId", "imageRef", "manifestArtifactDigest", "manifestArtifactId", "manifestArtifactName", "manifestSha256", "registryDigest", "registryRef", "runAttempt", "runId", "schemaVersion", "sourceArtifactDigest", "sourceArtifactId", "sourceArtifactName"}
-	sourceAttempt := expected.RunAttempt
-	switch {
-	case deployment.numberEquals("schemaVersion", 1):
-	case deployment.numberEquals("schemaVersion", 2), deployment.numberEquals("schemaVersion", 3):
-		keys = append(keys, "sourceRunAttempt")
-		sourceAttempt = deployment.text("sourceRunAttempt")
-		if deployment.numberEquals("schemaVersion", 3) {
-			keys = append(keys, "http4sPatchRepository", "http4sPatchScalaVersion", "http4sPatchSourceSha", "http4sPatchVersion")
-			if !deployment.equals("http4sPatchRepository", http4sRepository) ||
-				!deployment.equals("http4sPatchScalaVersion", http4sScalaVersion) ||
-				!commitPattern.MatchString(deployment.text("http4sPatchSourceSha")) ||
-				!versionPattern.MatchString(deployment.text("http4sPatchVersion")) {
-				return nil, "", fail
-			}
-		}
-	default:
+	keys = append(keys, "sourceRunAttempt", "http4sPatchRepository", "http4sPatchScalaVersion", "http4sPatchSourceSha", "http4sPatchVersion", "edgeRunAttempt", "edgeArtifactName", "edgeArtifactId", "edgeArtifactDigest", "edgeTreeSha256", "edgeWorkerName", "edgeVersionId")
+	sourceAttempt := deployment.text("sourceRunAttempt")
+	if !deployment.equals("http4sPatchRepository", http4sRepository) ||
+		!deployment.equals("http4sPatchScalaVersion", http4sScalaVersion) ||
+		!commitPattern.MatchString(deployment.text("http4sPatchSourceSha")) ||
+		!versionPattern.MatchString(deployment.text("http4sPatchVersion")) {
+		return nil, "", fail
+	}
+	edge := runIdentity{expected.RunID, deployment.text("edgeRunAttempt"), expected.Commit}
+	if !edge.valid() || !deployment.equals("edgeArtifactName", edge.artifact("web-edge")) ||
+		!positiveIDPattern.MatchString(deployment.text("edgeArtifactId")) ||
+		!digestPattern.MatchString(deployment.text("edgeArtifactDigest")) ||
+		!shaPattern.MatchString(deployment.text("edgeTreeSha256")) ||
+		!edgeNamePattern.MatchString(deployment.text("edgeWorkerName")) ||
+		!edgeVersionPattern.MatchString(deployment.text("edgeVersionId")) {
 		return nil, "", fail
 	}
 	source := runIdentity{expected.RunID, sourceAttempt, expected.Commit}

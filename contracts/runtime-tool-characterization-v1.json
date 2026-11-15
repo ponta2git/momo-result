@@ -24,73 +24,22 @@
       }
     }
   ],
-  "renderCaddy": [
-    {
-      "name": "production-hosts-are-normalized-and-deduplicated",
-      "appEnv": "prod",
-      "canonicalHost": "Example.COM.",
-      "extraAllowedHosts": "api.example.com,example.com",
-      "originLockToken": "0123456789abcdef0123456789abcdef",
-      "expectedStatus": "ok",
-      "expectedAllowedHosts": [
-        "example.com",
-        "api.example.com"
-      ],
-      "expectedOptionalOriginLockHosts": []
-    },
-    {
-      "name": "development-adds-local-origin-lock-exceptions",
-      "appEnv": "dev",
-      "canonicalHost": "dev.example.com",
-      "extraAllowedHosts": "",
-      "originLockToken": "",
-      "expectedStatus": "ok",
-      "expectedAllowedHosts": [
-        "dev.example.com",
-        "localhost",
-        "127.0.0.1"
-      ],
-      "expectedOptionalOriginLockHosts": [
-        "localhost",
-        "127.0.0.1"
-      ]
-    },
-    {
-      "name": "production-requires-origin-lock-token",
-      "appEnv": "prod",
-      "canonicalHost": "example.com",
-      "extraAllowedHosts": "",
-      "originLockToken": "",
-      "expectedStatus": "failed",
-      "expectedErrorClass": "InvalidConfiguration"
-    },
-    {
-      "name": "invalid-host-fails-closed",
-      "appEnv": "test",
-      "canonicalHost": "bad_host.example.com",
-      "extraAllowedHosts": "",
-      "originLockToken": "test-token",
-      "expectedStatus": "failed",
-      "expectedErrorClass": "InvalidConfiguration"
-    }
-  ],
   "smoke": {
     "processCases": [
       {
-        "name": "all-runtime-processes",
+        "name": "api-process",
         "commandLines": [
-          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main",
-          "/usr/bin/caddy run --config /tmp/Caddyfile --adapter caddyfile"
+          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main"
         ],
         "expectedMissing": []
       },
       {
-        "name": "missing-caddy",
+        "name": "missing-api",
         "commandLines": [
-          "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main"
+          "/bin/sh"
         ],
         "expectedMissing": [
-          "caddy"
+          "api"
         ]
       }
     ],
@@ -101,8 +50,7 @@
           "database",
           "http",
           "http2",
-          "processes",
-          "web"
+          "processes"
         ]
       },
       {
@@ -112,8 +60,7 @@
           "http",
           "http2",
           "processes",
-          "publicEdge",
-          "web"
+          "publicEdge"
         ]
       }
     ],

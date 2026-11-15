@@ -13,8 +13,5 @@ private[http] object HttpRequestPaths:
       request.pathInfo.renderString.dropWhile(_ == '/').split("/").toList.map(Uri.decode(_))
     if values == List("") then Nil else values
 
-  def isApi[F[_]](request: Request[F]): Boolean =
-    segments(request).headOption.contains(UploadPaths.Api)
-
   def isImageUpload[F[_]](request: Request[F]): Boolean =
     HttpMethodPredicates.isPost(request.method) && segments(request) == uploadSegments

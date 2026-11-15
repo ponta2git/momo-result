@@ -20,6 +20,8 @@
     "public:safety:check": "scripts/ci/public-repo-safety-check.sh",
     "web:dev": "pnpm --filter web dev",
     "web:build": "pnpm --filter web build",
+    "edge:build": "pnpm --filter edge build",
+    "edge:check": "pnpm --filter edge check",
     "web:contract:check": "pnpm --filter web contract:check",
     "web:lint": "pnpm --filter web lint",
     "web:e2e": "pnpm --filter web e2e",

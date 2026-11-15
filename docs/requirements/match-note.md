@@ -163,8 +163,8 @@
 - WebとAPIの文字数判定は同じ契約例を共有する。契約例はLF / CRLF、空、Unicode whitespace、通常の日本語、BMP外文字、結合文字、150 / 151 code pointsを含む。DB evidenceはこの可変な入力方針を再判定せず、APIで検証済みの本文を欠損や変形なく保存できることと、version、外部key、本文・最終更新情報のshapeを観測する。
 - 本機能の初回releaseと、その場で必要になった切戻しは、利用者へ事前に示したmaintenance時間内に行い、その間の操作とbrowserに残ったWebを含むversion混在は動作保証の対象外とする。ここでのmaintenanceは利用者への通知による運用上の境界だけを指し、アクセス遮断、read-only化、mutation拒否、maintenance専用画面を実装しない。告知の開始・終了を現行workflowが自動化すると仮定しない。
 - DB schemaの正本である`momo-db`でadditive migrationを先に用意し、このrepositoryの`.momo-db-ref`をそのcommitへ更新する。CIがpinned migrationを適用する先は隔離された検証DBであり、本番DBへ適用した証拠にはしない。本番DBへの適用手順はprivate runbookを正本とし、migration適用済み状態を確認してからruntimeをdeployする。
-- 現行deploy workflowではAPIとWebを別々に順次deployせず、両方を含む同一のsmoke済みimmutable runtime imageをproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
-- 通常rollbackは現行runtime rollback workflowで、過去に成功した同一runtimeのimageと設定を復元する。additiveなDB columnは残し、保存済みメモを失うdown migrationを通常rollbackへ含めない。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は通常rollbackと分けて設計・承認する。
+- 現行deploy workflowではAPI imageとWeb edgeの検証済みimmutable成果物を同じrelease候補としてproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
+- 配備後の修正は[CI・リリース規約](../release.md#recovery-verification)に従い、additiveなDB columnと保存済みメモを保つ。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は配備修正と分けて設計・承認する。
 
 ## 9. Analysis / Export Boundary
 
@@ -194,7 +194,7 @@
 | 閲覧整合 | 保存後の試合詳細、開催詳細、試合一覧が同じ本文またはabsenceを返し、試合一覧のメモ表示と検索結果が追加・編集・削除へ追従し、メモなしと取得失敗を混同しない |
 | 分析分離 | メモだけの追加、編集、削除でinput revision、source input checksum、再計算intent、job、artifactが変わらない |
 | 互換性 | migration前の全既存試合をメモなしで読め、旧clientの確定を受理し、rollbackで保存済みメモを破棄しない |
-| Release / rollback | pinnedしたmomo-db migrationを隔離DBへ適用したruntime gateが通り、必要columnがないDBではrelease preflightが失敗する。本番migrationの適用済み確認後、APIとWebを含む同一runtimeを通常workflowでdeployし、通常rollbackでは以前の成功runtimeを復元してadditive columnと保存済みメモを残す |
+| Release / recovery | pinnedしたmomo-db migrationを隔離DBへ適用したruntime gateが通り、必要columnがないDBではrelease preflightが失敗する。本番migrationの適用済み確認後、APIとWebの同じ検証済み候補を通常workflowでdeployし、配備後の修正でもadditive columnと保存済みメモを残す |
 | 出力 | 既存CSV / TSVの列順、行数、内容がメモの有無で変わらない |
 | 表示・安全性 | 改行、長文、HTML風文字列をplain textとして安全に表示し、本文をlogやerrorへ出さない |
 | 提供価値 | 初版リリース後、実利用者への定性的な確認により、150字の入力が気軽さを損なっていないことと、保存済みメモが後日の会話または振り返りに役立ったかを確認する。アプリ内の利用状況計測は受入条件にしない |

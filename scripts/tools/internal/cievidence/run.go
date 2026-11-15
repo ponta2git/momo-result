@@ -23,12 +23,15 @@ var usages = map[string]string{
 	"file-digest-match":          "<file> <bare-sha256>",
 	"analysis-release-selection": "<run-id> <producer-attempt> <metadata-name> <metadata-id> <metadata-digest>",
 	"e2e-artifact-selection":     "<producer-attempt> <artifact-id> <artifact-digest>",
+	"edge-candidate":             "<artifact-directory> <run-id> <producer-attempt> <commit> <artifact-id> <artifact-digest>",
+	"edge-deployment":            "<wrangler-output.jsonl> <worker-name>",
+	"create-edge-candidate":      "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA",
 	"e2e-candidate":              "controlled-worker|session-fixture <artifact-directory> <run-id> <producer-attempt> <commit> <artifact-id> <artifact-digest> [<runtime-image-id> for session-fixture]",
 	"create-http4s-patch":        "--repository URL --scala-version VERSION --source-sha SHA --version VERSION",
 	"create-runtime-candidate":   "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF",
 	"create-analysis-candidate":  "--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF --artifact-id ID --artifact-digest DIGEST",
 	"create-e2e-candidate":       "--kind controlled-worker|session-fixture --artifact-dir DIR --run-id ID --run-attempt N --commit SHA [--runtime-image-id ID for session-fixture]",
-	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST",
+	"create-runtime-deployment":  "--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST --edge-candidate FILE --edge-artifact-id ID --edge-artifact-digest DIGEST --edge-deployment FILE",
 	"resolve-pushed-image":       "IMAGE_TAG < docker-repo-digests.json",
 	"resolve-deployment-run":     "REPOSITORY < github-run.json",
 	"verify-manifest-artifact":   "DEPLOYMENT_JSON RUN_ID < github-artifact.json",
@@ -50,6 +53,7 @@ var argumentCounts = map[string]int{
 	"analysis-archive": 3, "image-id-match": 2,
 	"file-digest-match": 2, "analysis-release-selection": 5,
 	"e2e-artifact-selection": 3,
+	"edge-candidate":         6, "edge-deployment": 2,
 }
 
 // Run preserves the validators' positional arguments and stdout contracts.
@@ -89,6 +93,10 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 		err = e2eArtifactSelection(args[0], args[1], args[2])
 	case "e2e-candidate":
 		result, err = e2eCandidate(args)
+	case "edge-candidate":
+		err = edgeCandidate(args)
+	case "edge-deployment":
+		result, err = edgeDeployment(args)
 	case "postdeploy-evidence":
 		result, err = postdeployEvidence(args)
 	case "worker-readiness":
@@ -106,7 +114,7 @@ func Run(command string, args []string, in io.Reader, out, errOut io.Writer, rep
 		if !digestPattern.MatchString(args[0]) || !digestPattern.MatchString(args[1]) || args[0] != args[1] {
 			err = errors.New("The loaded image ID does not match the verified candidate image ID.")
 		}
-	case "create-http4s-patch", "create-runtime-candidate", "create-analysis-candidate", "create-runtime-deployment", "create-e2e-candidate":
+	case "create-http4s-patch", "create-runtime-candidate", "create-analysis-candidate", "create-runtime-deployment", "create-e2e-candidate", "create-edge-candidate":
 		var output bytes.Buffer
 		err = create(command, args, &output, repoRoot)
 		result = output.String()

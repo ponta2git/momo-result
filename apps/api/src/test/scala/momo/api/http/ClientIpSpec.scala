@@ -9,8 +9,8 @@ import sttp.tapir.model.{ConnectionInfo, ServerRequest}
 
 class ClientIpSpec extends FunSuite:
 
-  test("returns Fly-Client-IP when present") {
-    val req = request(headers = List(Header("Fly-Client-IP", "203.0.113.7")))
+  test("returns the client identity validated by runtime ingress") {
+    val req = request(headers = List(Header("X-Momo-Client-IP", "203.0.113.7")))
     assertEquals(ClientIp.of(req), "203.0.113.7")
   }
 
@@ -19,17 +19,18 @@ class ClientIpSpec extends FunSuite:
     assertEquals(ClientIp.of(req), "unknown")
   }
 
-  test("Fly-Client-IP wins over X-Forwarded-For") {
+  test("validated edge identity wins over external forwarding headers") {
     val req = request(
       headers = List(
         Header("X-Forwarded-For", "1.2.3.4"),
         Header("Fly-Client-IP", "203.0.113.9"),
+        Header("X-Momo-Client-IP", "203.0.113.10"),
       )
     )
-    assertEquals(ClientIp.of(req), "203.0.113.9")
+    assertEquals(ClientIp.of(req), "203.0.113.10")
   }
 
-  test("falls back to remoteAddr when no Fly header present") {
+  test("falls back to remoteAddr for local development without trusted edge identity") {
     val req = request(
       connectionInfo = ConnectionInfo(
         local = None,
@@ -45,13 +46,13 @@ class ClientIpSpec extends FunSuite:
     assertEquals(ClientIp.of(req), "unknown")
   }
 
-  test("trims and ignores empty Fly-Client-IP") {
-    val req = request(headers = List(Header("Fly-Client-IP", "   ")))
+  test("ignores an external Fly-Client-IP without validated edge identity") {
+    val req = request(headers = List(Header("Fly-Client-IP", "203.0.113.9")))
     assertEquals(ClientIp.of(req), "unknown")
   }
 
-  test("ignores malformed Fly-Client-IP values") {
-    val req = request(headers = List(Header("Fly-Client-IP", "not-an-ip")))
+  test("ignores malformed trusted client identity defensively") {
+    val req = request(headers = List(Header("X-Momo-Client-IP", "not-an-ip")))
     assertEquals(ClientIp.of(req), "unknown")
   }
 

@@ -2,6 +2,7 @@ package momo.api.http
 
 import java.io.EOFException
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
@@ -16,8 +17,42 @@ import org.http4s.{HttpApp, Request, Response, Status}
 import scodec.bits.ByteVector
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.config.{AppConfig, AppEnv, IngressConfig}
 
 final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
+  test("ingress rejects an unfinished unauthorized stream without blocking the next health check") {
+    for
+      ingress <- IngressConfig.load[IO](
+        Map(
+          "MOMO_CANONICAL_HOST" -> "localhost",
+          "MOMO_ORIGIN_LOCK_TOKEN" -> "test-only-origin-credential-32-bytes",
+        ),
+        AppEnv.Prod
+      )
+      config = AppConfig(AppEnv.Prod, "127.0.0.1", 8080, Path.of("/tmp"), Nil, ingress = ingress)
+      handled <- IO.ref(0)
+      app = RuntimeIngressMiddleware[IO](config)(Kleisli(_ =>
+        handled.update(_ + 1).as(Response[IO](Status.Ok).withEntity("healthy"))
+      ))
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.post(1, "/api/rejected", None)
+            rejected <- client.body(1).timeout(5.seconds)
+            before <- handled.get
+            _ <- client.get(3, "/healthz")
+            healthy <- client.body(3).timeout(5.seconds)
+            after <- handled.get
+          yield
+            assertEquals(rejected, "")
+            assertEquals(before, 0)
+            assertEquals(healthy, "healthy")
+            assertEquals(after, 1)
+        }
+      }
+    yield ()
+  }
+
   test("HEAD sends no content and releases capacity for the next stream") {
     for
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)

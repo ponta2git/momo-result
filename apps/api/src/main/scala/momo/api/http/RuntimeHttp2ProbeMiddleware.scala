@@ -13,8 +13,8 @@ import org.typelevel.ci.CIString
 /**
  * Loopback-only protocol oracle used by the runtime post-deploy probe.
  *
- * The public proxy removes the probe header and injects it only for loopback requests before
- * forwarding through the same h2c transport used by normal API routes.
+ * The outer ingress authenticates the origin and removes externally supplied probe headers.
+ * The transport peer is checked here too, independently of all forwarded headers.
  */
 private[api] object RuntimeHttp2ProbeMiddleware:
   val Path = "/api/__momo_runtime/http2-probe"
@@ -33,7 +33,7 @@ private[api] object RuntimeHttp2ProbeMiddleware:
   }
 
   private def isProbe[F[_]](request: Request[F]): Boolean =
-    request.method === Method.GET &&
+    RuntimeIngressMiddleware.isLoopback(request) && request.method === Method.GET &&
       request.uri.path.renderString == Path &&
       request.headers.get(HeaderName).exists(_.head.value == HeaderValue)
 

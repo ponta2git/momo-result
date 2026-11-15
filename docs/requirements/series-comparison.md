@@ -12,6 +12,7 @@
 | 追加する実績軸の作品通算・対象マップ・0試合時の表示 | [実績達成管理](player-achievements.md) |
 | 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
+| 収益トップと売り場・目的地の有無で分けた勝ち筋マップ（草案。確定まで本書の指標を変更しない） | `docs/requirements/series-win-path.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
 | UI共通規約、test、command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |

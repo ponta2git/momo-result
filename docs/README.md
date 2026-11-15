@@ -19,7 +19,7 @@ docs 以下の正本と実装入口へ、変更対象から最短で進むため
 | DB / repository | [DB 規約]、対象の業務・job 要求。`momo-db` 側の変更前には [AGENTS.md](../AGENTS.md#作業境界) の事前手順 | 対象 query、隔離 test 用の pinned migration |
 | OCR job / scheduler | [OCR job 契約](ocr-job-contract.md)、[DB 規約]、`docs/schemas/ocr-*.schema.json`。worker 構造は [Worker 規約の OCR Capability](worker-rule.md#ocr-capability) | API producer、`apps/processing-worker/` |
 | 分析 job / artifact / worker / API | [分析 batch 要求]。DB は [DB 規約]、worker は [Worker 規約]、bounded read は [API 規約]、Web state は [Web 実装規約]、表示は [UI 規約]、指標は対象要求 | artifact / input schema、Tapir、processing-worker、Web |
-| 戦績比較 | [比較要求](requirements/series-comparison.md)、[分析 batch 要求]。対象に応じ [オーナー別](requirements/series-owner-comparison.md)・[レーダー要求]・[見通し](requirements/series-rank-outlook.md)・[振り返り](requirements/series-review-playbook.md)、表示は [UI 規約] | artifact schema、worker、API / Web |
+| 戦績比較 | [比較要求](requirements/series-comparison.md)、[分析 batch 要求]。対象に応じ [オーナー別](requirements/series-owner-comparison.md)・[レーダー要求]・[見通し](requirements/series-rank-outlook.md)・[振り返り](requirements/series-review-playbook.md)・[勝ち筋マップ（草案）](requirements/series-win-path.md)、表示は [UI 規約] | artifact schema、worker、API / Web |
 | 開催一覧・詳細 | [開催詳細要求]。業務前提は [基本要求]、メモは [試合メモ要求] | 対象 API / Web |
 | 試合メモ | [試合メモ要求]。変更する境界に応じ [基本要求]、[開催詳細要求]、[分析 batch 要求]、[ドメイン規約]、[UI 規約] | Tapir、momo-db、API / Web |
 | 実績リスト・初達成・実績軸 | [実績要求](requirements/player-achievements.md)。権限は [基本要求]、既存6軸は [レーダー要求]、再計算は [分析 batch 要求]、保存は [DB 規約の Achievement Data](db-rule.md#achievement-data) | 試合登録・編集、リスト管理、専用ページ、レーダー |

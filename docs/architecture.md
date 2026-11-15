@@ -12,7 +12,8 @@ subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](w
 | API | HTTP、認証、usecase、DB adapter | Tapir endpoint、`apps/api/` |
 | Processing Worker | OCR / 分析の非同期実行、lease、外部 I/O | `apps/processing-worker/` |
 | DB | 業務状態、session、OAuth state 使用済み記録、job、入力、成果物 | 対象 `momo-db` checkout の migration（[DB 規約](db-rule.md#ownership)） |
-| public HTTP runtime | Web 配信、API、reverse proxy | `Dockerfile`、`deploy/`、runtime tool |
+| Web edge | 静的配信、SPA routing、API 転送 | `apps/edge/` |
+| API runtime | API process の起動・終了、単発の依存・稼働検査 | `Dockerfile`、`apps/runtime/` |
 
 - OCR / 分析処理は public HTTP runtime から分離した Processing Worker で実行し、高負荷分析は HTTP request の外で行う。高負荷処理が利用者向け HTTP の可用性を巻き込まないためである。
 - DB を業務状態と永続 job の正本とし、Worker が既存 job を直接取得する。job の受け渡しは DB だけで行い、wake が欠けても DB から回復できるようにする。
@@ -42,8 +43,8 @@ subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](w
 - 複数 service の E2E 環境管理と runtime HTTP smoke は root の `scripts/e2e` に置く。
 - `scripts/e2e` の入口は各 run の資源と後片付けを所有し、共通 runtime は隔離した子 process 環境と service の起動を所有する。`apps/web/scripts/e2e` には共通 helper と実行用の子スクリプトを置く。子 process の起動・中断・終了待ちはローカル開発と同じ共通 module を使い、開発用 env の読取りはローカル起動 tool に閉じる。入口は実行専用とし、ライブラリとして import しない。OCR 専用の制御 Worker は回復 E2E、画像 fixture と通知 recorder はシステム・回復 E2E で使い、UI E2E はいずれも使わない。
 - `scripts/ci` の Shell は外部 command、環境変数、file の受け渡し、終了状態と実行順序を扱い、アプリの業務判断は各 subsystem に置く。workflow は gate の依存関係、権限、service、artifact の受け渡しを所有する。
-- 構造化された CI data の集計・秘匿化・来歴検証と metadata 生成は `scripts/tools/cmd/ci-tool` に集約する。producer と consumer は同じ検証規則を使い、後続 release が以前の metadata を読める契約を保つ。CLI の入力・出力・終了値は [command の説明](../scripts/tools/cmd/ci-tool/README.md) から辿れる。
-- 独立した診断・評価用 Go command も `scripts/tools/cmd`、本番 runtime の process 管理と probe は独立 module の `apps/runtime` に置く。CI 専用の集計・判定は runtime binary の外に置く。
+- 構造化された CI data の集計・秘匿化・来歴検証と metadata 生成は `scripts/tools/cmd/ci-tool` に集約する。producer と consumer は同じ検証規則を使い、選択した release 候補の metadata と成果物を対応付ける。CLI の入力・出力・終了値は [command の説明](../scripts/tools/cmd/ci-tool/README.md) から辿れる。
+- 独立した診断・評価用 Go command も `scripts/tools/cmd`、本番 runtime の単発 preflight と probe は独立 module の `apps/runtime` に置く。API の process lifecycle は JVM が所有する。CI 専用の集計・判定は runtime binary の外に置く。
 
 ## Runtime / Security
 

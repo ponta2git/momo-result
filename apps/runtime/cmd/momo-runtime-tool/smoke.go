@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -20,7 +19,6 @@ const (
 	http2SmokeEvent  = "runtime_http2_smoke"
 	localHTTPTimeout = 5 * time.Second
 	edgeHTTPTimeout  = 10 * time.Second
-	probeBodyLimit   = 131_072
 	http2ProbePath   = "/api/__momo_runtime/http2-probe"
 	http2ProbeCount  = 16
 )
@@ -76,6 +74,7 @@ func runLocalSmoke(ctx context.Context, stdout io.Writer, stderr io.Writer) int 
 		return 1
 	}
 	result := successResult(localSmokeEvent)
+	result.SchemaVersion = 2
 	result.Checks = localSmokeChecks(edgeMode)
 	writeResult(stdout, result)
 	return 0
@@ -129,21 +128,6 @@ func probeLocalHTTP(ctx context.Context, host string, originToken string) string
 		return "HealthContractError"
 	}
 
-	webRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/", nil)
-	if err != nil {
-		return "WebContractError"
-	}
-	webRequest.Host = host
-	webRequest.Header.Set("X-Momo-Origin-Lock", originToken)
-	webResponse, err := client.Do(webRequest)
-	if err != nil {
-		return "WebContractError"
-	}
-	defer webResponse.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(webResponse.Body, probeBodyLimit))
-	if err != nil || webResponse.StatusCode != http.StatusOK || !bytes.Contains(body, []byte(`<div id="root"></div>`)) {
-		return "WebContractError"
-	}
 	return ""
 }
 
@@ -173,7 +157,7 @@ func probeLocalHTTP2(ctx context.Context, host string, originToken string) error
 	if err := probePublicListenerH2C(ctx, host, originToken); err != nil {
 		return err
 	}
-	return probeUpstreamConcurrency(ctx, host, originToken)
+	return probeHTTP2Concurrency(ctx, host, originToken)
 }
 
 func probePublicListenerH2C(ctx context.Context, host string, originToken string) error {
@@ -200,13 +184,15 @@ func probePublicListenerH2C(ctx context.Context, host string, originToken string
 	return nil
 }
 
-func probeUpstreamConcurrency(ctx context.Context, host string, originToken string) error {
+func probeHTTP2Concurrency(ctx context.Context, host string, originToken string) error {
 	protocols := new(http.Protocols)
-	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
 	transport := &http.Transport{
-		Protocols:           protocols,
-		MaxConnsPerHost:     http2ProbeCount,
-		MaxIdleConnsPerHost: http2ProbeCount,
+		Protocols: protocols,
+		// Probe the API directly over one h2c connection. Concurrent HTTP/1
+		// sockets no longer prove multiplexing through an intermediate proxy.
+		MaxConnsPerHost:     1,
+		MaxIdleConnsPerHost: 1,
 	}
 	defer transport.CloseIdleConnections()
 	client := newProbeHTTPClient(localHTTPTimeout, transport)
@@ -252,7 +238,7 @@ func probeUpstreamConcurrency(ctx context.Context, host string, originToken stri
 func validateHTTP2Concurrency(payloads []http2ProbePayload) error {
 	for _, payload := range payloads {
 		if payload.HTTPVersion != "HTTP/2.0" || payload.StartedNanos >= payload.FinishedNanos {
-			return errors.New("upstream HTTP/2 probe returned an invalid execution interval")
+			return errors.New("API HTTP/2 probe returned an invalid execution interval")
 		}
 	}
 	for index, left := range payloads {
@@ -262,7 +248,7 @@ func validateHTTP2Concurrency(payloads []http2ProbePayload) error {
 			}
 		}
 	}
-	return errors.New("upstream HTTP/2 requests did not execute concurrently")
+	return errors.New("API HTTP/2 requests did not execute concurrently")
 }
 
 func requestHTTP2Probe(
@@ -282,17 +268,18 @@ func requestHTTP2Probe(
 	}
 	request.Host = host
 	request.Header.Set("X-Momo-Origin-Lock", originToken)
+	request.Header.Set("X-Momo-Runtime-Probe", "v1")
 	response, err := client.Do(request)
 	if err != nil {
 		return http2ProbePayload{}, err
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned an unexpected status")
+	if response.ProtoMajor != 2 || response.StatusCode != http.StatusOK {
+		return http2ProbePayload{}, errors.New("API HTTP/2 probe returned an unexpected status")
 	}
 	var payload http2ProbePayload
 	if decodeBoundedJSON(response.Body, 4096, &payload) != nil || payload.HTTPVersion != "HTTP/2.0" {
-		return http2ProbePayload{}, errors.New("upstream HTTP/2 probe returned an invalid payload")
+		return http2ProbePayload{}, errors.New("API HTTP/2 probe returned an invalid payload")
 	}
 	return payload, nil
 }
@@ -350,5 +337,5 @@ func localSmokeChecks(edgeMode string) []string {
 	if edgeMode == "required" {
 		checks = append(checks, "publicEdge")
 	}
-	return append(checks, "web")
+	return checks
 }

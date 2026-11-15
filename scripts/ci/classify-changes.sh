@@ -31,6 +31,13 @@ while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
+    apps/edge/*.test.*)
+      web=true
+      ;;
+    apps/edge/*)
+      system_e2e=true
+      web=true
+      ;;
     apps/api/openapi.yaml)
       system_e2e=true
       api=true
@@ -206,8 +213,6 @@ while IFS= read -r -d '' path; do
       runtime=true
       system_e2e=true
       ;;
-    .github/workflows/runtime-rollback.yml)
-      ;;
     .github/workflows/runtime-release.yml)
       ;;
     .github/workflows/pr.yml)
@@ -246,6 +251,7 @@ while IFS= read -r -d '' path; do
 done
 
 if [[ "${system_e2e}" == true ]]; then
+  web=true
   runtime=true
   analysis=true
   analysis_image=true

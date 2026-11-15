@@ -18,7 +18,9 @@ trap 'rm -f "${log_file}" "${message_file}"' EXIT
 }
 docker stop --time "${stop_timeout}" "${container_name}" > /dev/null
 exit_code="$(docker inspect "${container_name}" --format '{{.State.ExitCode}}')"
-[[ "${exit_code}" == "0" ]] || {
+# HotSpot's SIGTERM shutdown hook can finish normally with the signal-derived 143.
+# A killed/timed-out JVM (137), startup failure, or missing drain log still fails.
+[[ "${exit_code}" == "0" || "${exit_code}" == "143" ]] || {
   echo "Runtime container did not exit cleanly after SIGTERM." >&2
   exit 1
 }
@@ -30,10 +32,4 @@ grep -Fxq 'momo_result_api_stopping' "${message_file}" || {
   echo "API did not record a graceful shutdown." >&2
   exit 1
 }
-if jq -Re 'fromjson? | select(.event == "runtime_serve" and .status == "failed")' \
-  "${log_file}" >/dev/null; then
-  echo "Go runtime supervisor reported a failed shutdown." >&2
-  exit 1
-fi
-
-echo "Runtime processes drained cleanly after SIGTERM."
+echo "API exited cleanly after SIGTERM."

@@ -23,7 +23,6 @@ func TestHTTPProbesRejectRedirectsWithoutForwardingCredentials(t *testing.T) {
 		accepts      func() bool
 	}{
 		{"local health", "/healthz", local},
-		{"local web", "/", local},
 		{"public edge", "/healthz", func() bool { return probePublicEdge(ctx, "example.com") == nil }},
 	} {
 		t.Run(probe.name, func(t *testing.T) {
@@ -32,9 +31,6 @@ func TestHTTPProbesRejectRedirectsWithoutForwardingCredentials(t *testing.T) {
 			http.DefaultTransport = probeRoundTripper(func(request *http.Request) (*http.Response, error) {
 				response := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Request: request}
 				body := `{"status":"ok"}`
-				if request.URL.Path == "/" {
-					body = `<div id="root"></div>`
-				}
 				if request.URL.Host == "redirect.invalid" {
 					followed = true
 				} else if request.URL.Path == probe.redirectPath {

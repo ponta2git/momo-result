@@ -66,13 +66,13 @@
 
 ## 6. Runtime / Release
 
-- public runtimeはWeb静的配信、API、reverse proxyを一つのrelease artifactとして構成し、process lifecycleとgraceful shutdownを管理する。
+- Web配信・API転送の成果物とAPI imageを分離し、同じrelease候補として検証・配備する。APIのprocess lifecycleとgraceful shutdownはJVMが所有する。
 - 公開listenerからAPI受信までのprotocol要件は、edge表示からの推測ではなく各hopの直接検証で確認する。
 - Processing Workerは利用者向けHTTP入口を持たず、productionと同じOS isolation、cgroup、native dependencyで検証する。
 - runtimeは最小権限で実行し、release imageに含める言語runtime、package manager、debuggerは実行に必要なものに限る。
 - 後方互換なDB migrationはconsumerより先に適用する。旧新consumerを併存させる非互換な変更は段階migrationにし、非互換の一括切替を選んだ機能は公開停止中に保存状態と全consumerを揃える。対象機能の切替契約に従い、データ保全と復旧条件を確認してから再開する。
 - release候補は一度だけbuildし、immutable identity / provenanceを後続gateとdeployで再利用する。
-- rollbackは同じ承認・排他・provenance検証を通し、health、機能、性能回復を別々に確認する。
+- 配信構成の切替は承認済みの保守時間内で行い、失敗時は前進修正する。health、機能、性能回復は別々に確認する。
 - secretはlocal、CI、productionの各secret storeで管理し、tracked fileやpublic docsへ置かない。
 
 具体的なruntime構成、CI workflow、release commandは実装と[CI・リリース規約](../release.md)を正本とする。

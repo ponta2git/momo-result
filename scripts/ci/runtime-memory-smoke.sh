@@ -30,6 +30,7 @@ seq 1 "${request_count}" | xargs -P "${concurrency}" -I __MOMO_REQUEST__ \
     -H "Host: ${canonical_host}" \
     -H "X-Momo-Origin-Lock: ${origin_lock_token}" \
     -H "X-Momo-Account-Id: ${dev_account}" \
+    -H "X-Momo-Client-IP: 127.0.0.1" \
     -H "X-Momo-Memory-Probe: __MOMO_REQUEST__" \
     "${base_url}/api/held-events"
 

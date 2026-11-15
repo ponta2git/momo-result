@@ -14,6 +14,7 @@ async function fixture(t: TestContext, broken = "") {
     host?: string;
     token?: string;
     account?: string;
+    clientIp?: string;
     method?: string;
   }[] = [];
   const http = createHTTPServer((request, response) => {
@@ -24,6 +25,7 @@ async function fixture(t: TestContext, broken = "") {
       token: request.headers["x-momo-origin-lock"] as string,
       account: request.headers["x-momo-account-id"] as string,
       method: request.method,
+      clientIp: request.headers["x-momo-client-ip"] as string,
     });
     if (broken === "timeout") return;
     if (broken === "redirect") {
@@ -32,30 +34,23 @@ async function fixture(t: TestContext, broken = "") {
     }
     if (
       request.headers.host !== host ||
-      (path !== "/healthz" && request.headers["x-momo-origin-lock"] !== token)
+      (!(path === "/healthz" && request.method === "GET") &&
+        request.headers["x-momo-origin-lock"] !== token)
     ) {
       response.writeHead(421).end();
       return;
     }
-    response.setHeader(
-      "Cache-Control",
-      path.startsWith("/assets/")
-        ? "public, max-age=31536000, immutable"
-        : path.startsWith("/api/") || path.startsWith("/healthz")
-          ? "no-store"
-          : "no-cache",
-    );
-    if (broken === "cache" && path === "/") response.setHeader("Cache-Control", "private");
+    response.setHeader("Cache-Control", "private, no-store");
+    if (broken === "cache" && path === "/api/auth/me")
+      response.setHeader("Cache-Control", "private");
     if (broken === "repeated-cache" && path === "/api/auth/me") {
-      response.setHeader("Cache-Control", ["no-store", "no-store"]);
+      response.setHeader("Cache-Control", ["private, no-store", "private, no-store"]);
     }
     if (path === "/healthz") response.end('{"status":"ok"}');
     else if (path === "/healthz/details") response.end('{"database":"ok"}');
     else if (path === "/api/auth/me")
       response.end(JSON.stringify({ accountId: request.headers["x-momo-account-id"] }));
-    else if (path === "/assets/missing.js") response.writeHead(405).end();
-    else if (path === "/openapi.yaml") response.writeHead(404).end();
-    else response.end('<script src="/assets/app.js"></script>');
+    else response.writeHead(404).end();
   });
   const http2 = createHTTP2Server();
   const sessions = new Set<import("node:http2").ServerHttp2Session>();
@@ -124,7 +119,7 @@ async function fixture(t: TestContext, broken = "") {
   };
 }
 
-test("runtime scenario sends host, origin and account headers and uses real h2c", async (t) => {
+test("API scenario sends trusted client identity and uses real h2c", async (t) => {
   const server = await fixture(t);
   await runSmoke(server.options);
   assert.equal(server.h2Requests.length, 1);
@@ -133,18 +128,22 @@ test("runtime scenario sends host, origin and account headers and uses real h2c"
   assert.equal(server.h2Requests[0]!["x-momo-origin-lock"], server.options.originLockToken);
   assert(
     server.requests.some(
-      (r) => r.path === "/api/auth/me" && r.account === server.options.accountId,
+      (r) =>
+        r.path === "/api/auth/me" &&
+        r.account === server.options.accountId &&
+        r.clientIp === "127.0.0.1",
     ),
   );
-  assert(server.requests.some((r) => r.path === "/assets/app.js"));
-  assert(server.requests.some((r) => r.path === "/assets/missing.js" && r.method === "POST"));
+  assert(server.requests.some((r) => r.path === "/api/__momo_runtime/http2-probe"));
+  assert(server.requests.some((r) => r.path === "/healthz" && r.method === "POST" && !r.token));
   assert(server.requests.some((r) => r.host === "momo-result.fly.dev"));
   assert(server.requests.some((r) => r.host === "unknown.example"));
-  assert(server.requests.some((r) => r.path === "/" && r.token === undefined));
+  assert(server.requests.some((r) => r.path === "/api/auth/me" && r.token === undefined));
+  assert(!server.requests.some((r) => r.path.startsWith("/assets/")));
 });
 
 for (const [broken, expected] of [
-  ["cache", "index cache"],
+  ["cache", "account cache"],
   ["redirect", "health"],
   ["http2-status", "HTTP/2 health"],
 ] as const) {
@@ -178,7 +177,7 @@ for (const broken of ["timeout", "http2-timeout"]) {
   });
 }
 
-test("accepts repeated Cache-Control lines from the API and proxy", async (t) => {
+test("accepts repeated private/no-store Cache-Control lines", async (t) => {
   const server = await fixture(t, "repeated-cache");
   await runSmoke(server.options);
 });

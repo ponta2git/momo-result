@@ -49,6 +49,8 @@ func create(command string, args []string, out io.Writer, root string) error {
 		return deployment(args, out, root)
 	case "create-e2e-candidate":
 		return createE2ECandidate(args, out)
+	case "create-edge-candidate":
+		return createEdgeCandidate(args, out)
 	default:
 		return flag.ErrHelp
 	}

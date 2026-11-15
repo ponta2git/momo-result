@@ -2,6 +2,7 @@ package momo.api.http
 
 import java.io.EOFException
 import java.nio.charset.StandardCharsets.UTF_8
+import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
@@ -16,8 +17,71 @@ import org.http4s.{HttpApp, Request, Response, Status}
 import scodec.bits.ByteVector
 
 import momo.api.MomoCatsEffectSuite
+import momo.api.config.{AppConfig, AppEnv, IngressConfig}
 
 final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
+  test("an authenticated protocol probe recognizes the actual HTTP/2 loopback peer") {
+    val credential = "test-only-origin-credential-32-bytes"
+    for
+      ingress <- IngressConfig.load[IO](
+        Map("MOMO_CANONICAL_HOST" -> "localhost", "MOMO_ORIGIN_LOCK_TOKEN" -> credential),
+        AppEnv.Prod
+      )
+      config = AppConfig(AppEnv.Prod, "127.0.0.1", 8080, Path.of("/tmp"), Nil, ingress = ingress)
+      app = RuntimeIngressMiddleware[IO](config)(RuntimeHttp2ProbeMiddleware[IO](Kleisli(_ =>
+        IO.pure(Response[IO](Status.NotFound))
+      )))
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.get(
+              1,
+              RuntimeHttp2ProbeMiddleware.Path,
+              List(
+                "x-momo-origin-lock" -> credential,
+                "x-momo-runtime-probe" -> RuntimeHttp2ProbeMiddleware.HeaderValue,
+              )
+            )
+            result <- client.body(1).timeout(5.seconds)
+          yield assert(result.contains("HTTP/2.0"))
+        }
+      }
+    yield ()
+  }
+
+  test("ingress rejects an unfinished unauthorized stream without blocking the next health check") {
+    for
+      ingress <- IngressConfig.load[IO](
+        Map(
+          "MOMO_CANONICAL_HOST" -> "localhost",
+          "MOMO_ORIGIN_LOCK_TOKEN" -> "test-only-origin-credential-32-bytes",
+        ),
+        AppEnv.Prod
+      )
+      config = AppConfig(AppEnv.Prod, "127.0.0.1", 8080, Path.of("/tmp"), Nil, ingress = ingress)
+      handled <- IO.ref(0)
+      app = RuntimeIngressMiddleware[IO](config)(Kleisli(_ =>
+        handled.update(_ + 1).as(Response[IO](Status.Ok).withEntity("healthy"))
+      ))
+      _ <- server(app).use { address =>
+        peer(address).use { client =>
+          for
+            _ <- client.post(1, "/api/rejected", None)
+            rejected <- client.body(1).timeout(5.seconds)
+            before <- handled.get
+            _ <- client.get(3, "/healthz")
+            healthy <- client.body(3).timeout(5.seconds)
+            after <- handled.get
+          yield
+            assertEquals(rejected, "")
+            assertEquals(before, 0)
+            assertEquals(healthy, "healthy")
+            assertEquals(after, 1)
+        }
+      }
+    yield ()
+  }
+
   test("HEAD sends no content and releases capacity for the next stream") {
     for
       admission <- RequestBodyAdmission.create[IO](1L, 1L, 1L, 1L, 1L)
@@ -224,14 +288,20 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
       socket.write(Chunk.array("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(UTF_8))) *>
         write(Frame(4, 0, 0, ByteVector.empty))
 
-    def get(streamId: Int, path: String): IO[Unit] =
-      headers(streamId, path, post = false, None, head = false)
+    def get(streamId: Int, path: String): IO[Unit] = get(streamId, path, Nil)
+
+    def get(
+        streamId: Int,
+        path: String,
+        extraHeaders: List[(String, String)],
+    ): IO[Unit] =
+      headers(streamId, path, post = false, None, head = false, extraHeaders)
 
     def head(streamId: Int, path: String): IO[Unit] =
-      headers(streamId, path, post = false, None, head = true)
+      headers(streamId, path, post = false, None, head = true, Nil)
 
     def post(streamId: Int, path: String, length: Option[String]): IO[Unit] =
-      headers(streamId, path, post = true, length, head = false)
+      headers(streamId, path, post = true, length, head = false, Nil)
 
     def data(streamId: Int, value: String, endStream: Boolean): IO[Unit] =
       write(Frame(0, if endStream then 1 else 0, streamId, ByteVector.view(value.getBytes(UTF_8))))
@@ -242,6 +312,7 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
         post: Boolean,
         length: Option[String],
         head: Boolean,
+        extraHeaders: List[(String, String)],
     ): IO[Unit] =
       // HPACK static-table indices: :method GET, :scheme http, :authority, :path.
       // Literal strings use no Huffman coding or dynamic table, so later requests are independent.
@@ -260,6 +331,11 @@ final class RequestBodyAdmissionHttp2Spec extends MomoCatsEffectSuite:
           // Literal without indexing, indexed name 28 (content-length).
           ByteVector(0x0f.toByte, 13.toByte, value.length.toByte) ++
             ByteVector.view(value.getBytes(UTF_8))
+        } ++ extraHeaders.foldLeft(ByteVector.empty) { case (bytes, (name, value)) =>
+          // Literal header without indexing, with a new name; test values fit one byte.
+          bytes ++ ByteVector(0.toByte, name.length.toByte) ++
+            ByteVector.view(name.getBytes(UTF_8)) ++
+            ByteVector(value.length.toByte) ++ ByteVector.view(value.getBytes(UTF_8))
         }
       write(Frame(1, if post then 4 else 5, streamId, fields)) // END_HEADERS, optional END_STREAM
 

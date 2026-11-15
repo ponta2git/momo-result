@@ -51,12 +51,17 @@ if (args[0] === "image") {
     { mode: 0o700 },
   );
   process.env.PATH = `${directory}:${previousPath}`;
+  await writeFile(
+    join(directory, "pnpm"),
+    `#!${process.execPath}\nif (require("node:fs").existsSync("fail-build")) process.exit(1);\n`,
+    { mode: 0o700 },
+  );
   const signal = AbortSignal.timeout(10_000);
   await prepareE2eInputs(root, signal);
   const environment = join(root, "target/e2e/prepared.env");
   const { stdout } = await execute("sh", [
     "-c",
-    '. "$1"; printf "%s\\n" "$MOMO_E2E_RUNTIME_IMAGE" "$MOMO_E2E_WORKER_IMAGE" "$MOMO_E2E_CONTROLLED_WORKER_IMAGE" "$MOMO_E2E_SESSION_FIXTURE_DIR"',
+    '. "$1"; printf "%s\\n" "$MOMO_E2E_RUNTIME_IMAGE" "$MOMO_E2E_WORKER_IMAGE" "$MOMO_E2E_CONTROLLED_WORKER_IMAGE" "$MOMO_E2E_SESSION_FIXTURE_DIR" "$MOMO_E2E_EDGE_DIR"',
     "sh",
     environment,
   ]);
@@ -66,6 +71,7 @@ if (args[0] === "image") {
     workerId,
     controlledWorkerId,
     fixture,
+    join(root, "apps/edge/dist"),
   ]);
   assert.equal((await verifiedSessionFixture(fixture, runtimeId)).toString(), "fixture classes");
 

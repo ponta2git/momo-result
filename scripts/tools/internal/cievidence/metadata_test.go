@@ -85,7 +85,7 @@ func evidenceCall(command string, args []string, root string) (int, string, stri
 	code := Run(command, args, strings.NewReader(""), &out, &diagnostics, root)
 	return code, out.String(), diagnostics.String()
 }
-func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
+func TestDeploymentProducerBindsRuntimeAndEdge(t *testing.T) {
 	root, dir, args := metadataFixture(t, false)
 	code, candidate, diagnostics := call(t, "create-runtime-candidate", args, "", root)
 	if code != 0 {
@@ -94,6 +94,9 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 	put(t, filepath.Join(dir, "candidate.json"), candidate)
 	put(t, filepath.Join(dir, "registry-manifest.json"), "{\"schemaVersion\":2}\n")
 	deploymentArgs := []string{"--candidate", filepath.Join(dir, "candidate.json"), "--run-attempt", "3", "--registry-ref", runtimeRef, "--source-artifact-id", "456", "--source-artifact-digest", testDigest, "--manifest", filepath.Join(dir, "registry-manifest.json"), "--manifest-artifact-id", "789", "--manifest-artifact-digest", strings.TrimPrefix(testDigest, "sha256:")}
+	edgeDir := edgeFixture(t, root, runIdentity{"123", "1", testCommit})
+	put(t, filepath.Join(edgeDir, "deployment.json"), `{"schemaVersion":1,"workerName":"fixture-web","versionId":"12345678-1234-1234-1234-123456789abc"}`)
+	deploymentArgs = append(deploymentArgs, "--edge-candidate", filepath.Join(edgeDir, "candidate.json"), "--edge-artifact-id", "333", "--edge-artifact-digest", testDigest, "--edge-deployment", filepath.Join(edgeDir, "deployment.json"))
 	code, out, diagnostics := call(t, "create-runtime-deployment", deploymentArgs, "", root)
 	if code != 0 {
 		t.Fatal(diagnostics)
@@ -101,8 +104,8 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 	if err := checkRuntimeDeployment([]byte(out), runIdentity{RunID: "123", RunAttempt: "3", Commit: testCommit}); err != nil {
 		t.Fatal(err)
 	}
-	// This frozen v3 fixture is the pre-refactor jq writer's wire document.
-	want, err := os.ReadFile("testdata/produced-runtime-deployment-v3.json")
+	// Frozen wire fixture binds independent producer attempts to one run/commit.
+	want, err := os.ReadFile("testdata/produced-runtime-deployment-v4.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +121,30 @@ func TestDeploymentProducerAndHistoricalWire(t *testing.T) {
 			t.Fatal(code, result, diagnostics)
 		}
 	}
+	// Runtime and edge producers may be retried independently, but the pair must
+	// still refer to the same run and source commit, with unchanged payload bytes.
+	baseline, err := os.ReadFile(filepath.Join(edgeDir, "candidate.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"runId", "commit"} {
+		writeFile(t, filepath.Join(edgeDir, "candidate.json"), mutated(t, baseline, func(o object) {
+			if field == "runId" {
+				o[field] = "124"
+			} else {
+				o[field] = strings.Repeat("b", 40)
+			}
+		}))
+		if code, out, _ := call(t, "create-runtime-deployment", deploymentArgs, "", root); code == 0 || out != "" {
+			t.Fatal("accepted mismatched edge", field)
+		}
+	}
+	writeFile(t, filepath.Join(edgeDir, "candidate.json"), baseline)
+	put(t, filepath.Join(edgeDir, "edge", "assets", "index.html"), "tampered")
+	if code, out, _ := call(t, "create-runtime-deployment", deploymentArgs, "", root); code == 0 || out != "" {
+		t.Fatal("accepted changed edge assets at deployment")
+	}
+
 }
 func TestPatchProducerRejectsUnpinnedSource(t *testing.T) {
 	root, _, _ := metadataFixture(t, false)

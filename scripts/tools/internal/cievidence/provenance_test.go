@@ -105,9 +105,7 @@ func TestProvenanceRejectsMissingTypesStreamsAndUnknownFields(t *testing.T) {
 		validate func([]byte, runIdentity) error
 	}{
 		{"analysis-candidate.json", runIdentity{"123456", "2", fixtureCommit}, checkAnalysisCandidate},
-		{"runtime-deployment-v1.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
-		{"runtime-deployment-v2.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
-		{"runtime-deployment-v3.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
+		{"runtime-deployment-v4.json", runIdentity{"123456", "3", fixtureCommit}, checkRuntimeDeployment},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -155,22 +153,16 @@ func TestProvenanceRejectsMissingTypesStreamsAndUnknownFields(t *testing.T) {
 	}
 }
 
-func TestRuntimeDeploymentPreservesProducerAttemptAndHistoricalPatch(t *testing.T) {
+func TestRuntimeDeploymentPreservesDistinctProducerAttempts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "deployment.json")
-	for _, version := range []string{"1", "2", "3"} {
-		writeFile(t, path, fixture(t, "runtime-deployment-v"+version+".json"))
-		code, out, stderr := run(t, "runtime-deployment", []string{path, "123456", "3", fixtureCommit}, t.TempDir())
-		attempt := "2"
-		if version == "1" {
-			attempt = "3"
-		}
-		expected := "candidate_sha=" + fixtureCommit + "\nsource_run_attempt=" + attempt + "\nconfig_sha256=" + fixtureConfigSHA +
-			"\nimage_ref=registry.fly.io/momo-result:" + fixtureCommit + "-123456-" + attempt +
-			"\nmanifest_artifact_digest=sha256:" + fixtureSHA + "\nmanifest_artifact_id=222\nmanifest_artifact_name=runtime-image-registry-manifest-123456-3\nmanifest_sha256=" +
-			fixtureSHA + "\nregistry_digest=sha256:" + fixtureSHA + "\nregistry_ref=registry.fly.io/momo-result@sha256:" + fixtureSHA + "\n"
-		if code != 0 || out != expected || stderr != "" {
-			t.Fatalf("v%s code=%d stdout=%q stderr=%q", version, code, out, stderr)
-		}
+	writeFile(t, path, fixture(t, "runtime-deployment-v4.json"))
+	code, out, stderr := run(t, "runtime-deployment", []string{path, "123456", "3", fixtureCommit}, t.TempDir())
+	expected := "candidate_sha=" + fixtureCommit + "\nsource_run_attempt=2\nconfig_sha256=" + fixtureConfigSHA +
+		"\nimage_ref=registry.fly.io/momo-result:" + fixtureCommit + "-123456-2" +
+		"\nmanifest_artifact_digest=sha256:" + fixtureSHA + "\nmanifest_artifact_id=222\nmanifest_artifact_name=runtime-image-registry-manifest-123456-3\nmanifest_sha256=" +
+		fixtureSHA + "\nregistry_digest=sha256:" + fixtureSHA + "\nregistry_ref=registry.fly.io/momo-result@sha256:" + fixtureSHA + "\n"
+	if code != 0 || out != expected || stderr != "" {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, stderr)
 	}
 	args := []string{path, "123456", "3", fixtureCommit, "--config", filepath.Join("testdata", "fly.toml")}
 	if code, _, stderr := run(t, "runtime-deployment", args, ""); code != 0 {
@@ -178,7 +170,7 @@ func TestRuntimeDeploymentPreservesProducerAttemptAndHistoricalPatch(t *testing.
 	}
 	args[5] = filepath.Join("testdata", "archive-bytes.txt")
 	rejected(t, "runtime-deployment", args, "")
-	data := fixture(t, "runtime-deployment-v3.json")
+	data := fixture(t, "runtime-deployment-v4.json")
 	for _, change := range []func(object){
 		func(o object) {
 			o["sourceRunAttempt"] = "3"
@@ -187,6 +179,14 @@ func TestRuntimeDeploymentPreservesProducerAttemptAndHistoricalPatch(t *testing.
 		func(o object) { o["registryRef"] = "registry.fly.io/momo-result@sha256:" + strings.Repeat("b", 64) },
 		func(o object) { o["http4sPatchSourceSha"] = strings.Repeat("b", 64) },
 		func(o object) { o["http4sPatchRepository"] = "https://example.invalid/http4s" },
+		func(o object) { o["schemaVersion"] = 3 },
+		func(o object) { o["edgeRunAttempt"] = "2" },
+		func(o object) { o["edgeArtifactName"] = "web-edge-999-1" },
+		func(o object) { o["edgeArtifactId"] = "0" },
+		func(o object) { o["edgeArtifactDigest"] = fixtureSHA },
+		func(o object) { o["edgeTreeSha256"] = testDigest },
+		func(o object) { o["edgeWorkerName"] = "private-input-marker\n" },
+		func(o object) { o["edgeVersionId"] = "private-input-marker" },
 	} {
 		writeFile(t, path, mutated(t, data, change))
 		rejected(t, "runtime-deployment", args[:4], "")

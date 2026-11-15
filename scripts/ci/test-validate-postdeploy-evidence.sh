@@ -4,7 +4,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 trap 'rm -rf "${test_dir}"' EXIT
 validator=("${repo_root}/scripts/ci/ci-tool.sh" postdeploy-evidence)
-valid='{"event":"runtime_postdeploy_smoke","schemaVersion":1,"status":"ok","checks":["database","http","http2","processes","publicEdge","web"]}'
+valid='{"event":"runtime_postdeploy_smoke","schemaVersion":2,"status":"ok","checks":["database","http","http2","processes","publicEdge"]}'
 printf '%s\n' "${valid}" > "${test_dir}/evidence.json"
 "${validator[@]}" "${test_dir}/evidence.json" --require-check publicEdge > "${test_dir}/out"
 jq -e '. == {schemaVersion: 1, status: "ok"}' "${test_dir}/out" >/dev/null
@@ -22,16 +22,16 @@ for mutation in \
   '.checks -= ["http2"]|MissingRequiredChecks' \
   '.checks += ["http"]|DuplicateChecks' \
   '.checks += ["bad\n"]|InvalidChecks' \
-  '.schemaVersion = 2|UnsupportedSchemaVersion' \
+  '.schemaVersion = 1|UnsupportedSchemaVersion' \
   '.status = "failed"|UnhealthyStatus' \
   '.checks = {}|InvalidChecks' \
   '.event = "wrong"|InvalidEvent'; do
   printf '%s\n' "${valid}" | jq "${mutation%|*}" > "${test_dir}/evidence.json"
   reject "${mutation##*|}"
 done
-# Legacy reports may omit the version, but still require every current core check.
+# Reports from the former combined runtime do not prove the API-only boundary.
 printf '%s\n' "${valid}" | jq 'del(.schemaVersion)' > "${test_dir}/evidence.json"
-"${validator[@]}" "${test_dir}/evidence.json" >/dev/null
+reject UnsupportedSchemaVersion
 printf '%s\n%s\n' "${valid}" "${valid}" > "${test_dir}/evidence.json"
 reject JSONDecodeError
 printf 'private malformed content' > "${test_dir}/evidence.json"

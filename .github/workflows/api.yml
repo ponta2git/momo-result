@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       test_http4s_patch:
-        description: Run the pinned http4s fork's focused test when its revision or builder changes
+        description: Run the pinned http4s fork's focused tests when its revision or builder changes
         required: false
         default: false
         type: boolean
@@ -41,7 +41,7 @@ jobs:
         id: patch
         run: |
           HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
-            HTTP4S_SCALA_VERSION=3.3.6 \
+            HTTP4S_SCALA_VERSION=3.3.8 \
             HTTP4S_RUN_TESTS=${{ inputs.test_http4s_patch && '1' || '0' }} \
             HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
             scripts/ci/build-http4s-patch.sh

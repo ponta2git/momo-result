@@ -6,7 +6,7 @@ ref_file="${HTTP4S_REF_FILE:-${repo_root}/.http4s-ref}"
 repository="${HTTP4S_REPOSITORY:-https://github.com/ponta2git/http4s.git}"
 output_dir="${HTTP4S_PATCH_OUTPUT_DIR:-${repo_root}/_deps/http4s-patch}"
 sbt_command="${SBT_COMMAND:-sbt}"
-scala_version="${HTTP4S_SCALA_VERSION:-3.3.6}"
+scala_version="${HTTP4S_SCALA_VERSION:-3.3.8}"
 run_tests="${HTTP4S_RUN_TESTS:-0}"
 
 [[ -f "${ref_file}" && ! -L "${ref_file}" ]] || {
@@ -91,7 +91,7 @@ version="$(awk '
   cd "${source_dir}"
   build_commands=("++${scala_version}")
   if [[ "${run_tests}" == "1" ]]; then
-    build_commands+=(ember-core/test)
+    build_commands+=(ember-core/test ember-server/test)
   fi
   build_commands+=(
     core/publishLocal

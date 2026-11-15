@@ -42,7 +42,7 @@ RUN --mount=type=cache,id=sbt-boot,target=/root/.sbt,sharing=locked \
   chmod 0755 /usr/local/bin/build-http4s-patch \
   && HTTP4S_REPOSITORY="${HTTP4S_REPOSITORY}" \
     HTTP4S_REF_FILE=/workspace/.http4s-ref \
-    HTTP4S_SCALA_VERSION=3.3.6 \
+    HTTP4S_SCALA_VERSION=3.3.8 \
     HTTP4S_PATCH_OUTPUT_DIR=/opt/http4s-patch \
     /usr/local/bin/build-http4s-patch
 

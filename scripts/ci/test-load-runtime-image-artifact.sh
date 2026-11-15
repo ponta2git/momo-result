@@ -14,7 +14,7 @@ readonly image_ref="registry.fly.io/momo-result:${commit}-${run_id}-${run_attemp
 readonly image_id=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 readonly http4s_ref="$(tr -d '[:space:]' < "${repo_root}/.http4s-ref")"
 readonly http4s_version=0.23.36-5-23a6bcd-SNAPSHOT
-readonly http4s_scala_version=3.3.6
+readonly http4s_scala_version=3.3.8
 artifact_dir="${test_dir}/runtime-image-${run_id}-${run_attempt}"
 fake_bin="${test_dir}/bin"
 mkdir -p "${artifact_dir}" "${fake_bin}"

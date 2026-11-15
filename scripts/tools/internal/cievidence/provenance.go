@@ -10,7 +10,7 @@ const (
 	runtimeRepository  = "registry.fly.io/momo-result"
 	analysisRepository = "registry.fly.io/momo-result-analysis"
 	http4sRepository   = "https://github.com/ponta2git/http4s.git"
-	http4sScalaVersion = "3.3.6"
+	http4sScalaVersion = "3.3.8"
 )
 
 // runIdentity names the producing run, not the current workflow's retry attempt.

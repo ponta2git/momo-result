@@ -17,7 +17,7 @@
   "manifestArtifactDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "manifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "http4sPatchRepository": "https://github.com/ponta2git/http4s.git",
-  "http4sPatchScalaVersion": "3.3.6",
+  "http4sPatchScalaVersion": "3.3.8",
   "http4sPatchSourceSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "http4sPatchVersion": "0.23.36-5-23a6bcd-SNAPSHOT",
   "edgeRunAttempt": "1",

@@ -42,7 +42,7 @@ def serviceTestSettings(tag: String): Seq[Def.Setting[?]] = Defaults.testSetting
 )
 
 lazy val nettyVersion = "4.2.18.Final"
-lazy val http4sVersion = "0.23.37"
+lazy val http4sVersion = "0.23.38"
 lazy val http4sPatchedVersion =
   settingKey[Either[String, String]]("Pinned http4s fork version, or why it is unavailable")
 lazy val http4sPatchCheck =

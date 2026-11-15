@@ -88,7 +88,7 @@ printf '%s\n' ++3.3.8 ember-core/test ember-server/test \
 diff -u "${test_root}/expected-tasks" "${test_root}/with-tests/tasks"
 
 run_builder without-tests 0
-sed '/^ember-\(core\|server\)\/test$/d' "${test_root}/expected-tasks" > "${test_root}/without-test-tasks"
+sed -e '/^ember-core\/test$/d' -e '/^ember-server\/test$/d' "${test_root}/expected-tasks" > "${test_root}/without-test-tasks"
 diff -u "${test_root}/without-test-tasks" "${test_root}/without-tests/tasks"
 
 if HTTP4S_TEST_FAIL=1 run_builder failed-test 1 >/dev/null 2>&1; then

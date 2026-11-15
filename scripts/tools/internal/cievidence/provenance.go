@@ -152,8 +152,11 @@ func validateRuntimeDeployment(deployment object, expected runIdentity) (object,
 	keys := []string{"commit", "configSha256", "imageId", "imageRef", "manifestArtifactDigest", "manifestArtifactId", "manifestArtifactName", "manifestSha256", "registryDigest", "registryRef", "runAttempt", "runId", "schemaVersion", "sourceArtifactDigest", "sourceArtifactId", "sourceArtifactName"}
 	keys = append(keys, "sourceRunAttempt", "http4sPatchRepository", "http4sPatchScalaVersion", "http4sPatchSourceSha", "http4sPatchVersion", "edgeRunAttempt", "edgeArtifactName", "edgeArtifactId", "edgeArtifactDigest", "edgeTreeSha256", "edgeWorkerName", "edgeVersionId")
 	sourceAttempt := deployment.text("sourceRunAttempt")
+	// Stored deployment receipts retain the compiler used by their producer.
+	// Fresh candidates still require the current pinned Scala version above.
 	if !deployment.equals("http4sPatchRepository", http4sRepository) ||
-		!deployment.equals("http4sPatchScalaVersion", http4sScalaVersion) ||
+		(!deployment.equals("http4sPatchScalaVersion", http4sScalaVersion) &&
+			!deployment.equals("http4sPatchScalaVersion", "3.3.6")) ||
 		!commitPattern.MatchString(deployment.text("http4sPatchSourceSha")) ||
 		!versionPattern.MatchString(deployment.text("http4sPatchVersion")) {
 		return nil, "", fail

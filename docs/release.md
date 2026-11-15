@@ -1,6 +1,6 @@
 # CI・リリース規約
 
-目的: CI の変更分類と evidence の配置、release 候補の来歴、runtime / Processing Worker の配備、分析の昇格と backfill、credential rotation、rollback の検証について、public repository に置ける規約を定める。workflow、service、timeout、artifact path、action の現在値は CI 設定を正本とし、本書ではその正本を参照する。
+目的: CI の変更分類と evidence の配置、release 候補の来歴、runtime / Processing Worker の配備、分析の昇格と backfill、credential rotation、復旧の検証について、public repository に置ける規約を定める。workflow、service、timeout、artifact path、action の現在値は CI 設定を正本とし、本書ではその正本を参照する。
 
 本番操作の承認境界は [公開運用規約](ops/README.md)、人間の承認・復旧判断・通知の受信設定は `private/ops/runbook.md` を正本とする。branch と PR の規則は [開発作業規約の Git](dev-rule.md#git)、retry の結果分類と report artifact は [テスト実行設計](test-architecture.md#ci-artifacts)、変更ごとの必須 gate は [Change Gates](dev-rule.md#change-gates) に従う。
 
@@ -13,14 +13,14 @@
 
 ## Release Candidate and Provenance
 
-- release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy / rollback は同じ候補を使う。
+- release 候補は一度だけ build し、commit、設定、immutable artifact identity、digest、producer attempt を記録する。後続 smoke / deploy は同じ候補を使う。Web edge と API image は同じ commit の候補を揃え、E2E で通した実行コード・静的ファイルを rebuild せず配備する。
 - 外部 action / provider の値は境界で検証・正規化し、consumer 用の表現はその結果から確定する。workflow 再実行時も、候補 identity は current attempt から再計算せず記録済みの値を使う。
 - provenance と検証成功の根拠には、mutable tag や cache hit ではなく immutable artifact identity と実際の検証結果を使う。
 
 ## Deploying Runtime and Worker
 
 - runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の runtime / worker deploy、post-deploy verification、必要な分析処理の完了確認がすべて成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。公開 release 履歴は GitHub Releases に一元化する。
-- 通常 release は runtime と Processing Worker の検証済み候補を揃え、同じ承認・排他の中で適用する。worker の候補もこの通常 release の workflow で扱う。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
+- 通常 release は Web edge、API runtime、Processing Worker の検証済み候補を揃え、同じ承認・排他の中で適用する。worker の候補もこの通常 release の workflow で扱う。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
 - DB migration と consumer の配備順序、段階移行、全 writer 停止を伴う非互換切替は [DB 規約の Migration / Deployment](db-rule.md#migration--deployment) に従う。
 - 分析成果物の非互換変更では、公開を止めて単一世代へ切り替え、再計算と監査を終えてから再開する。条件は [分析 batch 要求の Compatibility / Release / Rollback](requirements/series-analysis-batch.md#8-compatibility--release--rollback) を正本とする。
 
@@ -35,10 +35,12 @@
 - 共有 credential の rotation は、更新前に全 consumer と secret store を列挙し、同じ保守単位で更新する。完了扱いは、各 consumer が更新後の credential で新規接続し、必要な runtime peer が ready になった証拠を揃えた後に限る。
 - dependency gate の evidence は [テスト・品質規約の External Service Evidence Catalog](test-rule.md#external-service-evidence-catalog) に従う。
 
-## Rollback Verification
+## Recovery Verification
 
-- rollback 対象は immutable provenance を再検証できる成功済み候補に限り、来歴は記録から確認する。
+- 配信構成の変更は前進修正を基本とする。Web edge と API の片側だけを以前の版へ戻す操作は行わず、修正した組合せを検証して配備する。
+
+- 復旧に使う候補も immutable provenance と検証成功を確認し、来歴は記録から辿れるようにする。
 - 通常 deploy と同じ排他・承認・validator 境界を使い、target 世代で必須だった core check を確認する。
 - 変更対象の UI、API、usecase、engine と、利用者影響のある production 経路を列挙し、選択した回帰 evidence がその経路を直接通すことを確認する。確認済みとするのは直接通した経路だけとする。
 - deploy 成功、health、機能応答、性能回復を別々に判定する。観測不能な項目は未検証と報告する。
-- 通常 rollback が扱える DB 契約・publication の範囲と、非互換切替の切戻しは [分析 batch 要求](requirements/series-analysis-batch.md#8-compatibility--release--rollback) と [DB 規約の Transitional Contracts](db-rule.md#transitional-contracts) に従う。
+- DB 契約・publication の復旧可能範囲と、非互換切替の切戻しは [分析 batch 要求](requirements/series-analysis-batch.md#8-compatibility--release--rollback) と [DB 規約の Transitional Contracts](db-rule.md#transitional-contracts) に従う。

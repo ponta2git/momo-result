@@ -1079,7 +1079,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_analysis_outlook_reference_artifacts
           (artifact_id, scope_key, scope_kind, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
           SELECT $artifactId, 'overall', 'overall', legacy_id, $inventoryPayload, 2, 2, 1, 1, $inventoryHash FROM members""".update.run *>
-        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
+        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
           WHERE id = $artifactId AND status = 'staging'""".update.run *>
         sql"""UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
           WHERE id = $artifactId AND status = 'staging'""".update.run *>

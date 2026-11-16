@@ -21,7 +21,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
     sql"""
       UPDATE series_analysis_release_state
       SET algorithm_version = 'series-analysis-v15', artifact_schema_version = 11,
-          validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
+          validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
@@ -135,7 +135,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
           0L,
           "series-analysis-v15",
           11,
-          Some("series-analysis-artifact-v11-full-validation-v1"),
+          Some("series-analysis-artifact-v11-full-validation-v2"),
           "initial"
         )
       )
@@ -153,7 +153,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         sql"""
           UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
             artifact_schema_version = 11,
-            validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
+            validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
           WHERE singleton_key = 'current'
         """.update.run,
         new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
@@ -169,7 +169,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         (
           "promoted-analysis",
           11,
-          Some("series-analysis-artifact-v11-full-validation-v1")
+          Some("series-analysis-artifact-v11-full-validation-v2")
         )
       )
 

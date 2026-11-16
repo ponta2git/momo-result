@@ -44,6 +44,59 @@ fn ensure(condition: bool) -> Result<(), PayloadError> {
     condition.then_some(()).ok_or(PayloadError::InvalidSchema)
 }
 
+/// Additive quantities let the validator reconcile partitions without repeating the calculation.
+#[derive(Clone, Copy, Default)]
+struct Totals {
+    count: u64,
+    expected: f64,
+    actual: f64,
+}
+
+impl Totals {
+    fn add(&mut self, summary: &Value) -> Result<(), PayloadError> {
+        let count = required_u64(summary.get("count"))?;
+        self.count = self
+            .count
+            .checked_add(count)
+            .ok_or(PayloadError::InvalidSchema)?;
+        self.expected = number(summary.get("expectedRank"))?
+            .unwrap_or(0.0)
+            .mul_add(as_f64(count)?, self.expected);
+        self.actual = number(summary.get("averageRank"))?
+            .unwrap_or(0.0)
+            .mul_add(as_f64(count)?, self.actual);
+        Ok(())
+    }
+
+    fn reconcile(self, other: Self) -> Result<(), PayloadError> {
+        if self.count != other.count {
+            return Err(PayloadError::ItemCountMismatch);
+        }
+        let tolerance = TOLERANCE * as_f64(self.count)?;
+        ensure(
+            (self.expected - other.expected).abs() <= tolerance
+                && (self.actual - other.actual).abs() <= tolerance,
+        )
+    }
+
+    fn reconcile_summary(self, summary: &Value) -> Result<(), PayloadError> {
+        let mut expected = Self::default();
+        expected.add(summary)?;
+        self.reconcile(expected)
+    }
+
+    fn reconcile_scope(self, match_count: u64) -> Result<(), PayloadError> {
+        let rank_total = RANK_TOTAL_PER_MATCH * as_f64(match_count)?;
+        self.reconcile(Self {
+            count: match_count
+                .checked_mul(PLAYER_COUNT)
+                .ok_or(PayloadError::InvalidSchema)?,
+            expected: rank_total,
+            actual: rank_total,
+        })
+    }
+}
+
 pub(super) fn validate_aggregate(
     value: &Value,
     players: &[&str],
@@ -66,9 +119,9 @@ pub(super) fn validate_aggregate(
                 && reasons.len() == 1
                 && gap.get("hasMergedLayers") == Some(&Value::Bool(false)),
         )?;
-        let too_few = match_count < MINIMUM_MATCH_COUNT;
         return ensure(
-            (reasons.first().and_then(Value::as_str) == Some("insufficient_matches")) == too_few,
+            match_count < MINIMUM_MATCH_COUNT
+                && reasons.first().and_then(Value::as_str) == Some("insufficient_matches"),
         );
     }
     let judged = status == "ok";
@@ -88,17 +141,20 @@ pub(super) fn validate_aggregate(
         .ok_or(PayloadError::InvalidSchema)?;
     validate_layers(gap, layers, match_count, cell_count)?;
     validate_member_order(gap_players, players)?;
+    let mut player_totals = Totals::default();
     for player in gap_players {
         if required_u64(player.get("count"))? != match_count {
             return Err(PayloadError::ItemCountMismatch);
         }
         validate_summary(player, match_count, status)?;
+        player_totals.add(player)?;
     }
+    player_totals.reconcile_scope(match_count)?;
     if items.len() != ITEMS.len() {
         return Err(PayloadError::InvalidSchema);
     }
     for (item, code) in items.iter().zip(ITEMS) {
-        validate_item(item, code, players, match_count, cell_count, status)?;
+        validate_item(item, code, gap_players, match_count, cell_count, status)?;
     }
     Ok(())
 }
@@ -196,7 +252,7 @@ fn validate_summary(summary: &Value, denominator: u64, status: &str) -> Result<(
 fn validate_item(
     item: &Value,
     code: &str,
-    players: &[&str],
+    gap_players: &[Value],
     match_count: u64,
     cell_count: u64,
     status: &str,
@@ -210,9 +266,12 @@ fn validate_item(
     };
     ensure(required_string(item.get("item"))? == code && levels.len() == expected_levels)?;
     let mut next_minimum = 0_i64;
-    let mut overall_total = 0_u64;
-    let mut gap_total = 0.0_f64;
-    let mut player_totals = vec![0_u64; players.len()];
+    let players = gap_players
+        .iter()
+        .map(|player| required_string(player.get("memberId")))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut overall_total = Totals::default();
+    let mut player_totals = vec![Totals::default(); players.len()];
     let mut reported = false;
     let mut judged_levels = Vec::new();
     for (index, level) in levels.iter().enumerate() {
@@ -231,13 +290,7 @@ fn validate_item(
         }
         let overall = level.get("overall").ok_or(PayloadError::InvalidSchema)?;
         validate_summary(overall, cell_count, status)?;
-        let count = required_u64(overall.get("count"))?;
-        overall_total = overall_total
-            .checked_add(count)
-            .ok_or(PayloadError::InvalidSchema)?;
-        gap_total = number(overall.get("meanGap"))?
-            .unwrap_or(0.0)
-            .mul_add(as_f64(count)?, gap_total);
+        overall_total.add(overall)?;
         reported |= matches!(
             overall.get("signal").and_then(Value::as_str),
             Some("trend" | "hint")
@@ -246,26 +299,19 @@ fn validate_item(
             judged_levels.push(u64::try_from(index)?);
         }
         let by_player = array(level.get("byPlayer"))?;
-        validate_member_order(by_player, players)?;
-        let mut level_player_total = 0_u64;
+        validate_member_order(by_player, &players)?;
+        let mut level_player_total = Totals::default();
         for (summary, total) in by_player.iter().zip(player_totals.iter_mut()) {
             validate_summary(summary, match_count, status)?;
-            let player_count = required_u64(summary.get("count"))?;
-            *total = total
-                .checked_add(player_count)
-                .ok_or(PayloadError::InvalidSchema)?;
-            level_player_total = level_player_total
-                .checked_add(player_count)
-                .ok_or(PayloadError::InvalidSchema)?;
+            total.add(summary)?;
+            level_player_total.add(summary)?;
         }
-        if level_player_total != count {
-            return Err(PayloadError::ItemCountMismatch);
-        }
+        level_player_total.reconcile_summary(overall)?;
     }
-    if overall_total != cell_count || player_totals.iter().any(|total| *total != match_count) {
-        return Err(PayloadError::ItemCountMismatch);
+    overall_total.reconcile_scope(match_count)?;
+    for (total, player) in player_totals.into_iter().zip(gap_players) {
+        total.reconcile_summary(player)?;
     }
-    ensure(gap_total.abs() <= TOLERANCE * as_f64(cell_count)?)?;
     let conclusion = item.get("conclusion").ok_or(PayloadError::InvalidSchema)?;
     ensure(conclusion.is_null() == (status != "ok"))?;
     let background = item.get("background").ok_or(PayloadError::InvalidSchema)?;
@@ -317,7 +363,18 @@ pub(super) fn validate_evidence(
         .and_then(Value::as_object)
         .ok_or(PayloadError::InvalidSchema)?;
     let match_count = required_u64(summary.get("matchCount"))?;
+    if match_count != item_count {
+        return Err(PayloadError::ItemCountMismatch);
+    }
+    let status = required_string(summary.get("status"))?;
+    ensure(if status == "no_target" {
+        match_count < MINIMUM_MATCH_COUNT
+    } else {
+        match_count >= MINIMUM_MATCH_COUNT
+            && (status == "ok") == (match_count >= JUDGED_MATCH_COUNT)
+    })?;
     let mut match_ids = std::collections::BTreeSet::new();
+    let mut match_indices = std::collections::BTreeSet::new();
     let mut listed = 0_u64;
     for (side, count_field, above) in [
         ("above", "aboveCount", true),
@@ -342,7 +399,8 @@ pub(super) fn validate_evidence(
                     && gap != 0.0
                     && (expected - as_f64(actual)? - gap).abs() <= TOLERANCE
                     && (1..=match_count).contains(&match_index)
-                    && match_ids.insert(required_string(row.get("matchId"))?),
+                    && match_ids.insert(required_string(row.get("matchId"))?)
+                    && match_indices.insert(match_index),
             )?;
             // Larger gaps first; equal gaps keep the newer match first.
             if let Some((previous_gap, previous_index)) = previous {
@@ -360,4 +418,39 @@ pub(super) fn validate_evidence(
         return Err(PayloadError::ItemCountMismatch);
     }
     ensure(required_string(summary.get("status"))? != "no_target" || listed == 0)
+}
+
+/// At most ten references per player survive until the scope's match contexts are consumed.
+pub(super) struct EvidenceReference {
+    pub(super) match_id: String,
+    pub(super) sequence: u64,
+    pub(super) played_at: String,
+}
+
+pub(super) struct EvidenceReferences {
+    pub(super) status: String,
+    pub(super) match_count: u64,
+    pub(super) rows: Vec<EvidenceReference>,
+}
+
+pub(super) fn evidence_references(
+    detail: &Map<String, Value>,
+) -> Result<EvidenceReferences, PayloadError> {
+    let summary = detail.get("summary").ok_or(PayloadError::InvalidSchema)?;
+    let rows = array(detail.get("above"))?
+        .iter()
+        .chain(array(detail.get("below"))?)
+        .map(|row| {
+            Ok(EvidenceReference {
+                match_id: required_string(row.get("matchId"))?.into(),
+                sequence: required_u64(row.get("matchIndex"))?,
+                played_at: required_string(row.get("playedAt"))?.into(),
+            })
+        })
+        .collect::<Result<_, PayloadError>>()?;
+    Ok(EvidenceReferences {
+        status: required_string(summary.get("status"))?.into(),
+        match_count: required_u64(summary.get("matchCount"))?,
+        rows,
+    })
 }

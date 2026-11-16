@@ -53,6 +53,7 @@ struct ScopeResources {
     context_match_ids: BTreeSet<String>,
     context_item_count: u64,
     context_periods: BTreeMap<String, (u64, String)>,
+    gap_evidence: Vec<expected_rank_gap::EvidenceReference>,
 }
 
 struct AggregateReferences {
@@ -61,6 +62,7 @@ struct AggregateReferences {
     item_count: u64,
     match_count: u64,
     radar_basis: Option<(String, String)>,
+    gap_status: String,
 }
 
 struct ContextReferences<'a> {
@@ -79,11 +81,58 @@ enum ResourceReferences<'a> {
     Drilldown {
         member_id: String,
         metric_id: String,
+        gap_evidence: Option<expected_rank_gap::EvidenceReferences>,
     },
     MatchContext {
         match_id: String,
         context: ContextReferences<'a>,
     },
+}
+
+impl ScopeResources {
+    fn record_context(
+        &mut self,
+        is_overall: bool,
+        match_id: String,
+        context: &ContextReferences<'_>,
+    ) -> Result<bool, PayloadError> {
+        for evidence in self
+            .gap_evidence
+            .iter()
+            .filter(|row| row.match_id == match_id)
+        {
+            if evidence.sequence != context.sequence || evidence.played_at != context.played_at {
+                return Err(PayloadError::ReferenceMismatch);
+            }
+        }
+        self.gap_evidence.retain(|row| row.match_id != match_id);
+        if context
+            .member_ids
+            .iter()
+            .any(|member_id| !self.aggregate.member_ids.contains(*member_id))
+            || context
+                .focused_item_ids
+                .iter()
+                .any(|item_id| !self.aggregate.item_ids.contains(*item_id))
+        {
+            return Err(PayloadError::ReferenceMismatch);
+        }
+        if self.context_match_ids.contains(&match_id) {
+            return Err(PayloadError::ResourceSetMismatch);
+        }
+        self.context_item_count = self
+            .context_item_count
+            .checked_add(u64::try_from(context.member_ids.len())?)
+            .filter(|count| *count <= self.aggregate.item_count)
+            .ok_or(PayloadError::ResourceSetMismatch)?;
+        if is_overall {
+            self.context_periods.insert(
+                match_id.clone(),
+                (context.sequence, context.played_at.into()),
+            );
+        }
+        Ok(self.context_match_ids.insert(match_id))
+    }
 }
 
 impl PayloadSetValidator {
@@ -164,6 +213,7 @@ impl PayloadSetValidator {
             if resources.drilldowns != expected_drilldowns
                 || u64::try_from(resources.context_match_ids.len())? != aggregate.match_count
                 || resources.context_item_count != aggregate.item_count
+                || !resources.gap_evidence.is_empty()
             {
                 return Err(PayloadError::ResourceSetMismatch);
             }
@@ -235,6 +285,7 @@ impl PayloadSetValidator {
                         context_match_ids: BTreeSet::new(),
                         context_item_count: 0,
                         context_periods: BTreeMap::new(),
+                        gap_evidence: Vec::new(),
                     });
                     Ok(())
                 }
@@ -264,34 +315,23 @@ impl PayloadSetValidator {
             ResourceReferences::Drilldown {
                 member_id,
                 metric_id,
-            } => scope.drilldowns.insert((member_id, metric_id)),
-            ResourceReferences::MatchContext { match_id, context } => {
-                if context
-                    .member_ids
-                    .iter()
-                    .any(|member_id| !scope.aggregate.member_ids.contains(*member_id))
-                    || context
-                        .focused_item_ids
-                        .iter()
-                        .any(|item_id| !scope.aggregate.item_ids.contains(*item_id))
-                {
+                gap_evidence,
+            } => {
+                if !scope.aggregate.member_ids.contains(&member_id) {
                     return Err(PayloadError::ReferenceMismatch);
                 }
-                if scope.context_match_ids.contains(&match_id) {
-                    return Err(PayloadError::ResourceSetMismatch);
+                if let Some(evidence) = gap_evidence {
+                    if evidence.status != scope.aggregate.gap_status
+                        || evidence.match_count != scope.aggregate.match_count
+                    {
+                        return Err(PayloadError::ReferenceMismatch);
+                    }
+                    scope.gap_evidence.extend(evidence.rows);
                 }
-                scope.context_item_count = scope
-                    .context_item_count
-                    .checked_add(u64::try_from(context.member_ids.len())?)
-                    .filter(|count| *count <= scope.aggregate.item_count)
-                    .ok_or(PayloadError::ResourceSetMismatch)?;
-                if is_overall {
-                    scope.context_periods.insert(
-                        match_id.clone(),
-                        (context.sequence, context.played_at.into()),
-                    );
-                }
-                scope.context_match_ids.insert(match_id)
+                scope.drilldowns.insert((member_id, metric_id))
+            }
+            ResourceReferences::MatchContext { match_id, context } => {
+                scope.record_context(is_overall, match_id, &context)?
             }
         };
         inserted
@@ -497,6 +537,7 @@ fn validate_aggregate<'a>(
         item_ids,
         item_count,
         radar_basis,
+        gap_status: required_string(payload.pointer("/expectedRankGap/status"))?.into(),
         match_count: required_u64(
             object
                 .get("scope")
@@ -635,6 +676,11 @@ fn validate_drilldown<'a>(
     Ok(ResourceReferences::Drilldown {
         member_id: String::from(member_id),
         metric_id: String::from(metric_id),
+        gap_evidence: if expected_kind == "expected_rank_gap_evidence" {
+            Some(expected_rank_gap::evidence_references(detail)?)
+        } else {
+            None
+        },
     })
 }
 
@@ -1477,6 +1523,125 @@ mod tests {
                 );
             }
             assert!(validator.finish().is_ok());
+        }
+    }
+
+    #[test]
+    fn gap_partitions_reconcile_means_as_well_as_counts() {
+        let resources = compute_all(&input(8));
+        let aggregate = overall_resource(&resources, &ComputedResourceKind::Aggregate);
+        // Every mutation preserves each row's expected-minus-actual identity and all counts.
+        // The first also preserves every gap; only the cross-partition means expose the error.
+        for (row, fields) in [
+            (
+                "/expectedRankGap/items/0/levels/0/overall",
+                ["expectedRank", "averageRank"],
+            ),
+            (
+                "/expectedRankGap/items/0/levels/0/byPlayer/0",
+                ["expectedRank", "averageRank"],
+            ),
+            ("/expectedRankGap/players/0", ["expectedRank", "meanGap"]),
+        ] {
+            let mut changed = aggregate.clone();
+            for field in fields {
+                let value = changed
+                    .payload
+                    .pointer_mut(&format!("{row}/{field}"))
+                    .unwrap_or_else(|| panic!("gap summary field"));
+                *value = Value::from(
+                    value.as_f64().unwrap_or_else(|| panic!("nonempty summary")) + 0.125,
+                );
+            }
+            assert!(
+                schema::validate_aggregate(&changed.payload).is_ok(),
+                "shape stays valid: {row}"
+            );
+            assert!(
+                validate_computed(&changed).is_err(),
+                "partition mismatch: {row}"
+            );
+        }
+    }
+
+    #[test]
+    fn gap_evidence_rejects_wrong_denominators_and_references() {
+        let resources = compute_all(&input(8));
+        let kind = ComputedResourceKind::Drilldown {
+            member_id: "member-1".into(),
+            metric: DrilldownMetric::ExpectedRankGapEvidence,
+        };
+        let evidence = overall_resource(&resources, &kind);
+        let mut unknown_member = evidence.clone();
+        unknown_member.kind = ComputedResourceKind::Drilldown {
+            member_id: "unknown-member".into(),
+            metric: DrilldownMetric::ExpectedRankGapEvidence,
+        };
+        *unknown_member
+            .payload
+            .pointer_mut("/player/memberId")
+            .unwrap_or_else(|| panic!("evidence member")) = Value::from("unknown-member");
+        let mut member_validator = PayloadSetValidator::new();
+        member_validator
+            .add_computed(&overall_resource(
+                &resources,
+                &ComputedResourceKind::Aggregate,
+            ))
+            .unwrap_or_else(|error| panic!("valid aggregate: {error}"));
+        assert!(
+            matches!(
+                member_validator.add_computed(&unknown_member),
+                Err(PayloadError::ReferenceMismatch)
+            ),
+            "reject unknown players before buffering their evidence"
+        );
+        for (pointer, value) in [
+            ("/payload/summary/matchCount", Value::from(9)),
+            ("/payload/summary/status", Value::from("ok")),
+        ] {
+            let mut changed = evidence.clone();
+            *changed
+                .payload
+                .pointer_mut(pointer)
+                .unwrap_or_else(|| panic!("evidence field")) = value;
+            assert!(
+                validate_computed(&changed).is_err(),
+                "evidence denominator or quality: {pointer}"
+            );
+        }
+        for (pointer, value) in [
+            ("/payload/above/0/matchId", Value::from("missing-match")),
+            (
+                "/payload/above/0/playedAt",
+                Value::from("2026-12-31T00:00:00.000000Z"),
+            ),
+        ] {
+            let mut changed = evidence.clone();
+            *changed
+                .payload
+                .pointer_mut(pointer)
+                .unwrap_or_else(|| panic!("evidence row")) = value;
+            assert!(
+                validate_computed(&changed).is_ok(),
+                "reference checks belong to the artifact set"
+            );
+            let mut validator = PayloadSetValidator::new();
+            let result = resources
+                .iter()
+                .try_for_each(|resource| {
+                    validator.add_computed(
+                        if resource.scope == ScopeRef::Overall && resource.kind == kind {
+                            &changed
+                        } else {
+                            resource
+                        },
+                    )
+                })
+                .and_then(|()| validator.finish());
+            assert!(
+                result.is_err(),
+                "evidence points to another match: {pointer}"
+            );
         }
     }
 

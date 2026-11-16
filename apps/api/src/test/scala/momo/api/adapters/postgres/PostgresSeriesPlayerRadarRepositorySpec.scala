@@ -399,7 +399,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         INSERT INTO series_analysis_jobs(id, game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, status, trigger, work_kind, radar_operation_id)
         VALUES ('radar-prepare-job', $title, 0, 'series-analysis-v15', 11,
-          'series-analysis-artifact-v11-full-validation-v1', 'queued', 'manual', 'radar_prepare', $operationId)
+          'series-analysis-artifact-v11-full-validation-v2', 'queued', 'manual', 'radar_prepare', $operationId)
       """.update.run.transact(transactor)
       analysis <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
@@ -445,7 +445,7 @@ final class PostgresSeriesPlayerRadarRepositorySpec extends IntegrationSuite
         "artifact-scope-proof"
       ) *> sql"""
         UPDATE series_analysis_artifacts
-        SET validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
+        SET validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
         WHERE id = 'artifact-scope-proof'
       """.update.run *> sql"""
         UPDATE series_analysis_artifacts SET status = 'published', published_at = now()

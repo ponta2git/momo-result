@@ -422,11 +422,7 @@ const MATCH_RECORD_EVIDENCE_FIELDS: &[Field] = &[
 ];
 const MATCH_RECORD_EVIDENCE: Schema = Schema::Object(MATCH_RECORD_EVIDENCE_FIELDS);
 
-const GAP_REASON_CODE: Schema = Schema::StringEnum(&[
-    "insufficient_matches",
-    "invalid_dataset",
-    "calculation_failed",
-]);
+const GAP_REASON_CODE: Schema = Schema::StringEnum(&["insufficient_matches"]);
 const GAP_REASON_CODES: Schema = Schema::Array {
     item: &GAP_REASON_CODE,
     maximum: 1,

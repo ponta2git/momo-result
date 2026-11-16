@@ -12335,11 +12335,7 @@
               },
               "reasonCodes" : {
                 "items" : {
-                  "enum" : [
-                    "insufficient_matches",
-                    "invalid_dataset",
-                    "calculation_failed"
-                  ],
+                  "const" : "insufficient_matches",
                   "type" : "string"
                 },
                 "maxItems" : 1,

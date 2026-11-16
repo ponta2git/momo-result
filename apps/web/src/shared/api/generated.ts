@@ -2303,7 +2303,7 @@ export interface components {
                     signal: null | ("trend" | "hint" | "chance");
                     displayName: string;
                 }[];
-                reasonCodes: ("insufficient_matches" | "invalid_dataset" | "calculation_failed")[];
+                reasonCodes: "insufficient_matches"[];
                 /** @enum {string} */
                 status: "ok" | "reference" | "no_target";
             };

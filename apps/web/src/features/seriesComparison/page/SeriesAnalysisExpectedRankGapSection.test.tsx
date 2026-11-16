@@ -36,11 +36,11 @@ describe("expected-rank gap section", () => {
         .map((cell) => cell.textContent),
     ).toEqual(
       expect.arrayContaining([
-        "12戦100%",
+        "12戦",
         expect.stringContaining("2.50位"),
         expect.stringContaining("2.65位"),
         "−0.15位",
-        expect.stringMatching(/見込みより下位傾向あり/u),
+        expect.stringMatching(/^見込みより下位、傾向あり/u),
       ]),
     );
 
@@ -49,6 +49,15 @@ describe("expected-rank gap section", () => {
       memberId: "member_ponta",
       metricId: "expectedRankGap.evidence",
     });
+  });
+
+  it("keys the band once and names the axis sides instead of repeating directions", () => {
+    renderSection();
+    expect(screen.getAllByText("差がなくても偶然で動く範囲")).toHaveLength(1);
+    expect(screen.queryByText("場全体の値")).not.toBeInTheDocument();
+    const players = screen.getByRole("table", { name: "4人の見込みとの差" });
+    const header = within(players).getAllByRole("columnheader")[4];
+    expect(header).toHaveTextContent(/← 見込みより下位見込みより上位 →/u);
   });
 
   it("switches the record table to one player without moving the reading position", async () => {
@@ -69,7 +78,7 @@ describe("expected-rank gap section", () => {
     const shopNone = rowNamed(mine, /カード売り場 0回/u);
     expect(shopNone).toHaveTextContent(/6戦.*50%/u);
     expect(shopNone).toHaveTextContent("2.90位");
-    expect(shopNone).toHaveTextContent(/見込みより下位兆し/u);
+    expect(shopNone).toHaveTextContent(/見込みより下位、兆し/u);
     // A one- or two-result level keeps its values as a reference without a word.
     expect(rowNamed(mine, /カード売り場 2回以上/u)).toHaveTextContent(/2戦.*参考値/u);
     expect(

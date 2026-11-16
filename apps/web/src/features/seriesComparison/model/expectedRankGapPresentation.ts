@@ -125,10 +125,10 @@ export function gapAxisPosition(value: number, scale: number): number {
   return 50 + (clamped / scale) * 50;
 }
 
-export function formatAxisTick(value: number, edge: boolean): string {
+/** Tick labels stay unitless; the rank unit is read once from the value column. */
+export function formatAxisTick(value: number): string {
   if (Math.abs(value) < 1e-9) return "0";
-  const text = `${value > 0 ? "＋" : "−"}${Math.abs(value).toFixed(1)}`;
-  return edge ? `${text}位` : text;
+  return `${value > 0 ? "＋" : "−"}${Math.abs(value).toFixed(1)}`;
 }
 
 const percentFormatter = new Intl.NumberFormat("ja-JP", {

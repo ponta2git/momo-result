@@ -138,6 +138,7 @@ export function GapRow({
   judgementAction,
   label,
   marker,
+  showShare = true,
   summary,
 }: {
   axis: GapAxis;
@@ -147,6 +148,8 @@ export function GapRow({
   judgementAction?: ReactNode;
   label: ReactNode;
   marker?: number | null | undefined;
+  /** The share is omitted where every row covers the whole denominator. */
+  showShare?: boolean;
   summary: ExpectedRankGapSummary;
 }) {
   const reported = isReportedSignal(summary.signal);
@@ -171,7 +174,11 @@ export function GapRow({
           {summary.count}
           {countUnit}
         </span>
-        <span className={cn(contentText.supporting, "block")}>{formatGapShare(summary.share)}</span>
+        {showShare ? (
+          <span className={cn(contentText.supporting, "block")}>
+            {formatGapShare(summary.share)}
+          </span>
+        ) : null}
       </div>
       <div className={cn(cellClass, placement.expected, numberCellClass)} role="cell">
         <span aria-hidden="true" className={cn(contentText.supporting, "lg:hidden")}>
@@ -213,14 +220,17 @@ export function GapRow({
   );
 }
 
-/** Direction and word for a reported gap; a chance gap stays wordless inside its band. */
+/**
+ * The word for a reported gap; a chance gap stays wordless inside its band. The direction is
+ * read from the axis sides and the signed value, and is spoken for assistive technology.
+ */
 function GapJudgement({ summary }: { summary: ExpectedRankGapSummary }) {
   const word = gapSignalLabel(summary.signal);
   const direction = gapDirectionLabel(summary.meanGap);
   if (!word || !direction) return <span />;
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
-      <span className={contentText.body}>{direction}</span>
+    <span className="inline-flex items-center">
+      <span className="sr-only">{direction}、</span>
       <span
         className={cn(
           compactBadgeClass,

@@ -45,16 +45,6 @@ export function ExpectedRankGapEvidence({
         items={[
           { id: "player", label: "プレーヤー", value: playerName },
           { id: "target", label: "対象", value: `${payload.summary.matchCount}戦` },
-          {
-            id: "above",
-            label: "見込みより上位",
-            value: `${payload.summary.aboveCount}戦`,
-          },
-          {
-            id: "below",
-            label: "見込みより下位",
-            value: `${payload.summary.belowCount}戦`,
-          },
           ...(payload.summary.status === "reference"
             ? [
                 {

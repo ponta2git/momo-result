@@ -71,10 +71,25 @@ export function ExpectedRankGapTrack({
   );
 }
 
-/** Tick labels of the shared axis; only the edges carry the unit. */
+/**
+ * The shared axis heading: which side is above or below expectation, then the ticks. The sides
+ * carry the direction once, so rows read their direction from position and sign alone.
+ */
 export function ExpectedRankGapAxis({ axis, className }: { axis: GapAxis; className?: string }) {
   return (
-    <div aria-hidden="true" className={cn("relative h-4 min-w-24", className)}>
+    <div aria-hidden="true" className={cn("grid min-w-24 gap-0.5", className)}>
+      <div className="font-plain flex justify-between gap-2 text-xs/4 text-[var(--color-text-secondary)]">
+        <span>← 見込みより下位</span>
+        <span>見込みより上位 →</span>
+      </div>
+      <AxisTicks axis={axis} />
+    </div>
+  );
+}
+
+function AxisTicks({ axis }: { axis: GapAxis }) {
+  return (
+    <div className="relative h-4">
       {axis.ticks.map((tick, index) => {
         const first = index === 0;
         const last = index === axis.ticks.length - 1;
@@ -87,7 +102,7 @@ export function ExpectedRankGapAxis({ axis, className }: { axis: GapAxis; classN
             key={tick}
             style={{ left: `${gapAxisPosition(tick, axis.scale)}%` }}
           >
-            {formatAxisTick(tick, first || last)}
+            {formatAxisTick(tick)}
           </span>
         );
       })}
@@ -95,14 +110,20 @@ export function ExpectedRankGapAxis({ axis, className }: { axis: GapAxis; classN
   );
 }
 
-/** Legend for the band and, when a player is selected, the whole-table marker. */
-export function ExpectedRankGapLegend({ marker }: { marker: boolean }) {
+/**
+ * Legend keys, each shown once in the section: the band under the first chart, and the
+ * whole-table marker only while a player is selected.
+ */
+export function ExpectedRankGapLegend({ band, marker }: { band: boolean; marker: boolean }) {
+  if (!band && !marker) return null;
   return (
     <p className="font-plain flex flex-wrap items-center gap-x-4 gap-y-1 text-xs/4 text-[var(--color-text-muted)]">
-      <span className="inline-flex items-center gap-2">
-        <span aria-hidden="true" className={cn("h-3 w-6", bandClass)} />
-        差がなくても偶然で動く範囲
-      </span>
+      {band ? (
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className={cn("h-3 w-6", bandClass)} />
+          差がなくても偶然で動く範囲
+        </span>
+      ) : null}
       {marker ? (
         <span className="inline-flex items-center gap-2">
           <span aria-hidden="true" className={cn("h-3 w-0.5", markerClass)} />

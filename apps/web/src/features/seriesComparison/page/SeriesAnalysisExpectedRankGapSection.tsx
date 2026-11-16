@@ -130,13 +130,14 @@ function ExpectedRankGapBody({
                     label={
                       <MemberSequenceLabel memberId={player.memberId}>{name}</MemberSequenceLabel>
                     }
+                    showShare={false}
                     summary={player}
                   />
                 );
               })}
             </GapRowGroup>
           </GapTable>
-          {judged ? <ExpectedRankGapLegend marker={false} /> : null}
+          <ExpectedRankGapLegend band={judged} marker={false} />
         </div>
       </AnalysisSubsection>
       <ItemGapSubsection axis={axis} gap={gap} response={response} />
@@ -199,7 +200,7 @@ function ItemGapSubsection({
             />
           ))}
         </GapTable>
-        {judged ? <ExpectedRankGapLegend marker={!overall} /> : null}
+        <ExpectedRankGapLegend band={false} marker={judged && !overall} />
       </div>
     </AnalysisSubsection>
   );

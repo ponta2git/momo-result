@@ -38,8 +38,8 @@ describe("expected-rank gap presentation", () => {
     player.meanGap = -0.76;
     // 0.8 at a 0.2 step would need nine ticks; a 0.4 step keeps five.
     expect(gapAxis(wide).ticks).toEqual([-0.8, -0.4, 0, 0.4, 0.8]);
-    expect(formatAxisTick(-0.6, true)).toBe("−0.6位");
-    expect(formatAxisTick(0.2, false)).toBe("＋0.2");
-    expect(formatAxisTick(0, false)).toBe("0");
+    expect(formatAxisTick(-0.6)).toBe("−0.6");
+    expect(formatAxisTick(0.2)).toBe("＋0.2");
+    expect(formatAxisTick(0)).toBe("0");
   });
 });

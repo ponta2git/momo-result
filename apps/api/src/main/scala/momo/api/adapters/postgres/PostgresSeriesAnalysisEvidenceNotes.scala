@@ -31,8 +31,7 @@ private[postgres] object PostgresSeriesAnalysisEvidenceNotes:
       ).distinct
 
   def read(matchIds: List[String])(using
-      identities: PostgresIdentities
-  ): ConnectionIO[Either[AppError, Map[String, String]]] =
+      identities: PostgresIdentities): ConnectionIO[Either[AppError, Map[String, String]]] =
     if matchIds.isEmpty then Map.empty[String, String].asRight[AppError].pure[ConnectionIO]
     else
       val ids = identities.lookupArray(Entity.Matches, matchIds)

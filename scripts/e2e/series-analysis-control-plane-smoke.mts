@@ -141,7 +141,7 @@ FROM series_analysis_campaign_targets AS target
      , (SELECT count(*)
         FROM series_analysis_artifacts
         WHERE status = 'published' AND validation_contract_id = '${validation_contract_id}');`)) ===
-          "2|2|4|4|64|4|1|1|2",
+          "2|2|4|4|48|4|1|1|2",
         "Unexpected published artifact shape.",
       );
       const firstComplete = report(

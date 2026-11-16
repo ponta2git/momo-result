@@ -309,6 +309,8 @@ function SeriesComparisonPageContent() {
                       onOutlookMemberChange={filters.updateOutlookMember}
                       ownerMetric={filters.selection.ownerMetric}
                       onOwnerMetricChange={filters.updateOwnerMetric}
+                      expectedRankGapMemberId={filters.selection.expectedRankGapMemberId}
+                      onExpectedRankGapMemberChange={filters.updateExpectedRankGapMember}
                       activeView={filters.activeView}
                       bundle={resource.bundle}
                       shielded={resultsShielded}

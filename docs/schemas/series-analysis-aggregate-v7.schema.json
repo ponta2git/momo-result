@@ -1,6 +1,6 @@
 {
   "$comment": "Generated from apps/processing-worker/crates/analysis-core/src/payload/schema.rs; do not edit by hand. Draft 2020-12 keywords describe the portable shape, type, and bounds subset. x-momo-maxUtf8Bytes, x-momo-finiteF64, and x-momo-integerToken record constraints additionally enforced by the Rust owner validator; generic JSON Schema validation that ignores these annotations is not fully equivalent.",
-  "$id": "https://momo-result.local/schemas/series-analysis-aggregate-v6.schema.json",
+  "$id": "https://momo-result.local/schemas/series-analysis-aggregate-v7.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -821,6 +821,585 @@
       "required": [
         "items",
         "summary"
+      ],
+      "type": "object"
+    },
+    "expectedRankGap": {
+      "additionalProperties": false,
+      "properties": {
+        "hasMergedLayers": {
+          "type": "boolean"
+        },
+        "items": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "background": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "rows": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "levelIndex": {
+                              "maximum": 2,
+                              "minimum": 0,
+                              "type": "integer",
+                              "x-momo-integerToken": true
+                            },
+                            "values": {
+                              "items": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "marked": {
+                                    "type": "boolean"
+                                  },
+                                  "value": {
+                                    "maximum": 1.7976931348623157e+308,
+                                    "minimum": -1.7976931348623157e+308,
+                                    "type": "number",
+                                    "x-momo-finiteF64": true
+                                  }
+                                },
+                                "required": [
+                                  "marked",
+                                  "value"
+                                ],
+                                "type": "object"
+                              },
+                              "maxItems": 6,
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "levelIndex",
+                            "values"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 3,
+                        "type": "array"
+                      },
+                      "summary": {
+                        "maxLength": 4096,
+                        "minLength": 1,
+                        "type": "string",
+                        "x-momo-maxUtf8Bytes": 4096
+                      },
+                      "variables": {
+                        "items": {
+                          "enum": [
+                            "revenue_share",
+                            "total_assets",
+                            "card_shop",
+                            "plus_station",
+                            "card_station",
+                            "minus_station",
+                            "ginji"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 6,
+                        "type": "array"
+                      }
+                    },
+                    "required": [
+                      "rows",
+                      "summary",
+                      "variables"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "conclusion": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maxLength": 4096,
+                    "minLength": 1,
+                    "type": "string",
+                    "x-momo-maxUtf8Bytes": 4096
+                  }
+                ]
+              },
+              "item": {
+                "enum": [
+                  "card_shop",
+                  "plus_station",
+                  "card_station",
+                  "minus_station",
+                  "ginji"
+                ],
+                "type": "string"
+              },
+              "levels": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "byPlayer": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "averageRank": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 4.0,
+                                "minimum": 1.0,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "band": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 3.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "count": {
+                            "maximum": 1000000,
+                            "minimum": 0,
+                            "type": "integer",
+                            "x-momo-integerToken": true
+                          },
+                          "expectedRank": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 4.0,
+                                "minimum": 1.0,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "meanGap": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "maximum": 3.0,
+                                "minimum": -3.0,
+                                "type": "number",
+                                "x-momo-finiteF64": true
+                              }
+                            ]
+                          },
+                          "memberId": {
+                            "maxLength": 4096,
+                            "minLength": 1,
+                            "type": "string",
+                            "x-momo-maxUtf8Bytes": 4096
+                          },
+                          "quality": {
+                            "enum": [
+                              "ok",
+                              "reference",
+                              "no_target"
+                            ],
+                            "type": "string"
+                          },
+                          "share": {
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "type": "number",
+                            "x-momo-finiteF64": true
+                          },
+                          "signal": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "enum": [
+                                  "trend",
+                                  "hint",
+                                  "chance"
+                                ],
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "averageRank",
+                          "band",
+                          "count",
+                          "expectedRank",
+                          "meanGap",
+                          "memberId",
+                          "quality",
+                          "share",
+                          "signal"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 4,
+                      "type": "array"
+                    },
+                    "maximumCount": {
+                      "anyOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "maximum": 2147483647,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        }
+                      ]
+                    },
+                    "minimumCount": {
+                      "maximum": 2147483647,
+                      "minimum": 0,
+                      "type": "integer",
+                      "x-momo-integerToken": true
+                    },
+                    "overall": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "averageRank": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 4.0,
+                              "minimum": 1.0,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "band": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 3.0,
+                              "minimum": 0.0,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "count": {
+                          "maximum": 1000000,
+                          "minimum": 0,
+                          "type": "integer",
+                          "x-momo-integerToken": true
+                        },
+                        "expectedRank": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 4.0,
+                              "minimum": 1.0,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "meanGap": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "maximum": 3.0,
+                              "minimum": -3.0,
+                              "type": "number",
+                              "x-momo-finiteF64": true
+                            }
+                          ]
+                        },
+                        "quality": {
+                          "enum": [
+                            "ok",
+                            "reference",
+                            "no_target"
+                          ],
+                          "type": "string"
+                        },
+                        "share": {
+                          "maximum": 1.0,
+                          "minimum": 0.0,
+                          "type": "number",
+                          "x-momo-finiteF64": true
+                        },
+                        "signal": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "enum": [
+                                "trend",
+                                "hint",
+                                "chance"
+                              ],
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "averageRank",
+                        "band",
+                        "count",
+                        "expectedRank",
+                        "meanGap",
+                        "quality",
+                        "share",
+                        "signal"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "byPlayer",
+                    "maximumCount",
+                    "minimumCount",
+                    "overall"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 3,
+                "type": "array"
+              }
+            },
+            "required": [
+              "background",
+              "conclusion",
+              "item",
+              "levels"
+            ],
+            "type": "object"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
+        "layers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "destinationLevels": {
+                "items": {
+                  "maximum": 2,
+                  "minimum": 0,
+                  "type": "integer",
+                  "x-momo-integerToken": true
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              "expectedRank": {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "number",
+                "x-momo-finiteF64": true
+              },
+              "revenueRank": {
+                "maximum": 4,
+                "minimum": 1,
+                "type": "integer",
+                "x-momo-integerToken": true
+              }
+            },
+            "required": [
+              "count",
+              "destinationLevels",
+              "expectedRank",
+              "revenueRank"
+            ],
+            "type": "object"
+          },
+          "maxItems": 12,
+          "type": "array"
+        },
+        "matchCount": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "permutationCount": {
+          "const": 2000,
+          "minimum": 0,
+          "type": "integer",
+          "x-momo-integerToken": true
+        },
+        "players": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "averageRank": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 4.0,
+                    "minimum": 1.0,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "band": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "count": {
+                "maximum": 1000000,
+                "minimum": 0,
+                "type": "integer",
+                "x-momo-integerToken": true
+              },
+              "expectedRank": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 4.0,
+                    "minimum": 1.0,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "meanGap": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "maximum": 3.0,
+                    "minimum": -3.0,
+                    "type": "number",
+                    "x-momo-finiteF64": true
+                  }
+                ]
+              },
+              "memberId": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string",
+                "x-momo-maxUtf8Bytes": 4096
+              },
+              "quality": {
+                "enum": [
+                  "ok",
+                  "reference",
+                  "no_target"
+                ],
+                "type": "string"
+              },
+              "share": {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number",
+                "x-momo-finiteF64": true
+              },
+              "signal": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "enum": [
+                      "trend",
+                      "hint",
+                      "chance"
+                    ],
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "averageRank",
+              "band",
+              "count",
+              "expectedRank",
+              "meanGap",
+              "memberId",
+              "quality",
+              "share",
+              "signal"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4,
+          "type": "array"
+        },
+        "reasonCodes": {
+          "items": {
+            "const": "insufficient_matches",
+            "type": "string"
+          },
+          "maxItems": 1,
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "reference",
+            "no_target"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "hasMergedLayers",
+        "items",
+        "layers",
+        "matchCount",
+        "permutationCount",
+        "players",
+        "reasonCodes",
+        "status"
       ],
       "type": "object"
     },
@@ -7828,19 +8407,6 @@
           ],
           "type": "object"
         },
-        "defaultMemberId": {
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "maxLength": 4096,
-              "minLength": 1,
-              "type": "string",
-              "x-momo-maxUtf8Bytes": 4096
-            }
-          ]
-        },
         "foldScores": {
           "items": {
             "additionalProperties": false,
@@ -7928,109 +8494,6 @@
           "const": "rank-bt-v1",
           "type": "string"
         },
-        "rankSignalsByPlayer": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "candidates": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "candidateSharePercent": {
-                      "anyOf": [
-                        {
-                          "type": "null"
-                        },
-                        {
-                          "maximum": 100,
-                          "minimum": 0,
-                          "type": "integer",
-                          "x-momo-integerToken": true
-                        }
-                      ]
-                    },
-                    "direction": {
-                      "enum": [
-                        "more_is_higher",
-                        "less_is_higher"
-                      ],
-                      "type": "string"
-                    },
-                    "importance": {
-                      "maximum": 1.7976931348623157e+308,
-                      "minimum": 0.0,
-                      "type": "number",
-                      "x-momo-finiteF64": true
-                    },
-                    "signal": {
-                      "enum": [
-                        "revenue",
-                        "destination",
-                        "plus_station",
-                        "minus_station",
-                        "card_station",
-                        "card_shop",
-                        "ginji"
-                      ],
-                      "type": "string"
-                    },
-                    "stabilityBand": {
-                      "enum": [
-                        "high",
-                        "medium",
-                        "low"
-                      ],
-                      "type": "string"
-                    },
-                    "stable": {
-                      "type": "boolean"
-                    },
-                    "supportCount": {
-                      "maximum": 1000000,
-                      "minimum": 0,
-                      "type": "integer",
-                      "x-momo-integerToken": true
-                    }
-                  },
-                  "required": [
-                    "candidateSharePercent",
-                    "direction",
-                    "importance",
-                    "signal",
-                    "stabilityBand",
-                    "stable",
-                    "supportCount"
-                  ],
-                  "type": "object"
-                },
-                "maxItems": 7,
-                "type": "array"
-              },
-              "memberId": {
-                "maxLength": 4096,
-                "minLength": 1,
-                "type": "string",
-                "x-momo-maxUtf8Bytes": 4096
-              },
-              "status": {
-                "enum": [
-                  "ok",
-                  "reference",
-                  "no_target"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "candidates",
-              "memberId",
-              "status"
-            ],
-            "type": "object"
-          },
-          "maxItems": 4,
-          "type": "array"
-        },
         "reasonCodes": {
           "items": {
             "enum": [
@@ -8060,183 +8523,18 @@
             "no_target"
           ],
           "type": "string"
-        },
-        "unexpectedWinsByPlayer": {
-          "items": {
-            "additionalProperties": false,
-            "properties": {
-              "hasDetails": {
-                "type": "boolean"
-              },
-              "latest": {
-                "anyOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "additionalProperties": false,
-                    "properties": {
-                      "actualRank": {
-                        "maximum": 4,
-                        "minimum": 1,
-                        "type": "integer",
-                        "x-momo-integerToken": true
-                      },
-                      "evidence": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "cardShopCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "cardStationCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "destinationCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "ginjiCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "minusStationCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "plusStationCount": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          },
-                          "revenueManYen": {
-                            "maximum": 2147483647,
-                            "minimum": -2147483648,
-                            "type": "integer",
-                            "x-momo-integerToken": true
-                          }
-                        },
-                        "required": [
-                          "cardShopCount",
-                          "cardStationCount",
-                          "destinationCount",
-                          "ginjiCount",
-                          "minusStationCount",
-                          "plusStationCount",
-                          "revenueManYen"
-                        ],
-                        "type": "object"
-                      },
-                      "expectedRank": {
-                        "maximum": 1.7976931348623157e+308,
-                        "minimum": -1.7976931348623157e+308,
-                        "type": "number",
-                        "x-momo-finiteF64": true
-                      },
-                      "heldEventId": {
-                        "maxLength": 4096,
-                        "minLength": 1,
-                        "type": "string",
-                        "x-momo-maxUtf8Bytes": 4096
-                      },
-                      "matchId": {
-                        "maxLength": 4096,
-                        "minLength": 1,
-                        "type": "string",
-                        "x-momo-maxUtf8Bytes": 4096
-                      },
-                      "matchNoInEvent": {
-                        "maximum": 2147483647,
-                        "minimum": -2147483648,
-                        "type": "integer",
-                        "x-momo-integerToken": true
-                      },
-                      "playedAt": {
-                        "maxLength": 4096,
-                        "minLength": 1,
-                        "type": "string",
-                        "x-momo-maxUtf8Bytes": 4096
-                      }
-                    },
-                    "required": [
-                      "actualRank",
-                      "evidence",
-                      "expectedRank",
-                      "heldEventId",
-                      "matchId",
-                      "matchNoInEvent",
-                      "playedAt"
-                    ],
-                    "type": "object"
-                  }
-                ]
-              },
-              "memberId": {
-                "maxLength": 4096,
-                "minLength": 1,
-                "type": "string",
-                "x-momo-maxUtf8Bytes": 4096
-              },
-              "status": {
-                "enum": [
-                  "ok",
-                  "reference",
-                  "no_target"
-                ],
-                "type": "string"
-              },
-              "totalWinCount": {
-                "maximum": 1000000,
-                "minimum": 0,
-                "type": "integer",
-                "x-momo-integerToken": true
-              },
-              "unexpectedWinCount": {
-                "maximum": 1000000,
-                "minimum": 0,
-                "type": "integer",
-                "x-momo-integerToken": true
-              }
-            },
-            "required": [
-              "hasDetails",
-              "latest",
-              "memberId",
-              "status",
-              "totalWinCount",
-              "unexpectedWinCount"
-            ],
-            "type": "object"
-          },
-          "maxItems": 4,
-          "type": "array"
         }
       },
       "required": [
         "crownCertainty",
-        "defaultMemberId",
         "foldScores",
         "heldEventCount",
         "improvedFoldCount",
         "matchCount",
         "modelVersion",
-        "rankSignalsByPlayer",
         "reasonCodes",
         "requiredImprovedFoldCount",
-        "status",
-        "unexpectedWinsByPlayer"
+        "status"
       ],
       "type": "object"
     },
@@ -8548,7 +8846,7 @@
       "type": "array"
     },
     "schemaVersion": {
-      "const": 6,
+      "const": 7,
       "minimum": 0,
       "type": "integer",
       "x-momo-integerToken": true
@@ -8963,6 +9261,7 @@
     "assetStyleProfiles",
     "cardShopDestination",
     "dataQuality",
+    "expectedRankGap",
     "headToHead",
     "highlights",
     "histograms",
@@ -8986,6 +9285,6 @@
     "summary",
     "trends"
   ],
-  "title": "Series Analysis Aggregate Resource v6",
+  "title": "Series Analysis Aggregate Resource v7",
   "type": "object"
 }

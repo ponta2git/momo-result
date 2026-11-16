@@ -6,11 +6,13 @@ import {
   invalidateAfterMatchNoteReplaced,
 } from "@/shared/api/cacheInvalidation";
 import { commitMatchNoteCache } from "@/shared/api/matchNoteCache";
-import { matchKeys } from "@/shared/api/queryKeys";
+import { matchKeys, seriesAnalysisKeys } from "@/shared/api/queryKeys";
 import { matchDetailQueryOptions, matchRouteDetailQueryOptions } from "@/shared/api/queryOptions";
+import { seriesAnalysisDrilldownQueryOptions } from "@/shared/api/seriesAnalysisQueryOptions";
 import { setDevUser } from "@/test/auth";
 import { makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
+import { makeSeriesAnalysisDrilldown } from "@/test/msw/seriesAnalysisFixtures";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
 
@@ -18,6 +20,54 @@ setupMsw();
 beforeEach(() => setDevUser());
 
 describe("detail read cache", () => {
+  it("reloads saved notes when returning to evidence without refreshing calculated history", async () => {
+    const client = createTestQueryClient();
+    let note = "before";
+    server.use(
+      http.get("/api/analytics/series-comparison/v2/drilldown", ({ request }) => {
+        const metricId = new URL(request.url).searchParams.get("metricId") ?? "";
+        const response = makeSeriesAnalysisDrilldown(metricId);
+        if (response.payload.kind === "expected_rank_gap_evidence") {
+          response.payload.above = response.payload.above.map((row) => ({ ...row, note }));
+        }
+        return HttpResponse.json(response);
+      }),
+    );
+    const params = { artifactId: "artifact-current", gameTitleId: "title-1", memberId: "member-1" };
+    const evidence = seriesAnalysisDrilldownQueryOptions({
+      ...params,
+      metricId: "expectedRankGap.evidence",
+    });
+    const scopedEvidence = seriesAnalysisDrilldownQueryOptions({
+      ...params,
+      seasonMasterId: "season-1",
+      metricId: "expectedRankGap.evidence",
+    });
+    const history = seriesAnalysisDrilldownQueryOptions({
+      ...params,
+      metricId: "rank.averageHistory",
+    });
+    const historyBefore = await client.fetchQuery(history);
+    await Promise.all([client.fetchQuery(evidence), client.fetchQuery(scopedEvidence)]);
+    const aggregateKey = seriesAnalysisKeys.aggregate(params);
+    client.setQueryData(aggregateKey, { artifact: { artifactId: params.artifactId } });
+
+    note = "saved";
+    await invalidateAfterMatchNoteReplaced(client, "match-12");
+
+    for (const options of [evidence, scopedEvidence]) {
+      const result = await client.fetchQuery(options);
+      expect(result.payload.kind).toBe("expected_rank_gap_evidence");
+      if (result.payload.kind === "expected_rank_gap_evidence") {
+        expect(result.payload.above[0]?.note).toBe("saved");
+      }
+      expect(result.artifact.artifactId).toBe(params.artifactId);
+    }
+    expect(client.getQueryState(history.queryKey)?.isInvalidated).toBe(false);
+    expect(await client.fetchQuery(history)).toBe(historyBefore);
+    expect(client.getQueryState(aggregateKey)?.isInvalidated).toBe(false);
+  });
+
   it("updates both aliases of a record without confusing a numeric legacy ID with a public number", async () => {
     const client = createTestQueryClient();
     const target = makeMatchDetail({

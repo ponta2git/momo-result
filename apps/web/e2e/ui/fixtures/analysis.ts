@@ -4,6 +4,7 @@ import {
   analysisArtifact,
   makeFourPlayerSeriesAnalysisReview,
   makeSeriesAnalysisAggregate,
+  makeSeriesAnalysisDrilldown,
   makeSeriesAnalysisMatchContext,
   makeSeriesAnalysisOptions,
   makeSeriesAnalysisStatus,
@@ -82,6 +83,14 @@ export async function installAnalysisResponses(page: Page, context: typeof confi
   }
 
   const scopedQuery = { artifactId: artifact.artifactId, gameTitleId, seasonMasterId, mapMasterId };
+  const drilldown = makeSeriesAnalysisDrilldown("expectedRankGap.evidence");
+  drilldown.artifact = artifact;
+  drilldown.scope = analysisScope;
+  if (drilldown.payload.kind !== "expected_rank_gap_evidence")
+    throw new Error("expected rank gap evidence fixture is required");
+  const firstEvidence = drilldown.payload.above[0];
+  if (!firstEvidence) throw new Error("expected rank gap fixture requires evidence");
+  Object.assign(firstEvidence, { matchId, matchIndex: 1, matchNoInEvent: 1 });
 
   let statusPhase: "failed" | "running" = "running";
   const statusPattern = /\/api\/analytics\/series-comparison\/v2\/status(?:\?.*)?$/u;
@@ -151,6 +160,17 @@ export async function installAnalysisResponses(page: Page, context: typeof confi
     readQuery(route, scopedQuery);
     await route.fulfill({ json: reviewFixture });
   });
+  await page.route(
+    /\/api\/analytics\/series-comparison\/v2\/drilldown(?:\?.*)?$/u,
+    async (route) => {
+      readQuery(route, {
+        ...scopedQuery,
+        memberId: "member_ponta",
+        metricId: "expectedRankGap.evidence",
+      });
+      await route.fulfill({ json: drilldown });
+    },
+  );
   await page.route(
     /\/api\/analytics\/series-comparison\/v3\/match-context(?:\?.*)?$/u,
     async (route) => {

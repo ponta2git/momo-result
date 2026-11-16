@@ -12,6 +12,7 @@
 | 追加する実績軸の作品通算・対象マップ・0試合時の表示 | [実績達成管理](player-achievements.md) |
 | 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
+| 物件収益の順位と目的地から見込まれる順位との差 | `docs/requirements/series-expected-rank-gap.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
 | UI共通規約、test、command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
@@ -59,8 +60,8 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | --- | --- |
 | 次戦に備える (`review`) | 行動仮説。詳細はplaybook正本に従う |
 | 今の差 (`overview`) | 平均順位、順位分布、直接対決、順位ブレ、王座の確からしさ |
-| 勝因候補 (`drivers`) | 資産、物件収益、目的地、順位を読む追加の手掛かり |
-| 推移 (`flow`) | 直近成績、切り替え力、荒れ試合、開催内の流れ、予測より上位だった勝利 |
+| 勝因候補 (`drivers`) | 資産、物件収益、目的地、[見込み順位との差](series-expected-rank-gap.md) |
+| 推移 (`flow`) | 直近成績、切り替え力、荒れ試合、開催内の流れ |
 | 条件別 (`context`) | 番手、オーナー、カード売り場と目的地、スリの銀次 |
 | 見通しを試す (`outlook`) | 総合成績の差を、改善幅と継続戦数へ置き換えて検討する |
 
@@ -104,7 +105,7 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 | 資産・収益 | 総資産と物件収益の代表値・共通bin分布、収益順位との差、収益トップ未勝利、観測上の戦い方傾向 |
 | 推移 | 累積平均順位・順位ブレ、直近20戦、前戦からの順位遷移、開催内第n試合、荒れ試合 |
 | 条件別 | 番手別成績、オーナー別比較、目的地、カード売り場×目的地、銀次の件数・発生率・被害時成績 |
-| 補助 | 根拠付きhighlight、高度な順位分析、試合とプレーヤー粒度のdrilldown |
+| 補助 | 根拠付きhighlight、王座の確からしさ、[見込み順位との差](series-expected-rank-gap.md)、試合とプレーヤー粒度のdrilldown |
 
 ### Core / Drivers
 
@@ -158,19 +159,16 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 
 | 指標 | 意味 |
 | --- | --- |
-| 順位を読む手掛かり | 期間内順位と安定して結び付いた保存signalを各人最大3件示す |
-| 予測より上位だった勝利 | 外部評価で下位寄りでも実際は1位だった根拠試合を示す |
 | 王座の確からしさ | 開催条件と番手を調整しても期間内首位を支持する再標本化比率 |
+
+順位と記録の結び付きは [見込み順位との差](series-expected-rank-gap.md) が扱う。以前の「順位を読む手掛かり」と「予測より上位だった勝利」は同書へ置き換え、出力しない。
 
 共通要件:
 
 - 1試合4人の6組比較を正則化Bradley–Terryモデルで扱う。物件収益と固定6事件の試合内相対値をsignal、番手とプレーヤーを調整変数とし、最終順位を直接決める総資産は説明変数から除く。
 - 同じ開催を学習と評価へ分割しない。開催単位の決定論的5foldで、各試合を当該開催を学習に含めないout-of-fold推定にする。
 - full modelをプレーヤーと番手だけのbaselineとpairwise log loss / Brier scoreで比較する。solver、正則化、seed、反復、foldはmodel versionで固定する。
-- 順位signalは開催単位permutation importanceと係数方向を使い、5fold中4fold以上で方向一致、3fold以上で正のimportance、平均importanceが `+0.0001` 以上の採用境界をすべて満たす候補だけを返す。
-- 予測順位は `1 + sum(P(相手が本人より上位))`。実際1位かつ予測順位2.5以上の試合を対象とする。
-- 予測より上位だった勝利は本人の勝利0件で `no_target`、1〜9件で `reference`、10件以上で共通model品質を継承する。
-- 根拠試合では物件収益、目的地、プラス駅、マイナス駅、カード駅、カード売り場、スリの銀次の保存値を欠落なく示す。
+- 品質判定に使う順位signalは開催単位permutation importanceと係数方向で求め、5fold中4fold以上で方向一致、3fold以上で正のimportance、平均importanceが `+0.0001` 以上の採用境界をすべて満たすものを安定とみなす。signal自体は成果物に出さず、安定したsignalの有無だけを品質に使う。
 - 王座の確からしさは開催単位block bootstrapでプレーヤー効果の首位割合を返し、同値を等分する。丸め前の4人合計は1とする。
 - 開催8未満または試合32未満、数値不正、solver非収束は `no_target`。開催8〜19または方向不安定は `reference`。開催20以上かつfull modelが5fold中4fold以上baselineを上回り方向安定した場合だけ `ok` とする。
 - 高度分析の定義済み非採用は作品成果物の正常成功とする。予期しない計算失敗は部分公開せず、直前成功artifactを維持する。

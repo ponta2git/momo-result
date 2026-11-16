@@ -72,21 +72,6 @@ pub(super) fn exact_i64_as_f64(value: i64) -> Option<f64> {
     Some(value as f64)
 }
 
-pub(super) fn floor_u8(value: f64) -> Option<u8> {
-    let floored = value.floor();
-    if !floored.is_finite() || !(0.0..=f64::from(u8::MAX)).contains(&floored) {
-        return None;
-    }
-
-    #[expect(
-        clippy::as_conversions,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the finite inclusive u8 range check above makes this cast lossless"
-    )]
-    Some(floored as u8)
-}
-
 pub(super) fn floor_usize(value: f64) -> Option<usize> {
     finite_u32_to_usize(value.floor())
 }
@@ -118,8 +103,6 @@ mod tests {
     fn checked_float_integer_boundaries_do_not_saturate() {
         assert_eq!(floor_i64(3.9), Some(3));
         assert_eq!(ceil_i64(-3.9), Some(-3));
-        assert_eq!(floor_u8(100.9), Some(100));
-        assert_eq!(floor_u8(-0.1), None);
         assert_eq!(floor_usize(f64::INFINITY), None);
         assert_eq!(round_i64(2.49), Some(2));
         assert_eq!(round_i64(2.5), Some(3));

@@ -153,7 +153,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       config: SeriesAnalysisReadConfig,
       mapNames: Map[String, String],
   ): Either[AppError, SeriesAnalysisChunk] =
-    hydrateAndRender(chunk, memberNames, scopeName, config, mapNames, None)
+    hydrateAndRender(chunk, memberNames, scopeName, config, mapNames, None, Map.empty)
 
   def hydrateAndRender(
       chunk: DecodedSeriesAnalysisChunk,
@@ -162,6 +162,7 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
       config: SeriesAnalysisReadConfig,
       mapNames: Map[String, String],
       achievementMetadata: Option[AchievementDisplayMetadata],
+      matchNotes: Map[String, String],
   ): Either[AppError, SeriesAnalysisChunk] = scopeName
     .filter(displayName =>
       displayName.nonEmpty && memberNames.values.forall(_.nonEmpty) &&
@@ -170,8 +171,14 @@ private[postgres] object PostgresSeriesAnalysisChunkCodec:
     .toRight(AppError.Internal("Analysis display metadata is unavailable."))
     .flatMap { displayName =>
       Either.cond(
-        chunk.nodeCount <= config.maxJsonNodes,
-        achievementMetadata.fold(hydratePayload(chunk, memberNames, displayName, mapNames))(
+        chunk.nodeCount +
+          PostgresSeriesAnalysisEvidenceNotes.addedNodeCount(chunk.payload) <= config.maxJsonNodes,
+        achievementMetadata.fold(
+          PostgresSeriesAnalysisEvidenceNotes.hydrate(
+            hydratePayload(chunk, memberNames, displayName, mapNames),
+            matchNotes,
+          )
+        )(
           PostgresAchievementDisplayOps.hydrate(
             hydratePayload(chunk, memberNames, displayName, mapNames),
             _

@@ -57,9 +57,8 @@ const fn optional_field(name: &'static str, schema: &'static Schema) -> Field {
 
 const BOOL: Schema = Schema::Bool;
 const SCHEMA_V1: Schema = Schema::ExactUnsigned(1);
-const SCHEMA_V3: Schema = Schema::ExactUnsigned(3);
 const SCHEMA_V4: Schema = Schema::ExactUnsigned(4);
-const SCHEMA_V6: Schema = Schema::ExactUnsigned(6);
+const SCHEMA_V7: Schema = Schema::ExactUnsigned(7);
 const COUNT: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const INDEX: Schema = Schema::Unsigned { maximum: 1_000_000 };
 const I32: Schema = Schema::Integer {
@@ -412,79 +411,7 @@ const REASON_CODES: Schema = Schema::Array {
     item: &REASON_CODE,
     maximum: 4,
 };
-const SIGNAL_KIND: Schema = Schema::StringEnum(&[
-    "revenue",
-    "destination",
-    "plus_station",
-    "minus_station",
-    "card_station",
-    "card_shop",
-    "ginji",
-]);
-const SIGNAL_DIRECTION: Schema = Schema::StringEnum(&["more_is_higher", "less_is_higher"]);
-const NULLABLE_PERCENT: Schema = Schema::Nullable(&Schema::Unsigned { maximum: 100 });
-const SIGNAL_CANDIDATE_FIELDS: &[Field] = &[
-    field("signal", &SIGNAL_KIND),
-    field("direction", &SIGNAL_DIRECTION),
-    field("importance", &NON_NEGATIVE_NUMBER),
-    field("stable", &BOOL),
-    field("supportCount", &COUNT),
-    field("stabilityBand", &STABILITY),
-    field("candidateSharePercent", &NULLABLE_PERCENT),
-];
-const SIGNAL_CANDIDATE: Schema = Schema::Object(SIGNAL_CANDIDATE_FIELDS);
-const FOLD_ROW_FIELDS: &[Field] = &[
-    field("fold", &COUNT),
-    field("heldEventCount", &COUNT),
-    field("comparisonCount", &COUNT),
-    // A permutation can improve a single fold even when the aggregate signal is stable, so the
-    // per-fold loss delta is signed. `supported` records the positive-delta interpretation.
-    field("importance", &NUMBER),
-    field("supported", &BOOL),
-];
-const FOLD_ROW: Schema = Schema::Object(FOLD_ROW_FIELDS);
-const FOLD_ROWS: Schema = Schema::Array {
-    item: &FOLD_ROW,
-    maximum: 5,
-};
-const SIGNAL_DRILLDOWN_CANDIDATE_FIELDS: &[Field] = &[
-    field("signal", &SIGNAL_KIND),
-    field("direction", &SIGNAL_DIRECTION),
-    field("importance", &NON_NEGATIVE_NUMBER),
-    field("stable", &BOOL),
-    field("supportCount", &COUNT),
-    field("stabilityBand", &STABILITY),
-    field("candidateSharePercent", &NULLABLE_PERCENT),
-    field("foldRows", &FOLD_ROWS),
-];
-const SIGNAL_DRILLDOWN_CANDIDATE: Schema = Schema::Object(SIGNAL_DRILLDOWN_CANDIDATE_FIELDS);
-const SIGNAL_DRILLDOWN_CANDIDATES: Schema = Schema::Array {
-    item: &SIGNAL_DRILLDOWN_CANDIDATE,
-    maximum: 7,
-};
-const SIGNAL_METHOD_FIELDS: &[Field] = &[
-    field("modelVersion", &Schema::StringEnum(&["rank-bt-v1"])),
-    field("fixedSeed", &ID),
-    field("minimumHeldEvents", &COUNT),
-    field("minimumMatches", &COUNT),
-    field("foldCount", &COUNT),
-    field("requiredImprovedFoldCount", &COUNT),
-    field("minimumImportance", &NON_NEGATIVE_NUMBER),
-];
-const SIGNAL_METHOD: Schema = Schema::Object(SIGNAL_METHOD_FIELDS);
-const SIGNAL_DRILLDOWN_FIELDS: &[Field] = &[
-    field("kind", &Schema::StringEnum(&["rank_signals"])),
-    field("method", &SIGNAL_METHOD),
-    field("status", &QUALITY),
-    field("reasonCodes", &REASON_CODES),
-    field("heldEventCount", &COUNT),
-    field("matchCount", &COUNT),
-    field("improvedFoldCount", &COUNT),
-    field("candidates", &SIGNAL_DRILLDOWN_CANDIDATES),
-];
-const SIGNAL_DRILLDOWN: Schema = Schema::Object(SIGNAL_DRILLDOWN_FIELDS);
-
-const UNEXPECTED_EVIDENCE_FIELDS: &[Field] = &[
+const MATCH_RECORD_EVIDENCE_FIELDS: &[Field] = &[
     field("revenueManYen", &I32),
     field("destinationCount", &I32),
     field("plusStationCount", &I32),
@@ -493,37 +420,188 @@ const UNEXPECTED_EVIDENCE_FIELDS: &[Field] = &[
     field("cardShopCount", &I32),
     field("ginjiCount", &I32),
 ];
-const UNEXPECTED_EVIDENCE: Schema = Schema::Object(UNEXPECTED_EVIDENCE_FIELDS);
-const UNEXPECTED_ROW_FIELDS: &[Field] = &[
+const MATCH_RECORD_EVIDENCE: Schema = Schema::Object(MATCH_RECORD_EVIDENCE_FIELDS);
+
+const GAP_REASON_CODE: Schema = Schema::StringEnum(&["insufficient_matches"]);
+const GAP_REASON_CODES: Schema = Schema::Array {
+    item: &GAP_REASON_CODE,
+    maximum: 1,
+};
+const GAP_ITEM: Schema = Schema::StringEnum(&[
+    "card_shop",
+    "plus_station",
+    "card_station",
+    "minus_station",
+    "ginji",
+]);
+const GAP_VARIABLE: Schema = Schema::StringEnum(&[
+    "revenue_share",
+    "total_assets",
+    "card_shop",
+    "plus_station",
+    "card_station",
+    "minus_station",
+    "ginji",
+]);
+const GAP_SIGNAL: Schema = Schema::Nullable(&Schema::StringEnum(&["trend", "hint", "chance"]));
+const GAP_RANK: Schema = Schema::NumberRange {
+    minimum: 1.0,
+    maximum: 4.0,
+};
+const NULLABLE_GAP_RANK: Schema = Schema::Nullable(&GAP_RANK);
+const GAP: Schema = Schema::NumberRange {
+    minimum: -3.0,
+    maximum: 3.0,
+};
+const NULLABLE_GAP: Schema = Schema::Nullable(&GAP);
+const NULLABLE_BAND: Schema = Schema::Nullable(&Schema::NumberRange {
+    minimum: 0.0,
+    maximum: 3.0,
+});
+const NON_NEGATIVE_COUNT: Schema = Schema::Integer {
+    minimum: 0,
+    maximum: 2_147_483_647,
+};
+const GAP_SUMMARY_FIELDS: &[Field] = &[
+    field("count", &COUNT),
+    field("share", &RATE),
+    field("expectedRank", &NULLABLE_GAP_RANK),
+    field("averageRank", &NULLABLE_GAP_RANK),
+    field("meanGap", &NULLABLE_GAP),
+    field("quality", &QUALITY),
+    field("signal", &GAP_SIGNAL),
+    field("band", &NULLABLE_BAND),
+];
+const GAP_SUMMARY: Schema = Schema::Object(GAP_SUMMARY_FIELDS);
+const GAP_MEMBER_SUMMARY: Schema = Schema::MergedObject(&[MEMBER_REF_FIELDS, GAP_SUMMARY_FIELDS]);
+const GAP_MEMBER_SUMMARIES: Schema = Schema::Array {
+    item: &GAP_MEMBER_SUMMARY,
+    maximum: 4,
+};
+const GAP_LAYER_FIELDS: &[Field] = &[
+    field("revenueRank", &RANK),
+    field(
+        "destinationLevels",
+        &Schema::Array {
+            item: &Schema::Integer {
+                minimum: 0,
+                maximum: 2,
+            },
+            maximum: 3,
+        },
+    ),
+    field("count", &COUNT),
+    field("expectedRank", &GAP_RANK),
+];
+const GAP_LAYER: Schema = Schema::Object(GAP_LAYER_FIELDS);
+const GAP_LEVEL_FIELDS: &[Field] = &[
+    field("minimumCount", &NON_NEGATIVE_COUNT),
+    field("maximumCount", &Schema::Nullable(&NON_NEGATIVE_COUNT)),
+    field("overall", &GAP_SUMMARY),
+    field("byPlayer", &GAP_MEMBER_SUMMARIES),
+];
+const GAP_LEVEL: Schema = Schema::Object(GAP_LEVEL_FIELDS);
+const GAP_BACKGROUND_VALUE: Schema =
+    Schema::Object(&[field("value", &NUMBER), field("marked", &BOOL)]);
+const GAP_BACKGROUND_ROW: Schema = Schema::Object(&[
+    field("levelIndex", &Schema::Unsigned { maximum: 2 }),
+    field(
+        "values",
+        &Schema::Array {
+            item: &GAP_BACKGROUND_VALUE,
+            maximum: 6,
+        },
+    ),
+]);
+const GAP_BACKGROUND_FIELDS: &[Field] = &[
+    field("summary", &Schema::String { non_empty: true }),
+    field(
+        "variables",
+        &Schema::Array {
+            item: &GAP_VARIABLE,
+            maximum: 6,
+        },
+    ),
+    field(
+        "rows",
+        &Schema::Array {
+            item: &GAP_BACKGROUND_ROW,
+            maximum: 3,
+        },
+    ),
+];
+const GAP_BACKGROUND: Schema = Schema::Object(GAP_BACKGROUND_FIELDS);
+const GAP_ITEM_FIELDS: &[Field] = &[
+    field("item", &GAP_ITEM),
+    field(
+        "conclusion",
+        &Schema::Nullable(&Schema::String { non_empty: true }),
+    ),
+    field(
+        "levels",
+        &Schema::Array {
+            item: &GAP_LEVEL,
+            maximum: 3,
+        },
+    ),
+    field("background", &Schema::Nullable(&GAP_BACKGROUND)),
+];
+const GAP_ITEM_ROW: Schema = Schema::Object(GAP_ITEM_FIELDS);
+const EXPECTED_RANK_GAP_FIELDS: &[Field] = &[
+    field("status", &QUALITY),
+    field("reasonCodes", &GAP_REASON_CODES),
+    field("matchCount", &COUNT),
+    field("permutationCount", &Schema::ExactUnsigned(2_000)),
+    field("hasMergedLayers", &BOOL),
+    field(
+        "layers",
+        &Schema::Array {
+            item: &GAP_LAYER,
+            maximum: 12,
+        },
+    ),
+    field("players", &GAP_MEMBER_SUMMARIES),
+    field(
+        "items",
+        &Schema::Array {
+            item: &GAP_ITEM_ROW,
+            maximum: 5,
+        },
+    ),
+];
+const EXPECTED_RANK_GAP: Schema = Schema::Object(EXPECTED_RANK_GAP_FIELDS);
+
+const GAP_EVIDENCE_ROW_FIELDS: &[Field] = &[
     field("matchIndex", &INDEX),
     field("matchId", &ID),
     field("heldEventId", &ID),
     field("matchNoInEvent", &I32),
     field("playedAt", &ID),
-    field("expectedRank", &NUMBER),
+    field("revenueRank", &RANK),
+    field("expectedRank", &GAP_RANK),
     field("actualRank", &RANK),
-    field("evidence", &UNEXPECTED_EVIDENCE),
+    field("gap", &GAP),
+    field("evidence", &MATCH_RECORD_EVIDENCE),
 ];
-const UNEXPECTED_ROW: Schema = Schema::Object(UNEXPECTED_ROW_FIELDS);
-const UNEXPECTED_ROWS: Schema = Schema::Array {
-    item: &UNEXPECTED_ROW,
-    maximum: MAX_ITEMS,
+const GAP_EVIDENCE_ROW: Schema = Schema::Object(GAP_EVIDENCE_ROW_FIELDS);
+const GAP_EVIDENCE_ROWS: Schema = Schema::Array {
+    item: &GAP_EVIDENCE_ROW,
+    maximum: 5,
 };
-const UNEXPECTED_SUMMARY_FIELDS: &[Field] = &[
+const GAP_EVIDENCE_SUMMARY_FIELDS: &[Field] = &[
     field("status", &QUALITY),
-    field("reasonCodes", &REASON_CODES),
-    field("heldEventCount", &COUNT),
     field("matchCount", &COUNT),
-    field("totalWinCount", &COUNT),
-    field("unexpectedWinCount", &COUNT),
+    field("aboveCount", &COUNT),
+    field("belowCount", &COUNT),
 ];
-const UNEXPECTED_SUMMARY: Schema = Schema::Object(UNEXPECTED_SUMMARY_FIELDS);
-const UNEXPECTED_DRILLDOWN_FIELDS: &[Field] = &[
-    field("kind", &Schema::StringEnum(&["unexpected_wins"])),
-    field("summary", &UNEXPECTED_SUMMARY),
-    field("rows", &UNEXPECTED_ROWS),
+const GAP_EVIDENCE_SUMMARY: Schema = Schema::Object(GAP_EVIDENCE_SUMMARY_FIELDS);
+const GAP_EVIDENCE_DRILLDOWN_FIELDS: &[Field] = &[
+    field("kind", &Schema::StringEnum(&["expected_rank_gap_evidence"])),
+    field("summary", &GAP_EVIDENCE_SUMMARY),
+    field("above", &GAP_EVIDENCE_ROWS),
+    field("below", &GAP_EVIDENCE_ROWS),
 ];
-const UNEXPECTED_DRILLDOWN: Schema = Schema::Object(UNEXPECTED_DRILLDOWN_FIELDS);
+const GAP_EVIDENCE_DRILLDOWN: Schema = Schema::Object(GAP_EVIDENCE_DRILLDOWN_FIELDS);
 
 const CONTEXT_PLAYER_FIELDS: &[Field] = &[
     field("memberId", &ID),
@@ -1228,44 +1306,6 @@ const FOLD_SCORES: Schema = Schema::Array {
     item: &FOLD_SCORE,
     maximum: 5,
 };
-const SIGNAL_CANDIDATES: Schema = Schema::Array {
-    item: &SIGNAL_CANDIDATE,
-    maximum: 7,
-};
-const PLAYER_SIGNALS_FIELDS: &[Field] = &[
-    field("memberId", &ID),
-    field("status", &QUALITY),
-    field("candidates", &SIGNAL_CANDIDATES),
-];
-const PLAYER_SIGNALS: Schema = Schema::Object(PLAYER_SIGNALS_FIELDS);
-const PLAYER_SIGNALS_ARRAY: Schema = Schema::Array {
-    item: &PLAYER_SIGNALS,
-    maximum: 4,
-};
-const UNEXPECTED_SUMMARY_ROW_FIELDS: &[Field] = &[
-    field("matchId", &ID),
-    field("heldEventId", &ID),
-    field("matchNoInEvent", &I32),
-    field("playedAt", &ID),
-    field("expectedRank", &NUMBER),
-    field("actualRank", &RANK),
-    field("evidence", &UNEXPECTED_EVIDENCE),
-];
-const UNEXPECTED_SUMMARY_ROW: Schema = Schema::Object(UNEXPECTED_SUMMARY_ROW_FIELDS);
-const NULLABLE_UNEXPECTED_SUMMARY_ROW: Schema = Schema::Nullable(&UNEXPECTED_SUMMARY_ROW);
-const PLAYER_UNEXPECTED_FIELDS: &[Field] = &[
-    field("memberId", &ID),
-    field("status", &QUALITY),
-    field("totalWinCount", &COUNT),
-    field("unexpectedWinCount", &COUNT),
-    field("latest", &NULLABLE_UNEXPECTED_SUMMARY_ROW),
-    field("hasDetails", &BOOL),
-];
-const PLAYER_UNEXPECTED: Schema = Schema::Object(PLAYER_UNEXPECTED_FIELDS);
-const PLAYER_UNEXPECTED_ARRAY: Schema = Schema::Array {
-    item: &PLAYER_UNEXPECTED,
-    maximum: 4,
-};
 const CROWN_SHARE_FIELDS: &[Field] = &[field("memberId", &ID), field("share", &RATE)];
 const CROWN_SHARE: Schema = Schema::Object(CROWN_SHARE_FIELDS);
 const CROWN_SHARES: Schema = Schema::Array {
@@ -1289,9 +1329,6 @@ const RANK_ANALYSIS_FIELDS: &[Field] = &[
     field("improvedFoldCount", &COUNT),
     field("requiredImprovedFoldCount", &COUNT),
     field("foldScores", &FOLD_SCORES),
-    field("defaultMemberId", &NULLABLE_ID),
-    field("rankSignalsByPlayer", &PLAYER_SIGNALS_ARRAY),
-    field("unexpectedWinsByPlayer", &PLAYER_UNEXPECTED_ARRAY),
     field("crownCertainty", &CROWN),
 ];
 const RANK_ANALYSIS: Schema = Schema::Object(RANK_ANALYSIS_FIELDS);
@@ -1331,6 +1368,7 @@ const AGGREGATE_BODY_FIELDS: &[Field] = &[
     field("matchDigest", &MATCH_DIGEST),
     field("matchNoInEvent", &MATCH_NO),
     field("rankAnalysis", &RANK_ANALYSIS),
+    field("expectedRankGap", &EXPECTED_RANK_GAP),
     field("highlights", &HIGHLIGHTS),
     field("dataQuality", &DATA_QUALITY),
     field("source", &SOURCE),
@@ -1411,12 +1449,11 @@ const OWNER_COMPARISON: Schema = Schema::Object(&[
     field("recordedOwnerCount", &Schema::Unsigned { maximum: 4 }),
 ]);
 const OWNER_FIELDS: &[Field] = &[field("ownerComparison", &OWNER_COMPARISON)];
-const V6_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V6), field("scope", &SCOPE)];
+const V7_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V7), field("scope", &SCOPE)];
 const V4_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V4), field("scope", &SCOPE)];
-const V3_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V3), field("scope", &SCOPE)];
 const V1_RESOURCE_FIELDS: &[Field] = &[field("schemaVersion", &SCHEMA_V1), field("scope", &SCOPE)];
 const AGGREGATE: Schema = Schema::MergedObject(&[
-    V6_RESOURCE_FIELDS,
+    V7_RESOURCE_FIELDS,
     AGGREGATE_BODY_FIELDS,
     OWNER_FIELDS,
     &[radar::RESOURCE_FIELD],
@@ -1425,27 +1462,21 @@ const REVIEW: Schema = Schema::MergedObject(&[V4_RESOURCE_FIELDS, REVIEW_BODY_FI
 const DRILLDOWN_IDENTITY_FIELDS: &[Field] = &[field("player", &MEMBER_REF)];
 const RANK_HISTORY_PAYLOAD_FIELDS: &[Field] = &[field("payload", &RANK_HISTORY)];
 const PLAY_ORDER_HISTORY_PAYLOAD_FIELDS: &[Field] = &[field("payload", &PLAY_ORDER_HISTORY)];
-const SIGNAL_PAYLOAD_FIELDS: &[Field] = &[field("payload", &SIGNAL_DRILLDOWN)];
-const UNEXPECTED_PAYLOAD_FIELDS: &[Field] = &[field("payload", &UNEXPECTED_DRILLDOWN)];
+const GAP_EVIDENCE_PAYLOAD_FIELDS: &[Field] = &[field("payload", &GAP_EVIDENCE_DRILLDOWN)];
 const RANK_HISTORY_RESOURCE: Schema = Schema::MergedObject(&[
-    V3_RESOURCE_FIELDS,
+    V4_RESOURCE_FIELDS,
     DRILLDOWN_IDENTITY_FIELDS,
     RANK_HISTORY_PAYLOAD_FIELDS,
 ]);
 const PLAY_ORDER_HISTORY_RESOURCE: Schema = Schema::MergedObject(&[
-    V3_RESOURCE_FIELDS,
+    V4_RESOURCE_FIELDS,
     DRILLDOWN_IDENTITY_FIELDS,
     PLAY_ORDER_HISTORY_PAYLOAD_FIELDS,
 ]);
-const SIGNAL_RESOURCE: Schema = Schema::MergedObject(&[
-    V3_RESOURCE_FIELDS,
+const GAP_EVIDENCE_RESOURCE: Schema = Schema::MergedObject(&[
+    V4_RESOURCE_FIELDS,
     DRILLDOWN_IDENTITY_FIELDS,
-    SIGNAL_PAYLOAD_FIELDS,
-]);
-const UNEXPECTED_RESOURCE: Schema = Schema::MergedObject(&[
-    V3_RESOURCE_FIELDS,
-    DRILLDOWN_IDENTITY_FIELDS,
-    UNEXPECTED_PAYLOAD_FIELDS,
+    GAP_EVIDENCE_PAYLOAD_FIELDS,
 ]);
 #[derive(Clone, Copy)]
 struct DrilldownVariant {
@@ -1462,12 +1493,8 @@ const DRILLDOWN_VARIANTS: &[DrilldownVariant] = &[
         schema: &PLAY_ORDER_HISTORY_RESOURCE,
     },
     DrilldownVariant {
-        metric_id: "rankAnalysis.rankSignals",
-        schema: &SIGNAL_RESOURCE,
-    },
-    DrilldownVariant {
-        metric_id: "rankAnalysis.unexpectedWins",
-        schema: &UNEXPECTED_RESOURCE,
+        metric_id: "expectedRankGap.evidence",
+        schema: &GAP_EVIDENCE_RESOURCE,
     },
 ];
 const CONTEXT_RESOURCE_FIELDS: &[Field] = &[
@@ -1649,9 +1676,9 @@ mod json_schema_export_tests {
     use crate::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 
     use super::{
-        AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, FOLD_ROW, Field,
-        MAX_ITEMS, MAX_TEXT_BYTES, REVIEW, Schema, achievements, outlook, radar, validate,
-        validate_aggregate, validate_drilldown, validate_match_context, validate_review,
+        AGGREGATE, CONTEXT_RESOURCE, DRILLDOWN_VARIANTS, DrilldownVariant, Field, MAX_ITEMS,
+        MAX_TEXT_BYTES, REVIEW, Schema, achievements, outlook, radar, validate_aggregate,
+        validate_drilldown, validate_match_context, validate_review,
     };
 
     const DRAFT_2020_12: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -1878,8 +1905,8 @@ mod json_schema_export_tests {
             })
             .collect::<Vec<_>>();
         document_from_value(
-            "series-analysis-drilldown-v3.schema.json",
-            "Series Analysis Drilldown Resource v3",
+            "series-analysis-drilldown-v4.schema.json",
+            "Series Analysis Drilldown Resource v4",
             json!({
                 "oneOf": branches,
                 "x-momo-discriminator": {
@@ -1918,8 +1945,8 @@ mod json_schema_export_tests {
                 &achievements::PREVIEW,
             ),
             document(
-                "series-analysis-aggregate-v6.schema.json",
-                "Series Analysis Aggregate Resource v6",
+                "series-analysis-aggregate-v7.schema.json",
+                "Series Analysis Aggregate Resource v7",
                 &AGGREGATE,
             ),
             document(
@@ -2005,7 +2032,7 @@ mod json_schema_export_tests {
     fn shared_normal_fixtures_and_invalid_mutations_follow_owner_descriptor() {
         let aggregate: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v6.json"
+            "aggregate-payload-v7.json"
         )))
         .unwrap_or_else(|error| panic!("aggregate fixture is not JSON: {error}"));
         let review: Value = serde_json::from_str(include_str!(concat!(
@@ -2015,7 +2042,7 @@ mod json_schema_export_tests {
         .unwrap_or_else(|error| panic!("review fixture is not JSON: {error}"));
         let drilldown: Value = serde_json::from_str(include_str!(concat!(
             "../../../../../../docs/schemas/fixtures/series-analysis/",
-            "drilldown-payload-v3.json"
+            "drilldown-payload-v4.json"
         )))
         .unwrap_or_else(|error| panic!("drilldown fixture is not JSON: {error}"));
         let match_context: Value = serde_json::from_str(include_str!(concat!(
@@ -2026,7 +2053,7 @@ mod json_schema_export_tests {
 
         assert!(validate_aggregate(&aggregate).is_ok());
         assert!(validate_review(&review).is_ok());
-        for version in [1, 2, 3, 4] {
+        for version in [1, 2, 3, 4, 5, 6] {
             let mut obsolete = aggregate.clone();
             *obsolete
                 .get_mut("schemaVersion")
@@ -2078,19 +2105,6 @@ mod json_schema_export_tests {
     }
 
     #[test]
-    fn fold_importance_accepts_a_signed_permutation_loss_delta() {
-        let row = json!({
-            "fold": 0,
-            "heldEventCount": 8,
-            "comparisonCount": 48,
-            "importance": -0.001,
-            "supported": false,
-        });
-
-        assert!(validate(&row, &FOLD_ROW).is_ok());
-    }
-
-    #[test]
     fn draft_projection_preserves_closed_objects_tuples_and_metric_discriminator() {
         let tuple = draft_schema(&Schema::Tuple(&[
             &Schema::Bool,
@@ -2111,7 +2125,7 @@ mod json_schema_export_tests {
             .pointer("/oneOf")
             .and_then(Value::as_array)
             .unwrap_or_else(|| panic!("drilldown oneOf"));
-        assert_eq!(branches.len(), 4);
+        assert_eq!(branches.len(), 3);
         for branch in branches {
             assert_eq!(
                 branch.pointer("/additionalProperties"),

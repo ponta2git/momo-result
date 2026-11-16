@@ -512,7 +512,8 @@ fn resource_count_for_scopes(input: &AnalysisInput, scopes: &[ScopeRows]) -> Opt
             member_ids.insert(&player_match.member_id);
             match_ids.insert(&player_match.match_id);
         }
-        let player_chunks = u64::try_from(member_ids.len()).ok()?.checked_mul(4)?;
+        // One drilldown per player for each of the three drilldown metrics.
+        let player_chunks = u64::try_from(member_ids.len()).ok()?.checked_mul(3)?;
         let scope_count = 2_u64
             .checked_add(player_chunks)?
             .checked_add(u64::try_from(match_ids.len()).ok()?)?
@@ -783,7 +784,7 @@ mod tests {
             row_count * 4,
             "a row belongs only to overall, season, map, and season-map indexes"
         );
-        assert_eq!(normalized.resource_count(), Some(59_024));
+        assert_eq!(normalized.resource_count(), Some(47_020));
     }
 
     #[test]

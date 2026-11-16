@@ -1,33 +1,22 @@
 import { SeriesAnalysisDrilldownLoading } from "@/features/seriesComparison/drilldowns/SeriesAnalysisDrilldownLoading";
+import { ExpectedRankGapEvidence } from "@/features/seriesComparison/drilldowns/SeriesAnalysisExpectedRankGapEvidence";
 import { PlayOrderHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisPlayOrderHistoryDrilldown";
 import { RankHistoryDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankHistoryDrilldown";
-import { RankSignalDrilldown } from "@/features/seriesComparison/drilldowns/SeriesAnalysisRankSignalDrilldown";
 import { useSeriesAnalysisDrilldown } from "@/features/seriesComparison/drilldowns/useSeriesAnalysisDrilldown";
-import {
-  formatDateTime,
-  formatDecimal,
-  formatManYen,
-} from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
-import { SeriesAnalysisMatchLink } from "@/features/seriesComparison/navigation/SeriesAnalysisMatchLink";
-import {
-  qualityAdvisoryLabel,
-  SeriesAnalysisQualityAdvisory,
-} from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import type { SeriesAnalysisDrilldownV3, SeriesAnalysisQuery } from "@/shared/api/seriesAnalysis";
-import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
-import { DataTable } from "@/shared/ui/data/DataTable";
-import { FactList } from "@/shared/ui/data/FactList";
 import { Notice } from "@/shared/ui/feedback/Notice";
 
 export function SeriesAnalysisDrilldownContent({
   baseQuery,
   onArtifactExpired,
+  onFocusMatch,
   selection,
 }: {
   baseQuery: SeriesAnalysisQuery;
   onArtifactExpired: () => void;
+  onFocusMatch?: ((matchId: string) => void) | undefined;
   selection: SeriesAnalysisDrilldownSelection;
 }) {
   const resource = useSeriesAnalysisDrilldown({ baseQuery, onArtifactExpired, selection });
@@ -54,10 +43,16 @@ export function SeriesAnalysisDrilldownContent({
       </Notice>
     );
   }
-  return <DrilldownBody response={resource.data} />;
+  return <DrilldownBody response={resource.data} onFocusMatch={onFocusMatch} />;
 }
 
-function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV3 }) {
+function DrilldownBody({
+  onFocusMatch,
+  response,
+}: {
+  onFocusMatch?: ((matchId: string) => void) | undefined;
+  response: SeriesAnalysisDrilldownV3;
+}) {
   const payload = response.payload;
   switch (payload.kind) {
     case "rank_average_history":
@@ -66,146 +61,13 @@ function DrilldownBody({ response }: { response: SeriesAnalysisDrilldownV3 }) {
       return (
         <PlayOrderHistoryDrilldown payload={payload} playerName={response.player.displayName} />
       );
-    case "rank_signals":
-      return <RankSignalDrilldown payload={payload} />;
-    case "unexpected_wins":
-      return <UnexpectedWinsDrilldown payload={payload} />;
-  }
-}
-
-export function UnexpectedWinsDrilldown({
-  payload,
-}: {
-  payload: Extract<SeriesAnalysisDrilldownV3["payload"], { kind: "unexpected_wins" }>;
-}) {
-  const qualityAdvisory = qualityAdvisoryLabel(payload.summary.status);
-  return (
-    <div className="grid gap-6">
-      <FactList
-        ariaLabel="予測より上位だった勝利の要約"
-        columns={4}
-        items={[
-          {
-            id: "wins",
-            label: "勝利",
-            value: `${payload.summary.totalWinCount}戦`,
-          },
-          {
-            id: "targets",
-            label: "確認対象",
-            value: `${payload.summary.unexpectedWinCount}戦`,
-          },
-          ...(qualityAdvisory
-            ? [
-                {
-                  id: "quality",
-                  label: payload.summary.status === "reference" ? "注意" : "状態",
-                  value: <SeriesAnalysisQualityAdvisory status={payload.summary.status} />,
-                },
-              ]
-            : []),
-        ]}
-        layout="plain"
-      />
-      {payload.rows.length === 0 ? (
-        <Notice tone="info" title="予測より上位だった勝利はありません">
-          この比較範囲では、確認対象になった勝利はありません。
-        </Notice>
-      ) : (
-        <DataTable
-          caption={{ content: "予測より上位だった勝利の根拠" }}
-          columns={[
-            {
-              tabular: true,
-              header: "試合",
-              key: "match",
-              renderCell: (row) => (
-                <SeriesAnalysisMatchLink
-                  ariaLabel={`${formatSeriesMatchIndex(row.matchIndex)}の試合結果を見る`}
-                  matchId={row.matchId}
-                  presentation="text"
-                >
-                  {formatSeriesMatchIndex(row.matchIndex)}
-                </SeriesAnalysisMatchLink>
-              ),
-              rowHeader: true,
-            },
-            {
-              tabular: true,
-              header: "日時",
-              key: "played-at",
-              renderCell: (row) => formatDateTime(row.playedAt),
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "期待順位",
-              key: "expected-rank",
-              renderCell: (row) => `${formatDecimal(row.expectedRank)}位`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "実順位",
-              key: "actual-rank",
-              renderCell: (row) => `${row.actualRank}位`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "物件収益",
-              key: "revenue",
-              renderCell: (row) => formatManYen(row.evidence.revenueManYen),
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "目的地",
-              key: "destination",
-              renderCell: (row) => `${row.evidence.destinationCount}回`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "プラス駅",
-              key: "plus-station",
-              renderCell: (row) => `${row.evidence.plusStationCount}回`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "マイナス駅",
-              key: "minus-station",
-              renderCell: (row) => `${row.evidence.minusStationCount}回`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "カード駅",
-              key: "card-station",
-              renderCell: (row) => `${row.evidence.cardStationCount}回`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "カード売り場",
-              key: "card-shop",
-              renderCell: (row) => `${row.evidence.cardShopCount}回`,
-            },
-            {
-              align: "right",
-              tabular: true,
-              header: "スリの銀次",
-              key: "ginji",
-              renderCell: (row) => `${row.evidence.ginjiCount}回`,
-            },
-          ]}
-          density="compact"
-          getRowKey={(row) => row.matchId}
-          minWidth="68rem"
-          rows={payload.rows}
+    case "expected_rank_gap_evidence":
+      return (
+        <ExpectedRankGapEvidence
+          payload={payload}
+          playerName={response.player.displayName}
+          onFocusMatch={onFocusMatch}
         />
-      )}
-    </div>
-  );
+      );
+  }
 }

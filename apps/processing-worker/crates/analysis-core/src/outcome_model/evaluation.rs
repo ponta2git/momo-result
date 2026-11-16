@@ -4,10 +4,9 @@ use super::{
     CrownCertainty, EncodedEvent, FOLD_COUNT, FULL_FEATURE_COUNT, FoldEvaluation, FoldScore,
     MINIMUM_EVENT_COUNT, MINIMUM_IMPORTANCE, MINIMUM_IMPROVED_FOLDS, MINIMUM_MATCH_COUNT,
     OK_EVENT_COUNT, Observation, OutcomeModelAnalysis, OutcomeModelFailure, PLAYER_COUNT,
-    PairRecord, PlayerSignals, PlayerUnexpectedWins, Quality, Signal, SignalKind,
+    PairRecord, Quality, Signal, SignalKind,
     bootstrap::crown_certainty,
     encoding::{distinct_matches, encode, pair_records},
-    outcomes::{build_unexpected_wins, expected_ranks},
     solver::{brier_score, fit, log_loss},
 };
 
@@ -26,7 +25,7 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
         } else {
             vec!["invalid_dataset"]
         };
-        return empty_result(rows, players, held_event_count, match_count, reasons);
+        return empty_result(players, held_event_count, match_count, reasons);
     }
 
     let result = encode(rows, players)
@@ -34,10 +33,6 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
         .and_then(|events| {
             let evaluations = evaluate_folds(&events)?;
             let signals = rank_signals(&evaluations, players)
-                .map_err(|_error| OutcomeModelFailure::Calculation)?;
-            let expected =
-                expected_ranks(&evaluations).map_err(|_error| OutcomeModelFailure::Calculation)?;
-            let unexpected_wins = build_unexpected_wins(rows, players, &expected)
                 .map_err(|_error| OutcomeModelFailure::Calculation)?;
             let crown = crown_certainty(&events, players)
                 .map_err(|_error| OutcomeModelFailure::ModelNotConverged)?;
@@ -47,16 +42,15 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
                     .map(|entry| entry.score)
                     .collect::<Vec<_>>(),
                 signals,
-                unexpected_wins,
                 crown,
             ))
         });
     match result {
-        Ok((fold_scores, signals, unexpected_wins, crown)) => {
+        Ok((fold_scores, signals, crown)) => {
             let improved_fold_count = fold_scores.iter().filter(|score| score.improved()).count();
             let has_stable = signals
                 .iter()
-                .any(|player| player.signals.iter().any(|signal| signal.stable));
+                .any(|player| player.iter().any(|signal| signal.stable));
             let (quality, reasons) = assess(
                 held_event_count,
                 match_count,
@@ -70,13 +64,10 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
                 match_count,
                 improved_fold_count,
                 fold_scores,
-                player_signals: signals,
-                unexpected_wins,
                 crown,
             }
         }
         Err(failure) => empty_result(
-            rows,
             players,
             held_event_count,
             match_count,
@@ -119,7 +110,6 @@ fn assess(
 }
 
 fn empty_result(
-    rows: &[&PlayerMatchInput],
     players: &[String],
     held_event_count: usize,
     match_count: usize,
@@ -132,24 +122,6 @@ fn empty_result(
         match_count,
         improved_fold_count: 0,
         fold_scores: Vec::new(),
-        player_signals: players
-            .iter()
-            .map(|member_id| PlayerSignals {
-                member_id: member_id.clone(),
-                signals: Vec::new(),
-            })
-            .collect(),
-        unexpected_wins: players
-            .iter()
-            .map(|member_id| PlayerUnexpectedWins {
-                member_id: member_id.clone(),
-                total_win_count: rows
-                    .iter()
-                    .filter(|row| row.member_id == *member_id && row.rank == 1)
-                    .count(),
-                wins: Vec::new(),
-            })
-            .collect(),
         crown: CrownCertainty {
             bootstrap_iterations: 0,
             successful_iterations: 0,
@@ -224,14 +196,14 @@ fn evaluate_folds(events: &[EncodedEvent]) -> Result<Vec<FoldEvaluation<'_>>, Ou
         .collect()
 }
 
+/// The three most important signals of each player; only their stability is published, as
+/// part of the model quality.
 fn rank_signals(
     evaluations: &[FoldEvaluation<'_>],
     players: &[String],
-) -> Result<Vec<PlayerSignals>, ()> {
-    players
-        .iter()
-        .enumerate()
-        .map(|(member_index, member_id)| {
+) -> Result<Vec<Vec<Signal>>, ()> {
+    (0..players.len())
+        .map(|member_index| {
             let original_losses = evaluations
                 .iter()
                 .map(|evaluation| {
@@ -254,10 +226,7 @@ fn rank_signals(
                     .then_with(|| left.kind.cmp(&right.kind))
             });
             signals.truncate(3);
-            Ok(PlayerSignals {
-                member_id: member_id.clone(),
-                signals,
-            })
+            Ok(signals)
         })
         .collect()
 }
@@ -309,26 +278,7 @@ fn signal_for_player(
         && importance >= MINIMUM_IMPORTANCE;
     Ok(Signal {
         kind,
-        direction: if positive >= negative {
-            "more_is_higher"
-        } else {
-            "less_is_higher"
-        },
         importance,
-        fold_importances,
-        fold_comparison_counts: evaluations
-            .iter()
-            .map(|evaluation| {
-                evaluation
-                    .test_pairs
-                    .iter()
-                    .filter(|pair| {
-                        pair.left_member_index == member_index
-                            || pair.right_member_index == member_index
-                    })
-                    .count()
-            })
-            .collect(),
         stable,
     })
 }

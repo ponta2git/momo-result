@@ -216,7 +216,7 @@ export const OverviewView = memo(function OverviewView({
               {
                 id: "meaning",
                 label: "示すもの",
-                value: "開催の組み合わせを変えても、期間内の平均順位首位に残った割合",
+                value: "番手の有利不利を調整し、開催を選び直したときに各人が首位になった割合",
               },
               {
                 id: "decision",
@@ -231,12 +231,13 @@ export const OverviewView = memo(function OverviewView({
               {
                 id: "not-for",
                 label: "使わない場面",
-                value: "次戦の勝率や最終順位の予測には使わない",
+                value:
+                  "これまでの開催を選び直した計算で、これからの試合を含まないため、次戦や期間末に首位で終える確率としては読まない",
               },
               {
                 id: "validation",
-                label: "検証条件",
-                value: `再標本化 ${response.rankAnalysis.crownCertainty.successfulIterations}/${response.rankAnalysis.crownCertainty.bootstrapIterations}回成立・首位交代 ${response.rankAnalysis.crownCertainty.leaderChangeCount}回`,
+                label: "計算",
+                value: `開催を選び直した${response.rankAnalysis.crownCertainty.bootstrapIterations.toLocaleString("ja-JP")}通りのうち、首位を求められた${response.rankAnalysis.crownCertainty.successfulIterations.toLocaleString("ja-JP")}通りでの割合`,
               },
             ]}
           />

@@ -160,8 +160,7 @@ enum SeriesAnalysisScope derives CanEqual:
 enum SeriesAnalysisDrilldownMetric(val id: String) derives CanEqual:
   case RankAverageHistory extends SeriesAnalysisDrilldownMetric("rank.averageHistory")
   case PlayOrderRankHistory extends SeriesAnalysisDrilldownMetric("playOrder.rankHistory")
-  case RankSignals extends SeriesAnalysisDrilldownMetric("rankAnalysis.rankSignals")
-  case UnexpectedWins extends SeriesAnalysisDrilldownMetric("rankAnalysis.unexpectedWins")
+  case ExpectedRankGapEvidence extends SeriesAnalysisDrilldownMetric("expectedRankGap.evidence")
 
 object SeriesAnalysisDrilldownMetric:
   def fromId(id: String): Option[SeriesAnalysisDrilldownMetric] = values.find(_.id == id)

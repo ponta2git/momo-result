@@ -178,9 +178,20 @@ export function backgroundValueUnit(
   return "1試合平均の差";
 }
 
+/**
+ * A merged layer reads as one destination range, so the table itself shows which expectations
+ * were computed from several destination counts.
+ */
 export function gapLayerLabel(layer: ExpectedRankGap["layers"][number]): string {
-  const destinations = layer.destinationLevels.map((level) =>
-    level === 2 ? "目的地2回以上" : `目的地${level}回`,
-  );
-  return `収益${layer.revenueRank}位・${destinations.join("・")}`;
+  return `収益${layer.revenueRank}位・${destinationRangeLabel(layer.destinationLevels)}`;
+}
+
+/** Destination levels are 0, 1, and 2 (two or more); merged layers hold adjacent levels. */
+function destinationRangeLabel(levels: readonly number[]): string {
+  const lowest = Math.min(...levels);
+  const highest = Math.max(...levels);
+  if (lowest === 0 && highest === 2) return "目的地の回数を問わない";
+  if (highest === 2) return `目的地${lowest}回以上`;
+  if (lowest === highest) return `目的地${lowest}回`;
+  return `目的地${highest}回以下`;
 }

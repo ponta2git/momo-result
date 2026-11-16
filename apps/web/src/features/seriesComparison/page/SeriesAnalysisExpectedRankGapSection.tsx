@@ -67,7 +67,7 @@ export function ExpectedRankGapSection({
 function ExpectedRankGapMeta({ gap }: { gap: ExpectedRankGap }) {
   if (gap.status === "ok") {
     return gap.hasMergedLayers ? (
-      <span className={contentText.supporting}>件数の少ない見込みの層を併合</span>
+      <span className={contentText.supporting}>一部の見込みは目的地の回数をまとめて算出</span>
     ) : null;
   }
   return (
@@ -94,7 +94,7 @@ function ExpectedRankGapBody({
   return (
     <div className="grid gap-6">
       <p className={cn(contentText.body, readableTextWidthClass)}>
-        物件収益の順位と目的地の回数が同じ試合の平均順位を見込みとし、実際の順位と比べます。
+        物件収益の順位と目的地の回数が同じだった結果の平均順位を見込みとし、この2つでは説明できない順位の差を示します。
       </p>
       <AnalysisSubsection id="metric-expected-rank-gap-players" title="4人の差">
         <div className="grid gap-2">
@@ -317,11 +317,6 @@ function LayerTable({ gap }: { gap: ExpectedRankGap }) {
   return (
     <div className="grid gap-2">
       <h4 className={contentText.heading}>この範囲の見込み順位</h4>
-      {gap.hasMergedLayers ? (
-        <p className={contentText.supporting}>
-          件数の少ない層を、隣の目的地の区分と併合しています。
-        </p>
-      ) : null}
       <DataTable
         caption={{ content: "収益順位と目的地の回数ごとの見込み順位" }}
         columns={[
@@ -354,41 +349,47 @@ function LayerTable({ gap }: { gap: ExpectedRankGap }) {
   );
 }
 
+/**
+ * What the reader cannot see from the table itself: what the gap contains, how the bar, band and
+ * words relate, how the rows add up, and where the records stop explaining. Facts already shown
+ * by the intro, legend, or quality notices are not repeated here.
+ */
 function readingItems(permutationCount: number) {
   return [
     {
-      id: "expected",
-      label: "見込み",
+      id: "gap",
+      label: "見込みとの差",
       value:
-        "物件収益の順位と目的地の回数が同じだった試合結果（4人分）の平均順位です。総資産には物件と目的地の成果が含まれるため、この2つで決まる分を先に除いています。",
+        "見込みは試合前の予想ではなく、試合後の記録から作る比較の基準です。差には駅やカードの記録の分だけでなく、記録にない出来事や運の分も残るため、強さやうまさの差とは限りません。4人の差は合わせると0になり、誰かの＋はほかの誰かの−です。",
     },
     {
       id: "signal",
       label: "傾向あり・兆し",
       value:
-        "「傾向あり」は偶然ではまず説明できず、対戦順の前半と後半で同じ向きだった差です。「兆し」は偶然にしては大きいものの、まだ言い切れない差です。帯の内側は、差がなくても偶然で動く範囲です。",
-    },
-    {
-      id: "criteria",
-      label: "判定の基準",
-      value: `試合内で4人の結果を無作為に${permutationCount.toLocaleString("ja-JP")}回入れ替えた戦績と比べています。4人のうち誰か、または全区分のどれかに偶然で出る頻度が20回に1回未満なら傾向あり、10回に1回未満なら兆しです。20戦未満の範囲と1〜2件の区分は判定しません。`,
+        "棒が帯の外まで伸びた差に付きます。傾向ありは、そのうち偶然ではまず出ない大きさで、対戦順の前半と後半でも同じ向きだった差です。この範囲の結論として読めます。兆しはまだ言い切れない差で、試合が増えても同じ向きが続くかを見ます。帯は件数の少ない区分ほど広く、同じ大きさの差でも件数が少ないと言葉は付きにくくなります。",
     },
     {
       id: "records",
       label: "記録別の差",
       value:
-        "その回数だった試合の結果を並べたものです。回数は試合終了時の値で、止まった順序や理由は記録にありません。余裕のある展開だから回数が増えた可能性も消せません。",
+        "場全体の区分の差は、件数の重みを付けて合わせると0になります。ある区分が見込みより上位なら残りの区分は下位に寄るため、区分の並び全体で読みます。プレーヤーを選ぶと、4人の差に出た本人の差がどの区分に表れているかを、場全体の目印と比べて読めます。",
+    },
+    {
+      id: "counts",
+      label: "記録の回数",
+      value:
+        "回数は試合終了時の合計で、いつ・なぜ止まったか（狙ったのか出目か）は記録にありません。カード売り場が多くて上位だった試合も、売り場で上位になったのか、余裕があって売り場に寄れたのかは区別できません。経緯は根拠の試合の試合メモで確かめます。",
     },
     {
       id: "background",
       label: "背景",
       value:
-        "同じ収益順位・目的地回数の試合と比べて、一緒に動いていた値です。原因を示すものではなく、なぜその駅に止まったかは記録から分かりません。総資産は順位そのものに近いため、判定を付けていません。",
+        "記録どうしは差し引き合っていないため、ある記録の差には一緒に起きやすいほかの記録の分も含まれます。背景は、その回数だった試合のほかの記録と物件収益のシェアを、同じ収益順位・目的地回数の結果と比べた差です。見込みは収益の順位しか使わないため、シェアに差ありが付いた区分は、順位に表れない収益の大きさの違いと重なった差です。総資産は順位そのものに近いため判定しません。",
     },
     {
-      id: "not-for",
-      label: "使わない場面",
-      value: "「見込みより上位」を強さやうまさとして読まず、次戦の結果の予測にも使いません。",
+      id: "criteria",
+      label: "判定の基準",
+      value: `同じ試合の中で4人の見込みとの差をくじで入れ替え、記録と差が結び付かない戦績を${permutationCount.toLocaleString("ja-JP")}通り作って比べています。4人の差は4人の誰かに、記録別の差は全記録・全区分のどこかに、その大きさの差が偶然出る割合が20回に1回未満なら傾向あり、10回に1回未満なら兆しです。まとめて数えるため、行を一つずつ見るより厳しく判定します。`,
     },
   ];
 }

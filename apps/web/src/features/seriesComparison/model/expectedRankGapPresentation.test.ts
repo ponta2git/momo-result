@@ -5,9 +5,14 @@ import {
   formatBackgroundValue,
   formatRankGap,
   gapAxis,
+  gapLayerLabel,
   gapLevelLabel,
 } from "@/features/seriesComparison/model/expectedRankGapPresentation";
 import { makeExpectedRankGap } from "@/test/msw/seriesAnalysisFixtures";
+
+function layer(destinationLevels: number[]) {
+  return { count: 3, destinationLevels, expectedRank: 3, revenueRank: 4 };
+}
 
 describe("expected-rank gap presentation", () => {
   it("names levels with the same inclusive wording as the Worker sentences", () => {
@@ -15,6 +20,14 @@ describe("expected-rank gap presentation", () => {
     expect(gapLevelLabel({ minimumCount: 1, maximumCount: null })).toBe("1回以上");
     expect(gapLevelLabel({ minimumCount: 0, maximumCount: 3 })).toBe("3回以下");
     expect(gapLevelLabel({ minimumCount: 4, maximumCount: 5 })).toBe("4〜5回");
+  });
+
+  it("reads a merged layer as one destination range", () => {
+    expect(gapLayerLabel(layer([0]))).toBe("収益4位・目的地0回");
+    expect(gapLayerLabel(layer([2]))).toBe("収益4位・目的地2回以上");
+    expect(gapLayerLabel(layer([1, 2]))).toBe("収益4位・目的地1回以上");
+    expect(gapLayerLabel(layer([0, 1]))).toBe("収益4位・目的地1回以下");
+    expect(gapLayerLabel(layer([0, 1, 2]))).toBe("収益4位・目的地の回数を問わない");
   });
 
   it("signs rank gaps and reads a value that rounds to zero as even", () => {

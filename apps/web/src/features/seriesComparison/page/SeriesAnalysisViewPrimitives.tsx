@@ -88,10 +88,13 @@ export function AnalysisSubsection({
 
 export function AnalysisReadingGuide({
   ariaLabel,
+  children,
   items,
   summary = "読み方と使いどころ",
 }: {
   ariaLabel: string;
+  /** Reference material that belongs to the same reading, such as a basis table. */
+  children?: ReactNode;
   items: readonly AnalysisFact[];
   summary?: string | undefined;
 }) {
@@ -107,8 +110,11 @@ export function AnalysisReadingGuide({
         </span>
       }
     >
-      <div className={readableTextWidthClass}>
-        <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
+      <div className="grid gap-4">
+        <div className={readableTextWidthClass}>
+          <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
+        </div>
+        {children}
       </div>
     </Disclosure>
   );

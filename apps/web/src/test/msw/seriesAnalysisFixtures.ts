@@ -12,9 +12,9 @@ import { memberDisplayName } from "@/shared/domain/members";
 import { makePlayerRadarEvaluation } from "@/test/msw/playerRadarFixtures";
 
 export const analysisArtifact = {
-  algorithmVersion: "series-analysis-v14",
+  algorithmVersion: "series-analysis-v15",
   artifactId: "artifact-current",
-  artifactSchemaVersion: 10,
+  artifactSchemaVersion: 11,
   gameTitleId: "gt_momotetsu_2",
   inputRevision: "12",
   publishedAt: "2026-08-09T01:02:03.000Z",
@@ -68,7 +68,7 @@ export function makeSeriesAnalysisStatus(
     currentArtifact: analysisArtifact,
     desired: {
       algorithmVersion: analysisArtifact.algorithmVersion,
-      artifactSchemaVersion: 10,
+      artifactSchemaVersion: 11,
       inputRevision: analysisArtifact.inputRevision,
     },
     gameTitleId: analysisArtifact.gameTitleId,
@@ -462,51 +462,16 @@ export function makeSeriesAnalysisAggregate(
         status: "ok",
         successfulIterations: 128,
       },
-      defaultMemberId: player.memberId,
       foldScores: [],
       heldEventCount: 8,
       improvedFoldCount: 5,
       matchCount: 12,
       modelVersion: "rank-bt-v1",
-      rankSignalsByPlayer: [
-        {
-          candidates: [
-            {
-              candidateSharePercent: 100,
-              direction: "more_is_higher",
-              importance: 0.12,
-              signal: "revenue",
-              stabilityBand: "high",
-              stable: true,
-              supportCount: 5,
-            },
-          ],
-          memberId: player.memberId,
-          status: "ok",
-        },
-      ],
       reasonCodes: [],
       requiredImprovedFoldCount: 4,
       status: "ok",
-      unexpectedWinsByPlayer: [
-        {
-          hasDetails: true,
-          latest: {
-            actualRank: 1,
-            evidence: unexpectedEvidence(),
-            expectedRank: 3.1,
-            heldEventId: "event-12",
-            matchId: "match-12",
-            matchNoInEvent: 4,
-            playedAt: "2026-08-08T12:00:00.000Z",
-          },
-          memberId: player.memberId,
-          status: "ok",
-          totalWinCount: 6,
-          unexpectedWinCount: 1,
-        },
-      ],
     },
+    expectedRankGap: makeExpectedRankGap(),
     rankDistribution: [
       {
         cells: rankCells().map((cell) =>
@@ -560,7 +525,7 @@ export function makeSeriesAnalysisAggregate(
         memberId: player.memberId,
       },
     ],
-    schemaVersion: 6,
+    schemaVersion: 7,
     scope,
     source: { gameTitleId: artifact.gameTitleId },
     strategyScatter: {
@@ -772,7 +737,7 @@ export function makeFourPlayerSeriesAnalysisReview(): SeriesComparisonReviewV3 {
 }
 
 export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDrilldownV3 {
-  const common = { artifact: analysisArtifact, player, schemaVersion: 3 as const, scope };
+  const common = { artifact: analysisArtifact, player, schemaVersion: 4 as const, scope };
   if (metricId === "playOrder.rankHistory") {
     return {
       ...common,
@@ -828,71 +793,22 @@ export function makeSeriesAnalysisDrilldown(metricId: string): SeriesAnalysisDri
       },
     };
   }
-  if (metricId === "rankAnalysis.rankSignals") {
+  if (metricId === "expectedRankGap.evidence") {
     return {
       ...common,
       payload: {
-        candidates: [
-          {
-            candidateSharePercent: 100,
-            direction: "more_is_higher",
-            foldRows: Array.from({ length: 5 }, (_, fold) => ({
-              comparisonCount: 24,
-              fold,
-              heldEventCount: fold < 3 ? 2 : 1,
-              importance: 0.12 - fold * 0.01,
-              supported: true,
-            })),
-            importance: 0.12,
-            signal: "revenue",
-            stabilityBand: "high",
-            stable: true,
-            supportCount: 5,
-          },
-        ],
-        heldEventCount: 8,
-        improvedFoldCount: 5,
-        kind: "rank_signals",
-        matchCount: 12,
-        method: {
-          fixedSeed: "1",
-          foldCount: 5,
-          minimumHeldEvents: 8,
-          minimumImportance: 0.0001,
-          minimumMatches: 12,
-          modelVersion: "rank-bt-v1",
-          requiredImprovedFoldCount: 4,
-        },
-        reasonCodes: [],
-        status: "ok",
-      },
-    };
-  }
-  if (metricId === "rankAnalysis.unexpectedWins") {
-    return {
-      ...common,
-      payload: {
-        kind: "unexpected_wins",
-        rows: [
-          {
+        above: [
+          evidenceRow({
             actualRank: 1,
-            evidence: unexpectedEvidence(),
-            expectedRank: 3.1,
-            heldEventId: "event-12",
-            matchId: "match-12",
+            expectedRank: 2.5,
             matchIndex: 12,
-            matchNoInEvent: 4,
-            playedAt: "2026-08-08T12:00:00.000Z",
-          },
+            note: "売り場で現金を作って逃げ切った",
+          }),
+          evidenceRow({ actualRank: 2, expectedRank: 3, matchIndex: 7, note: null }),
         ],
-        summary: {
-          heldEventCount: 8,
-          matchCount: 12,
-          reasonCodes: [],
-          status: "ok",
-          totalWinCount: 6,
-          unexpectedWinCount: 1,
-        },
+        below: [evidenceRow({ actualRank: 4, expectedRank: 2.25, matchIndex: 9, note: null })],
+        kind: "expected_rank_gap_evidence",
+        summary: { aboveCount: 2, belowCount: 1, matchCount: 12, status: "ok" },
       },
     };
   }
@@ -1050,7 +966,7 @@ export function makeSeriesAnalysisAdminOverview(): SeriesAnalysisAdminOverview {
     },
     recentJobs: [
       {
-        algorithmVersion: "series-analysis-v14",
+        algorithmVersion: "series-analysis-v15",
         attemptCount: 1,
         coalescedTriggers: [],
         elapsedMilliseconds: 1234,
@@ -1121,6 +1037,198 @@ function momentum(targetCount: number, rate: number, signal: "none" | "risk" | "
     signal,
     successCount: Math.round(targetCount * rate),
     targetCount,
+  };
+}
+
+type GapSummaryFixture = SeriesComparisonAggregate["expectedRankGap"]["players"][number];
+
+function gapSummary(
+  count: number,
+  denominator: number,
+  expectedRank: number | null,
+  averageRank: number | null,
+  signal: "trend" | "hint" | "chance" | null,
+  band: number | null,
+): Omit<GapSummaryFixture, "memberId" | "displayName"> {
+  return {
+    averageRank,
+    band,
+    count,
+    expectedRank,
+    meanGap: expectedRank === null || averageRank === null ? null : expectedRank - averageRank,
+    quality: count === 0 ? "no_target" : count < 3 ? "reference" : "ok",
+    share: count / denominator,
+    signal,
+  };
+}
+
+/** A judged 12-match scope: the card shop's top level is a trend and carries its background. */
+export function makeExpectedRankGap(): SeriesComparisonAggregate["expectedRankGap"] {
+  const level = (
+    minimumCount: number,
+    maximumCount: number | null,
+    overall: ReturnType<typeof gapSummary>,
+    mine: ReturnType<typeof gapSummary>,
+  ) => ({
+    byPlayer: [{ ...mine, displayName: player.displayName, memberId: player.memberId }],
+    maximumCount,
+    minimumCount,
+    overall,
+  });
+  const quiet = (item: "card_station" | "plus_station") => ({
+    background: null,
+    conclusion: "順位との結び付きは見られない",
+    item,
+    levels: [
+      level(
+        0,
+        0,
+        gapSummary(16, 48, 2.5, 2.48, "chance", 0.2),
+        gapSummary(4, 12, 2.5, 2.4, "chance", 0.3),
+      ),
+      level(
+        1,
+        1,
+        gapSummary(16, 48, 2.5, 2.52, "chance", 0.2),
+        gapSummary(4, 12, 2.5, 2.6, "chance", 0.3),
+      ),
+      level(
+        2,
+        null,
+        gapSummary(16, 48, 2.5, 2.5, "chance", 0.2),
+        gapSummary(4, 12, 2.5, 2.5, "chance", 0.3),
+      ),
+    ],
+  });
+  const rare = (item: "ginji" | "minus_station") => ({
+    background: null,
+    conclusion: "順位との結び付きは見られない",
+    item,
+    levels: [
+      level(
+        0,
+        0,
+        gapSummary(46, 48, 2.5, 2.49, "chance", 0.05),
+        gapSummary(11, 12, 2.5, 2.45, "chance", 0.1),
+      ),
+      level(
+        1,
+        null,
+        gapSummary(2, 48, 2.5, 2.75, null, null),
+        gapSummary(1, 12, 2.5, 3, null, null),
+      ),
+    ],
+  });
+  return {
+    hasMergedLayers: true,
+    items: [
+      {
+        background: {
+          rows: [
+            {
+              levelIndex: 0,
+              values: [
+                { marked: false, value: 0.001 },
+                { marked: false, value: -1200 },
+                { marked: true, value: 0.4 },
+                { marked: false, value: 0.1 },
+                { marked: false, value: 0 },
+                { marked: false, value: 0.01 },
+              ],
+            },
+            {
+              levelIndex: 2,
+              values: [
+                { marked: false, value: -0.002 },
+                { marked: false, value: 2400 },
+                { marked: false, value: -0.2 },
+                { marked: false, value: -0.1 },
+                { marked: false, value: 0 },
+                { marked: false, value: -0.01 },
+              ],
+            },
+          ],
+          summary: "物件収益のシェアに差は見られない。0回の試合はプラス駅が多い",
+          variables: [
+            "revenue_share",
+            "total_assets",
+            "plus_station",
+            "card_station",
+            "minus_station",
+            "ginji",
+          ],
+        },
+        conclusion: "0回は見込みより下位、2回以上は上位の傾向",
+        item: "card_shop",
+        levels: [
+          level(
+            0,
+            0,
+            gapSummary(20, 48, 2.45, 2.7, "trend", 0.1),
+            gapSummary(6, 12, 2.5, 2.9, "hint", 0.35),
+          ),
+          level(
+            1,
+            1,
+            gapSummary(18, 48, 2.5, 2.45, "chance", 0.12),
+            gapSummary(4, 12, 2.5, 2.5, "chance", 0.4),
+          ),
+          level(
+            2,
+            null,
+            gapSummary(10, 48, 2.6, 2.2, "trend", 0.2),
+            gapSummary(2, 12, 2.5, 2, null, null),
+          ),
+        ],
+      },
+      quiet("plus_station"),
+      quiet("card_station"),
+      rare("minus_station"),
+      rare("ginji"),
+    ],
+    layers: [
+      { count: 12, destinationLevels: [0, 1, 2], expectedRank: 1.5, revenueRank: 1 },
+      { count: 12, destinationLevels: [0, 1], expectedRank: 2.25, revenueRank: 2 },
+      { count: 12, destinationLevels: [0], expectedRank: 2.75, revenueRank: 3 },
+      { count: 12, destinationLevels: [0], expectedRank: 3.5, revenueRank: 4 },
+    ],
+    matchCount: 12,
+    permutationCount: 2000,
+    players: [
+      {
+        ...gapSummary(12, 12, 2.5, 2.65, "trend", 0.12),
+        displayName: player.displayName,
+        memberId: player.memberId,
+      },
+    ],
+    reasonCodes: [],
+    status: "ok",
+  };
+}
+
+function evidenceRow({
+  actualRank,
+  expectedRank,
+  matchIndex,
+  note,
+}: {
+  actualRank: 1 | 2 | 3 | 4;
+  expectedRank: number;
+  matchIndex: number;
+  note: string | null;
+}) {
+  return {
+    actualRank,
+    evidence: unexpectedEvidence(),
+    expectedRank,
+    gap: expectedRank - actualRank,
+    heldEventId: `event-${matchIndex}`,
+    matchId: `match-${matchIndex}`,
+    matchIndex,
+    matchNoInEvent: 1,
+    note,
+    playedAt: "2026-08-08T12:00:00.000Z",
+    revenueRank: 2 as const,
   };
 }
 

@@ -87,10 +87,8 @@ function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
       return "平均順位の推移";
     case "playOrder.rankHistory":
       return "番手別順位の推移";
-    case "rankAnalysis.rankSignals":
-      return "順位を読む手掛かり";
-    case "rankAnalysis.unexpectedWins":
-      return "予測より上位だった勝利";
+    case "expectedRankGap.evidence":
+      return "見込みとの差の根拠試合";
   }
 }
 
@@ -341,6 +339,10 @@ function AnalysisViewContent({
               baseQuery={baseQuery}
               selection={drilldown.selection}
               onArtifactExpired={onArtifactExpired}
+              onFocusMatch={(matchId) => {
+                setDrilldown((current) => (current ? { ...current, open: false } : null));
+                onFocusMatch(matchId);
+              }}
             />
           </Suspense>
         </Dialog>

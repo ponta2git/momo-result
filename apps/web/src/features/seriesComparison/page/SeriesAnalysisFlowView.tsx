@@ -7,7 +7,6 @@ import {
 import { MatchDigestStrip } from "@/features/seriesComparison/charts/SeriesAnalysisMatchDigest";
 import { MatchNoInEventMatrix } from "@/features/seriesComparison/charts/SeriesAnalysisMatchNoMatrix";
 import { RecentRankStrips } from "@/features/seriesComparison/charts/SeriesAnalysisRecentRankStrip";
-import { playerName } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import type { AnalysisViewProps } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import {
   AnalysisSection,
@@ -18,16 +17,10 @@ import {
   analysisTabId,
   AnalysisTableOfContents,
 } from "@/features/seriesComparison/page/SeriesComparisonAnalysisNavigation";
-import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
-import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
-import { Button } from "@/shared/ui/actions/Button";
-import { cn } from "@/shared/ui/cn";
-import { contentText } from "@/shared/ui/typography";
 
 export const FlowView = memo(function FlowView({
   focusedItemIds,
   response,
-  onDrilldown,
   onFocusMatch,
 }: AnalysisViewProps & { onFocusMatch: (matchId: string) => void }) {
   const matchIndexes = new Map<string, number>();
@@ -55,40 +48,6 @@ export const FlowView = memo(function FlowView({
           digest={response.matchDigest}
           onFocusMatch={onFocusMatch}
         />
-      </AnalysisSection>
-      <AnalysisSection id="metric-unexpected-wins" title="事前予測より上位で終えた勝利">
-        <div className="grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-4">
-          {response.rankAnalysis.unexpectedWinsByPlayer.map((entry) => (
-            <article className="grid min-w-0 content-start gap-2" key={entry.memberId}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h3 className={contentText.heading}>
-                  <MemberSequenceLabel memberId={entry.memberId}>
-                    {playerName(response.players, entry.memberId)}
-                  </MemberSequenceLabel>
-                </h3>
-                <SeriesAnalysisQualityAdvisory status={entry.status} />
-              </div>
-              <p className={cn(contentText.compactPrimary, "tabular-nums")}>
-                全{entry.totalWinCount}勝のうち {entry.unexpectedWinCount}戦
-              </p>
-              <div>
-                <Button
-                  disabled={!entry.hasDetails}
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    onDrilldown({
-                      memberId: entry.memberId,
-                      metricId: "rankAnalysis.unexpectedWins",
-                    })
-                  }
-                >
-                  対象試合を見る
-                </Button>
-              </div>
-            </article>
-          ))}
-        </div>
       </AnalysisSection>
       <AnalysisSection id="metric-recent-form" title="直近順位と累積推移">
         <div className="grid gap-6">

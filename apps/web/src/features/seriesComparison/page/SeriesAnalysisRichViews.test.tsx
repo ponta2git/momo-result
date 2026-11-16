@@ -64,7 +64,7 @@ describe("rich series analysis views", () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "ぽんたの資産傾向の詳しい根拠" }));
     expect(screen.getByText(/大勝 8億円.*惜しい2位 2億円.*大敗 12億円/u)).toBeInTheDocument();
-    expect(screen.getByText(/候補はこの1件.*別開催で支持 5組/u)).toBeInTheDocument();
+    expect(screen.getByText("0回は見込みより下位、2回以上は上位の傾向")).toBeInTheDocument();
     expect(screen.getByText("4億5000万円")).toBeInTheDocument();
     expect(screen.getByText("-5万円〜-3万円")).toBeInTheDocument();
     expect(screen.getByText("-2万円〜0円")).toBeInTheDocument();

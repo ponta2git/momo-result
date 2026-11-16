@@ -175,6 +175,7 @@ function ItemGapSubsection({
               label: playerName(response.players, player.memberId),
             })),
           ]}
+          presentation="plain"
           value={overall ? OVERALL : requestedSubject}
           onValueChange={setSubject}
         />

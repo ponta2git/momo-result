@@ -168,7 +168,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         state,
         (
           "promoted-analysis",
-          10,
+          11,
           Some("series-analysis-artifact-v11-full-validation-v1")
         )
       )

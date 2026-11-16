@@ -650,7 +650,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         1,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         None,
-        10,
+        11,
       )
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
@@ -726,7 +726,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         payloadDepth,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         None,
-        10,
+        11,
       )
       _ <- insertPublishedArtifact(
         "artifact-analysis-current",
@@ -735,7 +735,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         payloadDepth,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         None,
-        10,
+        11,
       )
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
       repo <- repository
@@ -792,7 +792,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         depth,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         None,
-        10,
+        11,
       )
       _ <- pointToArtifacts("artifact-metadata-snapshot", None)
       repo <- PostgresSeriesAnalysisRepository.create[IO](
@@ -876,7 +876,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         depth,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         None,
-        10,
+        11,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -947,7 +947,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         depth,
         Some("series-analysis-artifact-v11-full-validation-v1"),
         Some(context),
-        10,
+        11,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -1115,7 +1115,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       val payload = parser.parse(new String(chunk.payload, StandardCharsets.UTF_8))
         .fold(error => fail(s"expected JSON analysis payload, got $error"), identity)
       val cursor = payload.hcursor
-      assertEquals(cursor.get[Int]("schemaVersion"), Right(6))
+      assertEquals(cursor.get[Int]("schemaVersion"), Right(7))
       assertEquals(cursor.downField("artifact").get[String]("artifactId"), Right(artifactId))
       assertEquals(cursor.downField("scope").get[String]("displayName"), Right("総合"))
     case Left(error) => fail(s"expected hydrated aggregate $artifactId, got $error")

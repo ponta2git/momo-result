@@ -1,4 +1,5 @@
 use serde_json::Value;
+use thiserror::Error;
 
 use crate::{
     contract::ScopeRef,
@@ -91,6 +92,15 @@ impl DrilldownMetric {
     }
 }
 
+/// A calculation failure aborts the candidate; it is never published as an empty metric.
+#[derive(Debug, Error)]
+pub enum ComputeError {
+    #[error("radar calculation input is invalid")]
+    Radar(#[from] RadarError),
+    #[error("expected-rank gap calculation failed")]
+    ExpectedRankGap,
+}
+
 struct ScopeAnalysis<'a> {
     player_matches: Vec<&'a PlayerMatchInput>,
     member_ids: Vec<String>,
@@ -106,7 +116,7 @@ impl<'a> ScopeAnalysis<'a> {
         input: &NormalizedAnalysisInput,
         player_matches: Vec<&'a PlayerMatchInput>,
         count_levels: &CountLevels,
-    ) -> Self {
+    ) -> Result<Self, ComputeError> {
         let member_ids = ordered_member_ids(&player_matches);
         let player_matches_by_member = player_matches_by_member(&player_matches, &member_ids);
         let match_groups = group_player_matches(&player_matches);
@@ -116,15 +126,16 @@ impl<'a> ScopeAnalysis<'a> {
             &player_matches,
             &member_ids,
             count_levels,
-        );
-        Self {
+        )
+        .ok_or(ComputeError::ExpectedRankGap)?;
+        Ok(Self {
             player_matches,
             member_ids,
             player_matches_by_member,
             match_groups,
             outcome_model,
             expected_rank_gap,
-        }
+        })
     }
 
     fn references_same_player_matches_in_order(
@@ -144,17 +155,17 @@ impl<'a> ScopeAnalysis<'a> {
 #[cfg(test)]
 #[expect(
     clippy::panic,
-    reason = "invalid calculation fixtures must fail with their exact radar domain error"
+    reason = "invalid calculation fixtures must fail with their exact domain error"
 )]
 pub(crate) fn compute_all(input: &AnalysisInput) -> Vec<ComputedResource> {
     let input = input.normalized();
     let mut resources = Vec::new();
     match try_for_each_resource(&input, |resource| {
         resources.push(resource);
-        Ok::<(), RadarError>(())
+        Ok::<(), ComputeError>(())
     }) {
         Ok(()) => {}
-        Err(error) => panic!("invalid radar calculation fixture: {error}"),
+        Err(error) => panic!("invalid calculation fixture: {error}"),
     }
     resources
 }
@@ -167,8 +178,8 @@ pub(crate) fn compute_all(input: &AnalysisInput) -> Vec<ComputedResource> {
 ///
 /// # Errors
 ///
-/// Returns the first error produced by the resource consumer without generating later resources.
-pub fn try_for_each_resource<E: From<RadarError>>(
+/// Returns the first calculation or consumer error without generating later resources.
+pub fn try_for_each_resource<E: From<ComputeError>>(
     input: &NormalizedAnalysisInput,
     mut consume: impl FnMut(ComputedResource) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -184,9 +195,9 @@ pub fn try_for_each_resource<E: From<RadarError>>(
             Some(analysis) if analysis.references_same_player_matches_in_order(&player_matches) => {
                 analysis
             }
-            Some(_) | None => ScopeAnalysis::new(input, player_matches, &count_levels),
+            Some(_) | None => ScopeAnalysis::new(input, player_matches, &count_levels)?,
         };
-        let player_radar = player_radar(input, scope, &analysis)?;
+        let player_radar = player_radar(input, scope, &analysis).map_err(ComputeError::from)?;
         let aggregate = aggregate(
             input.game_title_id(),
             scope,

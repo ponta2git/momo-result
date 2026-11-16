@@ -78,10 +78,10 @@ impl CountLevels {
 
 /// Chooses the cut points `low <= a < middle <= b < high` that maximize the smallest level.
 ///
-/// Candidate cuts are scanned in ascending `(a, b)` order and only a strictly larger smallest
-/// level replaces the current choice, so ties keep the lowest cut points. Cut points between two
+/// Ties keep the lowest `(a, b)` cut points. Cut points between two
 /// observed counts give the same partition as the lower observed count, so only observed counts
-/// are scanned. `(0, 1)` is the first candidate and the fallback when fewer than three distinct
+/// are considered. Cumulative counts and midpoint searches avoid scanning every cut pair.
+/// `(0, 1)` is the first candidate and the fallback when fewer than three distinct
 /// counts exist.
 fn three_level_bounds(counts: impl Iterator<Item = i32>) -> [LevelBound; 3] {
     let mut histogram = BTreeMap::<i32, usize>::new();
@@ -89,25 +89,55 @@ fn three_level_bounds(counts: impl Iterator<Item = i32>) -> [LevelBound; 3] {
         *histogram.entry(count).or_default() += 1;
     }
     let total = histogram.values().sum::<usize>();
-    let at_most = |cut: i32| {
-        histogram
-            .range(..=cut)
-            .map(|(_, frequency)| *frequency)
-            .sum::<usize>()
+    let mut running_count = 0;
+    let observed = histogram
+        .into_iter()
+        .map(|(count, frequency)| {
+            running_count += frequency;
+            (count, running_count)
+        })
+        .collect::<Vec<_>>();
+    let at_most = |cut| {
+        observed
+            .iter()
+            .take_while(|(count, _)| *count <= cut)
+            .last()
+            .map_or(0, |(_, cumulative)| *cumulative)
     };
-    let smallest = |low: i32, high: i32| {
-        let low_count = at_most(low);
-        let middle_count = at_most(high).saturating_sub(low_count);
-        let high_count = total.saturating_sub(at_most(high));
-        low_count.min(middle_count).min(high_count)
-    };
+    let (first, second) = (at_most(0), at_most(1));
     let mut best = (0, 1);
-    let mut best_smallest = smallest(0, 1);
-    let observed = histogram.keys().copied().collect::<Vec<_>>();
-    for (position, low) in observed.iter().enumerate() {
-        for high in observed.iter().skip(position + 1) {
-            let candidate = smallest(*low, *high);
-            if candidate > best_smallest {
+    let mut best_smallest = first.min(second - first).min(total - second);
+    for (position, (low, low_count)) in observed.iter().enumerate() {
+        let Some(upper_cuts) = observed.get(position + 1..) else {
+            continue;
+        };
+        // For a fixed lower cut, the smaller remaining bucket grows up to the midpoint
+        // and shrinks afterwards. Only its two neighbours can improve the partition.
+        let remaining = total - low_count;
+        let middle =
+            upper_cuts.partition_point(|(_, cumulative)| cumulative - low_count < remaining / 2);
+        let score = |(_, cumulative): &(i32, usize)| {
+            (*low_count)
+                .min(cumulative - low_count)
+                .min(total - cumulative)
+        };
+        let candidate = upper_cuts
+            .get(middle)
+            .into_iter()
+            .chain(
+                middle
+                    .checked_sub(1)
+                    .and_then(|index| upper_cuts.get(index)),
+            )
+            .map(score)
+            .max()
+            .unwrap_or_default();
+        if candidate > best_smallest {
+            // A small lower bucket can flatten the optimum: retain the first upper cut
+            // reaching it, rather than the midpoint, to preserve the lowest-cut tie rule.
+            let first_best =
+                upper_cuts.partition_point(|(_, cumulative)| cumulative - low_count < candidate);
+            if let Some((high, _)) = upper_cuts.get(first_best) {
                 best = (*low, *high);
                 best_smallest = candidate;
             }
@@ -153,6 +183,44 @@ mod tests {
             bounds(&[0, 2, 2, 5, 5, 5, 8, 8, 9, 9]),
             vec![(0, Some(2)), (3, Some(5)), (6, None)]
         );
+    }
+
+    #[test]
+    fn balanced_levels_match_exhaustive_count_partitioning() {
+        // Every histogram over these five counts with frequencies 0, 1 or 2. The oracle
+        // scans integer cut points, including unobserved counts and flat optimum ranges.
+        for encoded in 0..3_usize.pow(5) {
+            let mut frequencies = encoded;
+            let mut counts = Vec::new();
+            for count in [0, 2, 3, 7, 9] {
+                counts.extend(std::iter::repeat_n(count, frequencies % 3));
+                frequencies /= 3;
+            }
+            let mut expected = (0, 1);
+            let mut best_size = 0;
+            for low in 0..9 {
+                for high in low + 1..=9 {
+                    let mut sizes = [0_usize; 3];
+                    for count in &counts {
+                        let index = usize::from(*count > low) + usize::from(*count > high);
+                        if let Some(size) = sizes.get_mut(index) {
+                            *size += 1;
+                        }
+                    }
+                    let smallest = sizes.into_iter().min().unwrap_or_default();
+                    if smallest > best_size {
+                        expected = (low, high);
+                        best_size = smallest;
+                    }
+                }
+            }
+            let [low, middle, _] = three_level_bounds(counts.iter().copied());
+            assert_eq!(
+                (low.maximum, middle.maximum),
+                (Some(expected.0), Some(expected.1)),
+                "histogram {counts:?} retains the largest smallest bucket and earliest ties"
+            );
+        }
     }
 
     #[test]

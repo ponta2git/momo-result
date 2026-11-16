@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    ITEM_COUNT, Item, Match, PERMUTATION_COUNT, PLAYER_COUNT, TREND_BELOW,
+    ITEM_COUNT, Item, MAXIMUM_LEVEL_COUNT, Match, PERMUTATION_COUNT, PLAYER_COUNT, TREND_BELOW,
     judgement::{Permutations, corrected_frequencies},
 };
 
@@ -69,8 +69,12 @@ impl Variable {
         Self::Count(Item::Ginji),
     ];
 
-    fn index(self) -> Option<usize> {
-        Self::ALL.iter().position(|variable| *variable == self)
+    const fn index(self) -> usize {
+        match self {
+            Self::RevenueShare => 0,
+            Self::TotalAssets => 1,
+            Self::Count(item) => 2 + item.index(),
+        }
     }
 }
 
@@ -137,11 +141,12 @@ pub(super) fn analyze(
         })
         .collect::<Vec<_>>();
     let identity = [0, 1, 2, 3];
-    let observed = statistics(matches, &adjusted, targets, &cells, |_| Some(identity))?;
+    let mut statistics = Statistics::new(&cells, targets)?;
+    let observed = statistics.evaluate(matches, &adjusted, |_| Some(identity))?;
     let mut random = Permutations::new(seed);
     let mut nulls = vec![Vec::with_capacity(PERMUTATION_COUNT); cells.len()];
     for _ in 0..PERMUTATION_COUNT {
-        let permuted = statistics(matches, &adjusted, targets, &cells, |_| random.shuffle())?;
+        let permuted = statistics.evaluate(matches, &adjusted, |_| random.shuffle())?;
         for (null, value) in nulls.iter_mut().zip(permuted) {
             null.push(value.abs());
         }
@@ -213,49 +218,84 @@ fn adjusted_values(matches: &[Match<'_>], layer_count: usize) -> Option<Adjusted
         .collect()
 }
 
-/// Statistic of every cell when each match's values are read through `order`.
-fn statistics(
-    matches: &[Match<'_>],
-    adjusted: &Adjusted,
-    targets: &[Target],
-    cells: &[Cell],
-    mut order: impl FnMut(usize) -> Option<[usize; PLAYER_COUNT]>,
-) -> Option<Vec<f64>> {
-    let mut sums = vec![0.0_f64; cells.len()];
-    let mut medians = vec![Vec::new(); cells.len()];
-    for (match_index, match_cells) in matches.iter().enumerate() {
-        let order = order(match_index)?;
-        for (slot, cell) in match_cells.iter().enumerate() {
-            let source = *order.get(slot)?;
-            for ((background_cell, sum), median) in
-                cells.iter().zip(sums.iter_mut()).zip(medians.iter_mut())
-            {
-                let item = targets.get(background_cell.target)?.item;
-                if *cell.levels.get(item.index())? != background_cell.level {
-                    continue;
-                }
-                let value = *adjusted
-                    .get(background_cell.variable.index()?)?
-                    .get(match_index)?
-                    .get(source)?;
-                if background_cell.variable.uses_median() {
-                    median.push(value);
-                } else {
-                    *sum += value;
+/// Reuses the same destinations and buffers for the observed scope and every permutation.
+/// Each result visits only the background cells of its levels, not every candidate cell.
+struct Statistics<'a> {
+    cells: &'a [Cell],
+    by_level: [[Vec<usize>; MAXIMUM_LEVEL_COUNT]; ITEM_COUNT],
+    sums: Vec<f64>,
+    medians: Vec<Vec<f64>>,
+}
+
+impl<'a> Statistics<'a> {
+    fn new(cells: &'a [Cell], targets: &[Target]) -> Option<Self> {
+        let mut by_level: [[Vec<usize>; MAXIMUM_LEVEL_COUNT]; ITEM_COUNT] =
+            std::array::from_fn(|_| std::array::from_fn(|_| Vec::new()));
+        for (index, cell) in cells.iter().enumerate() {
+            let item = targets.get(cell.target)?.item;
+            by_level
+                .get_mut(item.index())?
+                .get_mut(cell.level)?
+                .push(index);
+        }
+        Some(Self {
+            cells,
+            by_level,
+            sums: vec![0.0; cells.len()],
+            medians: cells
+                .iter()
+                .map(|cell| {
+                    Vec::with_capacity(if cell.variable.uses_median() {
+                        cell.count
+                    } else {
+                        0
+                    })
+                })
+                .collect(),
+        })
+    }
+
+    /// Statistic of every cell when each match's values are read through `order`.
+    fn evaluate(
+        &mut self,
+        matches: &[Match<'_>],
+        adjusted: &Adjusted,
+        mut order: impl FnMut(usize) -> Option<[usize; PLAYER_COUNT]>,
+    ) -> Option<Vec<f64>> {
+        self.sums.fill(0.0);
+        for values in &mut self.medians {
+            values.clear();
+        }
+        for (match_index, match_cells) in matches.iter().enumerate() {
+            let order = order(match_index)?;
+            for (cell, source) in match_cells.iter().zip(order) {
+                for (level, buckets) in cell.levels.iter().zip(&self.by_level) {
+                    for index in buckets.get(*level)? {
+                        let background_cell = self.cells.get(*index)?;
+                        let value = *adjusted
+                            .get(background_cell.variable.index())?
+                            .get(match_index)?
+                            .get(source)?;
+                        if background_cell.variable.uses_median() {
+                            self.medians.get_mut(*index)?.push(value);
+                        } else {
+                            *self.sums.get_mut(*index)? += value;
+                        }
+                    }
                 }
             }
         }
+        self.cells
+            .iter()
+            .zip(&self.sums)
+            .zip(&self.medians)
+            .map(|((cell, sum), values)| {
+                if cell.variable.uses_median() {
+                    median_f64(values)
+                } else {
+                    Some(sum / count_as_f64(cell.count)?)
+                }
+            })
+            .collect()
     }
-    cells
-        .iter()
-        .zip(sums)
-        .zip(medians)
-        .map(|((cell, sum), values)| {
-            if cell.variable.uses_median() {
-                median_f64(&values)
-            } else {
-                Some(sum / count_as_f64(cell.count)?)
-            }
-        })
-        .collect()
 }

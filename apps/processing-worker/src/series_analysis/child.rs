@@ -241,10 +241,15 @@ const fn map_artifact_failure(error: &ArtifactError) -> ChildFailure {
         ArtifactError::ResourceBound | ArtifactError::NumericConversion(_) => {
             ChildFailure::ArtifactTooLarge
         }
-        ArtifactError::Canonical(_) | ArtifactError::Contract(_) | ArtifactError::Radar(_) => {
+        ArtifactError::Canonical(_)
+        | ArtifactError::Contract(_)
+        | ArtifactError::Calculation(momo_analysis_core::compute::ComputeError::Radar(_)) => {
             ChildFailure::InputInvalid
         }
-        ArtifactError::UnsafeDirectory | ArtifactError::Io(_) | ArtifactError::Payload(_) => {
+        ArtifactError::UnsafeDirectory
+        | ArtifactError::Io(_)
+        | ArtifactError::Payload(_)
+        | ArtifactError::Calculation(momo_analysis_core::compute::ComputeError::ExpectedRankGap) => {
             ChildFailure::CalculationFailed
         }
     }

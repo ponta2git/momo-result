@@ -233,29 +233,29 @@ pub(crate) struct ExpectedRankGap<'a> {
 }
 
 /// Computes the expected-rank gap of one scope from its canonically ordered results.
+/// Insufficient matches are a normal no-target result; `None` aborts candidate generation.
 pub(crate) fn analyze<'a>(
     game_title_id: &str,
     rows: &[&'a PlayerMatchInput],
     members: &[String],
     levels: &CountLevels,
-) -> ExpectedRankGap<'a> {
+) -> Option<ExpectedRankGap<'a>> {
     let match_count = rows
         .chunk_by(|left, right| left.match_id == right.match_id)
         .count();
     if match_count < MINIMUM_MATCH_COUNT {
-        return empty(match_count, "insufficient_matches");
+        return Some(empty(match_count));
     }
     if members.len() != PLAYER_COUNT {
-        return empty(match_count, "invalid_dataset");
+        return None;
     }
     compute(game_title_id, rows, members, levels, match_count)
-        .unwrap_or_else(|| empty(match_count, "calculation_failed"))
 }
 
-fn empty<'a>(match_count: usize, reason: &'static str) -> ExpectedRankGap<'a> {
+fn empty<'a>(match_count: usize) -> ExpectedRankGap<'a> {
     ExpectedRankGap {
         status: Quality::NoTarget,
-        reason_codes: vec![reason],
+        reason_codes: vec!["insufficient_matches"],
         match_count,
         layers: Vec::new(),
         players: Vec::new(),
@@ -569,32 +569,33 @@ fn player_evidence<'a>(
     slot: usize,
     member_id: &str,
 ) -> Option<PlayerEvidence<'a>> {
-    let newest_first = matches
-        .iter()
-        .enumerate()
-        .rev()
-        .map(|(index, cells)| {
-            Some(EvidenceRow {
-                match_index: index + 1,
-                cell: *cells.get(slot)?,
-            })
-        })
-        .collect::<Option<Vec<_>>>()?;
-    let mut above = newest_first
-        .iter()
-        .filter(|row| row.cell.gap > TIE_TOLERANCE)
-        .copied()
-        .collect::<Vec<_>>();
-    above.sort_by(|left, right| right.cell.gap.total_cmp(&left.cell.gap));
-    let mut below = newest_first
-        .iter()
-        .filter(|row| row.cell.gap < -TIE_TOLERANCE)
-        .copied()
-        .collect::<Vec<_>>();
-    below.sort_by(|left, right| left.cell.gap.total_cmp(&right.cell.gap));
-    let (above_count, below_count) = (above.len(), below.len());
-    above.truncate(EVIDENCE_LIMIT);
-    below.truncate(EVIDENCE_LIMIT);
+    let (mut above_count, mut below_count) = (0, 0);
+    let mut above = Vec::<EvidenceRow<'a>>::with_capacity(EVIDENCE_LIMIT);
+    let mut below = Vec::<EvidenceRow<'a>>::with_capacity(EVIDENCE_LIMIT);
+    for (index, cells) in matches.iter().enumerate().rev() {
+        let row = EvidenceRow {
+            match_index: index + 1,
+            cell: *cells.get(slot)?,
+        };
+        let (count, selected) = if row.cell.gap > TIE_TOLERANCE {
+            (&mut above_count, &mut above)
+        } else if row.cell.gap < -TIE_TOLERANCE {
+            (&mut below_count, &mut below)
+        } else {
+            continue;
+        };
+        *count += 1;
+        // Newest-first traversal leaves equal gaps behind their newer matches. Retain only
+        // the bounded evidence rows rather than sorting and copying the entire history.
+        let position =
+            selected.partition_point(|existing| existing.cell.gap.abs() >= row.cell.gap.abs());
+        if position < EVIDENCE_LIMIT {
+            if selected.len() == EVIDENCE_LIMIT {
+                selected.pop();
+            }
+            selected.insert(position, row);
+        }
+    }
     Some(PlayerEvidence {
         member_id: member_id.to_owned(),
         above_count,

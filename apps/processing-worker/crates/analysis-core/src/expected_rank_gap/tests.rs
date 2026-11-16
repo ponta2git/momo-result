@@ -56,6 +56,7 @@ fn analyze_rows(owned: &[PlayerMatchInput]) -> ExpectedRankGap<'_> {
         &members(),
         &CountLevels::from_rows(owned),
     )
+    .unwrap_or_else(|| panic!("valid gap fixture"))
 }
 
 /// The documented hand example: the layer "revenue 2nd, no destination" holds four results.
@@ -184,6 +185,32 @@ fn evidence_orders_larger_gaps_first_and_newer_matches_on_ties() {
 }
 
 #[test]
+fn evidence_keeps_full_side_counts_but_only_the_largest_five_results() {
+    let original = hand_example();
+    let owned = (0..4)
+        .flat_map(|block| {
+            original.iter().cloned().map(move |mut row| {
+                row.match_id = format!("block-{block}-{}", row.match_id);
+                row
+            })
+        })
+        .collect::<Vec<_>>();
+    let gap = analyze_rows(&owned);
+    let evidence = |member| {
+        gap.evidence
+            .iter()
+            .find(|player| player.member_id == member)
+            .unwrap_or_else(|| panic!("player evidence"))
+    };
+    let order =
+        |rows: &[EvidenceRow<'_>]| rows.iter().map(|row| row.match_index).collect::<Vec<_>>();
+    assert_eq!(evidence("a").above_count, 16);
+    assert_eq!(order(&evidence("a").above), vec![15, 11, 7, 3, 16]);
+    assert_eq!(evidence("c").below_count, 16);
+    assert_eq!(order(&evidence("c").below), vec![14, 10, 6, 2, 16]);
+}
+
+#[test]
 fn level_rows_partition_their_denominators_and_keep_observed_zero_apart_from_no_target() {
     let owned = hand_example();
     let gap = analyze_rows(&owned);
@@ -251,18 +278,22 @@ fn level_rows_partition_their_denominators_and_keep_observed_zero_apart_from_no_
 }
 
 #[test]
-fn scopes_without_three_matches_or_four_members_have_no_target() {
+fn insufficient_matches_have_no_target_but_invalid_data_aborts_calculation() {
     let owned = hand_example();
     let borrowed = owned.iter().take(8).collect::<Vec<_>>();
     let levels = CountLevels::from_rows(&owned);
-    let two = analyze("title", &borrowed, &members(), &levels);
+    let two = analyze("title", &borrowed, &members(), &levels)
+        .unwrap_or_else(|| panic!("valid no-target scope"));
     assert_eq!(two.status, Quality::NoTarget);
     assert_eq!(two.reason_codes, vec!["insufficient_matches"]);
     let all = owned.iter().collect::<Vec<_>>();
     let all_members = members();
     let first_three = all_members.get(..3).unwrap_or_default();
     let three_members = analyze("title", &all, first_three, &levels);
-    assert_eq!(three_members.reason_codes, vec!["invalid_dataset"]);
+    assert!(
+        three_members.is_none(),
+        "invalid data must abort calculation"
+    );
 }
 
 /// Deterministic pseudo-random scopes whose ranks are unrelated to every other record.

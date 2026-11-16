@@ -25,27 +25,29 @@ import { contentText } from "@/shared/ui/typography";
 export const GAP_COLUMN_COUNT = 7;
 
 /*
- * An ARIA table of grid rows instead of a native table: from the md breakpoint every row uses
+ * An ARIA table of grid rows instead of a native table: from the lg breakpoint every row uses
  * one shared column template, so the player and record rows line up on the same axis. Below it
  * a row stacks as "label · count · gap", "expected · actual", chart, and judgement without
  * horizontal scrolling. Changing the display of native table elements would drop their table
  * semantics in some browsers; ARIA roles on generic elements do not depend on display.
  */
-const columnTemplate = "md:grid-cols-[12fr_8fr_7fr_7fr_28fr_10fr_28fr]";
+const columnTemplate = "lg:grid-cols-[11fr_8fr_8fr_8fr_27fr_10fr_28fr]";
 const rowGridClass = cn(
-  "grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-1 px-3 py-2 md:gap-0 md:p-0",
+  "grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-3 gap-y-1 px-3 py-2 lg:gap-0 lg:p-0",
   columnTemplate,
 );
-const cellClass = "min-w-0 font-plain md:px-3 md:py-2";
+const cellClass = "min-w-0 font-plain lg:px-3 lg:py-2";
+/** Numbers and their unit never break inside a narrow column. */
+const numberCellClass = "tabular-nums whitespace-nowrap";
 const placement = {
-  label: "col-start-1 row-start-1 md:col-start-auto md:row-start-auto",
-  count: "col-start-2 row-start-1 text-right md:col-start-auto md:row-start-auto",
-  expected: "col-start-1 row-start-2 md:col-start-auto md:row-start-auto md:text-right",
+  label: "col-start-1 row-start-1 lg:col-start-auto lg:row-start-auto",
+  count: "col-start-2 row-start-1 text-right lg:col-start-auto lg:row-start-auto",
+  expected: "col-start-1 row-start-2 lg:col-start-auto lg:row-start-auto lg:text-right",
   actual:
-    "col-span-2 col-start-2 row-start-2 text-right md:col-span-1 md:col-start-auto md:row-start-auto",
-  chart: "col-span-3 row-start-3 md:col-span-1 md:row-start-auto md:self-center",
-  gap: "col-start-3 row-start-1 text-right md:col-start-auto md:row-start-auto",
-  judgement: "col-span-3 row-start-4 md:col-span-1 md:row-start-auto",
+    "col-span-2 col-start-2 row-start-2 text-right lg:col-span-1 lg:col-start-auto lg:row-start-auto",
+  chart: "col-span-3 row-start-3 lg:col-span-1 lg:row-start-auto lg:self-center",
+  gap: "col-start-3 row-start-1 text-right lg:col-start-auto lg:row-start-auto",
+  judgement: "col-span-3 row-start-4 lg:col-span-1 lg:row-start-auto",
 } as const;
 
 export function GapTable({
@@ -63,17 +65,17 @@ export function GapTable({
 }) {
   return (
     <div className="grid min-w-0 gap-1">
-      <ExpectedRankGapAxis axis={axis} className="mx-3 md:hidden" />
+      <ExpectedRankGapAxis axis={axis} className="mx-3 lg:hidden" />
       <div
         aria-label={caption}
         className={cn(
           contentText.body,
-          "min-w-0 border-t border-b border-[var(--color-border-strong)] md:border-t-0",
+          "min-w-0 border-t border-b border-[var(--color-border-strong)] lg:border-t-0",
         )}
         role="table"
       >
-        <div className="sr-only md:not-sr-only" role="rowgroup">
-          <div className={cn("md:grid", columnTemplate)} role="row">
+        <div className="sr-only lg:not-sr-only" role="rowgroup">
+          <div className={cn("lg:grid", columnTemplate)} role="row">
             <div className={cn(dataTableHeaderCellClassName, "text-left")} role="columnheader">
               {labelHeader}
             </div>
@@ -150,7 +152,7 @@ export function GapRow({
   const reported = isReportedSignal(summary.signal);
   return (
     <div
-      className={cn(rowGridClass, "border-b border-[var(--color-border)] md:border-b-0")}
+      className={cn(rowGridClass, "border-b border-[var(--color-border)] lg:border-b-0")}
       role="row"
     >
       <div
@@ -164,21 +166,21 @@ export function GapRow({
         ) : null}
         {label}
       </div>
-      <div className={cn(cellClass, placement.count, "tabular-nums")} role="cell">
+      <div className={cn(cellClass, placement.count, numberCellClass)} role="cell">
         <span className="block">
           {summary.count}
           {countUnit}
         </span>
         <span className={cn(contentText.supporting, "block")}>{formatGapShare(summary.share)}</span>
       </div>
-      <div className={cn(cellClass, placement.expected, "tabular-nums")} role="cell">
-        <span aria-hidden="true" className={cn(contentText.supporting, "md:hidden")}>
+      <div className={cn(cellClass, placement.expected, numberCellClass)} role="cell">
+        <span aria-hidden="true" className={cn(contentText.supporting, "lg:hidden")}>
           見込み{" "}
         </span>
         {formatGapRank(summary.expectedRank)}
       </div>
-      <div className={cn(cellClass, placement.actual, "tabular-nums")} role="cell">
-        <span aria-hidden="true" className={cn(contentText.supporting, "md:hidden")}>
+      <div className={cn(cellClass, placement.actual, numberCellClass)} role="cell">
+        <span aria-hidden="true" className={cn(contentText.supporting, "lg:hidden")}>
           実際{" "}
         </span>
         {formatGapRank(summary.averageRank)}
@@ -191,7 +193,7 @@ export function GapRow({
           value={summary.meanGap}
         />
       </div>
-      <div className={cn(cellClass, placement.gap, "tabular-nums")} role="cell">
+      <div className={cn(cellClass, placement.gap, numberCellClass)} role="cell">
         <span className={cn("block", reported ? contentText.compactPrimary : "")}>
           {formatRankGap(summary.meanGap)}
         </span>
@@ -202,7 +204,7 @@ export function GapRow({
         ) : null}
       </div>
       <div className={cn(cellClass, placement.judgement)} role="cell">
-        <div className="flex items-center justify-between gap-2 md:min-h-9">
+        <div className="flex items-center justify-between gap-2 lg:min-h-9">
           <GapJudgement summary={summary} />
           {judgementAction ? <div className="shrink-0">{judgementAction}</div> : null}
         </div>

@@ -378,7 +378,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       yield assertEquals(notification, "CANCELLED")
     }
 
-  test("old record URLs, cursor ties and export numbering retain exact legacy order"):
+  test("old record URLs, evidence notes, cursor ties and export numbering retain legacy identity"):
     val firstEvent = "legacy-a"
     val secondEvent = "legacy-x"
     val firstMatch = "legacy-a"
@@ -412,6 +412,16 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       ).void
     for
       _ <- seedMasters *> seedRecord(firstEvent, firstMatch) *> seedRecord(secondEvent, secondMatch)
+      _ <- new PostgresMatchNotesRepository[IO](transactor, identities).replace(
+        MatchId.unsafeFromString(firstMatch),
+        MatchNoteVersion.Initial,
+        MatchNoteBody.fromString("先頭の試合のメモ").toOption.flatten,
+        account,
+        now,
+      )
+      evidenceNotes <- PostgresSeriesAnalysisEvidenceNotes.read(List(firstMatch, secondMatch))
+        .transact(transactor)
+      _ = assertEquals(evidenceNotes, Right(Map(firstMatch -> "先頭の試合のメモ")))
       _ <- httpAppResource("canonical-old-records").use { app =>
         val firstUuid = canonical(Entity.Matches, firstMatch).toString
         val secondUuid = canonical(Entity.Matches, secondMatch).toString

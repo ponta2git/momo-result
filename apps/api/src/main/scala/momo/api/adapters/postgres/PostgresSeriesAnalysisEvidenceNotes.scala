@@ -35,17 +35,20 @@ private[postgres] object PostgresSeriesAnalysisEvidenceNotes:
     if matchIds.isEmpty then Map.empty[String, String].asRight[AppError].pure[ConnectionIO]
     else
       val ids = identities.lookupArray(Entity.Matches, matchIds)
+      // Reject oversized stored values without materializing their body in the JDBC driver.
       val limit = MatchNoteBody.MaximumCodePoints
       fr"""
-        SELECT ${identities.wireId("m")}, m.note_body, char_length(m.note_body) <= $limit
+        SELECT ${identities.wireId("m")},
+          CASE WHEN char_length(m.note_body) <= $limit THEN m.note_body ELSE NULL END
         FROM matches m
         WHERE m.id = ANY($ids) AND m.note_body IS NOT NULL
-      """.query[(String, String, Boolean)].to[List].map(rows =>
-        Either.cond(
-          rows.forall(_._3),
-          rows.map(row => row._1 -> row._2).toMap,
-          AppError.Internal("A saved match note exceeds its bound."),
-        )
+      """.query[(String, Option[String])].to[List].map(rows =>
+        rows.traverse { case (id, body) =>
+          body.toRight("match note exceeds its bound")
+            .flatMap(MatchNoteBody.fromRequiredString)
+            .leftMap(_ => AppError.Internal("A saved match note is invalid."))
+            .map(note => id -> note.value)
+        }.map(_.toMap)
       )
 
   /** Every evidence row receives `note`: the saved body, or null when the match has none. */

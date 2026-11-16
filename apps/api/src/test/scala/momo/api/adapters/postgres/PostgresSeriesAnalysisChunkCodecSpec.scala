@@ -89,6 +89,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       None,
       Some("unknown-validation-contract"),
       Some("series-analysis-artifact-v9-full-validation-v3"),
+      Some("series-analysis-artifact-v11-full-validation-v1"),
     ).foreach { contract =>
       assertInternal(
         PostgresSeriesAnalysisChunkCodec.decode(
@@ -476,16 +477,18 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       PostgresSeriesAnalysisEvidenceNotes.matchIds(decoded.payload).take(2),
       List("match-31", "match-12"),
     )
-    val rendered = PostgresSeriesAnalysisChunkCodec
+    def render(config: SeriesAnalysisReadConfig) = PostgresSeriesAnalysisChunkCodec
       .hydrateAndRender(
         decoded,
         decoded.memberIds.map(id => id -> s"name-$id").toMap,
         Some("総合"),
-        SeriesAnalysisReadConfig.defaults,
+        config,
         Map.empty,
         None,
         Map("match-31" -> "売却で現金を作って逃げ切った"),
       )
+    val config = SeriesAnalysisReadConfig.defaults.copy(maxJsonNodes = decoded.nodeCount + 7)
+    val rendered = render(config)
       .fold(error => fail(s"failed to hydrate evidence: $error"), identity)
     val json = parse(new String(rendered.payload, StandardCharsets.UTF_8))
       .fold(error => fail(s"rendered evidence is not JSON: $error"), identity)
@@ -501,6 +504,9 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       List(Json.fromString("売却で現金を作って逃げ切った")),
     )
     assert(notes.filterNot(_._1.contains("match-31")).forall(_._2.contains(Json.Null)))
+    assert(render(config.copy(maxJsonNodes = config.maxJsonNodes - 1)).isLeft)
+    assert(render(config.copy(maxResponseBytes = rendered.payload.length.toLong)).isRight)
+    assert(render(config.copy(maxResponseBytes = rendered.payload.length.toLong - 1)).isLeft)
 
   private def stored(
       payload: Array[Byte],

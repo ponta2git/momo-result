@@ -16,6 +16,7 @@ import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.adapters.postgres.{
   PostgresGameTitles,
   PostgresGameTitlesRepository,
+  PostgresMatchNotesRepository,
   PostgresMatchesRepository,
   PostgresSeriesAnalysisRepository
 }
@@ -23,8 +24,12 @@ import momo.api.config.SeriesAnalysisReadConfig
 import momo.api.domain.ids.{AccountId, GameTitleId, MatchId, MemberId, SeasonMasterId}
 import momo.api.domain.{
   GameTitle,
+  MatchNoteBody,
+  MatchNoteVersion,
+  SeriesAnalysisChunk,
   SeriesAnalysisChunkKind,
   SeriesAnalysisChunkRequest,
+  SeriesAnalysisDrilldownMetric,
   SeriesAnalysisScope
 }
 import momo.api.errors.AppError
@@ -651,6 +656,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         None,
         11,
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-delete", None)
       analysis <- repository
@@ -727,6 +733,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         None,
         11,
+        None,
       )
       _ <- insertPublishedArtifact(
         "artifact-analysis-current",
@@ -736,6 +743,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         None,
         11,
+        None,
       )
       _ <- pointToArtifacts("artifact-analysis-current", Some("artifact-analysis-previous"))
       repo <- repository
@@ -793,6 +801,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         None,
         11,
+        None,
       )
       _ <- pointToArtifacts("artifact-metadata-snapshot", None)
       repo <- PostgresSeriesAnalysisRepository.create[IO](
@@ -825,7 +834,16 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         for
           _ <- seedTitle
           _ <-
-            insertPublishedArtifact("old", payload, 0, depth, Some(contract), None, obsoleteVersion)
+            insertPublishedArtifact(
+              "old",
+              payload,
+              0,
+              depth,
+              Some(contract),
+              None,
+              obsoleteVersion,
+              None
+            )
           _ <- sql"""
           UPDATE series_analysis_title_states
           SET artifact_schema_version = $obsoleteVersion, validation_contract_id = $contract,
@@ -877,6 +895,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         None,
         11,
+        None,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -948,6 +967,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         Some("series-analysis-artifact-v11-full-validation-v2"),
         Some(context),
         11,
+        None,
       )
       _ <- pointToArtifacts(request.artifactId, None)
       repo <- repository
@@ -1021,6 +1041,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         validationContractId = None,
         contextPayload = None,
         2,
+        None,
       )
       _ <- sql"""
         UPDATE series_analysis_title_states
@@ -1039,6 +1060,94 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       assertEquals(status, Left(AppError.AnalysisStateUnavailable()))
       assertEquals(chunk, Left(AppError.AnalysisArtifactExpired()))
 
+  test("pinned evidence reads current notes without changing its selection or stored payload"):
+    val aggregate = Files.readAllBytes(
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v7.json")
+    )
+    val evidence = Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/expected-rank-gap-evidence-drilldown-payload-v4.json"
+    )).replace("member-1", "member_ponta").getBytes(StandardCharsets.UTF_8)
+    val request = SeriesAnalysisChunkRequest(
+      SeriesAnalysisChunkKind.Drilldown,
+      titleId,
+      "artifact-evidence-notes",
+      SeriesAnalysisScope.Overall,
+      memberId = Some(MemberId.unsafeFromString("member_ponta")),
+      metric = Some(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence),
+    )
+    val matchId = MatchId.unsafeFromString("match-31")
+    val maximumNote = "😀" * MatchNoteBody.MaximumCodePoints
+    def rows(result: Either[AppError, SeriesAnalysisChunk]): List[Json] =
+      val chunk = result.fold(error => fail(s"failed to read evidence: $error"), identity)
+      assertEquals(chunk.artifact.artifactId, request.artifactId)
+      parser.parse(new String(chunk.payload, StandardCharsets.UTF_8))
+        .flatMap(_.hcursor.downField("payload").get[List[Json]]("above"))
+        .fold(error => fail(s"invalid evidence response: $error"), identity)
+    for
+      _ <- seedTitle
+      _ <-
+      (sql"""INSERT INTO season_masters (id, game_title_id, name, display_order)
+          VALUES ('evidence-season', $titleId, '年度', 1)""".update.run *>
+        sql"""INSERT INTO map_masters (id, game_title_id, name, display_order)
+          VALUES ('evidence-map', $titleId, '地図', 1)""".update.run *>
+        sql"""INSERT INTO held_events (id, held_date_iso, start_at)
+          VALUES ('evidence-event', '2026-08-09', $now)""".update.run *>
+        sql"""INSERT INTO matches (id, held_event_id, match_no_in_event, game_title_id,
+          layout_family, season_master_id, owner_member_id, map_master_id, played_at,
+          created_by_account_id)
+          VALUES ($matchId, 'evidence-event', 1, $titleId, 'momotetsu_2', 'evidence-season',
+            'member_ponta', 'evidence-map', $now, $accountId)""".update.run *>
+        sql"""INSERT INTO match_players (match_id, member_id, play_order, rank,
+          total_assets_man_yen, revenue_man_yen)
+          SELECT $matchId, p.id, p.n, p.n, 0, 0 FROM (
+            VALUES ('member_eu', 1), ('member_ponta', 2), ('member_akane_mami', 3), ('member_otaka', 4)
+          ) p(id, n)""".update.run).transact(transactor)
+      _ <- insertPublishedArtifact(
+        request.artifactId,
+        aggregate,
+        0,
+        parser.parse(new String(aggregate, StandardCharsets.UTF_8)).toOption.map(jsonDepth).get,
+        Some("series-analysis-artifact-v11-full-validation-v2"),
+        None,
+        11,
+        Some(evidence),
+      )
+      _ <- pointToArtifacts(request.artifactId, None)
+      notes = new PostgresMatchNotesRepository[IO](transactor)
+      _ <- notes.replace(
+        matchId,
+        MatchNoteVersion.Initial,
+        MatchNoteBody.fromString(maximumNote).toOption.flatten,
+        accountId,
+        now
+      )
+      repo <- repository
+      first <- repo.chunk(request)
+      _ <- notes.replace(
+        matchId,
+        MatchNoteVersion.Initial.next,
+        MatchNoteBody.fromString("更新したメモ").toOption.flatten,
+        accountId,
+        now.plusSeconds(1)
+      )
+      updated <- repo.chunk(request)
+      _ <- sql"DELETE FROM matches WHERE id = $matchId".update.run.transact(transactor)
+      deleted <- repo.chunk(request)
+      stored <- sql"""SELECT payload FROM series_analysis_drilldown_artifacts
+        WHERE artifact_id = ${request.artifactId}""".query[Array[Byte]].unique.transact(transactor)
+    yield
+      val firstRows = rows(first)
+      val updatedRows = rows(updated)
+      val deletedRows = rows(deleted)
+      assertEquals(firstRows.head.hcursor.get[String]("note"), Right(maximumNote))
+      assertEquals(updatedRows.head.hcursor.get[String]("note"), Right("更新したメモ"))
+      assert(deletedRows.forall(_.hcursor.downField("note").focus.contains(Json.Null)))
+      assert(firstRows.tail.forall(_.hcursor.downField("note").focus.contains(Json.Null)))
+      def withoutNotes(values: List[Json]) = values.map(_.mapObject(_.remove("note")))
+      assertEquals(withoutNotes(firstRows), withoutNotes(updatedRows))
+      assertEquals(withoutNotes(firstRows), withoutNotes(deletedRows))
+      assertEquals(stored.toList, evidence.toList)
+
   private def insertPublishedArtifact(
       artifactId: String,
       payload: Array[Byte],
@@ -1047,6 +1156,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
       validationContractId: Option[String],
       contextPayload: Option[Array[Byte]],
       artifactSchemaVersion: Int,
+      drilldownPayload: Option[Array[Byte]],
   ): IO[Unit] =
     val algorithmVersion = "series-analysis-v15"
     val length = payload.length
@@ -1066,7 +1176,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         $artifactSchemaVersion, NULL,
         'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-        'staging', 1, 0, 0, ${contextPayload.size}, $length, $length, NULL, ARRAY['overall']
+        'staging', 1, 0, ${drilldownPayload.size}, ${contextPayload.size}, $length, $length, NULL, ARRAY['overall']
       )
     """.update.run.void *> sql"""
       INSERT INTO series_analysis_scope_aggregate_artifacts (
@@ -1086,6 +1196,17 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
         encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum
       ) VALUES ($artifactId, 'overall', 'overall', 'match-1', 1, $context,
         $size, $size, 1, $depth, $checksum)""".update.run.void
+    } *> drilldownPayload.traverse_ { drilldown =>
+      val size = drilldown.length
+      val checksum = sha256(drilldown)
+      val depth = parser.parse(new String(drilldown, StandardCharsets.UTF_8))
+        .toOption.map(jsonDepth).get
+      sql"""INSERT INTO series_analysis_drilldown_artifacts (
+        artifact_id, scope_key, scope_kind, member_id, metric_id, payload,
+        encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum
+      ) VALUES ($artifactId, 'overall', 'overall', 'member_ponta',
+        ${SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence.id}, $drilldown,
+        $size, $size, 40, $depth, $checksum)""".update.run.void
     } *> outlookInventory *> validationContractId.traverse_(contractId => sql"""
       UPDATE series_analysis_artifacts
       SET validation_contract_id = $contractId

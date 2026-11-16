@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "scope": {
     "kind": "overall",
     "matchCount": 0
@@ -76,9 +76,6 @@
     "improvedFoldCount": 0,
     "requiredImprovedFoldCount": 4,
     "foldScores": [],
-    "defaultMemberId": null,
-    "rankSignalsByPlayer": [],
-    "unexpectedWinsByPlayer": [],
     "crownCertainty": {
       "status": "no_target",
       "bootstrapIterations": 0,
@@ -86,6 +83,18 @@
       "leaderChangeCount": 0,
       "shares": []
     }
+  },
+  "expectedRankGap": {
+    "status": "no_target",
+    "reasonCodes": [
+      "insufficient_matches"
+    ],
+    "matchCount": 0,
+    "permutationCount": 2000,
+    "hasMergedLayers": false,
+    "layers": [],
+    "players": [],
+    "items": []
   },
   "highlights": [],
   "dataQuality": {

@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::{
     contract::ScopeRef,
+    expected_rank_gap::{self, CountLevels, ExpectedRankGap},
     model::{
         NormalizedAnalysisInput, PlayerMatchInput, PlayerMatchesByMember, ordered_member_ids,
         player_matches_by_member,
@@ -70,16 +71,14 @@ pub enum ComputedResourceKind {
 pub enum DrilldownMetric {
     RankAverageHistory,
     PlayOrderRankHistory,
-    RankSignals,
-    UnexpectedWins,
+    ExpectedRankGapEvidence,
 }
 
 impl DrilldownMetric {
-    const ALL: [Self; 4] = [
+    const ALL: [Self; 3] = [
         Self::RankAverageHistory,
         Self::PlayOrderRankHistory,
-        Self::RankSignals,
-        Self::UnexpectedWins,
+        Self::ExpectedRankGapEvidence,
     ];
 
     #[must_use]
@@ -87,8 +86,7 @@ impl DrilldownMetric {
         match self {
             Self::RankAverageHistory => "rank.averageHistory",
             Self::PlayOrderRankHistory => "playOrder.rankHistory",
-            Self::RankSignals => "rankAnalysis.rankSignals",
-            Self::UnexpectedWins => "rankAnalysis.unexpectedWins",
+            Self::ExpectedRankGapEvidence => "expectedRankGap.evidence",
         }
     }
 }
@@ -99,20 +97,33 @@ struct ScopeAnalysis<'a> {
     player_matches_by_member: PlayerMatchesByMember<'a>,
     match_groups: Vec<MatchGroup<'a>>,
     outcome_model: outcome_model::OutcomeModelAnalysis,
+    expected_rank_gap: ExpectedRankGap<'a>,
 }
 
 impl<'a> ScopeAnalysis<'a> {
-    fn new(player_matches: Vec<&'a PlayerMatchInput>) -> Self {
+    /// `count_levels` are fixed per title, so no scope or display switch redraws them.
+    fn new(
+        input: &NormalizedAnalysisInput,
+        player_matches: Vec<&'a PlayerMatchInput>,
+        count_levels: &CountLevels,
+    ) -> Self {
         let member_ids = ordered_member_ids(&player_matches);
         let player_matches_by_member = player_matches_by_member(&player_matches, &member_ids);
         let match_groups = group_player_matches(&player_matches);
         let outcome_model = outcome_model::analyze(&player_matches, &member_ids);
+        let expected_rank_gap = expected_rank_gap::analyze(
+            input.game_title_id(),
+            &player_matches,
+            &member_ids,
+            count_levels,
+        );
         Self {
             player_matches,
             member_ids,
             player_matches_by_member,
             match_groups,
             outcome_model,
+            expected_rank_gap,
         }
     }
 
@@ -166,13 +177,14 @@ pub fn try_for_each_resource<E: From<RadarError>>(
     let title_gap_thresholds = AssetGapThresholds::new(&group_player_matches(
         &input.player_matches().iter().collect::<Vec<_>>(),
     ));
+    let count_levels = CountLevels::from_rows(input.player_matches());
     let mut previous_analysis: Option<ScopeAnalysis<'_>> = None;
     for (scope, player_matches) in input.scopes() {
         let analysis = match previous_analysis.take() {
             Some(analysis) if analysis.references_same_player_matches_in_order(&player_matches) => {
                 analysis
             }
-            Some(_) | None => ScopeAnalysis::new(player_matches),
+            Some(_) | None => ScopeAnalysis::new(input, player_matches, &count_levels),
         };
         let player_radar = player_radar(input, scope, &analysis)?;
         let aggregate = aggregate(
@@ -183,6 +195,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
             &analysis.player_matches_by_member,
             &analysis.match_groups,
             &analysis.outcome_model,
+            &analysis.expected_rank_gap,
             &player_radar,
         );
         let aggregate_item_ids = AggregateItemIds::from_aggregate(&aggregate);
@@ -228,7 +241,7 @@ pub fn try_for_each_resource<E: From<RadarError>>(
                         analysis.match_groups.len(),
                         member_id,
                         metric,
-                        &analysis.outcome_model,
+                        &analysis.expected_rank_gap,
                     ),
                     item_count: member_matches.len(),
                     source_match_revision: None,

@@ -8,6 +8,7 @@ use crate::{
     contract::{ResourceManifest, ScopeRef},
 };
 
+mod expected_rank_gap;
 mod outlook;
 mod owner;
 mod radar;
@@ -302,8 +303,7 @@ impl PayloadSetValidator {
 const DRILLDOWN_METRIC_IDS: &[&str] = &[
     "rank.averageHistory",
     "playOrder.rankHistory",
-    "rankAnalysis.rankSignals",
-    "rankAnalysis.unexpectedWins",
+    "expectedRankGap.evidence",
 ];
 
 #[cfg(test)]
@@ -475,6 +475,13 @@ fn validate_aggregate<'a>(
         &player_order,
         required_u64(payload.pointer("/scope/matchCount"))?,
     )?;
+    expected_rank_gap::validate_aggregate(
+        payload
+            .get("expectedRankGap")
+            .ok_or(PayloadError::InvalidSchema)?,
+        &player_order,
+        required_u64(payload.pointer("/scope/matchCount"))?,
+    )?;
     let radar_basis = radar::validate_aggregate(
         payload
             .get("playerRadar")
@@ -601,8 +608,7 @@ fn validate_drilldown<'a>(
     let expected_kind = match metric_id {
         "rank.averageHistory" => "rank_average_history",
         "playOrder.rankHistory" => "play_order_rank_history",
-        "rankAnalysis.rankSignals" => "rank_signals",
-        "rankAnalysis.unexpectedWins" => "unexpected_wins",
+        "expectedRankGap.evidence" => "expected_rank_gap_evidence",
         _ => return Err(PayloadError::IdentityMismatch),
     };
     if detail.get("kind").and_then(Value::as_str) != Some(expected_kind) {
@@ -1072,8 +1078,6 @@ fn validate_rank_analysis(
     let analysis = value
         .and_then(Value::as_object)
         .ok_or(PayloadError::InvalidSchema)?;
-    validate_exact_member_entries(array(analysis.get("rankSignalsByPlayer"))?, player_ids)?;
-    validate_exact_member_entries(array(analysis.get("unexpectedWinsByPlayer"))?, player_ids)?;
     let crown = analysis
         .get("crownCertainty")
         .and_then(Value::as_object)
@@ -1168,27 +1172,7 @@ fn validate_drilldown_semantics(
                 return Err(PayloadError::ItemCountMismatch);
             }
         }
-        "rank_signals" => {
-            let candidates = array(detail.get("candidates"))?;
-            collect_unique_ids(candidates, "signal")?;
-            for candidate in candidates {
-                if array(candidate.get("foldRows"))?.len() != 5 {
-                    return Err(PayloadError::ItemCountMismatch);
-                }
-            }
-        }
-        "unexpected_wins" => {
-            let summary = detail
-                .get("summary")
-                .and_then(Value::as_object)
-                .ok_or(PayloadError::InvalidSchema)?;
-            let rows = array(detail.get("rows"))?;
-            if required_u64(summary.get("unexpectedWinCount"))? != u64::try_from(rows.len())?
-                || required_u64(summary.get("totalWinCount"))? < u64::try_from(rows.len())?
-            {
-                return Err(PayloadError::ItemCountMismatch);
-            }
-        }
+        "expected_rank_gap_evidence" => expected_rank_gap::validate_evidence(detail, item_count)?,
         _ => return Err(PayloadError::IdentityMismatch),
     }
     Ok(())
@@ -1411,7 +1395,7 @@ mod tests {
     fn shared_payload_fixtures_match_worker_contract() {
         let aggregate = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "aggregate-payload-v6.json"
+            "aggregate-payload-v7.json"
         )));
         let review = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
@@ -1419,19 +1403,16 @@ mod tests {
         )));
         let drilldown = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "drilldown-payload-v3.json"
+            "drilldown-payload-v4.json"
         )));
-        let rank_signals = fixture(include_str!(concat!(
+        let evidence = fixture(include_str!(concat!(
             "../../../../../docs/schemas/fixtures/series-analysis/",
-            "rank-signals-drilldown-payload-v3.json"
+            "expected-rank-gap-evidence-drilldown-payload-v4.json"
         )));
-        assert!(aggregate.is_ok() && review.is_ok() && drilldown.is_ok() && rank_signals.is_ok());
-        let (Some(aggregate), Some(review), Some(drilldown), Some(rank_signals)) = (
-            aggregate.ok(),
-            review.ok(),
-            drilldown.ok(),
-            rank_signals.ok(),
-        ) else {
+        assert!(aggregate.is_ok() && review.is_ok() && drilldown.is_ok() && evidence.is_ok());
+        let (Some(aggregate), Some(review), Some(drilldown), Some(evidence)) =
+            (aggregate.ok(), review.ok(), drilldown.ok(), evidence.ok())
+        else {
             return;
         };
 
@@ -1449,11 +1430,11 @@ mod tests {
         );
         assert!(
             validate_drilldown(
-                &rank_signals,
+                &evidence,
                 &ScopeRef::Overall,
                 40,
                 "member-1",
-                "rankAnalysis.rankSignals"
+                "expectedRankGap.evidence"
             )
             .is_ok()
         );
@@ -1621,14 +1602,9 @@ mod tests {
                 "countsByPlayOrder",
             ),
             (
-                DrilldownMetric::RankSignals,
-                "/payload/method",
-                "modelVersion",
-            ),
-            (
-                DrilldownMetric::UnexpectedWins,
+                DrilldownMetric::ExpectedRankGapEvidence,
                 "/payload/summary",
-                "unexpectedWinCount",
+                "aboveCount",
             ),
         ];
         for (metric, pointer, field) in variants {
@@ -1692,7 +1668,7 @@ mod tests {
                 || resource.kind
                     != ComputedResourceKind::Drilldown {
                         member_id: String::from("member-1"),
-                        metric: DrilldownMetric::UnexpectedWins,
+                        metric: DrilldownMetric::ExpectedRankGapEvidence,
                     }
         });
         let mut incomplete_validator = PayloadSetValidator::new();

@@ -606,7 +606,7 @@ fn normalized_input_binds_the_published_identity_and_clears_old_monitoring_on_ba
 #[test]
 fn empty_public_radar_fixture_matches_the_calculator() {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json"
+        "../../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v7.json"
     ))
     .unwrap_or_else(|error| panic!("fixture: {error}"));
     let result = RadarAggregate {

@@ -51,14 +51,12 @@ export function formatGapRank(value: number | null): string {
 /** Signed rank difference; values that round to zero read as "±0.00". */
 export function formatRankGap(value: number | null): string {
   if (value === null) return "—";
-  const rounded = Math.round(value * 100) / 100;
-  const sign = rounded > 0 ? "＋" : rounded < 0 ? "−" : "±";
-  return `${sign}${rankFormatter.format(Math.abs(rounded))}位`;
+  return signed(value, 2, (magnitude) => `${rankFormatter.format(magnitude)}位`);
 }
 
 export function gapDirection(value: number | null): "above" | "below" | null {
   if (value === null) return null;
-  const rounded = Math.round(value * 100) / 100;
+  const rounded = roundSigned(value, 2);
   return rounded > 0 ? "above" : rounded < 0 ? "below" : null;
 }
 
@@ -149,9 +147,14 @@ const pointFormatter = new Intl.NumberFormat("ja-JP", {
   minimumFractionDigits: 1,
 });
 
-function signed(value: number, digits: number, text: (magnitude: number) => string): string {
+/** Round magnitudes identically on both sides of zero before restoring the sign. */
+function roundSigned(value: number, digits: number): number {
   const scale = 10 ** digits;
-  const rounded = Math.round(value * scale) / scale;
+  return Math.sign(value) * (Math.round(Math.abs(value) * scale) / scale);
+}
+
+function signed(value: number, digits: number, text: (magnitude: number) => string): string {
+  const rounded = roundSigned(value, digits);
   const sign = rounded > 0 ? "＋" : rounded < 0 ? "−" : "±";
   return `${sign}${text(Math.abs(rounded))}`;
 }

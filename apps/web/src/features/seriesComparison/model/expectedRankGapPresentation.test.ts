@@ -5,6 +5,7 @@ import {
   formatBackgroundValue,
   formatRankGap,
   gapAxis,
+  gapDirection,
   gapLayerLabel,
   gapLevelLabel,
 } from "@/features/seriesComparison/model/expectedRankGapPresentation";
@@ -37,6 +38,11 @@ describe("expected-rank gap presentation", () => {
     expect(formatRankGap(null)).toBe("—");
     expect(formatBackgroundValue("revenue_share", 0.012)).toBe("＋1.2ポイント");
     expect(formatBackgroundValue("card_station", -0.25)).toBe("−0.25回");
+    expect(formatRankGap(0.005)).toBe("＋0.01位");
+    expect(formatRankGap(-0.005)).toBe("−0.01位");
+    expect(gapDirection(-0.005)).toBe("below");
+    expect(formatBackgroundValue("revenue_share", -0.0005)).toBe("−0.1ポイント");
+    expect(formatBackgroundValue("card_station", -0.005)).toBe("−0.01回");
   });
 
   it("shares one symmetric axis of five to seven round ticks over every judged value", () => {

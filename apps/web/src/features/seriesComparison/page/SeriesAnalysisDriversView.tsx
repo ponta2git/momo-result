@@ -29,10 +29,15 @@ import { FactList } from "@/shared/ui/data/FactList";
 import { contentText } from "@/shared/ui/typography";
 
 export const DriversView = memo(function DriversView({
+  expectedRankGapMemberId,
+  onExpectedRankGapMemberChange,
   focusedItemIds,
   response,
   onDrilldown,
-}: AnalysisViewProps) {
+}: AnalysisViewProps & {
+  expectedRankGapMemberId?: string | undefined;
+  onExpectedRankGapMemberChange?: ((memberId: string | undefined) => void) | undefined;
+}) {
   return (
     <div
       aria-labelledby={analysisTabId("drivers")}
@@ -87,7 +92,13 @@ export const DriversView = memo(function DriversView({
           />
         </div>
       </AnalysisSection>
-      <ExpectedRankGapSection response={response} onDrilldown={onDrilldown} />
+      <ExpectedRankGapSection
+        gap={response.expectedRankGap}
+        players={response.players}
+        memberId={expectedRankGapMemberId}
+        onMemberChange={onExpectedRankGapMemberChange}
+        onDrilldown={onDrilldown}
+      />
     </div>
   );
 });

@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,9 +9,21 @@ import { makeSeriesAnalysisAggregate } from "@/test/msw/seriesAnalysisFixtures";
 
 function renderSection(response = makeSeriesAnalysisAggregate()) {
   const onDrilldown = vi.fn();
+  function Harness() {
+    const [memberId, setMemberId] = useState<string>();
+    return (
+      <ExpectedRankGapSection
+        gap={response.expectedRankGap}
+        players={response.players}
+        memberId={memberId}
+        onMemberChange={setMemberId}
+        onDrilldown={onDrilldown}
+      />
+    );
+  }
   render(
     <MemoryRouter>
-      <ExpectedRankGapSection response={response} onDrilldown={onDrilldown} />
+      <Harness />
     </MemoryRouter>,
   );
   return { onDrilldown };

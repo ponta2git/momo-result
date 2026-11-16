@@ -64,6 +64,8 @@ function Harness({ gate }: { gate?: Promise<void> | undefined }) {
       <SeriesAnalysisContent
         ownerMetric={location.selection.ownerMetric}
         onOwnerMetricChange={location.actions.updateOwnerMetric}
+        expectedRankGapMemberId={location.selection.expectedRankGapMemberId}
+        onExpectedRankGapMemberChange={location.actions.updateExpectedRankGapMember}
         bundle={
           location.activeView === "review"
             ? { kind: "review", view: "review", review, matchContext: undefined }
@@ -111,6 +113,34 @@ function primaryEvidenceLink() {
 }
 
 describe("series analysis section navigation", () => {
+  it("restores the gap subject through URL navigation and switches it without losing focus", async () => {
+    const user = userEvent.setup();
+    const router = await setup({
+      url: `${initialUrl}&view=drivers&expectedRankGapMemberId=member_ponta`,
+    });
+    expect(screen.getByRole("radio", { name: "ぽんた" })).toBeChecked();
+    expect(
+      screen.getByRole("table", { name: "記録別の見込みとの差（ぽんた）" }),
+    ).toBeInTheDocument();
+    const overall = screen.getByRole("radio", { name: "場全体" });
+    await user.click(overall);
+    expect(overall).toHaveFocus();
+    expect(overall).toBeChecked();
+    expect(router.state.location.search).not.toContain("expectedRankGapMemberId");
+    expect(router.state.location.search).toContain("focusMatchId=match-12");
+    expect(router.state.location.hash).toBe("#metric-expected-rank-gap-items");
+
+    await user.click(screen.getByRole("radio", { name: "ぽんた" }));
+    await act(async () => router.navigate("/matches"));
+    await act(async () => router.navigate(-1));
+    expect(screen.getByRole("radio", { name: "ぽんた" })).toBeChecked();
+    expect(
+      screen.getByRole("table", { name: "記録別の見込みとの差（ぽんた）" }),
+    ).toBeInTheDocument();
+    await act(async () => router.navigate(-1));
+    expect(screen.getByText("試合一覧")).toBeInTheDocument();
+  });
+
   it("changes the actual owner select without a new arrival or history entry under Strict Mode", async () => {
     const user = userEvent.setup();
     const router = await setup({ url: `${initialUrl}&view=context#metric-play-order` });

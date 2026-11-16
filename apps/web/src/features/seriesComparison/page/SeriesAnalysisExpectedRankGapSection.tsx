@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { ExpectedRankGapLegend } from "@/features/seriesComparison/charts/ExpectedRankGapTrack";
 import {
   backgroundValueUnit,
@@ -43,14 +41,22 @@ import { contentText } from "@/shared/ui/typography";
 
 const OVERALL = "overall";
 
+type GapSubjectProps = {
+  memberId: string | undefined;
+  onMemberChange: ((memberId: string | undefined) => void) | undefined;
+  players: SeriesComparisonAggregate["players"];
+};
+
 export function ExpectedRankGapSection({
+  gap,
+  memberId,
   onDrilldown,
-  response,
-}: {
+  onMemberChange,
+  players,
+}: GapSubjectProps & {
+  gap: ExpectedRankGap;
   onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
-  response: SeriesComparisonAggregate;
 }) {
-  const gap = response.expectedRankGap;
   return (
     <AnalysisSection
       id="metric-expected-rank-gap"
@@ -58,7 +64,13 @@ export function ExpectedRankGapSection({
       title="見込みとの差"
     >
       {gap.status === "no_target" ? null : (
-        <ExpectedRankGapBody gap={gap} response={response} onDrilldown={onDrilldown} />
+        <ExpectedRankGapBody
+          gap={gap}
+          memberId={memberId}
+          players={players}
+          onMemberChange={onMemberChange}
+          onDrilldown={onDrilldown}
+        />
       )}
     </AnalysisSection>
   );
@@ -82,12 +94,13 @@ function ExpectedRankGapMeta({ gap }: { gap: ExpectedRankGap }) {
 
 function ExpectedRankGapBody({
   gap,
+  memberId,
   onDrilldown,
-  response,
-}: {
+  onMemberChange,
+  players,
+}: GapSubjectProps & {
   gap: ExpectedRankGap;
   onDrilldown: (selection: SeriesAnalysisDrilldownSelection) => void;
-  response: SeriesComparisonAggregate;
 }) {
   const axis = gapAxis(gap);
   const judged = gap.status === "ok";
@@ -106,7 +119,7 @@ function ExpectedRankGapBody({
           >
             <GapRowGroup>
               {gap.players.map((player) => {
-                const name = playerName(response.players, player.memberId);
+                const name = playerName(players, player.memberId);
                 return (
                   <GapRow
                     axis={axis}
@@ -140,7 +153,13 @@ function ExpectedRankGapBody({
           <ExpectedRankGapLegend band={judged} marker={false} />
         </div>
       </AnalysisSubsection>
-      <ItemGapSubsection axis={axis} gap={gap} response={response} />
+      <ItemGapSubsection
+        axis={axis}
+        gap={gap}
+        memberId={memberId}
+        players={players}
+        onMemberChange={onMemberChange}
+      />
       <AnalysisReadingGuide
         ariaLabel="見込みとの差の読み方"
         items={readingItems(gap.permutationCount)}
@@ -154,15 +173,15 @@ function ExpectedRankGapBody({
 function ItemGapSubsection({
   axis,
   gap,
-  response,
-}: {
+  memberId,
+  onMemberChange,
+  players,
+}: GapSubjectProps & {
   axis: GapAxis;
   gap: ExpectedRankGap;
-  response: SeriesComparisonAggregate;
 }) {
-  const [requestedSubject, setSubject] = useState(OVERALL);
-  const subjectIndex = gap.players.findIndex((player) => player.memberId === requestedSubject);
-  const overall = subjectIndex < 0;
+  const subject = gap.players.find((player) => player.memberId === memberId);
+  const overall = subject === undefined;
   const judged = gap.status === "ok";
   return (
     <AnalysisSubsection id="metric-expected-rank-gap-items" title="記録別の差">
@@ -173,19 +192,19 @@ function ItemGapSubsection({
             { value: OVERALL, label: "場全体" },
             ...gap.players.map((player) => ({
               value: player.memberId,
-              label: playerName(response.players, player.memberId),
+              label: playerName(players, player.memberId),
             })),
           ]}
           presentation="plain"
-          value={overall ? OVERALL : requestedSubject}
-          onValueChange={setSubject}
+          value={subject?.memberId ?? OVERALL}
+          onValueChange={(value) => onMemberChange?.(value === OVERALL ? undefined : value)}
         />
         <GapTable
           axis={axis}
           caption={
             overall
               ? "記録別の見込みとの差（場全体）"
-              : `記録別の見込みとの差（${playerName(response.players, requestedSubject)}）`
+              : `記録別の見込みとの差（${playerName(players, subject.memberId)}）`
           }
           countHeader={overall ? "件数" : "戦数"}
           labelHeader="回数"
@@ -196,7 +215,7 @@ function ItemGapSubsection({
               item={item}
               judged={judged}
               key={item.item}
-              subjectIndex={overall ? null : subjectIndex}
+              memberId={subject?.memberId}
             />
           ))}
         </GapTable>
@@ -210,15 +229,15 @@ function ItemRowGroup({
   axis,
   item,
   judged,
-  subjectIndex,
+  memberId,
 }: {
   axis: GapAxis;
   item: ExpectedRankGapItem;
   judged: boolean;
-  subjectIndex: number | null;
+  memberId: string | undefined;
 }) {
   const reported = item.levels.some((level) => isReportedSignal(level.overall.signal));
-  const overall = subjectIndex === null;
+  const overall = memberId === undefined;
   return (
     <GapRowGroup>
       <GapGroupRow heading>
@@ -234,7 +253,9 @@ function ItemRowGroup({
         </span>
       </GapGroupRow>
       {item.levels.map((level) => {
-        const summary = overall ? level.overall : level.byPlayer[subjectIndex];
+        const summary = overall
+          ? level.overall
+          : level.byPlayer.find((player) => player.memberId === memberId);
         if (!summary) return null;
         return (
           <GapRow

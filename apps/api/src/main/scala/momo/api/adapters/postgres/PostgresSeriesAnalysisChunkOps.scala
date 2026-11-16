@@ -36,6 +36,7 @@ private[postgres] object PostgresSeriesAnalysisChunkOps:
       scopeName: Option[String],
       mapNames: Map[String, String],
       achievementMetadata: Option[AchievementDisplayMetadata] = None,
+      matchNotes: Map[String, String] = Map.empty,
   )
 
   private final case class MatchIdentityRow(

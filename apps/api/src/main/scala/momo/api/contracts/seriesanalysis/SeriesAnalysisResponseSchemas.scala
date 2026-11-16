@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser.parse
 import io.circe.{Json, JsonObject}
 
-import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisMatchContextExclusion}
+import momo.api.domain.{MatchNoteBody, SeriesAnalysisChunkKind, SeriesAnalysisMatchContextExclusion}
 
 private[api] object SeriesAnalysisResponseSchemas:
   private val SchemaResourceDirectory = "/momo/api/series-analysis-schemas"
@@ -21,6 +21,14 @@ private[api] object SeriesAnalysisResponseSchemas:
     "minLength" -> Json.fromInt(1),
     "type" -> Json.fromString("string"),
   )
+  private val NoteSchema = Json.obj("anyOf" -> Json.arr(
+    Json.obj(
+      "maxLength" -> Json.fromInt(MatchNoteBody.MaximumCodePoints),
+      "minLength" -> Json.fromInt(1),
+      "type" -> Json.fromString("string"),
+    ),
+    Json.obj("type" -> Json.fromString("null")),
+  ))
   private val ArtifactSchema: Json = objectSchema(
     List(
       "algorithmVersion" -> TextSchema,
@@ -148,6 +156,7 @@ private[api] object SeriesAnalysisResponseSchemas:
       else if resource eq outlookWindow then responseSchema(outlookWindowSchema(owner))
       else if resource eq outlookExamples then responseSchema(outlookExamplesSchema(owner))
       else if resource eq achievements then achievementResponseSchema(owner)
+      else if resource eq drilldown then responseSchema(evidenceNoteSchema(owner))
       else responseSchema(owner)
     withMetadata(response, resource)
 
@@ -201,6 +210,20 @@ private[api] object SeriesAnalysisResponseSchemas:
       ),
       "achievements response"
     )
+
+  /** Evidence rows carry the saved match note that the API adds after payload validation. */
+  private def evidenceNoteSchema(owner: Json): Json = owner.arrayOrObject(
+    owner,
+    values => Json.fromValues(values.map(evidenceNoteSchema)),
+    fields =>
+      val nested = Json.fromJsonObject(JsonObject.fromIterable(fields.toIterable.map((key, child) =>
+        key -> evidenceNoteSchema(child)
+      )))
+      fields("properties").flatMap(_.asObject) match
+        case Some(properties) if properties.contains("gap") && properties.contains("matchIndex") =>
+          addProperty(nested, "note", NoteSchema, "evidence row")
+        case _ => nested,
+  )
 
   private def outlookReferenceFields(owner: Json): List[(String, Json)] =
     List("schemaVersion", "scope", "source", "memberId")

@@ -23,7 +23,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("accepts the Rust-attested owner resource fixtures"):
     assert(validate(
-      sharedFixture("aggregate-payload-v6.json"),
+      sharedFixture("aggregate-payload-v7.json"),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate),
       None,
     ))
@@ -33,7 +33,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       None,
     ))
     assert(validate(
-      sharedFixture("drilldown-payload-v3.json"),
+      sharedFixture("drilldown-payload-v4.json"),
       request(
         SeriesAnalysisChunkKind.Drilldown,
         Some("member-1"),
@@ -43,11 +43,11 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       None,
     ))
     assert(validate(
-      sharedFixture("rank-signals-drilldown-payload-v3.json"),
+      sharedFixture("expected-rank-gap-evidence-drilldown-payload-v4.json"),
       request(
         SeriesAnalysisChunkKind.Drilldown,
         Some("member-1"),
-        Some(SeriesAnalysisDrilldownMetric.RankSignals),
+        Some(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence),
         None,
       ),
       None,
@@ -60,13 +60,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("accepts only the current artifact and payload generations"):
     List(
-      (SeriesAnalysisChunkKind.Aggregate, "aggregate-payload-v6.json", List(2, 3, 4, 5)),
+      (SeriesAnalysisChunkKind.Aggregate, "aggregate-payload-v7.json", List(2, 3, 4, 5, 6)),
       (SeriesAnalysisChunkKind.Review, "review-payload-v4.json", List(2, 3)),
     ).foreach { case (kind, file, obsoletePayloadVersions) =>
       val current = sharedFixture(file)
       val request = simpleRequest(kind)
-      assert(validate(current, request, None, 10))
-      List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
+      assert(validate(current, request, None, 11))
+      List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99).foreach(version =>
         assert(!validate(current, request, None, version))
       )
       obsoletePayloadVersions.foreach(version =>
@@ -74,13 +74,13 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
           current.mapObject(_.add("schemaVersion", Json.fromInt(version))),
           request,
           None,
-          10
+          11
         ))
       )
     }
     val currentId = SeriesAnalysisArtifactContract.ValidationContractId
-    assert(SeriesAnalysisArtifactContract.supports(10, Some(currentId)))
-    List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99).foreach(version =>
+    assert(SeriesAnalysisArtifactContract.supports(11, Some(currentId)))
+    List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99).foreach(version =>
       assert(!SeriesAnalysisArtifactContract.supports(version, Some(currentId)))
     )
     List(
@@ -88,13 +88,14 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       Some("series-analysis-artifact-v2-full-validation-v1"),
       Some("series-analysis-artifact-v3-full-validation-v1"),
       Some("series-analysis-artifact-v7-full-validation-v1"),
+      Some("series-analysis-artifact-v10-full-validation-v1"),
       Some("unknown")
     ).foreach(id =>
-      assert(!SeriesAnalysisArtifactContract.supports(10, id))
+      assert(!SeriesAnalysisArtifactContract.supports(11, id))
     )
 
   test("keeps the API drilldown vocabulary aligned with the owner schema"):
-    val schema = sharedSchema("series-analysis-drilldown-v3.schema.json")
+    val schema = sharedSchema("series-analysis-drilldown-v4.schema.json")
     val metricIds = schema.hcursor.downField("oneOf").as[Vector[Json]]
       .fold(error => fail(s"invalid drilldown schema branches: $error"), identity)
       .map(branch =>
@@ -107,12 +108,12 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
 
   test("rejects generated-shape and request-identity mismatches"):
     assert(!validate(
-      sharedFixture("aggregate-payload-v6.json").mapObject(_.add("unexpected", Json.True)),
+      sharedFixture("aggregate-payload-v7.json").mapObject(_.add("unexpected", Json.True)),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate),
       None,
     ))
     assert(!validate(
-      sharedFixture("aggregate-payload-v6.json"),
+      sharedFixture("aggregate-payload-v7.json"),
       simpleRequest(SeriesAnalysisChunkKind.Aggregate).copy(
         scope = SeriesAnalysisScope.Season(
           SeasonMasterId.unsafeFromString("season-other")
@@ -121,7 +122,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       None,
     ))
     assert(!validate(
-      sharedFixture("drilldown-payload-v3.json"),
+      sharedFixture("drilldown-payload-v4.json"),
       request(
         SeriesAnalysisChunkKind.Drilldown,
         Some("member-other"),
@@ -131,11 +132,11 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
       None,
     ))
     assert(!validate(
-      sharedFixture("drilldown-payload-v3.json"),
+      sharedFixture("drilldown-payload-v4.json"),
       request(
         SeriesAnalysisChunkKind.Drilldown,
         Some("member-1"),
-        Some(SeriesAnalysisDrilldownMetric.UnexpectedWins),
+        Some(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence),
         None,
       ),
       None,
@@ -152,7 +153,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     ))
 
   test("rejects nested shape violations and unsigned-field underflow"):
-    val aggregate = sharedFixture("aggregate-payload-v6.json")
+    val aggregate = sharedFixture("aggregate-payload-v7.json")
     val emptySummary = aggregate.hcursor.downField("summary")
       .withFocus(_ => Json.obj()).top.getOrElse(fail("failed to replace aggregate summary"))
     val negativeCount = aggregate.hcursor.downField("summary").downField("totalGinjiCount")
@@ -164,7 +165,7 @@ final class SeriesAnalysisPayloadValidatorSpec extends FunSuite with JsonSchemaA
     )
 
   test("derives and enforces the Rust owner's UTF-8 byte bound"):
-    val oversized = sharedFixture("aggregate-payload-v6.json").hcursor
+    val oversized = sharedFixture("aggregate-payload-v7.json").hcursor
       .downField("source").downField("gameTitleId")
       .withFocus(_ => Json.fromString("あ" * 1400)).top
       .getOrElse(fail("failed to replace aggregate source gameTitleId"))

@@ -20,8 +20,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v14', artifact_schema_version = 10,
-          validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+      SET algorithm_version = 'series-analysis-v15', artifact_schema_version = 11,
+          validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
@@ -133,9 +133,9 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         initial,
         (
           0L,
-          "series-analysis-v14",
-          10,
-          Some("series-analysis-artifact-v10-full-validation-v1"),
+          "series-analysis-v15",
+          11,
+          Some("series-analysis-artifact-v11-full-validation-v1"),
           "initial"
         )
       )
@@ -152,8 +152,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       results <- concurrentWithUncommittedFirst(
         sql"""
           UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
-            artifact_schema_version = 10,
-            validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+            artifact_schema_version = 11,
+            validation_contract_id = 'series-analysis-artifact-v11-full-validation-v1'
           WHERE singleton_key = 'current'
         """.update.run,
         new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
@@ -169,7 +169,7 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         (
           "promoted-analysis",
           10,
-          Some("series-analysis-artifact-v10-full-validation-v1")
+          Some("series-analysis-artifact-v11-full-validation-v1")
         )
       )
 

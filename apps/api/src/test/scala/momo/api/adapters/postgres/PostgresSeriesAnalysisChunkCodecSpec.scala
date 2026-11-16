@@ -384,7 +384,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   test("rendered artifact responses satisfy the API-owned schemas"):
     assertHydratedFixture(
-      "aggregate-payload-v6.json",
+      "aggregate-payload-v7.json",
       SeriesAnalysisResponseSchemas.aggregateV5,
       request,
       itemCount = 0,
@@ -398,7 +398,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       sourceMatchRevision = None,
     )
     assertHydratedFixture(
-      "drilldown-payload-v3.json",
+      "drilldown-payload-v4.json",
       SeriesAnalysisResponseSchemas.drilldown,
       request.copy(
         kind = SeriesAnalysisChunkKind.Drilldown,
@@ -408,6 +408,18 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       itemCount = 1,
       sourceMatchRevision = None,
     )
+    assertHydratedFixture(
+      "expected-rank-gap-evidence-drilldown-payload-v4.json",
+      SeriesAnalysisResponseSchemas.drilldown,
+      request.copy(
+        kind = SeriesAnalysisChunkKind.Drilldown,
+        memberId = Some(MemberId.unsafeFromString("member-1")),
+        metric = Some(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence),
+      ),
+      itemCount = 40,
+      sourceMatchRevision = None,
+    )
+
     assertHydratedFixture(
       "match-context-payload-v1.json",
       SeriesAnalysisResponseSchemas.matchContext,
@@ -440,6 +452,56 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       new String(rendered.payload, StandardCharsets.UTF_8),
     )
 
+  test("evidence rows receive their saved note after validation, and null without one"):
+    val text = Files.readString(repositoryFile(
+      "docs/schemas/fixtures/series-analysis/expected-rank-gap-evidence-drilldown-payload-v4.json"
+    ))
+    val evidenceRequest = request.copy(
+      kind = SeriesAnalysisChunkKind.Drilldown,
+      memberId = Some(MemberId.unsafeFromString("member-1")),
+      metric = Some(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence),
+    )
+    val decoded = PostgresSeriesAnalysisChunkCodec
+      .decode(
+        stored(
+          text.getBytes(StandardCharsets.UTF_8),
+          nestingDepth(text)
+        ).copy(itemCount = Some(40)),
+        evidenceRequest,
+        SeriesAnalysisReadConfig.defaults,
+        None,
+      )
+      .fold(error => fail(s"failed to decode evidence: $error"), identity)
+    assertEquals(
+      PostgresSeriesAnalysisEvidenceNotes.matchIds(decoded.payload).take(2),
+      List("match-31", "match-12"),
+    )
+    val rendered = PostgresSeriesAnalysisChunkCodec
+      .hydrateAndRender(
+        decoded,
+        decoded.memberIds.map(id => id -> s"name-$id").toMap,
+        Some("総合"),
+        SeriesAnalysisReadConfig.defaults,
+        Map.empty,
+        None,
+        Map("match-31" -> "売却で現金を作って逃げ切った"),
+      )
+      .fold(error => fail(s"failed to hydrate evidence: $error"), identity)
+    val json = parse(new String(rendered.payload, StandardCharsets.UTF_8))
+      .fold(error => fail(s"rendered evidence is not JSON: $error"), identity)
+    val notes = List("above", "below").flatMap(side =>
+      json.hcursor.downField("payload").downField(side).as[List[Json]].getOrElse(Nil)
+        .map(row =>
+          row.hcursor.get[String]("matchId").toOption -> row.hcursor.downField("note").focus
+        )
+    )
+    assertEquals(notes.size, 7)
+    assertEquals(
+      notes.collect { case (Some("match-31"), note) => note }.flatten,
+      List(Json.fromString("売却で現金を作って逃げ切った")),
+    )
+    assert(notes.filterNot(_._1.contains("match-31")).forall(_._2.contains(Json.Null)))
+
   private def stored(
       payload: Array[Byte],
       nestingDepth: Int,
@@ -455,8 +517,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
       artifactGameTitleId = gameTitleId,
       inputRevision = 0,
       algorithmVersion = "series-analysis-v1",
-      artifactSchemaVersion = 10,
-      validationContractId = Some("series-analysis-artifact-v10-full-validation-v1"),
+      artifactSchemaVersion = 11,
+      validationContractId = Some("series-analysis-artifact-v11-full-validation-v1"),
       publishedAt = Instant.parse("2026-08-09T00:00:00Z"),
       scopeKind = Some(scope.kind),
       payload = Some(payload),
@@ -471,8 +533,8 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
     request.artifactId,
     gameTitleId,
     0,
-    "series-analysis-v14",
-    10,
+    "series-analysis-v15",
+    11,
     Instant.parse("2026-08-09T00:00:00Z"),
   )
 
@@ -557,7 +619,7 @@ final class PostgresSeriesAnalysisChunkCodecSpec extends FunSuite with JsonSchem
 
   private lazy val aggregateFixture =
     Files.readString(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json")
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v7.json")
     )
 
   private def nestingDepth(text: String): Int =

@@ -148,7 +148,7 @@ abs(shrunkSymptom)
 
 ## 7. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 領域 | 受入条件 |
 | --- | --- |

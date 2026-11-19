@@ -1,15 +1,15 @@
 # OCR Job Contract
 
-目的: API が保存する OCR 入力、Worker の直接取得、実行・再試行・回復の意味を定義する。入力の shape / limit は JSON Schema、DB shape は対象 `momo-db` checkout（[DB 規約](db-rule.md#ownership)）、時間と回数の現在値は runtime 設定を正本とする。
+目的: API が保存する OCR 入力、Worker の直接取得、実行・再試行・回復の意味を定義する。入力の shape / limit は JSON Schema、DB shape は対象 `momo-db` checkout（[DB 規約](database.md#ownership)）、時間と回数の現在値は runtime 設定を正本とする。
 
 関連正本:
 
 - 入力: `docs/schemas/ocr-job-input-v2.schema.json`
 - hints: `docs/schemas/ocr-hints-v1.schema.json`
-- 状態遷移と送出: [ドメイン規約](domain-rule.md#ocr-job)
-- transaction・保持・通知: [DB 規約](db-rule.md#durable-state-rules)
-- parent / child と受付調停: [Worker 規約](worker-rule.md#ocr-capability)
-- 利用者から見た受付・再試行・通知: [基本要求の OCR・下書き](requirements/base.md#6-ocr下書き)
+- 状態遷移と送出: [ドメイン規約](../domain-rule.md#ocr-job)
+- transaction・保持・通知: [DB 規約](database.md#durable-state-rules)
+- parent / child と受付調停: [Worker 規約](worker.md#ocr-capability)
+- 利用者から見た受付・再試行・通知: [基本要求の OCR・下書き](../requirements/base.md#6-ocr下書き)
 
 ## Ownership
 
@@ -37,7 +37,7 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 - job / snapshot / 下書き / submission member を同じ transaction で保存する。active job 上限は transaction lock 取得後の statement で最新件数を検査する。lock 待機前の snapshot を同じ CTE 内で使わない。
 - 受付判定は queued / running 件数と、実行可能になった queued job の待ち時間を使う。将来の再試行と現在の滞留を区別し、過去の failed 履歴を backlog に含めない。
 - process-local wake は commit 後に限って送る。外部の payloadless PostgreSQL 通知は API が所有する非同期 relay で HTTP 応答と独立に処理する。
-- 通知は低遅延化の hint とする。通知が失敗・欠落しても受付は有効のまま保ち、Worker の起動時・再接続時・期限到来時・低頻度走査で回収する。listener の接続と起動確認は [Worker 規約](worker-rule.md#runtime--listener--shutdown) に従う。
+- 通知は低遅延化の hint とする。通知が失敗・欠落しても受付は有効のまま保ち、Worker の起動時・再接続時・期限到来時・低頻度走査で回収する。listener の接続と起動確認は [Worker 規約](worker.md#runtime--listener--shutdown) に従う。
 
 ## Claim and Execution
 
@@ -68,7 +68,7 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 
 入力形式、状態遷移、保存必須条件の非互換変更では、対応する API・Worker・DB を一つの移行計画で切り替える。過去の失敗コードの読み取りと、旧 consumer の並行稼働は別の契約とする。
 
-品質証拠は [テスト・品質規約](test-rule.md#processing-worker-evidence-catalog) の採用基準で選ぶ。本契約を変更した場合に直接通す production boundary は次のとおりで、変更に該当する行だけを選び、未実行の境界は未検証として扱う。
+品質証拠は [テスト・品質規約](../development/test-policy.md#processing-worker-evidence-catalog) の採用基準で選ぶ。本契約を変更した場合に直接通す production boundary は次のとおりで、変更に該当する行だけを選び、未実行の境界は未検証として扱う。
 
 | 変更 | 直接通す境界 |
 | --- | --- |
@@ -78,6 +78,6 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 | claim、fence、lease、再試行予算 | 実 PostgreSQL で claim 競合、古い fence の拒否、retry と lease 回復の別予算、期限切れ実行だけが残る場合の回復 |
 | listener、wake | 実 PostgreSQL と production と同じ pooling mode で通知欠落・再接続からの回収 |
 | 優先順、child の停止・回収 | Linux の実 process で待機 OCR の優先、実行中の分析の継続、child の停止・回収 |
-| 画面への反映、再操作 | 主要 E2E（[開発作業規約の E2E Suites](dev-rule.md#e2e-suites)） |
+| 画面への反映、再操作 | 主要 E2E（[開発作業規約の E2E Suites](../development/workflow.md#e2e-suites)） |
 
-診断とログの制約は [アーキテクチャの Runtime / Security](architecture.md#runtime--security) に従う。
+診断とログの制約は [アーキテクチャの Runtime / Security](../architecture.md#runtime--security) に従う。

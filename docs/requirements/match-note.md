@@ -11,7 +11,7 @@
 | 開催詳細の情報設計 | `docs/requirements/held-event-detail.md` |
 | 戦績分析の入力 revision と再計算 | `docs/requirements/series-analysis-batch.md` |
 | UIの共通操作、状態、アクセシビリティ | `docs/ui-rule.md` |
-| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、[API規約](../api-rule.md)、[アーキテクチャ](../architecture.md)、[DB規約](../db-rule.md) |
+| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、[API規約](../implementation/api.md)、[アーキテクチャ](../architecture.md)、[DB規約](../implementation/database.md) |
 
 本書は特定のテーブル構造やendpoint pathを定めない。実装契約は、ここで定めるメモ専用更新と分析入力更新の分離を保ったうえで各実行正本に置く。
 
@@ -171,7 +171,7 @@
 - 本機能の初回releaseと、その場で必要になった切戻しは、利用者へ事前に示したmaintenance時間内に行い、その間の操作とbrowserに残ったWebを含むversion混在は動作保証の対象外とする。ここでのmaintenanceは利用者への通知による運用上の境界だけを指し、アクセス遮断、read-only化、mutation拒否、maintenance専用画面を実装しない。告知の開始・終了を現行workflowが自動化すると仮定しない。
 - DB schemaの正本である`momo-db`でadditive migrationを先に用意し、このrepositoryの`.momo-db-ref`をそのcommitへ更新する。CIがpinned migrationを適用する先は隔離された検証DBであり、本番DBへ適用した証拠にはしない。本番DBへの適用手順はprivate runbookを正本とし、migration適用済み状態を確認してからruntimeをdeployする。
 - 現行deploy workflowではAPI imageとWeb edgeの検証済みimmutable成果物を同じrelease候補としてproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
-- 配備後の修正は[CI・リリース規約](../release.md#recovery-verification)に従い、additiveなDB columnと保存済みメモを保つ。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は配備修正と分けて設計・承認する。
+- 配備後の修正は[CI・リリース規約](../development/release.md#recovery-verification)に従い、additiveなDB columnと保存済みメモを保つ。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は配備修正と分けて設計・承認する。
 
 ## 9. Analysis / Export Boundary
 
@@ -184,7 +184,7 @@
 
 ## 10. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 観点 | 受入条件 |
 | --- | --- |

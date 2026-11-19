@@ -1,6 +1,6 @@
 # テスト実行設計
 
-目的: 必要な品質証拠を、シンプルで保守できる実行構成へ割り当てる。test size、parallelism、coverage、cross-system contract evidence、CI artifact を扱う。日々の test 選択と oracle は [テスト・品質規約](test-rule.md)、command と変更 gate は [開発作業規約](dev-rule.md)、script と tool の配置は [アーキテクチャ](architecture.md#scripts--tooling-boundaries)、現在の実行構成（対象 file、除外、並列数、tag、report path、command）は設定と CI workflow を正本とする。
+目的: 必要な品質証拠を、シンプルで保守できる実行構成へ割り当てる。test size、parallelism、coverage、cross-system contract evidence、CI artifact を扱う。日々の test 選択と oracle は [テスト・品質規約](test-policy.md)、command と変更 gate は [開発作業規約](workflow.md)、script と tool の配置は [アーキテクチャ](../architecture.md#scripts--tooling-boundaries)、現在の実行構成（対象 file、除外、並列数、tag、report path、command）は設定と CI workflow を正本とする。
 
 ## Test Size
 
@@ -19,7 +19,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - CI は同じ test 集合の通常実行と coverage 実行を目的に合う方へまとめ、report を作る場合は通常 test を coverage 付き実行へ置き換える。
 - production deploy は同じ test 集合と変更対象の integration / smoke を release gate にし、coverage artifact の生成とは独立して進める。
-- 利用者影響が大きい module は、[テスト・品質規約](test-rule.md#品質証拠の採用維持削除) の採用基準に従って decision table、property / contract test、または個別に妥当性を示した file / glob threshold を選ぶ。
+- 利用者影響が大きい module は、[テスト・品質規約](test-policy.md#品質証拠の採用維持削除) の採用基準に従って decision table、property / contract test、または個別に妥当性を示した file / glob threshold を選ぶ。
 - file / glob threshold を blocking にする場合は、対象の利用者価値と検出する failure mode を個別に示し、coverage 数値が専用 test より適切な oracle であることを先に確認する。導入は対象ごとの個別判断で行う。
 - external adapter、process isolation、resource、OCR accuracy は coverage 率ではなく専用の contract / smoke / dataset で評価する。
 
@@ -38,10 +38,10 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - `src` の Vitest は値変換と component / hook / MSW の証拠を扱う。app の route 接続と feature の resource lifecycle を区別し、後者の詳細は feature 側の suite に置く。
 - `e2e/ui` はビルド済み Web と制御した HTTP 応答で focus・描画・非同期遷移を検証し、未定義 API 通信を失敗させる。DB や Worker を起動せず、mock 応答を保存・生成・配送の証拠にしない。
-- `e2e/system` は production image の Web / API / Worker と実 DB・画像 storage・固定した通知 consumer を通す。session fixture は既存 SessionService で生成し、ブラウザは通常 cookie / CSRF を使う。OAuth provider の handshake と callback はこの fixture の保証範囲に含めない。
+- `e2e/system` はビルド済みの Web edge 成果物と API・Worker の production image を使い、実 DB・画像 storage・固定した通知 consumer を通す。session fixture は既存 SessionService で生成し、ブラウザは通常 cookie / CSRF を使う。OAuth provider の handshake と callback はこの fixture の保証範囲に含めない。
 - session fixture は Test とは別の sbt config に置き、Runtime の build で compile 済みの API を再利用する Dockerfile target で JAR だけを作る。runner は候補 Runtime image の JVM と staged library で各 suite の新しい DB に対して実行し、本番 image には fixture class を含めない。制御 Worker（`e2e-test` target）も E2E job の外で build する。producer は artifact と来歴を作り、CI は producer の run・attempt・commit・hash と Runtime image ID との対応を検証し、runner は検証済みの入力を実行して可変な隔離環境だけを所有・回収する。
 - `e2e/recovery` は制御 Worker を使い、受付応答の喪失や処理失敗から利用者が操作を続けられることを確認する。実 Worker と同じ job DB に同時起動しない。通知本文・全画像待ちなどの詳細は API を入口にする `e2e/contracts`、全体状態を変える上限 fixture は独立した通知契約 runner が所有する。
-- 各 suite の command、必要な image、環境変数は [開発作業規約の E2E Suites](dev-rule.md#e2e-suites) に従う。
+- 各 suite の command、必要な image、環境変数は [開発作業規約の E2E Suites](workflow.md#e2e-suites) に従う。
 - `scripts:check` の Node test は build checker の誤検出・未検出、runner の中断と所有 process の回収、診断の機密保護を観測する pipeline-integrity evidence とし、Vitest / coverage と分離する。別 process を起動する runner test は L であり、browser の利用者 flow や実 DB の接続成功を保証しない。
 - 生成された validator の受理・拒否の観測は、それを使う decoder suite に集約する。build checker は実際の build にも接続し、最終 asset の確認は正負 fixture に加えて実際の build で行う。
 - 共通 setup は unmount 後に QueryClient を解放し、mock を復元してから実 storage を清掃する。各 suite は共通 cleanup に任せ、個別に所有する資源の解放と未完了操作の完了待ちだけを持つ。
@@ -49,7 +49,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 ### API / Worker の実行境界
 
 - API の service suite は通常 test とコンパイル結果を共有しても、tag 選択、fork、直列化を独立した設定 scope に置く。外部 gate を実行した順序によらず、後続の通常 test の対象・隔離を一定に保つ（session 内の設定が後続 command へ漏れた経緯は `apps/api/build.sbt` のコメントにある）。
-- `apiDbQuality` は同じ pinned migration source から legacy / canonical の境界までを別 process・別 DB に適用する。canonical suite は通常の runtime composition を通し、旧 URL・principal・replay・順序・immutable payload と、UUID 参照を使う次の更新を確認する。起動 probe の派生契約は `node apps/api/scripts/generate-identity-schema-contract.mjs /path/to/momo-db/drizzle` で DB 所有 snapshot から生成する。legacy 境界の suite は API が受理する legacy / canonical の schema 契約の受理・拒否を観測する証拠であり、canonical identity への切替手順を規約から撤去した後も維持する。API が legacy mode の受理をやめる変更で、[DB 規約の Identifiers and Decoding](db-rule.md#identifiers-and-decoding) とともに見直す。
+- `apiDbQuality` は同じ pinned migration source から legacy / canonical の境界までを別 process・別 DB に適用する。canonical suite は通常の runtime composition を通し、旧 URL・principal・replay・順序・immutable payload と、UUID 参照を使う次の更新を確認する。起動 probe の派生契約は `node apps/api/scripts/generate-identity-schema-contract.mjs /path/to/momo-db/drizzle` で DB 所有 snapshot から生成する。legacy 境界の suite は API が受理する legacy / canonical の schema 契約の受理・拒否を観測する証拠であり、canonical identity への切替手順を規約から撤去した後も維持する。API が legacy mode の受理をやめる変更で、[DB 規約の Identifiers and Decoding](../implementation/database.md#identifiers-and-decoding) とともに見直す。
 - 軽量 HTTP test は test source の `HttpTestRuntime` を明示して使う。InMemory adapter は test source に閉じ、production runtime の repository は PostgreSQL adapter を使う。分析・Radar の状態は InMemory で再現せず、その保存状態を使う HTTP test は `PostgresHttpAppTestFixtures` で通常の `ApiApp` を組み立てる。
 - 実 DB の HTTP fixture は既存 `IntegrationSuite` の隔離 DB と直列化を共有し、各 test の保存状態と変更した account を回収する。DB 固有の transaction、lock、rollback、job は実 DB suite が所有する。
 - 存続する double と production adapter に共通する consumer 契約は、必要な代表例だけを共有できる。共有する場合も oracle の強さは production adapter に合わせる。
@@ -72,7 +72,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 - test は並列実行を既定とし、resource、DB row、schema、stream、object、file、port、clock を test ごとに隔離する。
 - 共有状態、順序、resource 競合そのものを検証する場合、または隔離コストが証拠価値を上回る場合だけ直列化し、理由と対象 scope を test 設定の近くへ残す。隔離機構と setup は証拠価値に見合う範囲に留める。
-- 作業単位の並列化と待ち時間の扱いは [開発作業規約の Parallel Execution](dev-rule.md#parallel-execution) に従う。
+- 作業単位の並列化と待ち時間の扱いは [開発作業規約の Parallel Execution](workflow.md#parallel-execution) に従う。
 
 ## CI Artifacts
 

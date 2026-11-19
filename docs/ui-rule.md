@@ -2,7 +2,7 @@
 
 目的: momo-result の全画面で、同じ意味・状態・操作を一貫して表し、4人が記録、確認、比較、出力を迷わず完了し、その結果を囲んで楽しめるようにする。
 
-本書は Web の横断的な体験方針、情報設計、意味表現、視覚階層、操作文法、状態表示、文言の正本である。業務用語・状態遷移は [ドメイン規約](domain-rule.md)、画面固有の目的・順序・指標は対象要求（例外は [画面固有の要求](#画面固有の要求)）、層・server state・motion・form の実装境界は [Web 実装規約](web-rule.md)、検証の選択は [テスト・品質規約の UI の検証を選ぶ基準](test-rule.md#ui-の検証を選ぶ基準)、アクセシビリティの最低水準（WCAG AA 相当）は [システム要求](requirements/system-design.md#9-performance--client-quality) を正本とする。許容 scale と役割の対応は本書、component・class・token の現在名と値は実装が持つ。shared UI 部品の内部契約（キー操作、scroll の所有、内部の余白と境界、反応の時間など）は各部品の doc comment と test を正本とし、本書は部品を選ぶ基準と画面をまたぐ契約を書く。役割から実装への入口は [Web 実装規約の Implementation Entry Points](web-rule.md#implementation-entry-points) にある。
+本書は Web の横断的な体験方針、情報設計、意味表現、視覚階層、操作文法、状態表示、文言の正本である。業務用語・状態遷移は [ドメイン規約](domain-rule.md)、画面固有の目的・順序・指標は対象要求、層・server state・motion・form の実装境界は [Web 実装規約](implementation/web.md)、検証の選択は [テスト・品質規約の UI の検証を選ぶ基準](development/test-policy.md#ui-の検証を選ぶ基準)、アクセシビリティの最低水準（WCAG AA 相当）は [システム要求](requirements/system-design.md#9-performance--client-quality) を正本とする。許容 scale と役割の対応は本書、component・class・token の現在名と値は実装が持つ。shared UI 部品の内部契約（キー操作、scroll の所有、内部の余白と境界、反応の時間など）は各部品の doc comment と test を正本とし、本書は部品を選ぶ基準と画面をまたぐ契約を書く。役割から実装への入口は [Web 実装規約の Implementation Entry Points](implementation/web.md#implementation-entry-points) にある。
 
 ## 判断の優先順位
 
@@ -154,7 +154,7 @@
 
 ### 抽象化の単位と所有権
 
-- shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、内部の responsive arrangement と intrinsic constraint を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移、app は route と画面 composition、shared domain は業務 identity、順序、formatter を所有する。依存方向と配置は [Web 実装規約の Layering](web-rule.md#layering) に従う。
+- shared UI は、意味に対応する構造、keyboard / focus、accessible name、hit target、disabled / pending、局所 feedback、内部の responsive arrangement と intrinsic constraint を所有する。feature は業務語彙、URL / query / cache、権限、入力変換、副作用、業務状態遷移、app は route と画面 composition、shared domain は業務 identity、順序、formatter を所有する。依存方向と配置は [Web 実装規約の Layering](implementation/web.md#layering) に従う。
 - shared UI へ切り出すのは、複数の現在用途を一つの小さい契約で覆える場合か、accessibility、制約、feedback、状態同期の重要な判断を隠せる場合に限る。名前だけの wrapper、判断を props へ移すだけの万能 component、将来用途だけの schema は作らない。複数画面で共有する業務 UI は業務別の shared module に置き、共有されることと業務非依存であることを区別する。
 - 親 composition は位置、並び順、外側の寸法・余白、sibling 間の gap / divider、伸縮と積み替えを所有する。再利用 component は親の slot に従って伸縮し、特定の利用箇所を理由に固定寸法、外 margin、隣接 separator を持たない（利用可能領域を定義する layout primitive は除く）。consumer は外側 container で寸法を指定する。
 - 汎用部品は通常表示を既定とし、主要コンテンツであることが契約に含まれる部品だけが主要強調を持つ。主役は feature composition が選んで共通文字 recipe を適用し、任意のウェイトを渡す API や親全体の太字で補正しない。意味構造（`th`、`scope`、heading level）とウェイトを分ける。
@@ -176,7 +176,7 @@
 
 ### 更新・再試行・初期化・破棄
 
-- 更新は、現在の表示条件のまま再取得する操作である。`ready → updating with stale content → ready` を基本とし、失敗しても取得済み内容を残して局所表示する。再取得の起点は利用者の更新 / 再試行と、受付済みの処理を待機として示している間の完了確認（範囲は [Web 実装規約の Server State](web-rule.md#server-state)）だけとし、一定間隔、遅延 timer、tab の復帰、window focus、network reconnect を起点にしない。表示中の内容が変わる時点を利用者が予期できるようにするためである。
+- 更新は、現在の表示条件のまま再取得する操作である。`ready → updating with stale content → ready` を基本とし、失敗しても取得済み内容を残して局所表示する。再取得の起点は利用者の更新 / 再試行と、受付済みの処理を待機として示している間の完了確認（範囲は [Web 実装規約の Server State](implementation/web.md#server-state)）だけとし、一定間隔、遅延 timer、tab の復帰、window focus、network reconnect を起点にしない。表示中の内容が変わる時点を利用者が予期できるようにするためである。
 - 再試行は、失敗した操作を同じ入力と scope でやり直す回復操作である。`error → pending → success | error` を失敗箇所の近くで示し、処理中も失敗案内と再試行操作、入力、選択、scroll 位置を保つ。route retry は query と error boundary を同時に reset する。
 - 初期化は、変更できる値を明示された既定値へ戻す操作である。対象 scope をラベルで示し、主要操作にするのは変更がある場合に限る。
 - 破棄は、未確定の変更を取り除き `dirty → clean` へ戻す操作である。失われる内容を先に示し、影響が大きい場合だけ確認を挟む。保存済み data の削除と未保存変更の破棄は別の文言で表す。
@@ -237,7 +237,7 @@
 - 通常の内容では layout shift、bounce / overshoot、stagger、視線を奪う移動を作らない。route content、Suspense の fallback と完成内容、初回 content、一覧 row を登場や置換の演出として animate せず、disclosure の本文は開閉と同時に配置へ反映する。
 - 値の変化を伝える図表や数値は mark や値だけを補間してよい。viewport への進入を trigger にせず、図表は完成値から描き、表示中の同じ対象の値が変わった場合だけ補間する。
 - 楽観更新の pending、confirmed、error は静止状態でも区別し、追加・削除の presence motion は rollback、server correction、同時 mutation を含む正しさを先に検証する。
-- 常時 loop は時間が不定な loading に限り、完了や対象外で止める。非必須 motion は `prefers-reduced-motion` で省略する。application state を animation の完了に依存させない境界は [Web 実装規約の Client Lifecycle](web-rule.md#client-lifecycle--suspense--motion) に従う。
+- 常時 loop は時間が不定な loading に限り、完了や対象外で止める。非必須 motion は `prefers-reduced-motion` で省略する。application state を animation の完了に依存させない境界は [Web 実装規約の Client Lifecycle](implementation/web.md#client-lifecycle--suspense--motion) に従う。
 
 ### 節目の演出
 
@@ -258,15 +258,9 @@
 - source image と連動する編集 workspace は画像上の並びに合わせてよいが、各入力に固定メンバー名と `プレー順N` を示す。確定後は1試合の結果台帳を順位順、共通台帳・分析表を canonical 順で表示し、順位、プレーヤー名、総資産を主情報とする。画面固有の補助指標は対象要求を正本とする。
 - 主要結果は比較の取得と独立に表示し、比較の失敗や対象試合なしでも保存済みの結果を残す。試合の識別情報は文字で残し、ナビゲーションと出力は明示した操作として表す。
 
-## 画面固有の要求
-
-本節は、対象要求に正本がない画面固有の表示要求を置く。索引と本書冒頭が定める「画面固有の目的・順序・指標は対象要求が所有する」の明示的な例外であり、次の項目は本節を正本とする。対象要求へ移す場合は、移動と同じ変更で本節の該当項目を削除し、参照元を更新する。
-
-- 分析の入口は「平均順位の差が縮まったか」「最近の負けが通常より続いているか」「桃鉄型など別の型を試す根拠があるか」という会話へ答えられる構成にする。順位内訳、平均順位と差、直近範囲、総資産・収益を優先候補とし、型の変更は推薦ではなく根拠付きの仮説として示す。移す場合の受け入れ先: [比較要求](requirements/series-comparison.md#3-information-architecture--state)。
-
 ## 視覚レビューの観点
 
-visual review を evidence に選んだ場合の観点である。選択基準と自動検証との境界は [テスト・品質規約の UI の検証を選ぶ基準](test-rule.md#ui-の検証を選ぶ基準) が所有し、配置や反応の一貫性を、座標・DOM 構造・animation 設定を恒久 test へ固定する理由にしない。screenshot は補助とし、理解や読みやすさを秒数・評点へ置き換えず、判断した文脈と所見を伝える。
+visual review を evidence に選んだ場合の観点である。選択基準と自動検証との境界は [テスト・品質規約の UI の検証を選ぶ基準](development/test-policy.md#ui-の検証を選ぶ基準) が所有し、配置や反応の一貫性を、座標・DOM 構造・animation 設定を恒久 test へ固定する理由にしない。screenshot は補助とし、理解や読みやすさを秒数・評点へ置き換えず、判断した文脈と所見を伝える。
 
 | 変更 | 確認する観点 |
 | --- | --- |

@@ -1,6 +1,6 @@
 # テスト・品質規約
 
-目的: アプリ利用者へ提供する価値と変更リスクに対して、どの実行経路をどの oracle で検証するか、また何を検証対象にしないかを決める。実行 command と必須 gate は [開発作業規約](dev-rule.md)、test size、coverage、実行境界、CI artifact は [テスト実行設計](test-architecture.md) を正本とする。検証の終了、人間による確認の位置づけは [AGENTS.md](../AGENTS.md#検証と完了) に従い、本書は繰り返さない。
+目的: アプリ利用者へ提供する価値と変更リスクに対して、どの実行経路をどの oracle で検証するか、また何を検証対象にしないかを決める。検証の実行方法は [開発作業規約の Commands](workflow.md#commands)、変更種別ごとの必須 gate は [Change Gates](workflow.md#change-gates)、test size、coverage、実行境界、CI artifact は [テスト実行設計](test-architecture.md) を正本とする。検証の終了、人間による確認の位置づけは [AGENTS.md](../../AGENTS.md#検証と完了) に従い、本書は繰り返さない。
 
 ## 証拠モデルと正本
 
@@ -18,7 +18,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 4. 既存の test、型、schema、lint、生成照合、上位経路、manual review が同じ失敗をどこまで検出するか確認する。残すのは検出価値に対して待ち時間、保守負担、誤検出が見合うものだけとし、代替がない場合も価値の薄い evidence は足さない。
 5. case は業務上独立した条件、境界値、代表的な失敗の最小集合とし、branch や実装行を埋めるためには足さない。
 
-- 検出価値と保守負担の比較や見た目の良さは、点数・比率・閾値に置き換えず定性的に判断してよい（[AGENTS.md](../AGENTS.md#判断と並列作業)）。権限、保存値、互換性、resource 上限など明確な契約は直接検証する。
+- 検出価値と保守負担の比較や見た目の良さは、点数・比率・閾値に置き換えず定性的に判断してよい（[AGENTS.md](../../AGENTS.md#判断と並列作業)）。権限、保存値、互換性、resource 上限など明確な契約は直接検証する。
 - 判断結果は維持、追加・置換、統合・削除、または evidence を置かない、のいずれでもよい。変更説明には選んだ証拠と重要な未検証事項を残す。追加・削除などの判断を理解するために必要なら、守る価値、境界 / oracle、重複や非採用の理由を補う。非採用理由は判断に関わる項目に絞り、catalog 全項目には及ばせない。
 - 技術的難易度、変更頻度、過去の欠陥、競合、外部 I/O、復旧困難性は、利用者影響がある候補の優先度と test size を決める要因であり、単独の採用理由ではない。
 - 共通実装は consumer から見える契約の partition ごとの代表を検証する。全 call site や内部 branch の機械的な網羅は求めない。
@@ -28,7 +28,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ### UI の検証を選ぶ基準
 
-画面で観測できることと、恒久的な自動 test にする価値があることを区別する。本節が UI の選択基準と自動化境界を所有し、visual review で確認する観点は [UI 規約の視覚レビューの観点](ui-rule.md#視覚レビューの観点) が所有する。何を選ぶかの基準と、選んだ evidence で守る境界は分けて読む。
+画面で観測できることと、恒久的な自動 test にする価値があることを区別する。本節が UI の選択基準と自動化境界を所有し、visual review で確認する観点は [UI 規約の視覚レビューの観点](../ui-rule.md#視覚レビューの観点) が所有する。何を選ぶかの基準と、選んだ evidence で守る境界は分けて読む。
 
 | 失敗時の影響 | 検証の選び方 |
 | --- | --- |
@@ -44,7 +44,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 次の各項目は、その evidence を選んだ場合だけ適用する。共通表示の変更に既存の型・visual review で足りると判断した場合、その証拠で検証を完了できる。
 
-- 静的検査を選ぶ場合: 採用は [Change Gates](dev-rule.md#change-gates) に従う。UI では未定義 token、禁止 import、構文上確定する依存境界など、違反を一意に判定できる規則だけを候補とし、検査結果が示す範囲は対象規則への適合に限る。raw value の有無、一定間隔の倍数、shadow や `z-index` の書式、近似色、表の alignment といった表層規則は、それ単独では blocking gate にしない。
+- 静的検査を選ぶ場合: 採用は [Change Gates](workflow.md#change-gates) に従う。UI では未定義 token、禁止 import、構文上確定する依存境界など、違反を一意に判定できる規則だけを候補とし、検査結果が示す範囲は対象規則への適合に限る。raw value の有無、一定間隔の倍数、shadow や `z-index` の書式、近似色、表の alignment といった表層規則は、それ単独では blocking gate にしない。
 - component test を選ぶ場合: shared primitive と利用者価値が現れる component を中心に、keyboard での到達・実行、入力保持、pending 中の重複操作、local error からの復旧を実操作で確認する。rendered size が必要な hit target は代表 flow の browser / visual evidence で確認し、各 component ではその証拠を再利用する。
 - 複数画面が消費する対応関係（固定メンバー、プレー順、状態・意味 token など）の unit / component test を選ぶ場合: 共通の型・定義を実装上の正本とし、各画面の source 文字列ではなく、その consumer 契約を代表確認する。
 - 主要 flow の Playwright を選ぶ場合: URL、request、保存、download、主要結果を主 oracle とする。responsive な切替で入力を失う、必要な操作へ到達できないといった browser 固有の失敗を自動化し、微細な揃え・safe area・dialog の配置は変更時の visual review で確認する。
@@ -59,11 +59,11 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ## Web Evidence Catalog
 
-選んだ場合に適用する。実装契約は [Web 実装規約](web-rule.md)、表示契約は [UI 規約](ui-rule.md) を正本とする。
+選んだ場合に適用する。実装契約は [Web 実装規約](../implementation/web.md)、表示契約は [UI 規約](../ui-rule.md) を正本とする。
 
 ### Query / API Error
 
-- 自動再取得の契約は [Web 実装規約の Server State](web-rule.md#server-state) を正本とし、共通 QueryClient と共通の完了確認の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
+- 自動再取得の契約は [Web 実装規約の Server State](../implementation/web.md#server-state) を正本とし、共通 QueryClient と共通の完了確認の unit test で固定する。重要 flow で複合的な価値が変わる場合だけ component / integration test を追加し、production source 全体の文字列検査で代用しない。
 - query key ごとの runtime data shape と、mutation 後の detail / list / selector cache の整合を検証する。
 
 ### Form / Interaction
@@ -76,11 +76,11 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - 制御した Promise / 通信で pending と確定後を観測し、操作制限と解除、入力の保持、再試行の成功を主 oracle として判定する。spinner 数、skeleton 構造、mount 回数、待機中の寸法一致は補助的な観測に留める。
 - dialog / disclosure の開閉や非同期表示で操作不能が起こり得る場合は、keyboard で操作を続けられ、閉じた内容が操作対象から外れることを代表経路で確認する。focus 復帰は具体的な戻り先と次操作で判定する。
 - 楽観更新は pending、success、server correction、rollback、retry、同時 mutation を decision table にし、安定した identity、重複操作の抑止、局所 error、canonical data への収束を主 oracle とする。
-- motion の状態別の自動検証は、animation 完了や timer に操作の成立が依存している場合に限り、中断や reduced motion で操作が失われる経路を対象にする。hover 色、補間の途中値、再生タイミング、duration などの見え方を確認する場合は、変更に必要な観点を選んで visual review を行う。これらの自動網羅は visual review の代用にしない。import / bundle 境界は [Web 実装規約](web-rule.md#client-lifecycle--suspense--motion) と [Change Gates](dev-rule.md#change-gates) に従う。
+- motion の状態別の自動検証は、animation 完了や timer に操作の成立が依存している場合に限り、中断や reduced motion で操作が失われる経路を対象にする。hover 色、補間の途中値、再生タイミング、duration などの見え方を確認する場合は、変更に必要な観点を選んで visual review を行う。これらの自動網羅は visual review の代用にしない。import / bundle 境界は [Web 実装規約](../implementation/web.md#client-lifecycle--suspense--motion) と [Change Gates](workflow.md#change-gates) に従う。
 
 ### Completion / Toast
 
-- 通知先は [UI 規約](ui-rule.md#取得状態とフィードバック) を正本とし、遷移・dialog 閉鎖で完了確認場所が失われる操作、その場に結果が残る操作、局所回復が必要な失敗を代表例に選ぶ。toast の呼出しだけでなく、利用者に現れる結果と次の操作を確認する。
+- 通知先は [UI 規約](../ui-rule.md#取得状態とフィードバック) を正本とし、遷移・dialog 閉鎖で完了確認場所が失われる操作、その場に結果が残る操作、局所回復が必要な失敗を代表例に選ぶ。toast の呼出しだけでなく、利用者に現れる結果と次の操作を確認する。
 - 保存確定後の再取得失敗、結果不明、処理の受付と完了を分け、誤った成功・失敗や二重通知を防ぐ。同じ実行の再描画・cache 更新で通知数を保ち、別の実行結果を区別して扱うことを確認する。通知の有無と表示先は UI 規約に従う。
 - 共通 host は、遷移・body の準備待ちでも必要な完了結果へ到達でき、通知が主要操作を妨げない代表経路を検証する。表示上限や閉鎖で外れた通知が操作対象に残るなど、操作続行に影響する失敗を選ぶ。寿命・配置・animation の確認を選ぶ場合は共通 host に集約し、各画面ではその証拠を再利用する。
 - live region の配置と accessible state は component / browser で確認し、実際の読み上げ回数・順序を保証する場合は screen reader で確かめる。DOM の role 数や `aria-busy` の存在だけを、その保証の代用にしない。
@@ -102,15 +102,15 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ## API Evidence Catalog
 
-選んだ場合に適用する。実装契約は [API 規約](api-rule.md) を正本とする。
+選んだ場合に適用する。実装契約は [API 規約](../implementation/api.md) を正本とする。
 
-- HTTP 契約の正本と OpenAPI / Web 型の生成関係は [API 規約の Wire Boundary](api-rule.md#wire-boundary) に従う。構造 lint と freshness は pipeline integrity、代表 request / response と利用者に現れる意味は contract / integration evidence として区別する。
+- HTTP 契約の正本と OpenAPI / Web 型の生成関係は [API 規約の Wire Boundary](../implementation/api.md#wire-boundary) に従う。構造 lint と freshness は pipeline integrity、代表 request / response と利用者に現れる意味は contract / integration evidence として区別する。
 - 存続する InMemory double と production adapter に条件ずれがある場合だけ、consumer が依存する代表的な受理・拒否と保存結果を小さい共有 contract で検証する。全 repository の二重実装・二重 suite は求めない。
 - lock、rollback、競合、永続 job / replay の詳細を double へ追加する前に、該当 test を実 PostgreSQL へ移す。移行後は不要な simulator、fixture、重複 assertion を削除し、保守対象を一つにする。
 
 ### DB-backed API
 
-- DB contract、repository integration、HTTP / usecase test の責務を分ける。DB contract を evidence に選んだ場合の production boundary と oracle は [DB 規約の Contract Evidence](db-rule.md#contract-evidence) に従う。
+- DB contract、repository integration、HTTP / usecase test の責務を分ける。DB contract を evidence に選んだ場合の production boundary と oracle は [DB 規約の Contract Evidence](../implementation/database.md#contract-evidence) に従う。
 - pooler / proxy、接続 option、read-only probe は直接 DB test と別の wire 契約として検証する。
 
 ### Performance-sensitive Analytics
@@ -120,7 +120,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 
 ## Processing Worker Evidence Catalog
 
-選んだ場合に適用する。実装契約は [Worker 規約](worker-rule.md)、job 契約は [OCR job 契約](ocr-job-contract.md) を正本とする。Analysis / OCR の共通 contract として、次を観測する。
+選んだ場合に適用する。実装契約は [Worker 規約](../implementation/worker.md)、job 契約は [OCR job 契約](../implementation/ocr-job.md) を正本とする。Analysis / OCR の共通 contract として、次を観測する。
 
 - `DB candidate -> instance resource reservation -> job claim / lease / fence -> child -> candidate validation -> durable commit -> post-commit effect` の順序。
 - parent が DB、object、process、timeout、fence、結果確定を所有し、child は 1 attempt の bounded candidate だけを返すこと。
@@ -131,11 +131,11 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - worker runtime の起動途中・稼働中の異常からの共通停止、単一期限内の子 process・補助 task 回収。listener の一時切断と構造異常、通知 sender 単独の異常は、それぞれの回復境界で確認する。
 - DB / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 
-OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、retry / lease 回復、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、報告はその dataset の範囲に限る（未知画像への一般化は保証しない）。契約変更ごとに直接通す境界は [OCR job 契約](ocr-job-contract.md#compatibility-and-verification) の表に従う。
+OCR は schema / screen type、object metadata、parser / postprocess、failure mapping、retry / lease 回復、draft payload を外部 oracle にする。accuracy は version 固定 dataset と項目別 oracle で測り、報告はその dataset の範囲に限る（未知画像への一般化は保証しない）。契約変更ごとに直接通す境界は [OCR job 契約](../implementation/ocr-job.md#compatibility-and-verification) の表に従う。
 
 ## Analysis Capability / Worker Evidence Catalog
 
-選んだ場合に適用する。契約は [分析 batch 要求](requirements/series-analysis-batch.md)、[DB 規約](db-rule.md)、[Worker 規約](worker-rule.md#analysis-publication-and-release-control) を正本とし、本書へ列挙しない。
+選んだ場合に適用する。契約は [分析 batch 要求](../requirements/series-analysis-batch.md)、[DB 規約](../implementation/database.md)、[Worker 規約](../implementation/worker.md#analysis-publication-and-release-control) を正本とし、本書へ列挙しない。
 
 - 純粋計算は分母、同値、丸め、入力順、seed、品質状態を固定する。浮動小数点の oracle は、既存実装の値だけに頼らず、手計算、高精度参照、数学的性質のいずれかを使う。意図した結果変更は根拠、影響 fixture、algorithm version を同じ変更に含める。
 - DB job / intent / lease / persistent fence counter / artifact と通知は実 PostgreSQL、timeout / OOM / kill / reap / 実行継続は実 process で検証する。
@@ -143,7 +143,7 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - child の resource limit は対象 cgroup の readback / event と parent 生存を同時に確認する。host 上の制限や runtime 全体 OOM で代用しない。
 - artifact materialization は byte / node / depth / UTF-8 / checksum / path / symlink / disk 境界を検証する。
 - publication を evidence に選ぶ場合、意味 oracle は Worker 規約が定める Rust の full semantic validator とし、exact validation contract、published row の immutability、API の bounded shape / identity defense をそれぞれの境界で検証する。
-- 移行中だけの契約と撤去条件は [Transitional Contracts](db-rule.md#transitional-contracts) に置く。
+- 移行中だけの契約と撤去条件は [Transitional Contracts](../implementation/database.md#transitional-contracts) に置く。
 - release promotion は 2 接続の実 PostgreSQL で、capability 検査後の非互換登録が commit まで待つこと、singleton lock 中の新規作品が commit 後の tuple を継承すること、登録作品 0 件が terminal になることを検証する。
 - 自動・手動の分析保守は、preview の非更新、対象 snapshot 変更時の拒否、互換性不足、同じ世代の再実行、未完了・失敗 target の識別を実 PostgreSQL で確認する。運用 runner は不正 report、配備世代変更、待機期限を失敗として扱い、release 完了は enqueue 成功ではなく保守の完了で判定する。
 - 待機 OCR の優先と実行中の分析の完了を実 process / DB で確認する。
@@ -165,7 +165,3 @@ OCR は schema / screen type、object metadata、parser / postprocess、failure 
 - release の producer attempt と consumer attempt が異なるケース、通常 deploy と rollback の両方を同じ provenance validator で検証する。
 - 公開 edge test は URL だけでなく観測地点を契約に含め、blocking oracle は意図した公開経路を通る地点に置く。
 - deploy / credential rotation の dependency gate は、対象世代固有の identity で新規接続を直接確認する。更新前から生存する connection、process の起動状態、別 consumer の成功を代用証拠にしない。
-
-## Quality Gate Handoff
-
-本書で選んだ evidence を、[Change Gates](dev-rule.md#change-gates) の gate 役割と変更種別へ割り当てる。既存 evidence で足りる場合はその証拠を使い、test の追加・廃止・縮小は同じ採用基準で判断する。代替 check は守る価値が残る場合に限って作る。

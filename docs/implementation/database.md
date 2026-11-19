@@ -1,16 +1,16 @@
 # DB 利用規約
 
-目的: 共有 PostgreSQL の所有権、永続状態の意味、consumer contract、DB contract evidence、migration 順序、移行中の契約を判断する。DDL の現在値は `momo-db`、query の現在値は各 consumer、検証コマンドは [開発作業規約](dev-rule.md#commands) を正本とする。
+目的: 共有 PostgreSQL の所有権、永続状態の意味、consumer contract、DB contract evidence、migration 順序、移行中の契約を判断する。DDL の現在値は `momo-db`、query の現在値は各 consumer、検証コマンドは [開発作業規約](../development/workflow.md#commands) を正本とする。
 
-row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試合メモは [試合メモ要求](requirements/match-note.md)、分析 job / artifact は [分析 batch 要求](requirements/series-analysis-batch.md)、実績は [実績要求](requirements/player-achievements.md) を正本とする。
+row の業務意味と状態遷移は [ドメイン規約](../domain-rule.md)、試合メモは [試合メモ要求](../requirements/match-note.md)、分析 job / artifact は [分析 batch 要求](../requirements/series-analysis-batch.md)、実績は [実績要求](../requirements/player-achievements.md) を正本とする。
 
 ## Ownership
 
 - schema、migration、seed は別 repository の `momo-db` が所有し、migration SQL も `momo-db` にだけ置く。
-- 変更・DB 操作に用いる `momo-db` checkout は、依頼の指定や既知の配置から特定する。`../momo-db` は通常の配置例であり、worktree では元の作業ツリーなどの配置を確認する。隔離 test 用の pinned checkout・migration source は、変更対象とは区別して確認する。`momo-db` 側を変更する前の手順は [AGENTS.md](../AGENTS.md#作業境界) に従う。
+- 変更・DB 操作に用いる `momo-db` checkout は、依頼の指定や既知の配置から特定する。`../momo-db` は通常の配置例であり、worktree では元の作業ツリーなどの配置を確認する。隔離 test 用の pinned checkout・migration source は、変更対象とは区別して確認する。`momo-db` 側を変更する前の手順は [AGENTS.md](../../AGENTS.md#作業境界) に従う。
 - この repository は API / worker の query と、選択した DB contract evidence を所有する。
 - migration の存在と接続先への適用済み状態は別々に確認する。
-- Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。隔離 test の既定 migration source の解決は [開発作業規約の Environment](dev-rule.md#environment) に従う。
+- Testcontainers、CI、E2E は `momo-db` の migration を適用した DB を使う。隔離 test の既定 migration source の解決は [開発作業規約の Environment](../development/workflow.md#environment) に従う。
 
 ## Durable State Rules
 
@@ -23,7 +23,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 - 分析成果物の current / previous の確認と chunk read は cleanup と競合しない read 境界で行う。
 - 分析 campaign target は未展開を `pending`、request へ展開済みで未終端のものを `expanded` とする。実行中かどうかは job / attempt と request の割当が所有し、target へ重複保存しない。手動要求の未充足と後続実行は保存済み request で判定する。
 - 分析の published artifact header と child resource は改変不能とし、consumer の検証に加えて DB の guard でも守る。この不変性は恒久の契約であり、移行の完了後も維持する。staging の作成・差し替え、attempt 保持 cleanup による許可済み provenance 変更、参照されない parent からの cascade cleanup を、公開内容の単独変更と区別する。DB の guard を別の仕組みへ置き換える場合は、[Contract Evidence](#contract-evidence) の publication の各経路を実 PostgreSQL で検証し、撤去順を決めてから行う。
-- 実績の定義・直接入力と移行の根拠・廃止履歴は `momo-db` に保存する。根拠は項目・プレーヤー・入力元ごとの現在の申告であり、取消時も保持する。編集版と申告の世代を分け、同じ申告の訂正は世代を維持し、取消後に別試合から新規入力するときは新しい世代にする。取消・訂正を反映した現在の申告を保持し、初達成は有効な根拠から決め直せるようにする。判断条件は [実績要求](requirements/player-achievements.md#3-入力と達成判定) に従う。
+- 実績の定義・直接入力と移行の根拠・廃止履歴は `momo-db` に保存する。根拠は項目・プレーヤー・入力元ごとの現在の申告であり、取消時も保持する。編集版と申告の世代を分け、同じ申告の訂正は世代を維持し、取消後に別試合から新規入力するときは新しい世代にする。取消・訂正を反映した現在の申告を保持し、初達成は有効な根拠から決め直せるようにする。判断条件は [実績要求](../requirements/player-achievements.md#3-入力と達成判定) に従う。
 - 自動実績の廃止履歴は、定義と4人の統合結果を持つ独立した業務 snapshot として保存する。手入力の下位項目を廃止するときは、その時点で補完元となる根拠 ID・世代だけを固定する。いずれも通常の分析 artifact 整理から独立して保持し、全編集履歴や有効項目の派生行は蓄積しない。
 - OCR の Discord 通知は送出全体の確定、分析通知は分析成功時点の固定 snapshot を持つ。対象下書きの確定・取消・削除と open 送出の aborted 化・通知の未開始部分取消は同じ業務 command で commit する。掲載試合の削除も未開始通知の取消と同時に扱う。通知本文は確定時点の内容に固定し、後日のメモ編集や元 job の整理の後もそのまま保つ。
 - 送出の owner・固定 member・受付期限・終端識別を保持し、source 下書き削除後も同一操作の照合を可能にする。未確定送出の job と、受付期限内の upload 済み / job 未登録画像を保持処理から保護する。保存形・一意性・参照制約は momo-db、受付・失敗・確定の業務判断は API / Worker が所有する。
@@ -51,7 +51,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 
 - mutable entity の保存 ID / FK は native UUID とし、既存の外部 ID は保存された `legacy_id` または保持用 `legacy_*` から復元する。入力 ID は exact alias lookup で解決し、未登録の参照や認証主体を hash で補完しない。新規の構造化 job / attempt ID の割当だけが、momo-db の固定 namespace と共有 fixture に従う mapper を使う。
 - immutable な分析 artifact / radar basis の payload・header・chunk・revision は従来の text ID と checksum を保持する。可変状態からの UUID 参照は型付き identity table を経由し、新規 artifact / basis と identity は同じ transaction で保存する。計算入力、整列、tie-breaker、snapshot は保存された旧 ID の byte 列を使う。mutable storage を UUID にしても、既存の外部 ID、冪等 replay、immutable 成果物の byte と checksum を保つためである。
-- Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態への write を拒否する。API は起動時の read-only snapshot で legacy / canonical の schema 契約を検証する（[API 規約](api-rule.md#bootstrap--http-execution)）。これらの実行時検査は canonical identity への切替手順の完了後も恒久の契約として継続する。API が受理する mode は対応する consumer 契約に従い、legacy mode の受理をやめる場合は、その検査と legacy 境界の証拠（[テスト実行設計](test-architecture.md#api--worker-の実行境界)）を同じ変更で見直す。
+- Worker は通常接続時に UUID / legacy 列、identity の一意性、FK と保持値の NULL 対応を検査し、旧 schema や部分適用状態への write を拒否する。API は起動時の read-only snapshot で legacy / canonical の schema 契約を検証する（[API 規約](api.md#bootstrap--http-execution)）。これらの実行時検査は canonical identity への切替手順の完了後も恒久の契約として継続する。API が受理する mode は対応する consumer 契約に従い、legacy mode の受理をやめる場合は、その検査と legacy 境界の証拠（[テスト実行設計](../development/test-architecture.md#api--worker-の実行境界)）を同じ変更で見直す。
 - 出欠の週キーは Session の一意な所有者ではなく、週次自動実行予定を識別する。Session の親参照・操作 ID、週次予定への通知参照を共有 schema から読み、API の canonical 起動契約は日付占有・全体の active Session・週次自動 Session の部分一意 index と、出欠由来・週次通知 owner の CHECK を含む。週内の複数 Session を旧 `(week_key, postpone_count)` 制約で制限せず、これらの制約が欠けた中間 schema を受理しない。 CHECK と部分 index の式は生成契約が要求する対象だけを読み取り、論理式のグループと引用された値を区別して比較する。
 
 ### Notifications
@@ -65,7 +65,7 @@ row の業務意味と状態遷移は [ドメイン規約](domain-rule.md)、試
 
 ## Contract Evidence
 
-test の採用・維持・削除は [テスト・品質規約](test-rule.md#品質証拠の採用維持削除) に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
+test の採用・維持・削除は [テスト・品質規約](../development/test-policy.md#品質証拠の採用維持削除) に従う。DB contract を品質証拠に選んだ場合は、本節を production boundary と oracle の正本とし、変更に該当する項目を同じ単位で満たす。一項目ごとに新しい test case を要求する一覧ではない。
 
 - 分析 release の algorithm / artifact schema / validation contract は不可分な tuple として扱う。
 - 変更した query / repository を migration 適用済みの実 PostgreSQL で実行する。複数 table の write は statement / lock 順と保存後の関連 row を確認する。
@@ -80,7 +80,7 @@ test の採用・維持・削除は [テスト・品質規約](test-rule.md#品�
 
 - 後方互換な変更は migration 適用後に consumer を deploy する。
 - 通常 release の破壊的変更、NOT NULL / 型変更、大量 backfill、旧 schema 削除は、旧新 consumer の同時稼働期間を考慮して複数段階へ分け、deploy 順序、rollback、未移行データを実装前に決める。明示承認した全 writer 停止下の一括切替では、対象 DB checkout の `docs/development.md` が定める保全・順序・復旧条件を満たし、同じ停止期間内に DB と consumer を切り替えられる。provider 固有の手順は `private/` に置く。
-- 全 writer 停止を伴う非互換切替と切戻しは、対応する DB snapshot と consumer の組を承認時に確認する（[公開運用規約](ops/README.md)）。本番への migration 適用は、CI の使い捨て DB での検証とは別に本番の状態で確認する。
+- 全 writer 停止を伴う非互換切替と切戻しは、対応する DB snapshot と consumer の組を承認時に確認する（[公開運用規約](../ops/README.md)）。本番への migration 適用は、CI の使い捨て DB での検証とは別に本番の状態で確認する。
 - 進行中の切替ごとの具体的な順序・混在禁止・切戻し先は [Transitional Contracts](#transitional-contracts) に置き、完了後に撤去する。
 
 ## Transitional Contracts
@@ -95,6 +95,6 @@ test の採用・維持・削除は [テスト・品質規約](test-rule.md#品�
 
 ## Achievement Data
 
-- 項目の固定 ID・条件・星・備考は、`.momo-db-ref` に固定した `momo-db` の `seeds/momotetsu2-achievements-v1.json` を使う。個人の達成情報は、manifest や migration ではなく、明示した TSV から consumer の初期化 command で投入する。定義 manifest の所有は `momo-db`、利用者の達成データの投入は consumer の初期化 command と分け、再投入後も利用者の訂正・取消を保つ（下記）。command の実行方法と入力は [実績の初期投入](tools/initial-achievement-import.md) を参照する。
+- 項目の固定 ID・条件・星・備考は、`.momo-db-ref` に固定した `momo-db` の `seeds/momotetsu2-achievements-v1.json` を使う。個人の達成情報は、manifest や migration ではなく、明示した TSV から consumer の初期化 command で投入する。定義 manifest の所有は `momo-db`、利用者の達成データの投入は consumer の初期化 command と分け、再投入後も利用者の訂正・取消を保つ（下記）。command の実行方法と入力は [実績の初期投入](../tools/initial-achievement-import.md) を参照する。
 - 既定は書き込まない dry-run とし、apply は同じ保存部品で定義・移行根拠・再計算 intent を一つの transaction に保存する。dry-run は後続の apply 時点の競合や集計完了を保証しない。
 - 再実行時は、既存の同じ固定 ID の定義と移行根拠、および移行根拠の取消・訂正をそのまま保つ。下位達成の補完と自動達成は Worker だけが計算し、import command が保存する根拠は直接の移行根拠に限る。投入後は同じ世代の API・Worker で再計算結果を確認する。

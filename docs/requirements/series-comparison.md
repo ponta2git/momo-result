@@ -13,9 +13,10 @@
 | 総合成績で相手を追う・先行を保つ条件の試算 | `docs/requirements/series-rank-outlook.md` |
 | 「次戦に備える」の行動プレイブック | `docs/requirements/series-review-playbook.md` |
 | 物件収益の順位と目的地から見込まれる順位との差 | `docs/requirements/series-expected-rank-gap.md` |
+| 収益トップと売り場・目的地の有無で分けた勝ち筋マップ（草案。確定まで本書の指標を変更しない） | `docs/requirements/series-win-path.md` |
 | 非同期計算、artifact、状態、管理、公開・復旧 | `docs/requirements/series-analysis-batch.md` |
 | HTTP / artifact shape | Tapir endpoint、JSON Schema |
-| UI共通規約、test、command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
+| UI共通規約、test、command | `docs/ui-rule.md`、`docs/development/test-policy.md`、`docs/development/workflow.md` |
 
 endpoint path、DTO field、component構成、query cache key、閾値の配置場所は実装・schemaを正本とし、本書へ複製しない。
 
@@ -51,6 +52,8 @@ endpoint path、DTO field、component構成、query cache key、閾値の配置�
 - 行動順、因果、能力、次戦結果を保存済み集計から推定しない。
 
 ## 3. Information Architecture / State
+
+分析の入口では「平均順位の差が縮まったか」「最近の負けが通常より続いているか」「桃鉄型など別の型を試す根拠があるか」を読み取れるようにする。順位内訳、平均順位とその差、直近の対戦範囲、総資産・収益を優先候補とし、型の変更は根拠を添えた仮説としてのみ示す。
 
 ページは比較条件の後、目的で切り替える。
 
@@ -187,7 +190,7 @@ highlightは既存指標から決定論的に選び、銀次被害後の成績�
 
 ## 8. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 領域 | 受入条件 |
 | --- | --- |

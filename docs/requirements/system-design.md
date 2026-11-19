@@ -4,23 +4,16 @@
 
 専門正本:
 
-- 実装境界: `docs/architecture.md`
-- DB / migration: `docs/db-rule.md`
-- OCR job: `docs/ocr-job-contract.md`
+- OCR job: `docs/implementation/ocr-job.md`
 - 戦績分析: `docs/requirements/series-analysis-batch.md`
-- UI / test / command: `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md`
+- UI / test / command: `docs/ui-rule.md`、`docs/development/test-policy.md`、`docs/development/workflow.md`
 
 現在のframework version、directory、env名、threshold、workflow、provider設定は実装・設定を正本とし、本書ではその正本を参照する。
 
-採用する構成は React/Vite の SPA、API、Processing Worker、共有 PostgreSQL とする。APIとOCRワーカーは同一リポジトリで分離する。
-
 ## 1. System Boundaries
 
-- Web、API、Processing Worker、共有DB、object storageを独立した責務として扱う。
-- WebとAPIだけが利用者向けHTTP runtimeを構成する。OCRと戦績分析は高負荷処理がHTTP可用性を巻き込まない独立Rust runtimeへ置く。
-- APIは認証、入力検証、業務usecase、保存済み状態の読み取りを担う。OCR / 分析engineはHTTP requestの外で実行する。
-- DBはsummitと共有するPostgreSQLを使い、schema / migrationは`../momo-db`が所有する。
-- OCR / 分析は既存 DB の job を直接取得し、通知欠落からも回復する。
+- Web は React/Vite の SPA とし、利用者向け HTTP は Web edge と API が担う。高負荷な OCR・戦績分析は同じリポジトリの独立した Rust の Processing Worker で実行し、起床通知が欠けても DB の job から回復できるようにする。各サービスの責務と実装入口は [アーキテクチャ規約のシステム境界](../architecture.md#system-boundaries) に従う。
+- summit と共有する PostgreSQL の schema・migration は `momo-db` が所有する。変更対象の checkout は [DB 規約の所有権](../implementation/database.md#ownership) に従って特定する。
 - upload画像は非公開object storageへ置き、DB / jobにはopaque keyと検証metadataだけを保存する。
 - provider固有のtopology、resource、費用、実測、復旧手順はprivateに置く。
 
@@ -75,7 +68,7 @@
 - 配信構成の切替は承認済みの保守時間内で行い、失敗時は前進修正する。health、機能、性能回復は別々に確認する。
 - secretはlocal、CI、productionの各secret storeで管理し、tracked fileやpublic docsへ置かない。
 
-具体的なruntime構成、CI workflow、release commandは実装と[CI・リリース規約](../release.md)を正本とする。
+具体的なruntime構成、CI workflow、release commandは実装と[CI・リリース規約](../development/release.md)を正本とする。
 
 ## 7. Security / Abuse Resistance
 
@@ -114,7 +107,7 @@
 
 ## 10. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 変更境界 | 受入に必要な観測 |
 | --- | --- |

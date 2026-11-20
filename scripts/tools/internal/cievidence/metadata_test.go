@@ -38,7 +38,7 @@ func metadataFixture(t *testing.T, worker bool) (string, string, []string) {
 	put(t, filepath.Join(dir, "image-tar.sha256"), hash+"  "+archive+"\n")
 	put(t, filepath.Join(dir, "image-ref.txt"), ref+"\n")
 	put(t, filepath.Join(dir, "image-id.txt"), testDigest+"\n")
-	patch := `{"repository":"https://github.com/ponta2git/http4s.git","scalaVersion":"3.3.6","sourceSha":"` + testCommit + `","version":"1.0.0-test"}`
+	patch := `{"repository":"https://github.com/ponta2git/http4s.git","scalaVersion":"3.3.8","sourceSha":"` + testCommit + `","version":"1.0.0-test"}`
 	put(t, filepath.Join(dir, "http4s-patch.json"), patch)
 	args := []string{"--artifact-dir", dir, "--run-id", "123", "--run-attempt", "2", "--commit", testCommit, "--image-ref", ref}
 	if worker {
@@ -148,7 +148,7 @@ func TestDeploymentProducerBindsRuntimeAndEdge(t *testing.T) {
 }
 func TestPatchProducerRejectsUnpinnedSource(t *testing.T) {
 	root, _, _ := metadataFixture(t, false)
-	args := []string{"--repository", "https://github.com/ponta2git/http4s.git", "--scala-version", "3.3.6", "--source-sha", testCommit, "--version", "1.0.0-test"}
+	args := []string{"--repository", "https://github.com/ponta2git/http4s.git", "--scala-version", "3.3.8", "--source-sha", testCommit, "--version", "1.0.0-test"}
 	code, _, err := call(t, "create-http4s-patch", args, "", root)
 	if code != 0 {
 		t.Fatal(err)

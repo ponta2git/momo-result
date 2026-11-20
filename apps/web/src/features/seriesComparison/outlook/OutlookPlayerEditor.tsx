@@ -86,7 +86,7 @@ export function OutlookPlayerEditor(props: Props) {
                   name={proposal.name}
                   edit={dialog.edit}
                 />
-                <div aria-hidden="true" className="border-t border-[var(--color-border)]" />
+                <div aria-hidden="true" className="border-t border-border" />
                 <div className="grid justify-items-start gap-2" aria-label="この回数を続けた結果">
                   <p className={contentText.heading}>
                     {proposal.name}の平均：{proposal.average}位

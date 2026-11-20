@@ -17,7 +17,7 @@ import { formatSeriesMatchIndex } from "@/shared/domain/matchLabels";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { FactList } from "@/shared/ui/data/FactList";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 const flagOrder = ["close_finish", "asset_blowout", "ginji_storm", "revenue_top_no_win"];
@@ -55,7 +55,7 @@ export function MatchDigestStrip({
               return (
                 <article
                   className={cn(
-                    "w-52 shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4",
+                    "w-52 shrink-0 rounded-md border border-border bg-surface p-4",
                     focused && focusedMetricRingClass,
                   )}
                   data-focused-metric={focused ? "true" : undefined}
@@ -111,10 +111,7 @@ export function MatchDigestStrip({
                       <span className={contentText.supporting}>大きな特徴なし</span>
                     ) : (
                       match.flags.map((flag) => (
-                        <span
-                          className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}
-                          key={flag}
-                        >
+                        <span className={cn(compactBadgeClass, badgeToneClass.neutral)} key={flag}>
                           {timelineFlagLabel(flag)}
                         </span>
                       ))

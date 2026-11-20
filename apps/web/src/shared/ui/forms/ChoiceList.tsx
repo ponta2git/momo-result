@@ -64,7 +64,7 @@ export function ChoiceList<Value extends string>({
       {labelledBy ? null : <legend className={fieldText.label}>{legend}</legend>}
       <div
         className={cn(
-          "min-w-0 divide-y divide-[var(--color-border)] overflow-hidden rounded-sm border bg-[var(--color-surface)]",
+          "min-w-0 divide-y divide-border overflow-hidden rounded-sm border bg-surface",
           controlBorderClass.default,
           labelledBy ? "" : "mt-2",
           layout === "dialog"
@@ -123,8 +123,8 @@ function ChoiceOption<Value extends string>({
       aria-busy={option.pending || undefined}
       className={cn(
         "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-stretch",
-        option.trailingAction ? "divide-x divide-[var(--color-border)]" : "",
-        selected ? "bg-[var(--color-surface-selected)]" : "bg-[var(--color-surface)]",
+        option.trailingAction ? "divide-x divide-border" : "",
+        selected ? "bg-surface-selected" : "bg-surface",
         optionDisabled ? "opacity-60" : "",
       )}
     >
@@ -136,7 +136,7 @@ function ChoiceOption<Value extends string>({
           option.description ? "items-start" : "items-center",
           selected ? "momo-surface-selected" : "",
           optionDisabled ? "cursor-not-allowed" : "cursor-pointer",
-          "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)]",
+          "has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-action",
         )}
       >
         <input
@@ -155,9 +155,7 @@ function ChoiceOption<Value extends string>({
           aria-hidden="true"
           className={cn(
             "inline-flex size-5 items-center justify-center rounded-full border",
-            selected
-              ? "border-[var(--color-action)] text-[var(--color-action)]"
-              : "border-[var(--color-choice-marker-border)] text-transparent",
+            selected ? "border-action text-action" : "border-choice-marker-border text-transparent",
           )}
         >
           {option.pending ? (

@@ -89,7 +89,7 @@ export function TextareaControl({
         textareaMinHeightClass[minHeight],
         resize === "vertical" ? "resize-y" : "resize-none",
         textFlow === "relaxed" ? "leading-6" : "",
-        placeholderTone === "muted" ? "placeholder:text-[var(--color-text-muted)]" : "",
+        placeholderTone === "muted" ? "placeholder:text-text-muted" : "",
       )}
     />
   );

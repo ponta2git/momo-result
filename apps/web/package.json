@@ -18,7 +18,7 @@
     "format:check": "oxfmt --check . && (cd ../.. && apps/web/node_modules/.bin/oxfmt --check scripts/e2e)",
     "generate:api": "node ./scripts/generate-api.mts",
     "contract:check": "redocly lint --config ../api/redocly.yaml ../api/openapi.yaml && node ./scripts/generate-api.mts --check",
-    "e2e:ui": "playwright test --config playwright.ui.config.ts"
+    "e2e:ui": "pnpm build && playwright test --config playwright.ui.config.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

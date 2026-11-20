@@ -11,10 +11,10 @@
 | 実績の判定・保存・廃止履歴と実績軸 | [実績達成管理](player-achievements.md) |
 | job、artifact、version、公開・復旧 | 本書 |
 | ロール、管理操作の権限 | [基本要求の認証・権限](base.md#3-認証権限) |
-| runtime / parent-child | [Worker規約](../worker-rule.md) |
-| DB / migration | `docs/db-rule.md` と `../momo-db` |
+| runtime / parent-child | [Worker規約](../implementation/worker.md) |
+| DB / migration | `docs/implementation/database.md` と `../momo-db` |
 | artifact / 入力 / HTTP shape | JSON Schema、Tapir endpoint。本書の Artifact Contract |
-| UI / test / command | `docs/ui-rule.md`、`docs/test-rule.md`、`docs/dev-rule.md` |
+| UI / test / command | `docs/ui-rule.md`、`docs/development/test-policy.md`、`docs/development/workflow.md` |
 
 本書は指標の数式、推薦候補、画面構成、wire fieldを複製しない。
 
@@ -109,7 +109,7 @@ provider固有値、費用、実測、昇格・復旧手順は public docs へ�
 - 大容量 staging と短い fenced publication を分ける。stagingはcurrentから不可視とし、fresh transactionで完全性と実行権を再検証してからcurrent / previousを切り替える。
 - publication失敗やcommit成否不明はcurrentを維持し、fresh connection上の永続状態から再開する。
 
-DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process責務は [Worker規約](../worker-rule.md) を正本とする。
+DB lock順とstaging transactionの規則は [DB規約](../implementation/database.md)、process責務は [Worker規約](../implementation/worker.md) を正本とする。
 
 ### 分析完了通知
 
@@ -173,7 +173,7 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 - `queued` / `running` で成功artifactがあれば旧表示と最終成功日時を維持し、更新または手動再計算中であることを区別する。
 - 初回計算中は分析値のないloading state、成果物なしの失敗は分析値のないerror stateを出す。失敗時も旧成功artifactがあれば維持する。
 - 対象match revision不一致では一次データを維持し、分析文脈だけを隠す。
-- Webは初回表示と利用者の明示的な更新操作で状態を取得し、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。intervalによる取得は、`queued` / `running` を集計待ちとして表示している画面が完了を確認する場合に限り、[Web 実装規約の Server State](../web-rule.md#server-state) の範囲で行う。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
+- Webは初回表示と利用者の明示的な更新操作で状態を取得し、window focus、visibility / pageshow復帰、network reconnectによる自動再取得を行わない。intervalによる取得は、`queued` / `running` を集計待ちとして表示している画面が完了を確認する場合に限り、[Web 実装規約の Server State](../implementation/web.md#server-state) の範囲で行う。新artifact取得中は旧表示を保ち、latest resultだけへ原子的に切り替える。
 - artifact切替時に古いdrilldown / match contextを混在させない。ancillary resource failureで主表示の切替を無期限に待たない。
 - 選択試合表示と各指標の強調は、同じartifact・scope・試合の有効なcontextから導出する。切替中の旧表示を保護する場合も表と選択表示を一体で保持し、新bundleのcommitで一体に切り替える。選択解除後にownerだけを遅れて残さない。
 - 成功済みcontextがない取得失敗では強調を出さず、同じcontextの一時的な再取得失敗では有効な成功snapshotと更新失敗表示を維持してよい。現在のrequestの404（試合不存在）・410（artifact失効）またはrevision不一致等の除外はcached contextを無効とし、選択表示と全指標の強調を外す。別keyのerrorを混ぜず、新たな成功前に再取得中のcacheから復活させない。aggregateの表示・bounded recoveryは既存契約に従い、試合結果の保存済み本体は維持する。
@@ -199,7 +199,7 @@ DB lock順とstaging transactionの規則は [DB規約](../db-rule.md)、process
 - artifact / response / temporary storageにbyte、件数、深さ、disk、concurrency上限を設ける。production timeoutは同等runtimeの通常・上限・cold・連続実行測定後に設定する。
 - job / queue / phase / memory / byte数を低cardinality metricと安全なstructured logで観測する。実測値とalert thresholdはprivateに置く。
 
-OCR同居では、共通parent-child境界、processごとの資源予算と同時実行数1、待機OCRの優先と実行中の分析の継続、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。精度と実runtimeの品質証拠は[テスト・品質規約](../test-rule.md#processing-worker-evidence-catalog)と[OCR job契約の検証境界](../ocr-job-contract.md#compatibility-and-verification)に従う。
+OCR同居では、共通parent-child境界、processごとの資源予算と同時実行数1、待機OCRの優先と実行中の分析の継続、子process回収、非authoritative candidateを維持する。OCR payloadは共有storageのopaque keyを使い、local volume共有や一時HTTP配信へ依存しない。精度と実runtimeの品質証拠は[テスト・品質規約](../development/test-policy.md#processing-worker-evidence-catalog)と[OCR job契約の検証境界](../implementation/ocr-job.md#compatibility-and-verification)に従う。
 
 ## 8. Compatibility / Release / Rollback
 
@@ -218,7 +218,7 @@ OCR同居では、共通parent-child境界、processごとの資源予算と同�
 
 ## 9. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 変更領域 | 受入条件 / production boundary |
 | --- | --- |

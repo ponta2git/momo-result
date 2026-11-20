@@ -111,8 +111,8 @@ private[postgres] object SeriesAnalysisPayloadValidator:
         val metricKind = request.metric.map {
           case SeriesAnalysisDrilldownMetric.RankAverageHistory => "rank_average_history"
           case SeriesAnalysisDrilldownMetric.PlayOrderRankHistory => "play_order_rank_history"
-          case SeriesAnalysisDrilldownMetric.RankSignals => "rank_signals"
-          case SeriesAnalysisDrilldownMetric.UnexpectedWins => "unexpected_wins"
+          case SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence =>
+            "expected_rank_gap_evidence"
         }
         val kindMatches = metricKind.exists(expected =>
           value("payload").flatMap(_.hcursor.get[String]("kind").toOption).contains(expected)

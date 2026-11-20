@@ -33,8 +33,7 @@ export function ScoreGridDesktopHeader() {
               className={cn(
                 "px-2 py-2 align-middle",
                 alignClass[column.align],
-                column.kind === "member" &&
-                  "sticky left-0 z-[var(--z-sticky-raised)] bg-[var(--color-surface)]",
+                column.kind === "member" && "sticky left-0 z-(--z-sticky-raised) bg-surface",
               )}
             >
               {column.header}

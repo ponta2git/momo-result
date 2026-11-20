@@ -51,7 +51,7 @@ export function ScopedMasterPanel({
         <div
           aria-busy="true"
           aria-label={`${labels.itemLabel}を読み込み中`}
-          className="divide-y divide-[var(--color-border)]"
+          className="divide-y divide-border"
         >
           {["row-1", "row-2", "row-3"].map((id) => (
             <div key={id} className="py-2">
@@ -79,7 +79,7 @@ export function ScopedMasterPanel({
           {list.items.length === 0 ? (
             <EmptyState placement="embedded" title={`${labels.itemLabel}はまだありません`} />
           ) : (
-            <ul className="divide-y divide-[var(--color-border)]">
+            <ul className="divide-y divide-border">
               {list.items.map((item) => {
                 const isPending = item.pending === true;
                 return (

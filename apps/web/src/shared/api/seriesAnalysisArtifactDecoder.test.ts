@@ -11,16 +11,16 @@ import {
   makeSeriesAnalysisReview,
 } from "@/test/msw/seriesAnalysisFixtures";
 
-import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json";
-import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v3.json";
+import aggregateFixture from "../../../../../docs/schemas/fixtures/series-analysis/aggregate-payload-v7.json";
+import drilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/drilldown-payload-v4.json";
+import evidenceDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/expected-rank-gap-evidence-drilldown-payload-v4.json";
 import matchContextFixture from "../../../../../docs/schemas/fixtures/series-analysis/match-context-payload-v1.json";
-import rankSignalsDrilldownFixture from "../../../../../docs/schemas/fixtures/series-analysis/rank-signals-drilldown-payload-v3.json";
 import reviewFixture from "../../../../../docs/schemas/fixtures/series-analysis/review-payload-v4.json";
 
 const artifact = {
-  algorithmVersion: "series-analysis-v14",
+  algorithmVersion: "series-analysis-v15",
   artifactId: "artifact-1",
-  artifactSchemaVersion: 10,
+  artifactSchemaVersion: 11,
   gameTitleId: "title-1",
   inputRevision: "1",
   publishedAt: "2026-08-29T00:00:00Z",
@@ -67,12 +67,25 @@ function includedMatchContextResponse(): Record<string, unknown> {
   return response;
 }
 
+/** The API adds the saved note (or null) to every evidence row after payload validation. */
+function evidenceWithNotes() {
+  const stored = structuredClone(evidenceDrilldownFixture);
+  return {
+    ...stored,
+    payload: {
+      ...stored.payload,
+      above: stored.payload.above.map((row) => ({ ...row, note: null })),
+      below: stored.payload.below.map((row) => ({ ...row, note: "メモ" })),
+    },
+  };
+}
+
 describe("series analysis artifact response decoder", () => {
   it.each([
     ["aggregateV5", aggregateFixture],
     ["reviewV3", reviewFixture],
     ["drilldown", drilldownFixture],
-    ["drilldown", rankSignalsDrilldownFixture],
+    ["drilldown", evidenceWithNotes()],
     ["matchContext", includedMatchContextResponse()],
     ["matchContext", makeSeriesAnalysisExcludedMatchContext("not_in_scope")],
   ] as const)(
@@ -80,7 +93,7 @@ describe("series analysis artifact response decoder", () => {
     async (kind, fixture) => {
       const response = artifactResponse(fixture);
       await expect(decodeSeriesAnalysisArtifact(kind, response)).resolves.toBe(response);
-      for (const artifactSchemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 9, 99]) {
+      for (const artifactSchemaVersion of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 99]) {
         await expect(
           decodeSeriesAnalysisArtifact(kind, {
             ...response,
@@ -92,7 +105,7 @@ describe("series analysis artifact response decoder", () => {
   );
 
   it.each([
-    ["aggregateV5", aggregateFixture, [3, 4, 5]],
+    ["aggregateV5", aggregateFixture, [3, 4, 5, 6]],
     ["reviewV3", reviewFixture, [3]],
   ] as const)("%s rejects obsolete payload generations", async (kind, fixture, versions) => {
     const response = artifactResponse(fixture);

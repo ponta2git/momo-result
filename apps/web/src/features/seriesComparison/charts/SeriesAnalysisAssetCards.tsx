@@ -18,7 +18,7 @@ import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function AssetComparisonCards({
@@ -76,7 +76,7 @@ export function AssetComparisonCards({
                   className="mt-2 flex flex-wrap gap-2"
                 >
                   {entry.tags.map((tag) => (
-                    <li className={cn(compactBadgeClass, compactBadgeToneClass.neutral)} key={tag}>
+                    <li className={cn(compactBadgeClass, badgeToneClass.neutral)} key={tag}>
                       {assetTagLabel(tag)}
                     </li>
                   ))}
@@ -290,7 +290,7 @@ function AssetFact({
         <span
           className={cn(
             compactBadgeClass,
-            "mt-1 border-[var(--color-analysis-emphasis)]/45 bg-[var(--color-analysis-emphasis)]/10 text-[var(--color-analysis-emphasis)]",
+            "mt-1 border-analysis-emphasis/45 bg-analysis-emphasis/10 text-analysis-emphasis",
           )}
         >
           {badge}
@@ -303,10 +303,10 @@ function AssetFact({
 function assetEvidenceToneClassName(tone: "neutral" | "risk" | "strength"): string {
   switch (tone) {
     case "strength":
-      return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10";
+      return "border-analysis-positive/45 bg-analysis-positive/10";
     case "risk":
-      return "border-[var(--color-analysis-negative)]/45 bg-[var(--color-analysis-negative)]/10";
+      return "border-analysis-negative/45 bg-analysis-negative/10";
     case "neutral":
-      return "border-[var(--color-border)]";
+      return "border-border";
   }
 }

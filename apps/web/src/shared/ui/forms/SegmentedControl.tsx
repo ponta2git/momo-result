@@ -15,6 +15,11 @@ export type SegmentedControlProps = {
   label: string;
   onValueChange: (value: string) => void;
   options: readonly SegmentedOption[];
+  /**
+   * `framed` groups the modes as one control. `plain` drops the frame where the surrounding
+   * layout already names the group, such as a subject switch directly above the data it changes.
+   */
+  presentation?: "framed" | "plain" | undefined;
   value: string;
 };
 
@@ -27,6 +32,7 @@ export function SegmentedControl({
   label,
   onValueChange,
   options,
+  presentation = "framed",
   value,
 }: SegmentedControlProps) {
   const name = useId();
@@ -35,8 +41,10 @@ export function SegmentedControl({
     <fieldset
       disabled={disabled}
       className={cn(
-        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-0.5 rounded-sm border bg-[var(--color-surface)] p-0.5",
-        controlBorderClass.default,
+        "inline-flex max-w-full min-w-0 flex-wrap items-stretch",
+        presentation === "framed"
+          ? cn("gap-0.5 rounded-sm border bg-surface p-0.5", controlBorderClass.default)
+          : "gap-1",
       )}
     >
       <legend className="sr-only">{label}</legend>
@@ -74,8 +82,8 @@ function SegmentedChoice({
     <label
       ref={surfaceRef}
       className={cn(
-        "momo-surface momo-surface-press inline-flex min-h-11 min-w-[5ch] items-center justify-center rounded-xs px-3 py-2 text-sm font-plain text-[var(--color-text-secondary)] has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-[var(--color-action)] pointer-fine:min-h-8.5 pointer-fine:py-1 forced-colors:has-[:checked]:outline forced-colors:has-[:checked]:-outline-offset-2",
-        selected ? "momo-surface-selected text-[var(--color-text-primary)]" : "",
+        "momo-surface momo-surface-press inline-flex min-h-11 min-w-[5ch] items-center justify-center rounded-xs px-3 py-2 text-sm font-plain text-text-secondary has-[:focus-visible]:outline-3 has-[:focus-visible]:-outline-offset-3 has-[:focus-visible]:outline-action pointer-fine:min-h-8.5 pointer-fine:py-1 forced-colors:has-[:checked]:outline forced-colors:has-[:checked]:-outline-offset-2",
+        selected ? "momo-surface-selected text-text-primary" : "",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
       )}
     >

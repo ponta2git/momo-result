@@ -157,6 +157,7 @@ describe("SeriesComparison empty scope", () => {
     expect(new URLSearchParams(router.state.location.search).has("mapMasterId")).toBe(false);
     expect(new URLSearchParams(router.state.location.search).has("seasonMasterId")).toBe(false);
     expect(aggregateReads).toBe(1);
+    await waitFor(() => expect(client.isFetching()).toBe(0));
   });
 
   it("distinguishes unpublished nonempty scopes from zero matches", async () => {
@@ -260,7 +261,7 @@ describe("SeriesComparison empty scope", () => {
         }),
       ),
     );
-    const { router } = renderScope();
+    const { client, router } = renderScope();
     await waitFor(() =>
       expect(new URLSearchParams(router.state.location.search).has("mapMasterId")).toBe(false),
     );
@@ -269,5 +270,6 @@ describe("SeriesComparison empty scope", () => {
     );
     expect(await screen.findByText(/表示条件を調整しました/u)).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "プレーヤーレーダー" })).toBeInTheDocument();
+    await waitFor(() => expect(client.isFetching()).toBe(0));
   });
 });

@@ -111,6 +111,7 @@ export const test = base.extend<{ mockedApi: void }>({
             const unsupported = [
               "from",
               "to",
+              "q",
               "minMatchCount",
               "memberId",
               "metric",
@@ -122,34 +123,20 @@ export const test = base.extend<{ mockedApi: void }>({
               await route.abort("blockedbyclient");
               return;
             }
-            const q = url.searchParams.get("q");
-            const noted = q ? summaries.filter((match) => match.noteBody?.includes(q)) : summaries;
             const scoped = (["gameTitleId", "seasonMasterId", "mapMasterId"] as const).every(
               (key) => {
                 const requested = url.searchParams.get(key);
                 return !requested || summaries.some((match) => match[key] === requested);
               },
             );
-            const [firstNoted] = noted;
-            const items =
-              scoped && noted.length > 0
-                ? [
-                    makeHeldEventListItem({
-                      averageRanks: [3, 1, 2, 4],
-                      matchCount: summaries.length,
-                      ...(q && firstNoted
-                        ? {
-                            noteMatch: {
-                              matchId: firstNoted.matchId ?? firstNoted.id,
-                              matchNoInEvent: firstNoted.matchNoInEvent ?? 1,
-                              noteBody: firstNoted.noteBody ?? "",
-                              otherMatchCount: noted.length - 1,
-                            },
-                          }
-                        : {}),
-                    }),
-                  ]
-                : [];
+            const items = scoped
+              ? [
+                  makeHeldEventListItem({
+                    averageRanks: [3, 1, 2, 4],
+                    matchCount: summaries.length,
+                  }),
+                ]
+              : [];
             const pageSize = Number(
               url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? 10,
             );

@@ -1,19 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { AuthPanel } from "@/shared/auth/AuthPanel";
-
 function preventDocumentNavigation(event: MouseEvent) {
   event.preventDefault();
 }
 
 describe("AuthPanel", () => {
-  it("keeps modified navigation available and restores a pending login after browser back", () => {
+  it("keeps modified navigation available and restores a pending login after browser back", async () => {
     vi.stubEnv("DEV", false);
+    const { AuthPanel } = await import("@/shared/auth/AuthPanel");
     // Cancel jsdom navigation after React has handled the native click.
     document.addEventListener("click", preventDocumentNavigation);
     try {
-      render(<AuthPanel auth={undefined} loginNextPath="/matches?status=confirmed" />);
+      render(<AuthPanel loginNextPath="/matches?status=confirmed" />);
       const link = screen.getByRole("link", { name: "Discordでログインする" });
       expect(link).toHaveAttribute(
         "href",

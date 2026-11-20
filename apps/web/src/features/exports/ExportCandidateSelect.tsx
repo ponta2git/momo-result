@@ -176,7 +176,7 @@ export function ExportCandidateSelect({
           <p
             className={cn(
               "flex min-h-11 items-center rounded-sm border px-3 py-2 pointer-fine:min-h-10",
-              "font-plain text-base leading-6 text-pretty text-[var(--color-text-primary)] sm:text-sm sm:leading-5",
+              "font-plain text-base leading-6 text-pretty text-text-primary sm:text-sm sm:leading-5",
               controlBorderClass.default,
             )}
           >

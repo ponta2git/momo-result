@@ -11,7 +11,7 @@
 | 開催詳細の情報設計 | `docs/requirements/held-event-detail.md` |
 | 戦績分析の入力 revision と再計算 | `docs/requirements/series-analysis-batch.md` |
 | UIの共通操作、状態、アクセシビリティ | `docs/ui-rule.md` |
-| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、[API規約](../api-rule.md)、[アーキテクチャ](../architecture.md)、[DB規約](../db-rule.md) |
+| HTTP wire、DB shape、実装境界 | Tapir endpoint、momo-db migration、[API規約](../implementation/api.md)、[アーキテクチャ](../architecture.md)、[DB規約](../implementation/database.md) |
 
 本書は特定のテーブル構造やendpoint pathを定めない。実装契約は、ここで定めるメモ専用更新と分析入力更新の分離を保ったうえで各実行正本に置く。
 
@@ -35,6 +35,7 @@
 - OCR下書きから試合を確定するときの任意入力
 - 確定済み試合の試合詳細での追加、編集、削除
 - 試合一覧でのメモの抜粋表示とメモ本文の語句検索、開催一覧でのメモの語句検索と一致したメモの抜粋表示、試合詳細・開催詳細での閲覧
+- 戦績比較の [見込み順位との差](series-expected-rank-gap.md#5-根拠試合) の根拠試合での本文の閲覧
 - 最終更新者、最終更新日時、同時更新競合の判定に必要なversion
 
 初版の対象外:
@@ -47,7 +48,7 @@
 - メモの編集履歴と過去版の復元
 - メモ有無だけによるfilter
 - 既存CSV / TSVへの追加
-- 戦績比較、行動プレイブック、自然言語処理、機械学習、AIによる利用
+- 戦績比較・行動プレイブックの分析入力としての利用、自然言語処理、機械学習、AIによる利用（根拠試合での本文の表示を除く）
 
 ## 3. Content / Lifecycle
 
@@ -136,6 +137,12 @@
 - 語句で絞り込んでいる場合だけ、各開催で一致した試合のうち開催回内番号が最も小さい試合の番号とメモを、2行を超える分を省略して語句を強調して表示し、ほかに一致した試合の数を添える。語句の条件がない場合は開催一覧にメモを表示しない。
 - 開催一覧のメモは閲覧専用とする。一致したメモは表示するページの開催に限って一覧の取得にboundedに含め、開催ごとの追加requestを発生させない。
 
+### 6.5 戦績比較の根拠試合
+
+- [見込み順位との差](series-expected-rank-gap.md#5-根拠試合) の根拠試合では、メモがある行にだけ「試合メモ」として本文を改行を保ったまま表示する。メモがない行には欄を置かない。
+- 本文はAPIが保存済みのdrilldownを検証した後、一覧を読む時点の保存済み本文を添える。分析入力・成果物・checksumには含めず、メモの有無や内容で根拠試合の選定・順序・件数を変えない。
+- 閲覧専用とし、編集は試合詳細で行う。
+
 分析完了通知に載せるメモは、公開処理末尾の一括取得時点の保存済み全文で固定する。その後の保存で本文を書き換えず、取得後からcommitまでの編集を必ず含めるための追加排他は行わない。未入力メモ欄は省略し、メモ専用mutationから分析・通知を発生させない。通知全体の契約は [分析batch](series-analysis-batch.md#分析完了通知) を参照する。
 
 ## 7. Mutation / Failure Contract
@@ -164,7 +171,7 @@
 - 本機能の初回releaseと、その場で必要になった切戻しは、利用者へ事前に示したmaintenance時間内に行い、その間の操作とbrowserに残ったWebを含むversion混在は動作保証の対象外とする。ここでのmaintenanceは利用者への通知による運用上の境界だけを指し、アクセス遮断、read-only化、mutation拒否、maintenance専用画面を実装しない。告知の開始・終了を現行workflowが自動化すると仮定しない。
 - DB schemaの正本である`momo-db`でadditive migrationを先に用意し、このrepositoryの`.momo-db-ref`をそのcommitへ更新する。CIがpinned migrationを適用する先は隔離された検証DBであり、本番DBへ適用した証拠にはしない。本番DBへの適用手順はprivate runbookを正本とし、migration適用済み状態を確認してからruntimeをdeployする。
 - 現行deploy workflowではAPI imageとWeb edgeの検証済みimmutable成果物を同じrelease候補としてproduction承認境界からdeployする。release commandのDB contract preflightで必要columnがない場合はruntime切替前に失敗させ、deploy後のidentity確認とsmokeが成功してからmaintenance時間の終了を利用者へ通知する。
-- 配備後の修正は[CI・リリース規約](../release.md#recovery-verification)に従い、additiveなDB columnと保存済みメモを保つ。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は配備修正と分けて設計・承認する。
+- 配備後の修正は[CI・リリース規約](../development/release.md#recovery-verification)に従い、additiveなDB columnと保存済みメモを保つ。DB migration自体が未完了または成否不明ならruntimeをdeployせず、DBを戻す必要が生じた場合は配備修正と分けて設計・承認する。
 
 ## 9. Analysis / Export Boundary
 
@@ -177,7 +184,7 @@
 
 ## 10. Acceptance Criteria
 
-本節に対する evidence の選定と実行は [文書索引の「変更対象から読む」](../README.md#変更対象から読む)の順序に従う。
+受入条件をどの経路で検証するかは [テスト・品質規約](../development/test-policy.md)、変更ごとの必須 gate は [開発作業規約](../development/workflow.md#change-gates) に従う。
 
 | 観点 | 受入条件 |
 | --- | --- |

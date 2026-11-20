@@ -9,17 +9,17 @@ const assets = [
   [31, 64, 97, 128, 133, 59, 101, 92, 88, 76, 112, 140],
 ];
 
-const cell = "border-b border-[var(--color-border)] px-3 py-2 text-sm whitespace-nowrap";
+const cell = "border-b border-border px-3 py-2 text-sm whitespace-nowrap";
 
 const AssetTable = ({ rows = players }: { rows?: string[] }) => (
   <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
     <thead>
-      <tr className="bg-[var(--color-surface-subtle)] text-left">
+      <tr className="bg-surface-subtle text-left">
         <th className={`${cell} font-structure`} scope="col">
           プレーヤー
         </th>
         {seasons.map((season) => (
-          <th className={`${cell} font-structure text-right`} key={season} scope="col">
+          <th className={`${cell} text-right font-structure`} key={season} scope="col">
             {season}
           </th>
         ))}
@@ -28,7 +28,7 @@ const AssetTable = ({ rows = players }: { rows?: string[] }) => (
     <tbody>
       {rows.map((player, rowIndex) => (
         <tr key={`${player}-${rowIndex}`}>
-          <th className={`${cell} font-plain text-left`} scope="row">
+          <th className={`${cell} text-left font-plain`} scope="row">
             {player}
           </th>
           {(assets[rowIndex % assets.length] ?? []).map((value, index) => (
@@ -58,7 +58,7 @@ export const FitsWithoutHint = () => (
   <TableScrollArea label="最終順位">
     <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
       <thead>
-        <tr className="bg-[var(--color-surface-subtle)] text-left">
+        <tr className="bg-surface-subtle text-left">
           <th className={`${cell} font-structure`} scope="col">
             順位
           </th>
@@ -71,7 +71,7 @@ export const FitsWithoutHint = () => (
         {players.map((player, index) => (
           <tr key={player}>
             <td className={`${cell} tabular-nums`}>{index + 1}位</td>
-            <th className={`${cell} font-plain text-left`} scope="row">
+            <th className={`${cell} text-left font-plain`} scope="row">
               {player}
             </th>
           </tr>

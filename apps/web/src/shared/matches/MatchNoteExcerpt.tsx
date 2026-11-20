@@ -38,7 +38,7 @@ export function MatchNoteExcerpt({
         // oxlint-disable-next-line react/no-array-index-key
         <Fragment key={index}>
           {part.match ? (
-            <mark className="rounded-xs bg-[var(--color-search-match-surface)] px-0.5 text-[var(--color-text-primary)]">
+            <mark className="rounded-xs bg-search-match-surface px-0.5 text-text-primary">
               {part.text}
             </mark>
           ) : (

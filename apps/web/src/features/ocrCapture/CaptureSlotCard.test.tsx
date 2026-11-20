@@ -18,7 +18,7 @@ function renderCard(slot: CaptureSlotState, captureTarget = false, statusRefresh
         onSelectCapture: vi.fn(),
       }}
       presentation={{
-        accentClass: "bg-[var(--color-tray-assets)]",
+        accentClass: "bg-tray-assets",
         captureTarget,
         index: 0,
         label: "総資産",

@@ -1,11 +1,18 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { lazy, Suspense } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
+import { appRoutes } from "@/app/router";
 import { loadLazyModule, reloadCurrentPage } from "@/shared/lib/moduleLoadError";
+import { createTestQueryClient } from "@/test/queryClient";
+
+vi.mock("@/shared/auth/DevUserPicker", () => {
+  throw new TypeError("Development account picker could not load");
+});
 
 vi.mock("@/shared/lib/moduleLoadError", async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -18,6 +25,20 @@ function MaybeBroken({ shouldThrow }: { shouldThrow: () => boolean }) {
 }
 
 describe("RouteErrorBoundary", () => {
+  it("keeps the login destination and provides recovery when the development account picker cannot load", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubEnv("VITE_DEV_USER", "");
+    const router = createMemoryRouter(appRoutes, { initialEntries: ["/login?next=%2Fexports"] });
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("button", { name: "画面を再読み込み" })).toBeVisible();
+    expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
+    expect(router.state.location.search).toBe("?next=%2Fexports");
+  });
+
   it("reloads the page when an actual React.lazy loader rejects", async () => {
     const user = userEvent.setup();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

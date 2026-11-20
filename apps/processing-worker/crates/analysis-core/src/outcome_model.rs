@@ -1,12 +1,11 @@
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-use crate::model::{IncidentCounts, PlayerMatchInput};
+use crate::model::PlayerMatchInput;
 
 mod bootstrap;
 mod encoding;
 mod evaluation;
-mod outcomes;
 mod presentation;
 mod solver;
 
@@ -59,18 +58,6 @@ impl SignalKind {
             Self::CardStation => 4,
             Self::CardShop => 5,
             Self::Ginji => 6,
-        }
-    }
-
-    const fn code(self) -> &'static str {
-        match self {
-            Self::Revenue => "revenue",
-            Self::Destination => "destination",
-            Self::PlusStation => "plus_station",
-            Self::MinusStation => "minus_station",
-            Self::CardStation => "card_station",
-            Self::CardShop => "card_shop",
-            Self::Ginji => "ginji",
         }
     }
 
@@ -152,76 +139,8 @@ impl FoldScore {
 #[derive(Clone, Debug)]
 struct Signal {
     kind: SignalKind,
-    direction: &'static str,
     importance: f64,
-    fold_importances: Vec<f64>,
-    fold_comparison_counts: Vec<usize>,
     stable: bool,
-}
-
-#[derive(Clone, Debug)]
-struct PlayerSignals {
-    member_id: String,
-    signals: Vec<Signal>,
-}
-
-#[derive(Clone, Debug)]
-struct UnexpectedWin {
-    match_index: usize,
-    match_id: String,
-    held_event_id: String,
-    match_no_in_event: i32,
-    played_at: String,
-    expected_rank: f64,
-    rank: i32,
-    revenue_man_yen: i32,
-    incidents: IncidentCounts,
-}
-
-impl UnexpectedWin {
-    fn summary_json(&self) -> Value {
-        json!({
-            "matchId": self.match_id,
-            "heldEventId": self.held_event_id,
-            "matchNoInEvent": self.match_no_in_event,
-            "playedAt": self.played_at,
-            "expectedRank": self.expected_rank,
-            "actualRank": self.rank,
-            "evidence": self.evidence_json(),
-        })
-    }
-
-    fn detail_json(&self) -> Value {
-        json!({
-            "matchIndex": self.match_index,
-            "matchId": self.match_id,
-            "heldEventId": self.held_event_id,
-            "matchNoInEvent": self.match_no_in_event,
-            "playedAt": self.played_at,
-            "expectedRank": self.expected_rank,
-            "actualRank": self.rank,
-            "evidence": self.evidence_json(),
-        })
-    }
-
-    fn evidence_json(&self) -> Value {
-        json!({
-            "revenueManYen": self.revenue_man_yen,
-            "destinationCount": self.incidents.destination,
-            "plusStationCount": self.incidents.plus_station,
-            "minusStationCount": self.incidents.minus_station,
-            "cardStationCount": self.incidents.card_station,
-            "cardShopCount": self.incidents.card_shop,
-            "ginjiCount": self.incidents.suri_no_ginji,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-struct PlayerUnexpectedWins {
-    member_id: String,
-    total_win_count: usize,
-    wins: Vec<UnexpectedWin>,
 }
 
 #[derive(Clone, Debug)]
@@ -240,8 +159,6 @@ pub(super) struct OutcomeModelAnalysis {
     match_count: usize,
     improved_fold_count: usize,
     fold_scores: Vec<FoldScore>,
-    player_signals: Vec<PlayerSignals>,
-    unexpected_wins: Vec<PlayerUnexpectedWins>,
     crown: CrownCertainty,
 }
 
@@ -319,6 +236,7 @@ pub(super) fn analyze(rows: &[&PlayerMatchInput], players: &[String]) -> Outcome
 )]
 mod tests {
     use super::*;
+    use crate::model::IncidentCounts;
 
     fn row(match_index: usize, event_index: usize, player: usize) -> PlayerMatchInput {
         let match_index_i32 =

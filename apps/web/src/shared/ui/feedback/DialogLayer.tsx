@@ -14,11 +14,11 @@ import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
-const dialogBackdropClassName = "fixed inset-0 z-[var(--z-base)] bg-[var(--color-backdrop)]/35";
+const dialogBackdropClassName = "fixed inset-0 z-(--z-base) bg-backdrop/35";
 const dialogPopupClassName =
-  "momo-dialog-popup fixed inset-0 z-[var(--z-base)] mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
+  "momo-dialog-popup fixed inset-0 z-(--z-base) mx-auto flex w-full max-w-[40rem] items-center justify-center overflow-hidden";
 const dialogSurfaceClassName =
-  "momo-dialog-surface w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)] shadow-[var(--shadow-dialog)]";
+  "momo-dialog-surface w-full rounded-lg border border-border bg-surface p-4 text-text-primary shadow-dialog";
 const dialogBackdropInitial = { opacity: 0 } as const;
 const dialogSurfaceInitial = { opacity: 0.96 } as const;
 const dialogHidden = { opacity: 0 } as const;
@@ -132,7 +132,7 @@ export function DialogLayer({
     <BaseDialog.Portal
       container={portalContainer ?? undefined}
       keepMounted
-      className="relative isolate z-[var(--z-dialog)]"
+      className="relative isolate z-(--z-dialog)"
     >
       <DialogFloatingContainerContext value={floatingContainer}>
         <BaseDialog.Backdrop
@@ -188,7 +188,7 @@ export function DialogLayer({
           <div
             {...exitSnapshotProps}
             ref={setFloatingContainer}
-            className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]"
+            className="pointer-events-none fixed inset-0 z-(--z-dropdown)"
           />
         </BaseDialog.Popup>
       </DialogFloatingContainerContext>
@@ -238,7 +238,7 @@ export function AlertDialogLayer({
     <BaseAlertDialog.Portal
       container={portalContainer ?? undefined}
       keepMounted
-      className="relative isolate z-[var(--z-dialog)]"
+      className="relative isolate z-(--z-dialog)"
     >
       <DialogFloatingContainerContext value={floatingContainer}>
         <BaseAlertDialog.Backdrop
@@ -279,7 +279,7 @@ export function AlertDialogLayer({
               surfaceClassName,
             )}
           >
-            <div className="momo-alert-dialog-frame short-viewport:grid flex min-h-0 w-full flex-1 flex-col gap-4">
+            <div className="momo-alert-dialog-frame flex min-h-0 w-full flex-1 flex-col gap-4 short-viewport:grid">
               <div className="min-w-0 shrink-0 px-2">
                 <BaseAlertDialog.Title className={cn(contentText.heading, "text-balance")}>
                   {title}
@@ -304,7 +304,7 @@ export function AlertDialogLayer({
                     <p
                       className={cn(
                         fieldText.error,
-                        "rounded-sm border border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] p-3",
+                        "rounded-sm border border-tone-danger-border bg-tone-danger-surface p-3",
                         readableTextWidthClass,
                       )}
                       role="alert"
@@ -341,7 +341,7 @@ export function AlertDialogLayer({
           <div
             {...exitSnapshotProps}
             ref={setFloatingContainer}
-            className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]"
+            className="pointer-events-none fixed inset-0 z-(--z-dropdown)"
           />
         </BaseAlertDialog.Popup>
       </DialogFloatingContainerContext>

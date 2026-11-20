@@ -76,7 +76,7 @@ export function AppGlobalNav() {
       endContent={
         <div className="grid max-w-full min-w-0 justify-items-end gap-1">
           <div className="flex max-w-full min-w-0 items-center justify-end gap-2">
-            <p className="hidden max-w-28 truncate text-xs text-[var(--color-text-secondary)] min-[24rem]:block">
+            <p className="hidden max-w-28 truncate text-xs text-text-secondary min-[24rem]:block">
               {sessionLabel}
             </p>
             {canLogout ? (

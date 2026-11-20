@@ -12,10 +12,10 @@ export function AchievementDifficulty({ stars }: { stars: number }) {
         // the shared badge box rather than shrinking to the label size.
         "text-sm/4 tracking-widest",
         stars >= 5
-          ? "border-[var(--color-achievement-premium-border)] bg-[var(--color-achievement-premium-surface)] text-[var(--color-achievement-premium-foreground)]"
+          ? "border-achievement-premium-border bg-achievement-premium-surface text-achievement-premium-foreground"
           : stars === 4
-            ? "border-transparent text-[var(--color-achievement-premium-foreground)]"
-            : "border-transparent text-[var(--color-text-muted)]",
+            ? "border-transparent text-achievement-premium-foreground"
+            : "border-transparent text-text-muted",
       )}
     >
       <span aria-hidden="true">{"★".repeat(stars)}</span>

@@ -65,7 +65,7 @@ export function ComparisonSkeleton({ view }: { view?: SeriesAnalysisViewId | und
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div
           aria-hidden="true"
-          className="flex max-w-full min-w-0 overflow-hidden border-b border-[var(--color-border)]"
+          className="flex max-w-full min-w-0 overflow-hidden border-b border-border"
         >
           {analysisViewLabels.map((item) => (
             <span className={tabSlotClass} key={item.id}>

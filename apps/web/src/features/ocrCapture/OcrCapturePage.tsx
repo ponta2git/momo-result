@@ -25,7 +25,7 @@ import { cn } from "@/shared/ui/cn";
 import { AlertDialog } from "@/shared/ui/feedback/Dialog";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 export function OcrCapturePage() {
@@ -165,9 +165,7 @@ const OcrCaptureStart = memo(function OcrCaptureStart({ view }: { view: OcrCaptu
           <h2 id="ocr-start-title" className={contentText.heading}>
             読み取りの準備
           </h2>
-          <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>
-            {view.badgeLabel}
-          </span>
+          <span className={cn(compactBadgeClass, badgeToneClass.neutral)}>{view.badgeLabel}</span>
         </div>
         <p className={contentText.body}>{view.description}</p>
         {view.error ? (
@@ -176,7 +174,7 @@ const OcrCaptureStart = memo(function OcrCaptureStart({ view }: { view: OcrCaptu
           </p>
         ) : null}
         {view.blockedReason ? (
-          <p className="font-emphasis text-sm/5 text-[var(--color-review)]">{view.blockedReason}</p>
+          <p className="text-sm/5 font-emphasis text-review">{view.blockedReason}</p>
         ) : null}
       </div>
 

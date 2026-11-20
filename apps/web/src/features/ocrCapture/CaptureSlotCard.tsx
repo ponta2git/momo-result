@@ -72,9 +72,9 @@ export function CaptureSlotCard({ actions, presentation, slot }: CaptureSlotCard
       className={cn(
         "relative grid gap-4 overflow-hidden rounded-md border p-4",
         presentation.captureTarget
-          ? "border-[var(--color-action)] bg-[var(--color-surface-selected)]"
-          : "border-[var(--color-border)] bg-[var(--color-surface)]",
-        dragOver ? "border-[var(--color-action)] bg-[var(--color-action)]/10" : "",
+          ? "border-action bg-surface-selected"
+          : "border-border bg-surface",
+        dragOver ? "border-action bg-action/10" : "",
       )}
       data-capture-target={presentation.captureTarget || undefined}
       onDragOver={handleDragOver}

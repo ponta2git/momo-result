@@ -102,12 +102,12 @@ export function ChoicePickerDialogField({
       <div className="flex min-w-0 items-start gap-2">
         <div
           className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center rounded-sm border bg-[var(--color-surface)] px-3 py-2 pointer-fine:min-h-10",
+            "flex min-h-11 min-w-0 flex-1 items-center rounded-sm border bg-surface px-3 py-2 pointer-fine:min-h-10",
             error ? controlBorderClass.invalid : controlBorderClass.default,
           )}
         >
           <p
-            className="font-plain min-w-0 flex-1 text-base leading-6 text-pretty text-[var(--color-text-primary)] sm:text-sm sm:leading-5"
+            className="min-w-0 flex-1 text-base leading-6 font-plain text-pretty text-text-primary sm:text-sm sm:leading-5"
             id={valueId}
           >
             {selectedLabel}

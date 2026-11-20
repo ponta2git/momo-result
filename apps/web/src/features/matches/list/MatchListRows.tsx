@@ -14,11 +14,10 @@ import { contentText } from "@/shared/ui/typography";
 
 // A coarse pointer gets the 44px hit target; a fine pointer keeps the row's text density.
 const titleLinkClass =
-  "inline-flex min-h-11 items-center underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
+  "inline-flex min-h-11 items-center underline decoration-border-strong underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
 
 // The list owns the dividers between records; its outer rules match the table's top and bottom.
-const compactListClass =
-  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
+const compactListClass = "divide-y divide-border border-y border-border-strong";
 
 function MatchTitle({ item }: { item: MatchListItemView }) {
   return (

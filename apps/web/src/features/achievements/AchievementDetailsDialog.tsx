@@ -246,10 +246,7 @@ function AchievementPlayerRecord({
       <div className="flex items-start gap-4">
         <StateIcon
           aria-hidden="true"
-          className={cn(
-            "size-10 shrink-0",
-            achieved ? "text-[var(--color-success)]" : "text-[var(--color-text-muted)]",
-          )}
+          className={cn("size-10 shrink-0", achieved ? "text-success" : "text-text-muted")}
         />
         <div className="grid gap-2">
           <p className={achieved ? contentText.primary : contentText.body}>

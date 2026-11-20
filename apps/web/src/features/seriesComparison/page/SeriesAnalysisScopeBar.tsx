@@ -98,12 +98,9 @@ export function SeriesAnalysisScopeBar({
                 <span className={contentText.supporting}>{detailFilterLabels.join("・")}</span>
               ) : null}
               {qualityAdvisories.length > 0 ? (
-                <span className="inline-flex items-center gap-1 text-xs text-[var(--color-text-primary)]">
+                <span className="inline-flex items-center gap-1 text-xs text-text-primary">
                   {quality && quality.referenceCount > 0 ? (
-                    <TriangleAlert
-                      aria-hidden="true"
-                      className="size-3.5 shrink-0 text-[var(--color-warning)]"
-                    />
+                    <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
                   ) : null}
                   {qualityAdvisories.join("・")}
                 </span>

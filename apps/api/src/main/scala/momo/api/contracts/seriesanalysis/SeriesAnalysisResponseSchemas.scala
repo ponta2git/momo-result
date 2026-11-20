@@ -5,7 +5,12 @@ import java.nio.charset.StandardCharsets
 import io.circe.parser.parse
 import io.circe.{Json, JsonObject}
 
-import momo.api.domain.{SeriesAnalysisChunkKind, SeriesAnalysisMatchContextExclusion}
+import momo.api.domain.{
+  MatchNoteBody,
+  SeriesAnalysisChunkKind,
+  SeriesAnalysisDrilldownMetric,
+  SeriesAnalysisMatchContextExclusion
+}
 
 private[api] object SeriesAnalysisResponseSchemas:
   private val SchemaResourceDirectory = "/momo/api/series-analysis-schemas"
@@ -21,6 +26,14 @@ private[api] object SeriesAnalysisResponseSchemas:
     "minLength" -> Json.fromInt(1),
     "type" -> Json.fromString("string"),
   )
+  private val NoteSchema = Json.obj("anyOf" -> Json.arr(
+    Json.obj(
+      "maxLength" -> Json.fromInt(MatchNoteBody.MaximumCodePoints),
+      "minLength" -> Json.fromInt(1),
+      "type" -> Json.fromString("string"),
+    ),
+    Json.obj("type" -> Json.fromString("null")),
+  ))
   private val ArtifactSchema: Json = objectSchema(
     List(
       "algorithmVersion" -> TextSchema,
@@ -148,6 +161,7 @@ private[api] object SeriesAnalysisResponseSchemas:
       else if resource eq outlookWindow then responseSchema(outlookWindowSchema(owner))
       else if resource eq outlookExamples then responseSchema(outlookExamplesSchema(owner))
       else if resource eq achievements then achievementResponseSchema(owner)
+      else if resource eq drilldown then responseSchema(evidenceNoteSchema(owner))
       else responseSchema(owner)
     withMetadata(response, resource)
 
@@ -201,6 +215,27 @@ private[api] object SeriesAnalysisResponseSchemas:
       ),
       "achievements response"
     )
+
+  /** Evidence rows carry the saved match note that the API adds after payload validation. */
+  private def evidenceNoteSchema(owner: Json): Json = mapBranches(owner) { branch =>
+    if !branch.hcursor.get[String]("x-momo-metricId")
+        .contains(SeriesAnalysisDrilldownMetric.ExpectedRankGapEvidence.id)
+    then branch
+    else
+      val payload = requiredProperty(branch, "payload", "evidence drilldown")
+      val hydrated = List("above", "below").foldLeft(payload) { (current, side) =>
+        val rows = requiredProperty(current, side, "evidence payload")
+        val row = objectValue(rows, "evidence rows")("items")
+          .getOrElse(sys.error("Series analysis evidence rows have no item schema."))
+        replaceProperty(
+          current,
+          side,
+          rows.mapObject(_.add("items", addProperty(row, "note", NoteSchema, "evidence row"))),
+          "evidence payload",
+        )
+      }
+      replaceProperty(branch, "payload", hydrated, "evidence drilldown")
+  }
 
   private def outlookReferenceFields(owner: Json): List[(String, Json)] =
     List("schemaVersion", "scope", "source", "memberId")

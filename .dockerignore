@@ -21,6 +21,7 @@ private
 **/target
 *.tsbuildinfo
 apps/api/src/test
+apps/runtime/**/*_test.go
 apps/web/.cache
 apps/web/coverage
 apps/web/dist

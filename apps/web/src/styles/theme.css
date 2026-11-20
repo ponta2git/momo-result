@@ -1,0 +1,148 @@
+@import "./palette.css" layer(theme);
+
+@layer theme {
+  :root {
+    --font-momo-ui:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+      "Yu Gothic", YuGothic, Meiryo, sans-serif;
+    --font-momo-heading: var(--font-momo-ui);
+    --font-momo-data:
+      ui-monospace, "SFMono-Regular", "SF Mono", "Cascadia Mono", "Roboto Mono", "Yu Gothic",
+      YuGothic, monospace;
+
+    --z-base: 0;
+    --z-sticky: 20;
+    --z-sticky-raised: 30;
+    --z-dropdown: 40;
+    --z-toast: 60;
+    --z-dialog: 80;
+    --z-tooltip: 90;
+
+    /* The sticky global navigation publishes its height so sticky content can rest below it. */
+    --global-nav-height: 0px;
+    --sticky-below-nav: calc(var(--global-nav-height) + 1rem);
+  }
+}
+
+/* Inline aliases resolve against the element that uses a font utility. */
+@theme inline {
+  --font-sans: var(--font-momo-ui);
+  --font-display: var(--font-momo-heading);
+  --font-mono: var(--font-momo-data);
+}
+
+@theme {
+  --font-weight-plain: 400;
+  --font-weight-structure: 500;
+  --font-weight-emphasis: 600;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-dialog: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Widths are named by the content need they serve; consumers choose a purpose, not a size. */
+  --container-readable: 42rem;
+  --container-page-default: 96rem;
+  --container-page-analysis: 108rem;
+  --container-page-workspace: 120rem;
+}
+
+/* Runtime chart and sequence consumers need every semantic color in production CSS. */
+@theme static {
+  /* Semantic tokens are the only color API consumed by component and feature UI. */
+  --color-canvas: var(--ref-neutral-50);
+  --color-surface: var(--ref-neutral-25);
+  --color-surface-hover: var(--ref-neutral-75);
+  --color-surface-subtle: var(--ref-neutral-100);
+  --color-surface-selected: var(--ref-neutral-200);
+  --color-surface-row-hover: var(--ref-neutral-60);
+  --color-surface-row-focus: var(--ref-neutral-60);
+  --color-surface-pressed: var(--ref-neutral-100);
+  --color-surface-selected-hover: var(--ref-neutral-225);
+  --color-surface-selected-pressed: var(--ref-neutral-250);
+  --color-action-hover: var(--ref-action-725);
+  --color-action-pressed: var(--ref-action-750);
+  --color-danger-hover: var(--ref-status-danger-725);
+  --color-danger-pressed: var(--ref-status-danger-750);
+  --color-surface-inverse: var(--ref-neutral-night);
+  --color-media-canvas: var(--ref-neutral-night);
+  --color-backdrop: var(--ref-neutral-night);
+  --color-text-primary: var(--ref-neutral-900);
+  --color-text-body: var(--ref-neutral-700);
+  --color-text-secondary: var(--ref-neutral-500);
+  --color-text-muted: var(--ref-neutral-300);
+  --color-text-inverse: var(--ref-neutral-0);
+  --color-border: var(--ref-neutral-border);
+  --color-border-strong: var(--ref-neutral-border-strong);
+  --color-secondary-border: var(--ref-neutral-border-strong);
+  --color-control-border: var(--ref-neutral-border-strong);
+  --color-choice-marker-border: var(--ref-neutral-choice-marker);
+  --color-control-border-action: color-mix(in oklab, var(--color-action) 75%, transparent);
+  --color-control-border-review: var(--color-tone-review-border);
+  --color-control-border-success: var(--color-tone-success-border);
+  --color-control-border-warning: var(--color-tone-warning-border);
+  --color-control-border-invalid: var(--color-tone-danger-border);
+  /* One border and surface pair per status tone. Notices, badges, toasts, and controls share
+     the same strength; borders keep the 3:1 contrast that tone-marked controls require. */
+  --color-tone-info-border: color-mix(in oklab, var(--color-status-info) 80%, transparent);
+  --color-tone-info-surface: color-mix(in oklab, var(--color-status-info) 12%, transparent);
+  --color-tone-review-border: color-mix(in oklab, var(--color-review) 80%, transparent);
+  --color-tone-review-surface: color-mix(in oklab, var(--color-review) 14%, transparent);
+  --color-tone-success-border: color-mix(in oklab, var(--color-success) 80%, transparent);
+  --color-tone-success-surface: color-mix(in oklab, var(--color-success) 12%, transparent);
+  --color-tone-warning-border: color-mix(in oklab, var(--color-warning) 95%, transparent);
+  --color-tone-warning-surface: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  --color-tone-danger-border: color-mix(in oklab, var(--color-danger) 75%, transparent);
+  --color-tone-danger-surface: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  --color-action: var(--ref-action-700);
+  --color-analysis-emphasis: var(--ref-analysis-emphasis-700);
+  --color-analysis-positive: var(--ref-analysis-positive-700);
+  --color-analysis-negative: var(--ref-analysis-negative-700);
+  /* Even or middle comparisons: neither the positive nor the negative side. */
+  --color-analysis-neutral: var(--ref-analysis-neutral-700);
+  --color-status-info: var(--ref-status-info-700);
+  --color-success: var(--ref-status-success-700);
+  --color-warning: var(--ref-status-warning-700);
+  --color-review: var(--ref-status-review-700);
+  --color-danger: var(--ref-status-danger-700);
+  --color-member-sequence-1: var(--ref-four-player-sequence-1);
+  --color-member-sequence-2: var(--ref-four-player-sequence-2);
+  --color-member-sequence-3: var(--ref-four-player-sequence-3);
+  --color-member-sequence-4: var(--ref-four-player-sequence-4);
+  --color-play-order-1: var(--ref-four-player-sequence-1);
+  --color-play-order-2: var(--ref-four-player-sequence-2);
+  --color-play-order-3: var(--ref-four-player-sequence-3);
+  --color-play-order-4: var(--ref-four-player-sequence-4);
+  --color-series-1: var(--ref-series-1);
+  --color-series-2: var(--ref-series-2);
+  --color-series-3: var(--ref-series-3);
+  --color-series-4: var(--ref-series-4);
+  --color-series-5: var(--ref-series-5);
+  --color-series-6: var(--ref-series-6);
+  --color-rank-1: var(--ref-rank-1);
+  --color-rank-2: var(--ref-rank-2);
+  --color-rank-3: var(--ref-rank-3);
+  --color-rank-4: var(--ref-rank-4);
+  --color-rank-1-foreground: var(--color-text-primary);
+  --color-rank-2-foreground: var(--color-text-primary);
+  --color-rank-3-foreground: var(--color-text-inverse);
+  --color-rank-4-foreground: var(--color-text-inverse);
+  --color-achievement-premium-foreground: var(--ref-gold-800);
+  --color-achievement-premium-surface: var(--ref-gold-50);
+  --color-achievement-premium-border: var(--ref-gold-300);
+  --color-celebration-surface: var(--ref-celebration-surface);
+  --color-celebration-border: var(--ref-celebration-border);
+  --color-celebration-mark: var(--ref-celebration-mark);
+  --color-celebration-shine: var(--ref-celebration-shine);
+  /* Marks the searched words inside matched text; the text color stays primary. It owns its
+     reference value so rank colors can change without moving search highlights. */
+  --color-search-match-surface: var(--ref-search-match);
+  --color-chart-segment-separator: var(--color-surface);
+  --color-tray-assets: var(--ref-tray-assets);
+  --color-tray-revenue: var(--ref-tray-revenue);
+  --color-tray-incident: var(--ref-tray-incident);
+  --color-tray-marker: var(--ref-tray-marker);
+}

@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 4,
+  "scope": {
+    "kind": "overall",
+    "matchCount": 40
+  },
+  "player": {
+    "memberId": "member-1"
+  },
+  "payload": {
+    "kind": "expected_rank_gap_evidence",
+    "summary": {
+      "status": "ok",
+      "matchCount": 40,
+      "aboveCount": 6,
+      "belowCount": 2
+    },
+    "above": [
+      {
+        "matchIndex": 31,
+        "matchId": "match-31",
+        "heldEventId": "event-08",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-02-08T12:00:00.000000Z",
+        "revenueRank": 3,
+        "expectedRank": 2.5,
+        "actualRank": 1,
+        "gap": 1.5,
+        "evidence": {
+          "revenueManYen": 6000,
+          "destinationCount": 1,
+          "plusStationCount": 0,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 2,
+          "ginjiCount": 0
+        }
+      },
+      {
+        "matchIndex": 12,
+        "matchId": "match-12",
+        "heldEventId": "event-03",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-02-03T12:00:00.000000Z",
+        "revenueRank": 3,
+        "expectedRank": 2.25,
+        "actualRank": 1,
+        "gap": 1.25,
+        "evidence": {
+          "revenueManYen": 6000,
+          "destinationCount": 1,
+          "plusStationCount": 0,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 1,
+          "ginjiCount": 0
+        }
+      },
+      {
+        "matchIndex": 38,
+        "matchId": "match-38",
+        "heldEventId": "event-10",
+        "matchNoInEvent": 2,
+        "playedAt": "2026-02-10T12:00:00.000000Z",
+        "revenueRank": 3,
+        "expectedRank": 2.75,
+        "actualRank": 2,
+        "gap": 0.75,
+        "evidence": {
+          "revenueManYen": 6000,
+          "destinationCount": 1,
+          "plusStationCount": 0,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 0,
+          "ginjiCount": 0
+        }
+      },
+      {
+        "matchIndex": 20,
+        "matchId": "match-20",
+        "heldEventId": "event-05",
+        "matchNoInEvent": 4,
+        "playedAt": "2026-02-05T12:00:00.000000Z",
+        "revenueRank": 3,
+        "expectedRank": 2.75,
+        "actualRank": 2,
+        "gap": 0.75,
+        "evidence": {
+          "revenueManYen": 6000,
+          "destinationCount": 1,
+          "plusStationCount": 0,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 0,
+          "ginjiCount": 0
+        }
+      },
+      {
+        "matchIndex": 5,
+        "matchId": "match-05",
+        "heldEventId": "event-02",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-02-02T12:00:00.000000Z",
+        "revenueRank": 2,
+        "expectedRank": 2.5,
+        "actualRank": 2,
+        "gap": 0.5,
+        "evidence": {
+          "revenueManYen": 8000,
+          "destinationCount": 1,
+          "plusStationCount": 1,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 0,
+          "ginjiCount": 0
+        }
+      }
+    ],
+    "below": [
+      {
+        "matchIndex": 9,
+        "matchId": "match-09",
+        "heldEventId": "event-03",
+        "matchNoInEvent": 1,
+        "playedAt": "2026-02-03T12:00:00.000000Z",
+        "revenueRank": 2,
+        "expectedRank": 2.25,
+        "actualRank": 4,
+        "gap": -1.75,
+        "evidence": {
+          "revenueManYen": 8000,
+          "destinationCount": 1,
+          "plusStationCount": 3,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 0,
+          "ginjiCount": 0
+        }
+      },
+      {
+        "matchIndex": 27,
+        "matchId": "match-27",
+        "heldEventId": "event-07",
+        "matchNoInEvent": 3,
+        "playedAt": "2026-02-07T12:00:00.000000Z",
+        "revenueRank": 2,
+        "expectedRank": 2.5,
+        "actualRank": 3,
+        "gap": -0.5,
+        "evidence": {
+          "revenueManYen": 8000,
+          "destinationCount": 1,
+          "plusStationCount": 0,
+          "minusStationCount": 0,
+          "cardStationCount": 3,
+          "cardShopCount": 0,
+          "ginjiCount": 0
+        }
+      }
+    ]
+  }
+}

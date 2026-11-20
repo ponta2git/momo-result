@@ -2,29 +2,9 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/ui/cn";
 import { SpinnerIcon } from "@/shared/ui/feedback/Spinner";
+import { badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
-export type StatusBadgeTone =
-  | "attention"
-  | "danger"
-  | "neutral"
-  | "progress"
-  | "success"
-  | "warning";
-
-const toneClass = {
-  attention:
-    "border-[var(--color-tone-review-border)] bg-[var(--color-tone-review-surface)] text-[var(--color-text-primary)]",
-  danger:
-    "border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] text-[var(--color-text-primary)]",
-  neutral:
-    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-  progress:
-    "border-[var(--color-tone-info-border)] bg-[var(--color-tone-info-surface)] text-[var(--color-text-primary)]",
-  success:
-    "border-[var(--color-tone-success-border)] bg-[var(--color-tone-success-surface)] text-[var(--color-text-primary)]",
-  warning:
-    "border-[var(--color-tone-warning-border)] bg-[var(--color-tone-warning-surface)] text-[var(--color-text-primary)]",
-} as const satisfies Record<StatusBadgeTone, string>;
+export type StatusBadgeTone = keyof typeof badgeToneClass;
 
 export type StatusBadgeProps = {
   /** Opts a persistent, dynamically changing badge into a polite atomic live region. */
@@ -58,7 +38,7 @@ export function StatusBadge({
       aria-live={announceChanges ? "polite" : undefined}
       className={cn(
         "inline-flex min-h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-xs border px-2 py-1 text-xs font-plain leading-5",
-        toneClass[tone],
+        badgeToneClass[tone],
       )}
       role={announceChanges ? "status" : undefined}
     >
@@ -71,7 +51,7 @@ export function StatusBadge({
         </span>
       ) : null}
       <span>{label}</span>
-      {note ? <span className="text-[var(--color-text-secondary)]">{note}</span> : null}
+      {note ? <span className="text-text-secondary">{note}</span> : null}
     </span>
   );
 }

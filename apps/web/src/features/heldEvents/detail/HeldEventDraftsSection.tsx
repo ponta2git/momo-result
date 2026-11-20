@@ -36,7 +36,7 @@ export function HeldEventDraftsSection({
         </p>
       </div>
       {/* The list owns the dividers; the first and last records drop their outer padding. */}
-      <ul className="divide-y divide-[var(--color-border)]">
+      <ul className="divide-y divide-border">
         {drafts.map((draft) => {
           const actionView = buildHeldEventDraftActionView(draft);
           const scopeLabel = heldEventDraftScopeLabel(draft);

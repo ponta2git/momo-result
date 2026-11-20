@@ -1,47 +1,25 @@
 import { usePrincipalSwitchCommand } from "@/shared/auth/usePrincipalSwitchCommand";
 import { canonicalResultMembers } from "@/shared/domain/members";
-import { cn } from "@/shared/ui/cn";
 import { SelectField } from "@/shared/ui/forms/SelectField";
 
-type DevUserPickerProps = {
-  embedded?: boolean;
-  force?: boolean;
-};
+const options = [
+  { label: "未選択", value: "" },
+  ...canonicalResultMembers.map(({ memberId, displayName }) => {
+    const value = `account_${memberId.replace(/^member_/u, "")}`;
+    return { label: `${displayName} (${value})`, value };
+  }),
+];
 
-export function DevUserPicker({ embedded = false, force = false }: DevUserPickerProps) {
+export function DevUserPicker() {
   const { currentPrincipal, switchPrincipal } = usePrincipalSwitchCommand();
-
-  if (!import.meta.env.DEV && !force) {
-    return null;
-  }
-
-  const devAccounts = canonicalResultMembers.map((member) => ({
-    accountId: `account_${member.memberId.replace(/^member_/u, "")}`,
-    displayName: member.displayName,
-  }));
-
   return (
-    <div
-      className={cn(
-        embedded
-          ? "grid gap-2"
-          : "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3",
-      )}
-    >
-      <SelectField
-        label="操作用アカウント"
-        options={[
-          { label: "未選択", value: "" },
-          ...devAccounts.map((account) => ({
-            label: `${account.displayName} (${account.accountId})`,
-            value: account.accountId,
-          })),
-        ]}
-        value={currentPrincipal}
-        onValueChange={(nextValue) => {
-          void switchPrincipal(nextValue);
-        }}
-      />
-    </div>
+    <SelectField
+      label="操作用アカウント"
+      options={options}
+      value={currentPrincipal}
+      onValueChange={(nextValue) => {
+        void switchPrincipal(nextValue);
+      }}
+    />
   );
 }

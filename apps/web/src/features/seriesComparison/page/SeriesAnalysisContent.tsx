@@ -87,10 +87,8 @@ function drilldownTitle(metricId: SeriesAnalysisDrilldownMetricId): string {
       return "平均順位の推移";
     case "playOrder.rankHistory":
       return "番手別順位の推移";
-    case "rankAnalysis.rankSignals":
-      return "順位を読む手掛かり";
-    case "rankAnalysis.unexpectedWins":
-      return "予測より上位だった勝利";
+    case "expectedRankGap.evidence":
+      return "見込みとの差の根拠試合";
   }
 }
 
@@ -111,6 +109,8 @@ export function preloadSeriesAnalysisView(view: SeriesAnalysisViewId): void {
 }
 
 type SeriesAnalysisContentProps = {
+  expectedRankGapMemberId?: string | undefined;
+  onExpectedRankGapMemberChange?: ((memberId: string | undefined) => void) | undefined;
   showPurposeTabs?: boolean;
   outlookSelection?: SeriesAnalysisSelection;
   onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
@@ -138,6 +138,8 @@ type DrilldownDialogState = {
  * subtrees for an unchanged artifact and selection.
  */
 export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
+  expectedRankGapMemberId,
+  onExpectedRankGapMemberChange,
   bundle,
   activeView = bundle.view,
   navigationReady = true,
@@ -236,6 +238,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               strategy="preserve-inert"
             >
               <AnalysisViewContent
+                expectedRankGapMemberId={expectedRankGapMemberId}
+                onExpectedRankGapMemberChange={onExpectedRankGapMemberChange}
                 ownerMetric={ownerMetric}
                 onOwnerMetricChange={onOwnerMetricChange}
                 bundle={bundle}
@@ -256,6 +260,8 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
 });
 
 function AnalysisViewContent({
+  expectedRankGapMemberId,
+  onExpectedRankGapMemberChange,
   ownerMetric,
   onOwnerMetricChange,
   bundle,
@@ -264,6 +270,8 @@ function AnalysisViewContent({
   onArtifactExpired,
   onFocusMatch,
 }: {
+  expectedRankGapMemberId: string | undefined;
+  onExpectedRankGapMemberChange: ((memberId: string | undefined) => void) | undefined;
   ownerMetric: OwnerMetricId;
   onOwnerMetricChange: ((metric: OwnerMetricId) => void) | undefined;
   bundle: SeriesAnalysisBundle;
@@ -299,6 +307,8 @@ function AnalysisViewContent({
         ) : null}
         {bundle.view === "drivers" ? (
           <DriversView
+            expectedRankGapMemberId={expectedRankGapMemberId}
+            onExpectedRankGapMemberChange={onExpectedRankGapMemberChange}
             focusedItemIds={focusedItemIds}
             response={bundle.aggregate}
             onDrilldown={openDrilldown}
@@ -341,6 +351,10 @@ function AnalysisViewContent({
               baseQuery={baseQuery}
               selection={drilldown.selection}
               onArtifactExpired={onArtifactExpired}
+              onFocusMatch={(matchId) => {
+                setDrilldown((current) => (current ? { ...current, open: false } : null));
+                onFocusMatch(matchId);
+              }}
             />
           </Suspense>
         </Dialog>

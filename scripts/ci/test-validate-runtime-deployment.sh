@@ -44,7 +44,7 @@ write_valid_metadata() {
         manifestArtifactDigest: $artifactDigest,
         manifestSha256: $digest,
         http4sPatchRepository: "https://github.com/ponta2git/http4s.git",
-        http4sPatchScalaVersion: "3.3.6",
+        http4sPatchScalaVersion: "3.3.8",
         http4sPatchSourceSha: $http4sRef,
         http4sPatchVersion: "0.23.36-test",
         edgeRunAttempt: "1",

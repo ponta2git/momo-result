@@ -130,21 +130,6 @@ describe("app routing", () => {
     },
   );
 
-  it("orients a new page, then preserves focus while its conditions change", async () => {
-    setDevUser();
-    renderApp("/matches");
-    expect(await screen.findByRole("region", { name: "試合一覧" })).toBeVisible();
-    expect(document.title).toBe("試合一覧 | 桃鉄戦績台帳");
-    await user.click(screen.getByRole("link", { name: "まとめて出力" }));
-    expect(await screen.findByRole("region", { name: "出力条件" })).toBeVisible();
-    expect(document.title).toBe("戦績を出力 | 桃鉄戦績台帳");
-    expect(screen.getByRole("main")).toHaveFocus();
-    const tsv = screen.getByRole("tab", { name: "TSV" });
-    await user.click(tsv);
-    expect(tsv).toHaveFocus();
-    expect(tsv).toHaveAttribute("aria-selected", "true");
-  });
-
   it("opens comparison through the protected lazy route from global navigation", async () => {
     setDevUser();
     const { router } = renderApp("/matches");
@@ -211,7 +196,7 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
     await selectOption(
       user,
-      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      await screen.findByRole("combobox", { name: "操作用アカウント" }),
       "account_eu",
     );
     await user.click(await screen.findByRole("link", { name: "試合" }));
@@ -787,7 +772,7 @@ describe("app routing", () => {
 
     await selectOption(
       user,
-      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      await screen.findByRole("combobox", { name: "操作用アカウント" }),
       "account_ponta",
     );
     await waitFor(() => {

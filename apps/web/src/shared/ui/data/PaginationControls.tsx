@@ -49,11 +49,11 @@ export function PaginationControls(props: PaginationControlsProps) {
       className={cn(
         "@container/pagination flex min-w-0 flex-wrap items-end gap-4",
         placement === "standalone"
-          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          ? "rounded-md border border-border bg-surface p-3"
           : "bg-transparent",
       )}
     >
-      <p className="font-plain w-full min-w-0 text-sm text-[var(--color-text-secondary)] tabular-nums @2xl/pagination:me-auto @2xl/pagination:inline-flex @2xl/pagination:min-h-11 @2xl/pagination:w-auto @2xl/pagination:items-center">
+      <p className="w-full min-w-0 text-sm font-plain text-text-secondary tabular-nums @2xl/pagination:me-auto @2xl/pagination:inline-flex @2xl/pagination:min-h-11 @2xl/pagination:w-auto @2xl/pagination:items-center">
         {formatPaginationRange(pagination)}
       </p>
 
@@ -114,7 +114,7 @@ export function PaginationControls(props: PaginationControlsProps) {
           </div>
           <span
             className={cn(
-              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] px-3 text-sm font-plain text-[var(--color-text-secondary)] tabular-nums @2xl/pagination:min-w-22",
+              "inline-flex min-h-11 min-w-0 items-center justify-center rounded-sm border border-border bg-surface-subtle px-3 text-sm font-plain text-text-secondary tabular-nums @2xl/pagination:min-w-22",
               variant === "full"
                 ? "order-1 col-span-4 @2xl/pagination:order-none @2xl/pagination:col-span-1"
                 : "",

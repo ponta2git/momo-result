@@ -97,7 +97,7 @@ function MatchNoRow({ entry }: { entry: MatchNoEntry }) {
         return (
           <MatrixCell
             aria-label={`${player.displayName}、${formatMatchNoInEvent(entry.matchNoInEvent)}、${player.targetCount}戦${qualityAdvisory ? `、${qualityAdvisory}` : ""}、平均${formatDecimal(player.averageRank)}位、入賞${formatPercent(player.podiumRate)}`}
-            className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
+            className="rounded-xs border border-border bg-surface px-2 py-2 text-center"
             key={player.memberId}
           >
             <strong className={cn(contentText.compactPrimary, "tabular-nums")}>

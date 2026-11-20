@@ -35,7 +35,7 @@ const analysisViews = [
       { id: "metric-revenue-outcome", label: "物件収益と勝ち" },
       { id: "metric-destination-outcome", label: "目的地と順位" },
       { id: "metric-strategy-scatter", label: "試合ごとの資産と収益" },
-      { id: "metric-rank-signals", label: "追加の手掛かり" },
+      { id: "metric-expected-rank-gap", label: "見込みとの差" },
     ],
   },
   {
@@ -43,7 +43,6 @@ const analysisViews = [
     label: "推移",
     sections: [
       { id: "metric-match-digest", label: "最近の試合" },
-      { id: "metric-unexpected-wins", label: "予測より上位の勝利" },
       { id: "metric-recent-form", label: "直近" },
       { id: "metric-momentum-switch", label: "切り替え" },
       { id: "metric-match-no", label: "第n試合傾向" },
@@ -182,7 +181,7 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
           <li className="shrink-0" key={section.id}>
             <Link
               id={`analysis-toc-${section.id}`}
-              className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+              className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-text-secondary underline decoration-border-strong underline-offset-4 hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               to={{ pathname: location.pathname, search: location.search, hash: `#${section.id}` }}
               onClick={(event) => {
                 if (

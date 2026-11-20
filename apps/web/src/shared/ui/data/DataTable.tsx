@@ -87,13 +87,13 @@ const densityClass = {
 
 export const dataTableHeaderCellClassName = cn(
   contentText.supporting,
-  "border-y border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 py-2 align-middle",
+  "border-y border-border-strong bg-surface px-3 py-2 align-middle",
 );
 
 // Each shared horizontal edge belongs to the cell above it, so it is painted only once.
 // Header/footer offsets cover their existing 1px rules without changing cell dimensions.
 const highlightedColumnClassName =
-  "after:pointer-events-none after:absolute after:inset-0 after:border-x-2 after:border-b-2 after:border-[var(--color-action)]";
+  "after:pointer-events-none after:absolute after:inset-0 after:border-x-2 after:border-b-2 after:border-action";
 
 /**
  * Rows only assist the reading position: a weaker hover than controls, and no pressed state,
@@ -109,7 +109,7 @@ export function DataTableBodyRow({
   return (
     <tr
       ref={surfaceRef}
-      className="momo-surface momo-surface-neutral momo-surface-row group last:[&>td]:border-b last:[&>td]:border-[var(--color-border-strong)] last:[&>th]:border-b last:[&>th]:border-[var(--color-border-strong)]"
+      className="momo-surface momo-surface-neutral momo-surface-row group last:[&>td]:border-b last:[&>td]:border-border-strong last:[&>th]:border-b last:[&>th]:border-border-strong"
       {...props}
     />
   );
@@ -154,10 +154,7 @@ export function DataTable<Row>({
           id={captionId}
           className={cn(
             caption.visibility === "visible"
-              ? cn(
-                  contentText.heading,
-                  "border-t border-[var(--color-border-strong)] px-3 py-2 text-left",
-                )
+              ? cn(contentText.heading, "border-t border-border-strong px-3 py-2 text-left")
               : "sr-only",
           )}
         >
@@ -187,9 +184,9 @@ export function DataTable<Row>({
                   dataTableHeaderCellClassName,
                   column.sortable ? "p-0" : "",
                   caption.visibility === "visible" ? "border-t-0" : "",
-                  "sticky top-0 z-[var(--z-base)]",
-                  stickyRowHeader && "z-[var(--z-sticky)]",
-                  stickyRowHeader && column.rowHeader && "left-0 z-[var(--z-sticky-raised)]",
+                  "sticky top-0 z-(--z-base)",
+                  stickyRowHeader && "z-(--z-sticky)",
+                  stickyRowHeader && column.rowHeader && "left-0 z-(--z-sticky-raised)",
                   alignClass[column.align ?? "left"],
                   column.highlighted && [
                     highlightedColumnClassName,
@@ -230,7 +227,7 @@ export function DataTable<Row>({
                     data-highlighted={column.highlighted || undefined}
                     className={cn(
                       // Values read as body text; only the row identity keeps the primary color.
-                      column.rowHeader ? "text-[var(--color-text-primary)]" : "",
+                      column.rowHeader ? "text-text-primary" : "",
                       densityClass[density],
                       alignClass[column.align ?? "left"],
                       verticalAlignClass[verticalAlign],
@@ -243,7 +240,7 @@ export function DataTable<Row>({
                       ],
                       stickyRowHeader &&
                         column.rowHeader &&
-                        "sticky left-0 z-[var(--z-base)] bg-inherit",
+                        "sticky left-0 z-(--z-base) bg-inherit",
                     )}
                     scope={column.rowHeader ? "row" : undefined}
                     style={columnStyle(column)}
@@ -257,7 +254,7 @@ export function DataTable<Row>({
           {rows.length === 0 && emptyState ? (
             <tr>
               <td
-                className="border-b border-[var(--color-border-strong)] p-3 align-middle"
+                className="border-b border-border-strong p-3 align-middle"
                 colSpan={columns.length}
               >
                 {emptyState}
@@ -297,7 +294,7 @@ function DataTableSortButton({
         "momo-surface momo-surface-press inline-flex min-h-11 w-full items-center gap-1 rounded-xs px-3 py-2 text-inherit focus-visible:-outline-offset-3 pointer-fine:min-h-9 pointer-fine:py-1",
         actionAlignClass[align],
         "disabled:cursor-not-allowed disabled:opacity-60",
-        direction ? "momo-surface-sorted text-[var(--color-text-primary)]" : "",
+        direction ? "momo-surface-sorted text-text-primary" : "",
       )}
       disabled={disabled}
       onClick={onSort}

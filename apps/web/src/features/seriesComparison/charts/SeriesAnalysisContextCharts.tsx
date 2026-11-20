@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import {
   focusedMetricLabelClass,
   focusedMetricRingClass,
+  memberChartCardClass,
 } from "@/features/seriesComparison/charts/chartPresentation";
 import {
   AnalysisMatrix,
@@ -62,7 +63,7 @@ export function PlayOrderMatrix({
                   return (
                     <MatrixCell
                       aria-label={`${entry.displayName}、${playOrder}番手、対象なし`}
-                      className="rounded-xs border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-2 text-center"
+                      className="rounded-xs border border-border bg-surface px-2 py-2 text-center"
                       key={playOrder}
                     >
                       —
@@ -184,10 +185,7 @@ export function CardShopDestinationQuadrants({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {entries.map((entry) => (
-        <article
-          className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-          key={entry.memberId}
-        >
+        <article className={memberChartCardClass} key={entry.memberId}>
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h3 className={contentText.heading}>
               <MemberSequenceLabel memberId={entry.memberId}>

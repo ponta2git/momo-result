@@ -2,7 +2,7 @@
 
 目的: Web、API、Processing Worker、共有 DB、public runtime の責務と依存方向、資源の境界、script / tool の配置を判断する。現在の型、設定、コマンドは実装、wire payload の shape / limit は対応する endpoint または schema を正本とし、本書ではその正本を参照する。
 
-subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](web-rule.md)、[Worker 規約](worker-rule.md) が持つ。業務意味は [ドメイン規約](domain-rule.md)、DB は [DB 規約](db-rule.md)、OCR job は [OCR job 契約](ocr-job-contract.md)、戦績分析の横断要求は [分析 batch 要求](requirements/series-analysis-batch.md)、表示と操作は [UI 規約](ui-rule.md)、非機能要求は [システム要求](requirements/system-design.md) を参照する。複数文書にまたがる契約の分担は [文書索引](README.md#正本の役割) にある。
+subsystem 内の実装契約は [API 規約](implementation/api.md)、[Web 実装規約](implementation/web.md)、[Worker 規約](implementation/worker.md) が持つ。業務意味は [ドメイン規約](domain-rule.md)、DB は [DB 規約](implementation/database.md)、OCR job は [OCR job 契約](implementation/ocr-job.md)、戦績分析の横断要求は [分析 batch 要求](requirements/series-analysis-batch.md)、表示と操作は [UI 規約](ui-rule.md)、非機能要求は [システム要求](requirements/system-design.md) を参照する。複数文書にまたがる契約の分担は [文書索引](README.md#正本の役割) にある。
 
 ## System Boundaries
 
@@ -11,7 +11,7 @@ subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](w
 | Web | SPA、入力、表示、画面状態 | `apps/web/src/` |
 | API | HTTP、認証、usecase、DB adapter | Tapir endpoint、`apps/api/` |
 | Processing Worker | OCR / 分析の非同期実行、lease、外部 I/O | `apps/processing-worker/` |
-| DB | 業務状態、session、OAuth state 使用済み記録、job、入力、成果物 | 対象 `momo-db` checkout の migration（[DB 規約](db-rule.md#ownership)） |
+| DB | 業務状態、session、OAuth state 使用済み記録、job、入力、成果物 | 対象 `momo-db` checkout の migration（[DB 規約](implementation/database.md#ownership)） |
 | Web edge | 静的配信、SPA routing、API 転送 | `apps/edge/` |
 | API runtime | API process の起動・終了、単発の依存・稼働検査 | `Dockerfile`、`apps/runtime/` |
 
@@ -24,15 +24,15 @@ subsystem 内の実装契約は [API 規約](api-rule.md)、[Web 実装規約](w
 
 | subsystem | 依存方向 | 詳細 |
 | --- | --- | --- |
-| API | `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories`。`bootstrap` だけが実装を選ぶ | [API 規約](api-rule.md#bootstrap--http-execution) |
-| Web | `app → features → shared` と、shared 内の基盤・業務別 module の分担 | [Web 実装規約の Layering](web-rule.md#layering)。import の可否は `apps/web/oxlint.config.ts` が検査する |
-| Processing Worker | `runtime → capability crate`、`worker → momo-notifications` のいずれも一方向 | [Worker 規約](worker-rule.md#process-boundary) |
-| 共有 DB | 業務ルール・再試行方針・集計状態の更新手順はアプリ、FK・一意性・改変不能性・原子的な条件付き更新は DB | [DB 規約](db-rule.md#durable-state-rules) |
+| API | `http → auth / usecases → domain + ports / repositories`、`adapters → domain + ports / repositories`。`bootstrap` だけが実装を選ぶ | [API 規約](implementation/api.md#bootstrap--http-execution) |
+| Web | `app → features → shared` と、shared 内の基盤・業務別 module の分担 | [Web 実装規約の Layering](implementation/web.md#layering)。import の可否は `apps/web/oxlint.config.ts` が検査する |
+| Processing Worker | `runtime → capability crate`、`worker → momo-notifications` のいずれも一方向 | [Worker 規約](implementation/worker.md#process-boundary) |
+| 共有 DB | 業務ルール・再試行方針・集計状態の更新手順はアプリ、FK・一意性・改変不能性・原子的な条件付き更新は DB | [DB 規約](implementation/database.md#durable-state-rules) |
 
 ## Storage / Resource Boundaries
 
 - rate limit のカウンタは API process 内で保持し、scope ごとの key 数と有効期間を制限する。process 間では共有せず再起動で初期化されるため、永続する quota や同時 job 上限は DB の原子的な操作で別に守る。
-- 接続 pool は runtime で再利用し、取得待ちの実行枠も pool 上限へ合わせる。利用しない接続の常時補充や keepalive query を避け、idle な pool が検証用の traffic を出し続けないようにする一方、request ごとの接続開閉へ置き換えない。SQL 側の上限は transaction pooler 下でも保つため各 transaction で適用する（[API 規約の Usecase / Repository](api-rule.md#usecase--repository)）。
+- 接続 pool は runtime で再利用し、取得待ちの実行枠も pool 上限へ合わせる。利用しない接続の常時補充や keepalive query を避け、idle な pool が検証用の traffic を出し続けないようにする一方、request ごとの接続開閉へ置き換えない。SQL 側の上限は transaction pooler 下でも保つため各 transaction で適用する（[API 規約の Usecase / Repository](implementation/api.md#usecase--repository)）。
 - 受付判定は、必要な外部状態を受付時に取得した結果から行い、quota と fail-closed の意味を保つ。直前の PING や cache した外部状態は成功保証に使わない。
 - 処理中の lease heartbeat、待機中の capability 更新、job の起床通知、実行可能時刻、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown 予算・利用者の待ち時間と合わせて調整し、コマンド数や query 負荷はその判断材料の一つとして扱う。
 - query や index の測定には開発用 data store と分離した合成 fixture を使い、実験資源を破棄する。採否は整合性と resource 上限を守ったうえで単純さと保守負担も含めて決める。provider の稼働時間や請求額への効果を判断する場合は、それを示す証拠を使い、接続数・コマンド数の削減と区別する。

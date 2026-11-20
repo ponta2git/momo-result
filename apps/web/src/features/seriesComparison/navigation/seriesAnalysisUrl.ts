@@ -19,6 +19,7 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const ownerMetric = isOwnerMetricId(rawMetric) ? rawMetric : defaultOwnerMetric;
   const focusMemberId = params.get("focusMemberId")?.trim() || undefined;
   const rivalMemberId = params.get("rivalMemberId")?.trim() || undefined;
+  const expectedRankGapMemberId = params.get("expectedRankGapMemberId")?.trim() || undefined;
   return {
     focusMatchId,
     gameTitleId,
@@ -28,6 +29,7 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
     ownerMetric,
     ...(focusMemberId ? { focusMemberId } : {}),
     ...(rivalMemberId ? { rivalMemberId } : {}),
+    ...(expectedRankGapMemberId ? { expectedRankGapMemberId } : {}),
   };
 }
 
@@ -41,6 +43,8 @@ export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisSelection):
   if (state.focusMatchId) params.set("focusMatchId", state.focusMatchId);
   if (state.focusMemberId) params.set("focusMemberId", state.focusMemberId);
   if (state.rivalMemberId) params.set("rivalMemberId", state.rivalMemberId);
+  if (state.expectedRankGapMemberId)
+    params.set("expectedRankGapMemberId", state.expectedRankGapMemberId);
   const view = normalizeSeriesAnalysisView(state.view);
   if (view !== defaultSeriesAnalysisView) params.set("view", view);
   return params;
@@ -75,6 +79,9 @@ export function seriesAnalysisNormalizationNotice(
   }
   if (requested.focusMatchId && !normalized.focusMatchId) {
     reasons.push("比較条件が変わったため、選択試合の強調表示を解除しました。");
+  }
+  if (requested.expectedRankGapMemberId && !normalized.expectedRankGapMemberId) {
+    reasons.push("記録別の差の対象を場全体に戻しました。");
   }
   if (
     (requested.focusMemberId && requested.focusMemberId !== normalized.focusMemberId) ||

@@ -4,7 +4,7 @@
 
 ## 使い方
 
-下表から該当カードの条件・確認事項を読む。確認事項は見落としを問い直す観点として使い、test・gate の要否と品質の判断は参照先の正本で行う。契約は参照先の正本、証拠の採否は [テスト・品質規約](../test-rule.md)、検証の終了は [Change Gates](../dev-rule.md#change-gates) に従う。実装・検証へ反映済みの確認は再利用し、関連する変更や未解決事項が生じた範囲を見直す。教訓の確認によって選んだ実装・検証・制約は通常の変更報告へ含め、カード番号は判断の根拠を伝えるために必要な場合に示す。
+下表から変更に関係するカードを選び、見落としがないかを確かめる。契約はカードの参照先、検証の採否は [テスト・品質規約](../development/test-policy.md)、完了の判断は [作業指針](../../AGENTS.md#検証と完了) に従う。確認済みの結果は再利用し、関連する変更や未解決事項だけを見直す。判断は通常の変更報告に含め、根拠を辿るのに必要ならカード番号を添える。
 
 | 変更・判断 | カード |
 | --- | --- |
@@ -39,8 +39,8 @@
 
 **参照先**
 
-- [DB 規約の Contract Evidence](../db-rule.md#contract-evidence)
-- [テスト・品質規約の DB-backed API](../test-rule.md#db-backed-api)
+- [DB 規約の Contract Evidence](../implementation/database.md#contract-evidence)
+- [テスト・品質規約の DB-backed API](../development/test-policy.md#db-backed-api)
 
 ### L2 テストは失敗した実行経路を直接通す
 
@@ -59,8 +59,8 @@
 
 **参照先**
 
-- [テスト・品質規約](../test-rule.md#証拠モデルと正本)
-- [CI・リリース規約](../release.md#ci-classification-and-evidence)
+- [テスト・品質規約](../development/test-policy.md#証拠モデルと正本)
+- [CI・リリース規約](../development/release.md#ci-classification-and-evidence)
 
 ### L3 TanStack Query は cache lifecycle で壊れる
 
@@ -77,8 +77,8 @@
 
 **参照先**
 
-- [Web 実装規約の Server State](../web-rule.md#server-state)
-- [テスト・品質規約の Query / API Error](../test-rule.md#query--api-error)
+- [Web 実装規約の Server State](../implementation/web.md#server-state)
+- [テスト・品質規約の Query / API Error](../development/test-policy.md#query--api-error)
 
 ### L4 Form / request transform は workflow identifier を落とす
 
@@ -95,9 +95,9 @@
 
 **参照先**
 
-- [Web 実装規約の Form / React 19 / API Client](../web-rule.md#form--react-19--api-client)
+- [Web 実装規約の Form / React 19 / API Client](../implementation/web.md#form--react-19--api-client)
 - [ドメイン規約の Draft / Match Confirmation Modes](../domain-rule.md#draft--match-confirmation-modes)
-- [テスト・品質規約の Form / Interaction](../test-rule.md#form--interaction)
+- [テスト・品質規約の Form / Interaction](../development/test-policy.md#form--interaction)
 
 ### L5 Test double と oracle は通るだけのテストを作る
 
@@ -114,8 +114,8 @@
 
 **参照先**
 
-- [テスト・品質規約の Test Foundation / Doubles](../test-rule.md#test-foundation--doubles) と [Coverage / Decision Coverage](../test-rule.md#coverage--decision-coverage)
-- [Web 実装規約の Implementation Entry Points](../web-rule.md#implementation-entry-points)（共通 factory と MSW reset）
+- [テスト・品質規約の Test Foundation / Doubles](../development/test-policy.md#test-foundation--doubles) と [Coverage / Decision Coverage](../development/test-policy.md#coverage--decision-coverage)
+- [Web 実装規約の Implementation Entry Points](../implementation/web.md#implementation-entry-points)（共通 factory と MSW reset）
 
 ### L6 React 新APIは既存契約を置き換えすぎる
 
@@ -133,8 +133,8 @@
 
 **参照先**
 
-- [Web 実装規約の Server State](../web-rule.md#server-state) と [React Update Priority](../web-rule.md#react-update-priority)
-- [テスト・品質規約の Web Evidence Catalog](../test-rule.md#web-evidence-catalog)
+- [Web 実装規約の Server State](../implementation/web.md#server-state) と [React Update Priority](../implementation/web.md#react-update-priority)
+- [テスト・品質規約の Web Evidence Catalog](../development/test-policy.md#web-evidence-catalog)
 
 ### L7 契約変更はコードだけでは伝わらない
 
@@ -153,7 +153,7 @@
 **参照先**
 
 - [文書索引の正本の役割](../README.md#正本の役割)
-- [ドメイン規約](../domain-rule.md)、[API 規約](../api-rule.md#wire-boundary)、[DB 規約](../db-rule.md)、[OCR job 契約](../ocr-job-contract.md)
+- [ドメイン規約](../domain-rule.md)、[API 規約](../implementation/api.md#wire-boundary)、[DB 規約](../implementation/database.md)、[OCR job 契約](../implementation/ocr-job.md)
 
 ### L8 高負荷分析は通常経路のコストと観測を先に固定する
 
@@ -177,8 +177,8 @@
 - [比較要求の Read / Failure Behavior](../requirements/series-comparison.md#7-read--failure-behavior)
 - [分析 batch 要求の Correctness / Resource / OCR](../requirements/series-analysis-batch.md#7-correctness--resource--ocr)
 - [振り返り要求の Detail / Artifact Boundary](../requirements/series-review-playbook.md#6-detail--artifact-boundary)
-- [テスト・品質規約の Performance-sensitive Analytics](../test-rule.md#performance-sensitive-analytics)
-- fence と計算枠: [DB 規約の Locks and Transactions](../db-rule.md#locks-and-transactions)、[Worker 規約の Process Boundary](../worker-rule.md#process-boundary)
+- [テスト・品質規約の Performance-sensitive Analytics](../development/test-policy.md#performance-sensitive-analytics)
+- fence と計算枠: [DB 規約の Locks and Transactions](../implementation/database.md#locks-and-transactions)、[Worker 規約の Process Boundary](../implementation/worker.md#process-boundary)
 
 ### L9 Release来歴の外部wire表現を推測しない
 
@@ -198,8 +198,8 @@
 
 **参照先**
 
-- [CI・リリース規約](../release.md#release-candidate-and-provenance)
-- [テスト・品質規約の External Service Evidence Catalog](../test-rule.md#external-service-evidence-catalog)
+- [CI・リリース規約](../development/release.md#release-candidate-and-provenance)
+- [テスト・品質規約の External Service Evidence Catalog](../development/test-policy.md#external-service-evidence-catalog)
 
 ### L10 開発hostで通ることをproduction runtimeの証拠にしない
 
@@ -218,8 +218,8 @@
 
 **参照先**
 
-- [Worker 規約の OCR Capability](../worker-rule.md#ocr-capability)
-- [テスト・品質規約の Locator / E2E](../test-rule.md#locator--e2e)、[DB-backed API](../test-rule.md#db-backed-api)、[Analysis Capability / Worker Evidence Catalog](../test-rule.md#analysis-capability--worker-evidence-catalog)
+- [Worker 規約の OCR Capability](../implementation/worker.md#ocr-capability)
+- [テスト・品質規約の Locator / E2E](../development/test-policy.md#locator--e2e)、[DB-backed API](../development/test-policy.md#db-backed-api)、[Analysis Capability / Worker Evidence Catalog](../development/test-policy.md#analysis-capability--worker-evidence-catalog)
 
 ### L11 共有credentialのrotationは既存connectionが不整合を隠す
 
@@ -238,8 +238,8 @@
 
 **参照先**
 
-- [CI・リリース規約の Credential Rotation](../release.md#credential-rotation)
-- [テスト・品質規約の External Service Evidence Catalog](../test-rule.md#external-service-evidence-catalog)
+- [CI・リリース規約の Credential Rotation](../development/release.md#credential-rotation)
+- [テスト・品質規約の External Service Evidence Catalog](../development/test-policy.md#external-service-evidence-catalog)
 
 ### L12 source の token を production asset に存在するとみなさない
 
@@ -258,9 +258,9 @@
 
 **参照先**
 
-- [テスト・品質規約の UI Conformance](../test-rule.md#ui-conformance)
-- [Change Gates](../dev-rule.md#change-gates)
-- [Web 実装規約の Build / Test Tooling](../web-rule.md#build--test-tooling)
+- [テスト・品質規約の UI Conformance](../development/test-policy.md#ui-conformance)
+- [Change Gates](../development/workflow.md#change-gates)
+- [Web 実装規約の Build / Test Tooling](../implementation/web.md#build--test-tooling)
 
 ### L13 Shared DB migration は owner の authoring 手順から始める
 
@@ -273,12 +273,12 @@
 
 - 対象 checkout の `docs/development.md` を全文確認してから変更を始めたか。
 - 対象 migration の適用状態を確認し、fresh 検証には保存対象 DB とは別の DB を使い、existing DB の data 保持を別に確認したか。
-- 移行中の契約に該当する場合、撤去条件と混在禁止を [Transitional Contracts](../db-rule.md#transitional-contracts) で確認したか。
+- 移行中の契約に該当する場合、撤去条件と混在禁止を [Transitional Contracts](../implementation/database.md#transitional-contracts) で確認したか。
 
 **参照先**
 
 - [変更前の手順](../../AGENTS.md#作業境界)
-- [DB 規約の Ownership](../db-rule.md#ownership)
+- [DB 規約の Ownership](../implementation/database.md#ownership)
 
 ### L14 algorithm version と release 世代は定数更新で完了しない
 
@@ -296,5 +296,5 @@
 **参照先**
 
 - [分析 batch 要求の Compatibility / Release / Rollback](../requirements/series-analysis-batch.md#8-compatibility--release--rollback)
-- [DB 規約の Contract Evidence](../db-rule.md#contract-evidence)
-- [CI・リリース規約の Analysis Promotion and Backfill](../release.md#analysis-promotion-and-backfill) と [Rollback Verification](../release.md#rollback-verification)
+- [DB 規約の Contract Evidence](../implementation/database.md#contract-evidence)
+- [CI・リリース規約の Analysis Promotion and Backfill](../development/release.md#analysis-promotion-and-backfill) と [Recovery Verification](../development/release.md#recovery-verification)

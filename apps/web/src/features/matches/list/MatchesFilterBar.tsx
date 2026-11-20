@@ -93,7 +93,7 @@ export function MatchesFilterBar({
                 }}
               />
             </div>
-            <div className="max-w-readable w-full min-w-0">
+            <div className="w-full max-w-readable min-w-0">
               <MatchNoteQueryField value={memo} onChange={setMemo} onCommit={commitMemo} />
             </div>
             <MatchListRecordFields value={record} onChange={setRecord} onCommit={commitRecord} />

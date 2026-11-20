@@ -13,7 +13,7 @@ export function PendingStatus({
   spinner?: boolean;
 }) {
   return (
-    <span className="grid min-h-5 min-w-0 items-center text-xs/5 text-[var(--color-text-muted)]">
+    <span className="grid min-h-5 min-w-0 items-center text-xs/5 text-text-muted">
       {idleLabel ? (
         <span
           aria-hidden={pending || undefined}

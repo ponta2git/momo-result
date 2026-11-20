@@ -20,7 +20,7 @@
     "TabsList": "../../../src/shared/ui/forms/Tabs.tsx",
     "TabsTab": "../../../src/shared/ui/forms/Tabs.tsx",
     "TabsPanel": "../../../src/shared/ui/forms/Tabs.tsx",
-    "TooltipProvider": "../../../src/shared/ui/feedback/Tooltip.tsx"
+    "TooltipProvider": "../../../src/shared/ui/feedback/TooltipProvider.tsx"
   },
   "provider": {
     "component": "TooltipProvider",

@@ -105,7 +105,7 @@ const ScoreGridMobileRow = memo(function ScoreGridMobileRow({
   const reviewedCellIds = new Set(acknowledgedCellIds);
   const unresolvedCount = items.filter((item) => !reviewedCellIds.has(item.cellId)).length;
   return (
-    <article className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
+    <article className="rounded-md border border-border bg-surface p-1">
       <Disclosure
         open={expanded}
         panelPadding="sm"

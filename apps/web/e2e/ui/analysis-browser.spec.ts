@@ -151,6 +151,43 @@ test("restores review disclosure and keyboard focus after returning from evidenc
   await expect(evidenceLink).toBeInViewport();
 });
 
+test("keeps the gap subject and focused match when opening evidence and returning", async ({
+  analysis,
+  page,
+}) => {
+  let aggregateReads = 0;
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/v5/aggregate")) aggregateReads += 1;
+  });
+  await openAnalysis(page, analysis);
+  await page.getByRole("tab", { name: "勝因候補", exact: true }).click();
+  const subject = page.getByRole("radio", { name: "ぽんた", exact: true });
+  await page
+    .getByRole("group", { name: "記録別の差の対象" })
+    .getByText("ぽんた", { exact: true })
+    .click();
+  await expect(subject).toBeChecked();
+  await expect(subject).toBeFocused();
+  await expect(page.getByRole("table", { name: "記録別の見込みとの差（ぽんた）" })).toContainText(
+    "6戦",
+  );
+  expect(new URL(page.url()).searchParams.get("focusMatchId")).toBe(analysis.matchId);
+  expect(new URL(page.url()).searchParams.get("expectedRankGapMemberId")).toBe("member_ponta");
+  expect(aggregateReads).toBe(1);
+
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expect(subject).toBeChecked();
+  await page.getByRole("button", { name: "ぽんたの根拠の試合を見る" }).click();
+  const dialog = page.getByRole("dialog", { name: "見込みとの差の根拠試合" });
+  await expect(dialog).toContainText("売り場で現金を作って逃げ切った");
+  await dialog.getByRole("link", { name: "第1戦の試合結果を開く" }).click();
+  await expect(page.getByRole("heading", { name: "第1試合の結果" })).toBeVisible();
+  await page.goBack();
+  await expect(subject).toBeChecked();
+  await expect(page.getByRole("table", { name: "記録別の見込みとの差（ぽんた）" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("focusMatchId")).toBe(analysis.matchId);
+});
+
 async function openAnalysis(page: Page, context: AnalysisContext) {
   const params = new URLSearchParams({
     gameTitleId: context.gameTitleId,

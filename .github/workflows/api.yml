@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       test_http4s_patch:
-        description: Run the pinned http4s fork's focused test when its revision or builder changes
+        description: Run the pinned http4s fork's focused tests when its revision or builder changes
         required: false
         default: false
         type: boolean
@@ -25,7 +25,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -35,13 +35,13 @@ jobs:
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
-        uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
+        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
 
       - name: Build fixed http4s fork artifacts
         id: patch
         run: |
           HTTP4S_REPOSITORY=https://github.com/ponta2git/http4s.git \
-            HTTP4S_SCALA_VERSION=3.3.6 \
+            HTTP4S_SCALA_VERSION=3.3.8 \
             HTTP4S_RUN_TESTS=${{ inputs.test_http4s_patch && '1' || '0' }} \
             HTTP4S_PATCH_OUTPUT_DIR="${RUNNER_TEMP}/http4s-patch" \
             scripts/ci/build-http4s-patch.sh
@@ -93,7 +93,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -104,7 +104,7 @@ jobs:
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
-        uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
+        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
 
       - name: Download fixed http4s fork artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -137,7 +137,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -148,7 +148,7 @@ jobs:
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
-        uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
+        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
 
       - name: Download fixed http4s fork artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -234,7 +234,7 @@ jobs:
           sparse-checkout: drizzle
           persist-credentials: false
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: "25"
@@ -245,7 +245,7 @@ jobs:
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
       - name: Setup sbt
-        uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f # v1.5.12
+        uses: sbt/setup-sbt@67d461eba2c4753196c230e02da850757ba4775e # v1.5.14
 
       - name: Download fixed http4s fork artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

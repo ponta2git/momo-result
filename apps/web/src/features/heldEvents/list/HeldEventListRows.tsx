@@ -13,16 +13,15 @@ import { IconButton } from "@/shared/ui/actions/IconButton";
 import { IconLink } from "@/shared/ui/actions/IconLink";
 import { cn } from "@/shared/ui/cn";
 import { DataTable } from "@/shared/ui/data/DataTable";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 // A coarse pointer gets the 44px hit target; a fine pointer keeps the row's text density.
 const titleLinkClass =
-  "inline-flex min-h-11 items-center underline decoration-[var(--color-border-strong)] underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
+  "inline-flex min-h-11 items-center underline decoration-border-strong underline-offset-3 hover:decoration-current pointer-fine:min-h-0";
 
 // The list owns the dividers between records; its outer rules match the table's top and bottom.
-const compactListClass =
-  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
+const compactListClass = "divide-y divide-border border-y border-border-strong";
 
 type HeldEventListRowsProps = {
   /** Links lead away from rows that may belong to a previous search. */
@@ -36,7 +35,7 @@ type HeldEventListRowsProps = {
 };
 
 function LatestBadge() {
-  return <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>最新</span>;
+  return <span className={cn(compactBadgeClass, badgeToneClass.neutral)}>最新</span>;
 }
 
 function HeldEventTitle({ disabled, row }: { disabled: boolean; row: HeldEventListRowView }) {

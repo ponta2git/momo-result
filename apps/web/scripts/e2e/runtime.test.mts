@@ -118,9 +118,7 @@ for (const abort of [false, true]) {
         detached: true,
         stdio: "ignore",
       });
-      // The interrupted branch must also reap a descendant that ignores TERM;
-      // the normal-exit branch covers cooperative shutdown without escalation.
-      const childCode = `${abort ? "process.on('SIGTERM', () => {});" : ""} require('node:fs').writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setInterval(() => {}, 1000);`;
+      const childCode = `require('node:fs').writeFileSync(${JSON.stringify(ready)}, String(process.pid)); setInterval(() => {}, 1000);`;
       const launcherCode = `const child = require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(childCode)}], { stdio: 'ignore' }); ${abort ? "setInterval(() => {}, 1000);" : "child.unref(); const timer = setInterval(() => { if (require('node:fs').existsSync(process.argv[1])) { clearInterval(timer); process.exit(0); } }, 10);"}`;
       // Attach the rejection handler immediately, before driving the interruption.
       const result = runCommand(process.execPath, ["-e", launcherCode, ready], {
@@ -150,6 +148,35 @@ for (const abort of [false, true]) {
     },
   );
 }
+
+test(
+  "sends TERM before forcibly stopping an uncooperative process",
+  { skip: process.platform === "win32", timeout: 5_000 },
+  async () => {
+    const code = `
+process.on("SIGTERM", () => process.send("TERM"));
+process.send("ready");
+setInterval(() => {}, 1_000);
+`;
+    const child = spawn(process.execPath, ["-e", code], {
+      detached: true,
+      stdio: ["ignore", "ignore", "inherit", "ipc"],
+    });
+    try {
+      const [ready] = await once(child, "message");
+      assert.equal(ready, "ready");
+      const signals: unknown[] = [];
+      child.on("message", (message) => signals.push(message));
+      const exited = once(child, "exit");
+      await stopProcessGroup(child, { graceMs: 1_000 });
+      const [, signal] = await exited;
+      assert.deepEqual(signals, ["TERM"]);
+      assert.equal(signal, "SIGKILL");
+    } finally {
+      await stopProcessGroup(child, { signal: "SIGKILL" });
+    }
+  },
+);
 
 async function readStartedPid(path: string) {
   const deadline = Date.now() + 5_000;

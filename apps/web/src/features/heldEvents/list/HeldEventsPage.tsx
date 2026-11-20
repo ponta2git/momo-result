@@ -39,8 +39,8 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
     <div aria-label="開催履歴を読み込み中" role="status">
       <span className="sr-only">開催履歴を読み込み中</span>
       {showDesktopTable ? (
-        <div className="border-y border-[var(--color-border-strong)]">
-          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+        <div className="border-y border-border-strong">
+          <div className="border-b border-border-strong px-3 py-2">
             <Skeleton className="h-4 w-full" />
           </div>
           {skeletonRowIds.map((id) => (
@@ -50,7 +50,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
           ))}
         </div>
       ) : (
-        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]">
+        <div className="divide-y divide-border border-y border-border-strong">
           {skeletonRowIds.map((id) => (
             <div key={id} className="grid gap-2 py-3">
               <Skeleton className="h-10" />

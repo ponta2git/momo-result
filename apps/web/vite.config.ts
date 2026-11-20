@@ -12,6 +12,26 @@ const backendProxy = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            // Keep startup libraries cached across edits to shared UI.
+            {
+              name: "initial-vendor",
+              tags: ["$initial"],
+              test: /[/\\]node_modules[/\\]/u,
+              priority: 1,
+            },
+            // Lazy pages import startup UI and API helpers from shared/. Keep them out of the
+            // entry, whose import list changes whenever a lazy page gets a new content hash.
+            { name: "initial-shared", tags: ["$initial"], test: /[/\\]src[/\\]shared[/\\]/u },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

@@ -183,6 +183,20 @@ describe("useSeriesAnalysisLocationState", () => {
     );
   });
 
+  it("normalizes an unknown gap subject without dropping the scope or selected match", async () => {
+    const router = renderHarness(
+      "/analytics/series?gameTitleId=gt_momotetsu_2&view=drivers&focusMatchId=match-12&expectedRankGapMemberId=unknown",
+    );
+    await waitFor(() =>
+      expect(router.state.location.search).not.toContain("expectedRankGapMemberId"),
+    );
+    expect(screen.getByLabelText("normalization notice")).toHaveTextContent(
+      "記録別の差の対象を場全体に戻しました。",
+    );
+    expect(router.state.location.search).toContain("focusMatchId=match-12");
+    expect(router.state.location.search).toContain("view=drivers");
+  });
+
   it("restores focus intent across browser back and forward traversal", async () => {
     const user = userEvent.setup();
     const router = renderHarness();

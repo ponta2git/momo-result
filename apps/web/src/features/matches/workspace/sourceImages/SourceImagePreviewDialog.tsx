@@ -35,7 +35,7 @@ export function SourceImagePreviewDialog({
       title={`${sourceImageKindLabels[kind]}の拡大表示`}
     >
       {/* The same bounded frame as the inline source image. */}
-      <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+      <div className="rounded-sm border border-border bg-surface-subtle p-3">
         <img
           alt={`${sourceImageKindLabels[kind]}の元画像`}
           className="mx-auto h-auto max-w-full rounded-xs object-contain"

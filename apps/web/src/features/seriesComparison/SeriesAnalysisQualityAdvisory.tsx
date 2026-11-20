@@ -21,13 +21,10 @@ export function SeriesAnalysisQualityAdvisory({ status }: { status: DataQualityS
 
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs ${status === "reference" ? "font-plain text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"}`}
+      className={`inline-flex items-center gap-1 text-xs ${status === "reference" ? "font-plain text-text-primary" : "text-text-muted"}`}
     >
       {status === "reference" ? (
-        <TriangleAlert
-          aria-hidden="true"
-          className="size-3.5 shrink-0 text-[var(--color-warning)]"
-        />
+        <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
       ) : null}
       {label}
     </span>
@@ -49,8 +46,8 @@ export function SeriesAnalysisEvidenceStrengthWarning({
   if (!label) return null;
 
   return (
-    <span className="font-plain inline-flex items-center gap-1 text-xs text-[var(--color-text-primary)]">
-      <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-[var(--color-warning)]" />
+    <span className="inline-flex items-center gap-1 text-xs font-plain text-text-primary">
+      <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
       {label}
     </span>
   );

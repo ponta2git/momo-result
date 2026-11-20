@@ -1,8 +1,8 @@
 import { PlayerRadarAdminPanel } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdminPanel";
+import { PlayerRadarLoading } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarLoading";
 import { usePlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/usePlayerRadarAdministration";
 import { Button } from "@/shared/ui/actions/Button";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { Skeleton } from "@/shared/ui/feedback/Skeleton";
 
 export function PlayerRadarAdministration({
   gameTitleId,
@@ -45,10 +45,5 @@ export function PlayerRadarAdministration({
         {administration.error.detail}
       </Notice>
     );
-  return (
-    <div aria-label="採点基準を読み込み中" role="status" className="grid min-w-0 gap-4">
-      <Skeleton className="h-5 w-48" />
-      <Skeleton className="h-32 w-full" />
-    </div>
-  );
+  return <PlayerRadarLoading label="採点基準を読み込み中" />;
 }

@@ -1,128 +1,97 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 
 import { matchNoteMaximumCharacters, normalizeMatchNote } from "@/features/matches/matchNoteText";
 import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
-import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { fixedMemberIds } from "@/shared/domain/members";
-import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
 
-const memberIds = [...fixedMemberIds] as [string, ...string[]];
+const memberIds: readonly string[] = fixedMemberIds;
+const memberId = z.enum(memberIds);
+const incidentCount = z.int().check(z.minimum(0));
+const playerPosition = z.int().check(z.minimum(1), z.maximum(4));
 
 const incidentSchema = z.object({
-  destination: z.number().int().min(0),
-  plusStation: z.number().int().min(0),
-  minusStation: z.number().int().min(0),
-  cardStation: z.number().int().min(0),
-  cardShop: z.number().int().min(0),
-  suriNoGinji: z.number().int().min(0),
+  destination: incidentCount,
+  plusStation: incidentCount,
+  minusStation: incidentCount,
+  cardStation: incidentCount,
+  cardShop: incidentCount,
+  suriNoGinji: incidentCount,
 });
 
 const playerSchema = z.object({
-  memberId: z.enum(memberIds),
-  playOrder: z.number().int().min(1).max(4),
-  rank: z.number().int().min(1).max(4),
-  totalAssetsManYen: z.number().int(),
-  revenueManYen: z.number().int(),
+  memberId,
+  playOrder: playerPosition,
+  rank: playerPosition,
+  totalAssetsManYen: z.int(),
+  revenueManYen: z.int(),
   incidents: incidentSchema,
 });
 
-const playedAtSchema = z
-  .string()
-  .min(1, "対戦日時を入力してください")
-  .refine((value) => !Number.isNaN(new Date(value).getTime()), {
-    message: "対戦日時を正しく入力してください",
-  });
+const playedAtSchema = z.string().check(
+  z.minLength(1, "対戦日時を入力してください"),
+  z.refine((value) => !Number.isNaN(new Date(value).getTime()), "対戦日時を正しく入力してください"),
+);
 
-function pruneDraftIds(values: {
-  totalAssets?: string | undefined;
-  revenue?: string | undefined;
-  incidentLog?: string | undefined;
-}): ConfirmMatchRequest["draftIds"] {
-  const next: ConfirmMatchRequest["draftIds"] = {};
-  if (values.totalAssets) next.totalAssets = values.totalAssets;
-  if (values.revenue) next.revenue = values.revenue;
-  if (values.incidentLog) next.incidentLog = values.incidentLog;
-  return next;
-}
-
-/**
- * フォーム値を検証しつつ `ConfirmMatchRequest` (= API リクエスト DTO) に変換する。
- *
- * `transform()` を末尾に置くことで「parse → validate → reshape」を 1 段にまとめ、
- * 呼び出し側で個別に request 整形関数を用意する必要をなくしている。
- */
-export const confirmMatchSchema = z
+export const confirmMatchFormSchema = z
   .object({
-    heldEventId: z.string().min(1, "開催を選択してください"),
-    matchNoInEvent: z.number().int().min(1, "試合番号は1以上です"),
-    gameTitleId: z.string().min(1, "作品を選択してください"),
-    seasonMasterId: z.string().min(1, "シーズンを選択してください"),
-    ownerMemberId: z.enum(memberIds),
-    mapMasterId: z.string().min(1, "マップを選択してください"),
+    heldEventId: z.string().check(z.minLength(1, "開催を選択してください")),
+    matchNoInEvent: z.int().check(z.minimum(1, "試合番号は1以上です")),
+    gameTitleId: z.string().check(z.minLength(1, "作品を選択してください")),
+    seasonMasterId: z.string().check(z.minLength(1, "シーズンを選択してください")),
+    ownerMemberId: memberId,
+    mapMasterId: z.string().check(z.minLength(1, "マップを選択してください")),
     playedAt: playedAtSchema,
-    achievements: z.array(matchAchievementSelectionSchema).default([]),
-    matchDraftId: z.string().optional(),
+    achievements: z._default(z.array(matchAchievementSelectionSchema), []),
+    matchDraftId: z.optional(z.string()),
     draftIds: z.object({
-      totalAssets: z.string().optional(),
-      revenue: z.string().optional(),
-      incidentLog: z.string().optional(),
+      totalAssets: z.optional(z.string()),
+      revenue: z.optional(z.string()),
+      incidentLog: z.optional(z.string()),
     }),
-    players: z.array(playerSchema).length(4, "4人分の結果が必要です"),
+    players: z.array(playerSchema).check(z.length(4, "4人分の結果が必要です")),
     noteBody: z
-      .string()
-      .default("")
-      .refine(
-        (value) => Array.from(normalizeMatchNote(value)).length <= matchNoteMaximumCharacters,
-        {
-          message: `試合メモは${matchNoteMaximumCharacters}字以内で入力してください`,
-        },
+      ._default(z.string(), "")
+      .check(
+        z.refine(
+          (value) => Array.from(normalizeMatchNote(value)).length <= matchNoteMaximumCharacters,
+          `試合メモは${matchNoteMaximumCharacters}字以内で入力してください`,
+        ),
       ),
   })
-  .superRefine((value, ctx) => {
-    const achievements = new Set(
-      value.achievements.map((entry) => `${entry.achievementId}:${entry.memberId}`),
-    );
-    if (achievements.size !== value.achievements.length) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["achievements"],
-        message: "同じ人の実績は1件ずつ選択してください",
-      });
-    }
-    const memberSet = new Set(value.players.map((player) => player.memberId));
-    if (memberSet.size !== 4) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["players"],
-        message: "4人全員を重複なく選択してください",
-      });
-    }
-    for (const key of ["playOrder", "rank"] as const) {
-      const set = new Set(value.players.map((player) => player[key]));
-      if (set.size !== 4 || ![1, 2, 3, 4].every((number) => set.has(number))) {
+  .check(
+    z.superRefine((value, ctx) => {
+      const achievements = new Set(
+        value.achievements.map((entry) => `${entry.achievementId}:${entry.memberId}`),
+      );
+      if (achievements.size !== value.achievements.length) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["achievements"],
+          message: "同じ人の実績は1件ずつ選択してください",
+        });
+      }
+      const memberSet = new Set(value.players.map((player) => player.memberId));
+      if (memberSet.size !== 4) {
         ctx.addIssue({
           code: "custom",
           path: ["players"],
-          message:
-            key === "playOrder"
-              ? "プレー順は1〜4を重複なく入力してください"
-              : "順位は1〜4を重複なく入力してください",
+          message: "4人全員を重複なく選択してください",
         });
       }
-    }
-  })
-  .transform((values): ConfirmMatchRequest => {
-    const { matchDraftId, noteBody, achievements, ...rest } = values;
-    const normalizedNote = normalizeMatchNote(noteBody);
-    return {
-      ...rest,
-      achievements: achievements.map(({ achievementName: _name, ...entry }) => entry),
-      ...(matchDraftId ? { matchDraftId } : {}),
-      ...(normalizedNote.trim().length > 0 ? { noteBody: normalizedNote } : {}),
-      draftIds: pruneDraftIds(values.draftIds),
-      playedAt: toIsoFromLocalDateTime(values.playedAt),
-    };
-  });
+      for (const key of ["playOrder", "rank"] as const) {
+        const set = new Set(value.players.map((player) => player[key]));
+        if (set.size !== 4 || ![1, 2, 3, 4].every((number) => set.has(number))) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["players"],
+            message:
+              key === "playOrder"
+                ? "プレー順は1〜4を重複なく入力してください"
+                : "順位は1〜4を重複なく入力してください",
+          });
+        }
+      }
+    }),
+  );
 
-/** フォーム入力時の値の型 (transform 適用前)。 */
-export type ConfirmMatchFormValues = z.input<typeof confirmMatchSchema>;
+export type ConfirmMatchFormValues = z.input<typeof confirmMatchFormSchema>;

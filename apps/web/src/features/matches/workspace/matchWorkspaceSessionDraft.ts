@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 
 import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -7,55 +7,55 @@ import { fixedMemberIds } from "@/shared/domain/members";
 const legacyStoragePrefix = "momoresult.matchWorkspaceDraft.v1.";
 const storagePrefix = "momoresult.matchWorkspaceDraft.v2.";
 export const matchWorkspaceSessionDraftTtlMs = 2 * 60 * 60 * 1000;
-const memberIds = [...fixedMemberIds] as [string, ...string[]];
+const memberId = z.enum(fixedMemberIds);
 
 const incidentSchema = z.object({
-  cardShop: z.number().finite(),
-  cardStation: z.number().finite(),
-  destination: z.number().finite(),
-  minusStation: z.number().finite(),
-  plusStation: z.number().finite(),
-  suriNoGinji: z.number().finite(),
+  cardShop: z.number(),
+  cardStation: z.number(),
+  destination: z.number(),
+  minusStation: z.number(),
+  plusStation: z.number(),
+  suriNoGinji: z.number(),
 });
 
 const matchFormValuesSchema = z.object({
   draftIds: z.object({
-    incidentLog: z.string().optional(),
-    revenue: z.string().optional(),
-    totalAssets: z.string().optional(),
+    incidentLog: z.optional(z.string()),
+    revenue: z.optional(z.string()),
+    totalAssets: z.optional(z.string()),
   }),
   gameTitleId: z.string(),
   heldEventId: z.string(),
   mapMasterId: z.string(),
-  matchDraftId: z.string().optional(),
-  matchNoInEvent: z.number().finite(),
-  ownerMemberId: z.enum(memberIds),
+  matchDraftId: z.optional(z.string()),
+  matchNoInEvent: z.number(),
+  ownerMemberId: memberId,
   playedAt: z.string(),
-  achievements: z.array(matchAchievementSelectionSchema).default([]),
-  expectedVersion: z.string().optional(),
-  initialResultFingerprint: z.string().optional(),
+  achievements: z._default(z.array(matchAchievementSelectionSchema), []),
+  expectedVersion: z.optional(z.string()),
+  initialResultFingerprint: z.optional(z.string()),
   players: z
     .array(
       z.object({
         incidents: incidentSchema,
-        memberId: z.enum(memberIds),
-        playOrder: z.number().finite(),
-        rank: z.number().finite(),
-        revenueManYen: z.number().finite(),
-        totalAssetsManYen: z.number().finite(),
+        memberId,
+        playOrder: z.number(),
+        rank: z.number(),
+        revenueManYen: z.number(),
+        totalAssetsManYen: z.number(),
       }),
     )
-    .length(4),
+    .check(z.length(4)),
   seasonMasterId: z.string(),
-  noteBody: z.string().default(""),
-  numericDrafts: z.record(z.string(), z.string()).optional(),
+  noteBody: z._default(z.string(), ""),
+  numericDrafts: z.optional(z.record(z.string(), z.string())),
 });
 
 const sessionDraftSchema = z.object({
-  accountId: z.string().min(1),
+  accountId: z.string().check(z.minLength(1)),
   acknowledgedCellIds: z.array(z.string()),
   baselineFingerprint: z.string(),
-  resumeAutomatically: z.boolean().optional(),
+  resumeAutomatically: z.optional(z.boolean()),
   savedAt: z.string(),
   values: matchFormValuesSchema,
   version: z.literal(2),

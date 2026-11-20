@@ -47,6 +47,7 @@ describe("validateMatchForm", () => {
 
     expect(result.success).toBe(false);
     expect(result.pathSet.has("players.2.rank")).toBe(true);
+    expect(result.firstMessage).toContain("4");
   });
 
   it("rejects duplicate play orders with the players-level path", () => {

@@ -1,22 +1,36 @@
+import { normalizeMatchNote } from "@/features/matches/matchNoteText";
 import type { MatchFormValues } from "@/features/matches/workspace/matchFormTypes";
 import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
-import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import { confirmMatchFormSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import type { ConfirmMatchRequest, UpdateMatchRequest } from "@/shared/api/matches";
+import { toIsoFromLocalDateTime } from "@/shared/lib/dateTime";
+import { parseSchema } from "@/shared/lib/schemaValidation";
 
 export type MatchConfirmRequest = ConfirmMatchRequest;
 export type MatchUpdateRequest = UpdateMatchRequest;
 
-/**
- * フォーム値を `ConfirmMatchRequest` (= 確定 API リクエスト DTO) に変換する。
- *
- * 値変換 (ISO 化・draftIds の null 落とし) は `confirmMatchSchema.transform` が
- * 行うため、ここは parse 呼び出しの薄いラッパに過ぎない。
- *
- * 呼び出し側は事前に validateMatchForm で検証済みである前提で、ここでは throw する
- * `parse` を使う (検証エラーは UI 側で先に握っている)。
- */
+function pruneDraftIds(values: MatchFormValues["draftIds"]): ConfirmMatchRequest["draftIds"] {
+  const next: ConfirmMatchRequest["draftIds"] = {};
+  if (values.totalAssets) next.totalAssets = values.totalAssets;
+  if (values.revenue) next.revenue = values.revenue;
+  if (values.incidentLog) next.incidentLog = values.incidentLog;
+  return next;
+}
+
 export function toConfirmMatchRequest(values: MatchFormValues): MatchConfirmRequest {
-  return confirmMatchSchema.parse(matchFormInput(values));
+  const { matchDraftId, noteBody, achievements, ...rest } = parseSchema(
+    confirmMatchFormSchema,
+    matchFormInput(values),
+  );
+  const normalizedNote = normalizeMatchNote(noteBody);
+  return {
+    ...rest,
+    achievements: achievements.map(({ achievementName: _name, ...entry }) => entry),
+    ...(matchDraftId ? { matchDraftId } : {}),
+    ...(normalizedNote.trim().length > 0 ? { noteBody: normalizedNote } : {}),
+    draftIds: pruneDraftIds(rest.draftIds),
+    playedAt: toIsoFromLocalDateTime(rest.playedAt),
+  };
 }
 
 export function toUpdateMatchRequest(values: MatchFormValues): MatchUpdateRequest {

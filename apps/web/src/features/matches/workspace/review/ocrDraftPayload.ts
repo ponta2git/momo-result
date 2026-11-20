@@ -1,31 +1,36 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 
 import { incidentOcrNames } from "@/shared/domain/incidents";
 import type { IncidentOcrName } from "@/shared/domain/incidents";
+import { parseSchema } from "@/shared/lib/schemaValidation";
 
 const structuredOcrWarningSchema = z.object({
   code: z.string(),
-  field_path: z.string().nullable().default(null),
+  field_path: z._default(z.nullable(z.string()), null),
   message: z.string(),
-  severity: z.string().default("warning"),
+  severity: z._default(z.string(), "warning"),
 });
 
 export const ocrWarningSchema = z.union([
   structuredOcrWarningSchema,
-  z.string().transform((message) => ({
-    code: "LEGACY_WARNING",
-    field_path: null,
-    message,
-    severity: "warning",
-  })),
+  z.pipe(
+    z.string(),
+    z.transform((message) => ({
+      code: "LEGACY_WARNING",
+      field_path: null,
+      message,
+      severity: "warning",
+    })),
+  ),
 ]);
 
-const ocrFieldSchema = <T extends z.ZodType>(valueSchema: T) =>
+const warningsSchema = z._default(z.array(ocrWarningSchema), []);
+const ocrFieldSchema = <T extends z.ZodMiniType>(valueSchema: T) =>
   z.object({
-    value: valueSchema.nullable(),
-    raw_text: z.string().nullable(),
-    confidence: z.number().nullable(),
-    warnings: z.array(ocrWarningSchema).default([]),
+    value: z.nullable(valueSchema),
+    raw_text: z.nullable(z.string()),
+    confidence: z.nullable(z.number()),
+    warnings: warningsSchema,
   });
 
 export const ocrNumberFieldSchema = ocrFieldSchema(z.number());
@@ -37,52 +42,52 @@ export type IncidentName = IncidentOcrName;
 
 const ocrPlayerEntrySchema = z.object({
   raw_player_name: ocrStringFieldSchema,
-  member_id: z.string().nullable().optional(),
+  member_id: z.nullish(z.string()),
   play_order: ocrNumberFieldSchema,
   rank: ocrNumberFieldSchema,
   total_assets_man_yen: ocrNumberFieldSchema,
   revenue_man_yen: ocrNumberFieldSchema,
-  incidents: z.record(z.string(), ocrNumberFieldSchema).default({}),
+  incidents: z._default(z.record(z.string(), ocrNumberFieldSchema), {}),
 });
 
 /**
  * OCR worker が画面種別ごとに付随情報として返す `category_payload`。
  * `parser` キーで画面種別を判別する discriminated union として表現する。
  *
- * - 既知のフィールド以外は worker 側の進化を許容するため `passthrough` で保持する
+ * - 既知のフィールド以外も worker 側の進化を許容するため保持する
  * - 旧来の空オブジェクト `{}` 等、`parser` 未設定の payload は legacy fallback で受ける
  */
 const baseCategoryFields = {
-  status: z.string().optional(),
-  rows: z.array(z.unknown()).optional(),
-  player_order: z.unknown().optional(),
-  include_raw_text: z.boolean().optional(),
+  status: z.optional(z.string()),
+  rows: z.optional(z.array(z.unknown())),
+  player_order: z.optional(z.unknown()),
+  include_raw_text: z.optional(z.boolean()),
 } as const;
 
-const totalAssetsCategoryPayloadSchema = z
-  .object({ parser: z.literal("total_assets"), ...baseCategoryFields })
-  .passthrough();
+const totalAssetsCategoryPayloadSchema = z.looseObject({
+  parser: z.literal("total_assets"),
+  ...baseCategoryFields,
+});
 
-const revenueCategoryPayloadSchema = z
-  .object({ parser: z.literal("revenue"), ...baseCategoryFields })
-  .passthrough();
+const revenueCategoryPayloadSchema = z.looseObject({
+  parser: z.literal("revenue"),
+  ...baseCategoryFields,
+});
 
-const incidentLogCategoryPayloadSchema = z
-  .object({
-    parser: z.literal("incident_log"),
-    ...baseCategoryFields,
-    layout_profile_id: z.string().optional(),
-    incident_names: z.array(z.string()).optional(),
-  })
-  .passthrough();
+const incidentLogCategoryPayloadSchema = z.looseObject({
+  parser: z.literal("incident_log"),
+  ...baseCategoryFields,
+  layout_profile_id: z.optional(z.string()),
+  incident_names: z.optional(z.array(z.string())),
+});
 
 const legacyCategoryPayloadSchema = z.record(z.string(), z.unknown());
 
 const baseDraftFields = {
-  detected_screen_type: z.string().nullable(),
-  profile_id: z.string().nullable(),
-  players: z.array(ocrPlayerEntrySchema).default([]),
-  warnings: z.array(ocrWarningSchema).default([]),
+  detected_screen_type: z.nullable(z.string()),
+  profile_id: z.nullable(z.string()),
+  players: z._default(z.array(ocrPlayerEntrySchema), []),
+  warnings: warningsSchema,
   raw_snippets: z.unknown(),
 } as const;
 
@@ -94,23 +99,26 @@ const baseDraftFields = {
 export const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
   z.object({
     requested_screen_type: z.literal("total_assets"),
-    category_payload: z
-      .union([totalAssetsCategoryPayloadSchema, legacyCategoryPayloadSchema])
-      .default({}),
+    category_payload: z._default(
+      z.union([totalAssetsCategoryPayloadSchema, legacyCategoryPayloadSchema]),
+      {},
+    ),
     ...baseDraftFields,
   }),
   z.object({
     requested_screen_type: z.literal("revenue"),
-    category_payload: z
-      .union([revenueCategoryPayloadSchema, legacyCategoryPayloadSchema])
-      .default({}),
+    category_payload: z._default(
+      z.union([revenueCategoryPayloadSchema, legacyCategoryPayloadSchema]),
+      {},
+    ),
     ...baseDraftFields,
   }),
   z.object({
     requested_screen_type: z.literal("incident_log"),
-    category_payload: z
-      .union([incidentLogCategoryPayloadSchema, legacyCategoryPayloadSchema])
-      .default({}),
+    category_payload: z._default(
+      z.union([incidentLogCategoryPayloadSchema, legacyCategoryPayloadSchema]),
+      {},
+    ),
     ...baseDraftFields,
   }),
 ]);
@@ -126,7 +134,7 @@ export type OcrDraftPayload = z.infer<typeof ocrDraftPayloadSchema>;
 export type OcrPlayerEntry = z.infer<typeof ocrPlayerEntrySchema>;
 
 export function parseOcrDraftPayload(value: unknown): OcrDraftPayload {
-  return ocrDraftPayloadSchema.parse(value);
+  return parseSchema(ocrDraftPayloadSchema, value);
 }
 
 export function parseOcrWarningList(value: unknown): OcrWarning[] {

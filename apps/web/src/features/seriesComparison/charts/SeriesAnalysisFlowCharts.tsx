@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 
+import { memberChartCardClass } from "@/features/seriesComparison/charts/chartPresentation";
 import { DataVizLineChart } from "@/features/seriesComparison/charts/dataViz/LineChart";
 import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
 import { momentumRateFact } from "@/features/seriesComparison/charts/SeriesAnalysisMomentumRateSummary";
@@ -138,10 +139,7 @@ export function MomentumMatrices({
       <div className="grid gap-4 lg:grid-cols-2">
         {entries.map((entry) => {
           return (
-            <article
-              className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-              key={entry.memberId}
-            >
+            <article className={memberChartCardClass} key={entry.memberId}>
               <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}

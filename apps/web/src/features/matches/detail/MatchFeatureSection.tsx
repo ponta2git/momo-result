@@ -1,7 +1,7 @@
 import type { MatchFeatureBadge } from "@/features/matches/detail/matchDetailPresentation";
 import { cn } from "@/shared/ui/cn";
 import { Skeleton } from "@/shared/ui/feedback/Skeleton";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
 /**
  * Features come from the separate analysis read. While it is pending, one badge row stays
@@ -26,7 +26,7 @@ export function MatchFeatureSection({
           title={badge.description}
           className={cn(
             compactBadgeClass,
-            compactBadgeToneClass[badge.tone === "notice" ? "attention" : "neutral"],
+            badgeToneClass[badge.tone === "notice" ? "attention" : "neutral"],
           )}
         >
           {badge.label}

@@ -51,7 +51,7 @@ function SelectOptionRow({ option }: { option: SelectOption }) {
       value={option.value}
       className={({ selected }) =>
         cn(
-          "momo-select-option momo-surface flex min-h-11 cursor-default items-center gap-2 rounded-xs px-3 py-2 text-base leading-6 font-plain text-[var(--color-text-primary)] data-disabled:cursor-not-allowed data-disabled:text-[var(--color-text-muted)] sm:text-sm sm:leading-5 pointer-fine:min-h-10 forced-colors:data-selected:bg-[Highlight] forced-colors:data-selected:text-[HighlightText] forced-colors:data-selected:forced-color-adjust-none forced-colors:data-disabled:text-[GrayText]",
+          "momo-select-option momo-surface flex min-h-11 cursor-default items-center gap-2 rounded-xs px-3 py-2 text-base leading-6 font-plain text-text-primary data-disabled:cursor-not-allowed data-disabled:text-text-muted sm:text-sm sm:leading-5 pointer-fine:min-h-10 forced-colors:data-selected:bg-[Highlight] forced-colors:data-selected:text-[HighlightText] forced-colors:data-selected:forced-color-adjust-none forced-colors:data-disabled:text-[GrayText]",
           selected && "momo-surface-selected",
         )
       }
@@ -173,7 +173,7 @@ export function SelectControl({
         <Select.Value className="block truncate">{selectedLabel}</Select.Value>
         <Select.Icon
           className={cn(
-            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)]",
+            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-text-secondary",
             density === "compact" ? "right-2" : "right-3",
           )}
         >
@@ -183,7 +183,7 @@ export function SelectControl({
       {/* The portal also owns the invisible backdrop, including inside pointer-inert dialog hosts. */}
       <Select.Portal
         container={container ?? undefined}
-        className="pointer-events-auto relative isolate z-[var(--z-dropdown)]"
+        className="pointer-events-auto relative isolate z-(--z-dropdown)"
       >
         <Select.Positioner
           alignItemWithTrigger={false}
@@ -192,11 +192,11 @@ export function SelectControl({
           align="start"
           sideOffset={4}
           collisionPadding={16}
-          className="pointer-events-auto z-[var(--z-dropdown)]"
+          className="pointer-events-auto z-(--z-dropdown)"
         >
           <Select.Popup
             hidden={!open || !present || disabled}
-            className="momo-select-popup rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-raised)]"
+            className="momo-select-popup rounded-sm border border-border bg-surface p-1 shadow-raised"
             onKeyDown={(event) => {
               // Base UI 1.8 treats Shift+Tab as returning from a submenu to its trigger.
               // Start the browser's native backward tab from the field, without traversing

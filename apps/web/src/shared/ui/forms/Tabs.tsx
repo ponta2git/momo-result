@@ -66,7 +66,7 @@ function UnderlineSelectionIndicator() {
             <m.span
               {...(target ? { animate: target } : {})}
               aria-hidden="true"
-              className="absolute top-0 left-0 h-full bg-[var(--color-action)]"
+              className="absolute top-0 left-0 h-full bg-action"
               initial={false}
               style={{
                 width: "var(--active-tab-width, 0px)",
@@ -99,9 +99,7 @@ export function TabsList({ children, ref, variant = "filled", wrap, ...props }: 
         className={cn(
           "relative flex max-w-full min-w-0",
           shouldWrap ? "flex-wrap" : "flex-nowrap overflow-x-auto overflow-y-hidden",
-          variant === "filled"
-            ? "gap-2"
-            : "border-b border-[var(--color-border)] [scrollbar-width:thin]",
+          variant === "filled" ? "gap-2" : "border-b border-border [scrollbar-width:thin]",
         )}
       >
         {children}
@@ -126,15 +124,13 @@ export function TabsTab({ ref, ...props }: TabsTabProps) {
           variant === "filled"
             ? cn(
                 "rounded-sm",
-                state.active
-                  ? "momo-surface-selected text-[var(--color-text-primary)]"
-                  : "text-[var(--color-text-secondary)]",
+                state.active ? "momo-surface-selected text-text-primary" : "text-text-secondary",
               )
             : cn(
                 "momo-surface-underline -mb-px border-b-2 focus-visible:outline-offset-[-3px]",
                 state.active
-                  ? "momo-surface-underline-selected border-transparent text-[var(--color-text-primary)]"
-                  : "text-[var(--color-text-secondary)]",
+                  ? "momo-surface-underline-selected border-transparent text-text-primary"
+                  : "text-text-secondary",
               ),
           state.disabled ? "cursor-not-allowed opacity-60" : "",
         )

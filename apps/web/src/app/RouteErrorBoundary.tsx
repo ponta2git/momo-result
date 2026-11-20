@@ -79,7 +79,7 @@ export class RouteErrorBoundary extends Component<
             role="alert"
             tone="danger"
           >
-            <p className="momo-break-token text-sm">{detail}</p>
+            <p className="text-sm momo-break-token">{detail}</p>
           </Notice>
         </RouteTerminalPage>
       );

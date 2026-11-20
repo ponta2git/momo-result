@@ -25,7 +25,7 @@ export function PageContentSurface({
   return (
     <div
       className={cn(
-        "w-full min-w-0 rounded-lg bg-[var(--color-surface)] text-[var(--color-text-primary)]",
+        "w-full min-w-0 rounded-lg bg-surface text-text-primary",
         paddingClass[padding],
         className,
       )}

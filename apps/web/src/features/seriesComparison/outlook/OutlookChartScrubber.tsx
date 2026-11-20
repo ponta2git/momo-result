@@ -55,7 +55,7 @@ export function OutlookChartScrubber({
       aria-describedby={descriptionId}
       aria-orientation="horizontal"
       data-outlook-preserve-draft
-      className="absolute inset-0 cursor-ew-resize touch-pan-y select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+      className="absolute inset-0 cursor-ew-resize touch-pan-y select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       onPointerDown={(event) => {
         if (!event.isPrimary || event.button !== 0 || drag.current) return;
         event.currentTarget.focus({ preventScroll: true });

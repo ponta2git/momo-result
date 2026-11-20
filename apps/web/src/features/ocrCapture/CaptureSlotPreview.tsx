@@ -30,10 +30,8 @@ export function CaptureSlotPreview({
     <div
       aria-label={`${label}の16:9画像枠`}
       className={cn(
-        "relative aspect-video w-full overflow-hidden rounded-sm border border-[var(--color-border)]",
-        hasImage
-          ? "bg-[var(--color-media-canvas)]"
-          : "border-dashed bg-[var(--color-surface-subtle)]",
+        "relative aspect-video w-full overflow-hidden rounded-sm border border-border",
+        hasImage ? "bg-media-canvas" : "border-dashed bg-surface-subtle",
         hasImage &&
           (isWorking ? "cursor-not-allowed opacity-85" : "cursor-grab active:cursor-grabbing"),
       )}
@@ -53,7 +51,7 @@ export function CaptureSlotPreview({
               className={cn(
                 compactBadgeClass,
                 // Over the image a dark fill alone separates the label; no frame is needed.
-                "absolute bottom-2 left-2 border-transparent bg-[var(--color-surface-inverse)]/80 text-[var(--color-text-inverse)]",
+                "absolute bottom-2 left-2 border-transparent bg-surface-inverse/80 text-text-inverse",
               )}
             >
               {sourceLabels[slot.source]}

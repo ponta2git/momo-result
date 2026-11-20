@@ -181,7 +181,7 @@ export function AnalysisTableOfContents({ view }: { view: AnalysisViewId }) {
           <li className="shrink-0" key={section.id}>
             <Link
               id={`analysis-toc-${section.id}`}
-              className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-[var(--color-text-secondary)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)]"
+              className="inline-flex min-h-11 shrink-0 items-center whitespace-nowrap text-text-secondary underline decoration-border-strong underline-offset-4 hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
               to={{ pathname: location.pathname, search: location.search, hash: `#${section.id}` }}
               onClick={(event) => {
                 if (

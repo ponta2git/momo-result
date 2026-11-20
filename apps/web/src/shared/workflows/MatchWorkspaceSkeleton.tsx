@@ -41,7 +41,7 @@ export function MatchWorkspaceSkeleton({ mode, sample, sourcePanel }: MatchWorks
           {mode === "create" ? <SetupFieldsSkeleton /> : null}
         </div>
         {/* The result and achievement views, the result opening first. */}
-        <div className="flex min-h-11 items-end gap-2 border-b border-[var(--color-border)] pointer-fine:min-h-9">
+        <div className="flex min-h-11 items-end gap-2 border-b border-border pointer-fine:min-h-9">
           <Skeleton className="mb-2 h-5 w-20" />
           <Skeleton className="mb-2 h-5 w-24" />
         </div>
@@ -136,7 +136,7 @@ function ScoreSectionSkeleton() {
 
 function SourcePanelSkeleton() {
   return (
-    <div className="grid gap-4 rounded-md border border-[var(--color-border)] p-4">
+    <div className="grid gap-4 rounded-md border border-border p-4">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="grid min-w-0 flex-[1_1_16rem] gap-1">
           <Skeleton className="h-5 w-24" />
@@ -145,7 +145,7 @@ function SourcePanelSkeleton() {
         <Skeleton className="h-11 w-28 rounded-sm pointer-fine:h-9" />
       </div>
       <Skeleton className="h-11 w-full rounded-sm" />
-      <div className="grid gap-2 rounded-sm border border-[var(--color-border)] p-3">
+      <div className="grid gap-2 rounded-sm border border-border p-3">
         <Skeleton className="aspect-video w-full" />
         <Skeleton className="h-11 w-full max-w-60 pointer-fine:h-9" />
       </div>

@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function ScoreGridReviewToolbar({
@@ -34,7 +34,7 @@ export function ScoreGridReviewToolbar({
   return (
     <div
       aria-label="OCRの確認項目"
-      className="min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3"
+      className="min-w-0 rounded-sm border border-border bg-surface-subtle p-3"
     >
       <ContentWithActions
         actions={
@@ -70,16 +70,14 @@ export function ScoreGridReviewToolbar({
       >
         <div className="grid min-w-0 gap-1" aria-live="polite">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(compactBadgeClass, compactBadgeToneClass.attention, "tabular-nums")}
-            >
+            <span className={cn(compactBadgeClass, badgeToneClass.attention, "tabular-nums")}>
               未確認{remainingCount}件／全{totalCount}件
             </span>
             {activeItem ? (
               <span className={contentText.compactPrimary}>{activeItem.label}</span>
             ) : null}
             {activeReviewed ? (
-              <span className="font-plain text-xs text-[var(--color-success)]">確認済み</span>
+              <span className="text-xs font-plain text-success">確認済み</span>
             ) : null}
           </div>
           {activeItem ? (

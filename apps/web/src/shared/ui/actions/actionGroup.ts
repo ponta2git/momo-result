@@ -8,5 +8,4 @@ export const inlineActionGroupClass = "flex min-w-0 max-w-full flex-wrap items-c
  * The final execution step shares one inset surface, without a second border. Keep its
  * availability/result feedback inside the panel, grouped with the action it qualifies.
  */
-export const taskActionPanelClass =
-  "grid min-w-0 gap-4 rounded-md bg-[var(--color-surface-subtle)] p-4";
+export const taskActionPanelClass = "grid min-w-0 gap-4 rounded-md bg-surface-subtle p-4";

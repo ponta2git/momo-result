@@ -6,7 +6,7 @@ export function OutlookLoading() {
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6" role="status">
       <span className="sr-only">見通しを読み込み中</span>
-      <div className="max-w-readable @container/outlook-people grid min-w-0 grid-cols-1 gap-2">
+      <div className="@container/outlook-people grid max-w-readable min-w-0 grid-cols-1 gap-2">
         <div className="grid min-w-0 grid-cols-1 gap-4 @xs/outlook-people:grid-cols-2">
           {["focus", "rival"].map((role) => (
             <div key={role} className="grid min-w-0 grid-cols-1 gap-2">
@@ -17,7 +17,7 @@ export function OutlookLoading() {
         </div>
       </div>
       <div className="grid min-w-0 grid-cols-1 gap-4">
-        <div className="flex overflow-hidden border-b border-[var(--color-border)]">
+        <div className="flex overflow-hidden border-b border-border">
           {["performance", "goal"].map((task) => (
             <Skeleton key={task} className="-mb-px h-11 w-32 shrink-0 pointer-fine:h-9" />
           ))}

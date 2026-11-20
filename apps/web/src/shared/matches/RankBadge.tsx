@@ -7,7 +7,7 @@ export function RankBadge({ rank, size = "sm" }: { rank: number; size?: "md" | "
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-xs border font-plain text-[var(--color-text-primary)] tabular-nums",
+        "inline-flex shrink-0 items-center justify-center rounded-xs border font-plain text-text-primary tabular-nums",
         size === "md" ? "min-h-10 min-w-14 px-2 text-lg" : "min-h-6 min-w-9 px-2 text-xs",
       )}
       style={
@@ -34,7 +34,7 @@ export function RankTrail({ ariaLabel, ranks }: { ariaLabel: string; ranks: read
       {entries.map((entry) => (
         <li key={entry.key} className="inline-flex items-center gap-2">
           {entry.first ? null : (
-            <span aria-hidden="true" className="text-[var(--color-text-muted)]">
+            <span aria-hidden="true" className="text-text-muted">
               {" → "}
             </span>
           )}

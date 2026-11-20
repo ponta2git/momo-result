@@ -28,7 +28,7 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { contentText } from "@/shared/ui/typography";
 
 const rangeClass =
-  "block min-h-11 w-full cursor-pointer accent-[var(--color-action)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-not-allowed disabled:opacity-50";
+  "block min-h-11 w-full cursor-pointer accent-action focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-not-allowed disabled:opacity-50";
 const rangeKeys = new Set([
   "ArrowLeft",
   "ArrowRight",
@@ -242,7 +242,7 @@ function WholeCountEditor({ view, role, name, edit }: Props) {
                   {value.denominator === 1n ? String(value.numerator) : formatRational(value, 2)}回
                 </span>
                 <div
-                  className="h-1.5 overflow-hidden rounded-xs bg-[var(--color-surface-subtle)]"
+                  className="h-1.5 overflow-hidden rounded-xs bg-surface-subtle"
                   aria-hidden="true"
                 >
                   <div
@@ -300,7 +300,7 @@ function WholeCountEditor({ view, role, name, edit }: Props) {
             />
             {index === 0 ? (
               <span
-                className="flex h-11 items-center text-[var(--color-text-secondary)] pointer-fine:h-10"
+                className="flex h-11 items-center text-text-secondary pointer-fine:h-10"
                 aria-hidden="true"
               >
                 <ArrowRight className="size-4" />

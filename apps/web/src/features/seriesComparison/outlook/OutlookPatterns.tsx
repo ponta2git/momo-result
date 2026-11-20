@@ -314,7 +314,7 @@ export function OutlookPatterns({
                   strokeDasharray={index === 1 ? "6 4" : undefined}
                 />
               </svg>
-              <span className="font-plain min-w-0 text-xs break-words text-[var(--color-text-primary)]">
+              <span className="min-w-0 text-xs font-plain break-words text-text-primary">
                 {names[role]}
                 <span className="sr-only">（{index === 1 ? "破線" : "実線"}）</span>
               </span>

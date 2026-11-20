@@ -120,10 +120,7 @@ function UnresolvedReadingsCaution({ unresolvedCount }: { unresolvedCount: numbe
   if (unresolvedCount === 0) return null;
   return (
     <p className={cn(contentText.body, "flex gap-2 text-pretty")}>
-      <AlertTriangle
-        aria-hidden="true"
-        className="mt-0.5 size-4 shrink-0 text-[var(--color-warning)]"
-      />
+      <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
       <span>
         未確認の読み取りが{unresolvedCount}
         件あります。このまま確定できますが、元画像との照合をおすすめします。

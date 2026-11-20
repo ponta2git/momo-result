@@ -20,8 +20,7 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 // The list owns the dividers between records; its outer rules match the table's top and bottom.
-const compactListClass =
-  "divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]";
+const compactListClass = "divide-y divide-border border-y border-border-strong";
 
 type RowActionsProps = {
   item: DraftItemView;
@@ -168,8 +167,8 @@ function DraftsSkeleton({ showTable }: { showTable: boolean }) {
         <Skeleton className="h-4 w-full max-w-80" />
       </div>
       {showTable ? (
-        <div className="border-y border-[var(--color-border-strong)]">
-          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+        <div className="border-y border-border-strong">
+          <div className="border-b border-border-strong px-3 py-2">
             <Skeleton className="h-4 w-full" />
           </div>
           {skeletonRowIds.map((id) => (

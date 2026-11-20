@@ -20,7 +20,7 @@ export const Filled = () => (
       </TabsList>
       {axes.map((axis) => (
         <TabsPanel key={axis.id} value={axis.id}>
-          <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
+          <p className="mt-3 text-sm text-text-secondary">
             {axis.label}の採点境界を表示しています。
           </p>
         </TabsPanel>
@@ -41,9 +41,7 @@ export const Underline = () => (
       </TabsList>
       {axes.map((axis) => (
         <TabsPanel key={axis.id} value={axis.id}>
-          <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-            {axis.label}の境界値を編集します。
-          </p>
+          <p className="mt-3 text-sm text-text-secondary">{axis.label}の境界値を編集します。</p>
         </TabsPanel>
       ))}
     </TabsRoot>

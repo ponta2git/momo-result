@@ -84,7 +84,7 @@ export function DataVizLineChart({
       <div className="max-w-full min-w-0 overflow-x-auto pb-1" ref={containerRef}>
         <svg
           aria-label={ariaLabel}
-          className="block max-w-none rounded-sm bg-[var(--color-surface)]"
+          className="block max-w-none rounded-sm bg-surface"
           height={height}
           role="img"
           viewBox={`0 0 ${width} ${height}`}

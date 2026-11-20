@@ -24,21 +24,16 @@ export function SeriesAnalysisMatchLink({
     <Link
       aria-label={ariaLabel}
       className={cn(
-        "inline-flex min-h-11 items-center text-sm/5 font-plain text-[var(--color-action)] underline-offset-4 hover:underline",
+        "inline-flex min-h-11 items-center text-sm/5 font-plain text-action underline-offset-4 hover:underline",
         presentation === "text"
           ? ""
           : presentation === "inline"
             ? "gap-1"
             : presentation === "axis"
-              ? cn(
-                  "justify-center text-xs/4 whitespace-nowrap",
-                  focused ? "" : "text-[var(--color-text-muted)]",
-                )
+              ? cn("justify-center text-xs/4 whitespace-nowrap", focused ? "" : "text-text-muted")
               : cn(
                   "size-11 justify-center overflow-hidden rounded-xs border p-0 tabular-nums no-underline hover:no-underline",
-                  focused
-                    ? "ring-2 ring-[var(--color-action)] ring-offset-2 ring-offset-[var(--color-surface)]"
-                    : "",
+                  focused ? "ring-2 ring-action ring-offset-2 ring-offset-surface" : "",
                 ),
       )}
       style={

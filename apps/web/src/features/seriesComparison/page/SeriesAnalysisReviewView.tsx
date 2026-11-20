@@ -32,7 +32,7 @@ import { Disclosure } from "@/shared/ui/data/Collapsible";
 import { FactList } from "@/shared/ui/data/FactList";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
 import { Notice } from "@/shared/ui/feedback/Notice";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function ReviewView({
@@ -167,7 +167,7 @@ function PlaybookCard({
           {card.actionHypothesis}
         </h3>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>
+          <span className={cn(compactBadgeClass, badgeToneClass.neutral)}>
             {classificationLabel(card.classification)}
           </span>
           <span className={contentText.supporting}>

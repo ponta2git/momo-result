@@ -32,7 +32,7 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
     >
       <Toast.Root
         className={cn(
-          "rounded-lg border p-3 shadow-[var(--shadow-raised)]",
+          "rounded-lg border p-3 shadow-raised",
           toastToneClass[toast.type ?? "info"] ?? toastToneClass["info"],
         )}
         toast={toast}

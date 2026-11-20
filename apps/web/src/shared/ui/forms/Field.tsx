@@ -51,7 +51,7 @@ export function Field({
       <label className={cn(fieldText.label, "mb-2")} htmlFor={htmlFor}>
         {label}
         {required ? (
-          <span aria-hidden="true" className="ml-1 text-[var(--color-danger)]">
+          <span aria-hidden="true" className="ml-1 text-danger">
             *
           </span>
         ) : null}

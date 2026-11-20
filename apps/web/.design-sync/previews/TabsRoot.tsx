@@ -7,7 +7,7 @@ export const Filled = () => (
       <TabsTab value="radar">レーダーの採点基準</TabsTab>
     </TabsList>
     <TabsPanel value="recalculation">
-      <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
+      <p className="mt-4 text-sm text-text-secondary">
         直近の再計算は 2026/10/24 21:05 に完了しました。
       </p>
     </TabsPanel>
@@ -24,7 +24,7 @@ export const Underline = () => (
       <TabsTab value="history">改訂履歴</TabsTab>
     </TabsList>
     <TabsPanel value="current">
-      <p className="mt-4 text-sm text-[var(--color-text-secondary)]">第3版（2026/10/01 適用）</p>
+      <p className="mt-4 text-sm text-text-secondary">第3版（2026/10/01 適用）</p>
     </TabsPanel>
     <TabsPanel value="history">
       <p className="mt-4 text-sm">改訂履歴</p>

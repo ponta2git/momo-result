@@ -87,7 +87,7 @@ function MatchDetailReadyContent({
               className={cn(
                 contentText.body,
                 "mt-0.5 tabular-nums",
-                incidents[key] === 0 && "text-[var(--color-text-muted)]",
+                incidents[key] === 0 && "text-text-muted",
               )}
             >
               {incidents[key]}回

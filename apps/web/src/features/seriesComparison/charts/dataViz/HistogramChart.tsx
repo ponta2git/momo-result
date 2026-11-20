@@ -76,8 +76,8 @@ function SingleHistogram({
   const binWidth = chartWidth / Math.max(1, bins.length);
   const barWidth = Math.max(10, binWidth * 0.62);
   return (
-    <div className="w-full max-w-sm min-w-0 rounded-sm border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <div className="font-plain mb-2 flex min-w-0 items-center gap-2 text-sm">
+    <div className="w-full max-w-sm min-w-0 rounded-sm border border-border bg-surface p-3">
+      <div className="mb-2 flex min-w-0 items-center gap-2 text-sm font-plain">
         <span
           aria-hidden="true"
           className="size-2.5 rounded-full"
@@ -88,7 +88,7 @@ function SingleHistogram({
       <div className="overflow-x-auto pb-1">
         <svg
           aria-label={`${identity.label}の分布`}
-          className="block w-[320px] max-w-none min-w-[320px] rounded-sm bg-[var(--color-surface)]"
+          className="block w-[320px] max-w-none min-w-[320px] rounded-sm bg-surface"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}

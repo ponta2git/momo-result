@@ -60,14 +60,14 @@ export function PlayOrderMark({
   return (
     <span
       className={cn(
-        "inline-flex min-w-0 items-center gap-2 text-xs font-plain text-[var(--color-text-secondary)] tabular-nums",
+        "inline-flex min-w-0 items-center gap-2 text-xs font-plain text-text-secondary tabular-nums",
         align === "center" ? "justify-center" : "",
       )}
       data-play-order={presentation.playOrder ?? "unknown"}
     >
       <span
         aria-hidden="true"
-        className="size-3 shrink-0 rounded-full border border-[var(--color-border-strong)]"
+        className="size-3 shrink-0 rounded-full border border-border-strong"
         style={{ backgroundColor: presentation.color }}
       />
       <span>{presentation.label}</span>

@@ -56,7 +56,7 @@ export function TableScrollArea({
       <div
         className={cn(
           // Always a stacking context: sticky cells inside must not paint over the sticky nav.
-          "relative isolate min-w-0 overflow-x-auto bg-[var(--color-surface)]",
+          "relative isolate min-w-0 overflow-x-auto bg-surface",
           namedScroll && "focus-visible:-outline-offset-2",
         )}
         ref={scrollRef}

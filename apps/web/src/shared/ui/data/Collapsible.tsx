@@ -13,8 +13,8 @@ type DisclosurePanelSpacing = "none" | "sm" | "md";
 type DisclosurePanelPadding = "none" | "xs" | "sm" | "md";
 
 const triggerVariantClass = {
-  default: "text-sm font-plain text-[var(--color-text-primary)]",
-  supporting: "text-sm font-plain text-[var(--color-text-secondary)]",
+  default: "text-sm font-plain text-text-primary",
+  supporting: "text-sm font-plain text-text-secondary",
 } as const satisfies Record<DisclosureTriggerVariant, string>;
 
 /**
@@ -25,8 +25,8 @@ const disclosureInlineInsetClass = "px-3";
 
 const presentationClass = {
   framed: {
-    panel: "border-t border-[var(--color-border)]",
-    root: "rounded-sm border border-[var(--color-border)]",
+    panel: "border-t border-border",
+    root: "rounded-sm border border-border",
   },
   plain: {
     panel: "",
@@ -107,7 +107,7 @@ export function Disclosure({
             <m.span
               aria-hidden="true"
               animate={{ rotate: state.open ? 180 : 0 }}
-              className="inline-flex size-4 shrink-0 text-[var(--color-text-secondary)]"
+              className="inline-flex size-4 shrink-0 text-text-secondary"
               initial={false}
               transition={politeMotionTransition}
             >

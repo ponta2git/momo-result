@@ -42,19 +42,19 @@ export const slotDefinitions: Array<{
     kind: "total_assets",
     label: "総資産",
     stationLabel: "01",
-    accentClass: "bg-[var(--color-tray-assets)]",
+    accentClass: "bg-tray-assets",
   },
   {
     kind: "revenue",
     label: "収益",
     stationLabel: "02",
-    accentClass: "bg-[var(--color-tray-revenue)]",
+    accentClass: "bg-tray-revenue",
   },
   {
     kind: "incident_log",
     label: "事件簿",
     stationLabel: "03",
-    accentClass: "bg-[var(--color-tray-incident)]",
+    accentClass: "bg-tray-incident",
   },
 ];
 

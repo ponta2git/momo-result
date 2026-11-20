@@ -1,6 +1,6 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { createInterruptionSignal, runCommand } from "../../web/scripts/process.mts";
 import { childEnvironment } from "../../web/scripts/e2e/runtime.mts";
@@ -33,8 +33,10 @@ try {
       env: childEnvironment({ WRANGLER_SEND_METRICS: "false", WRANGLER_WRITE_LOGS: "false" }),
     },
   );
-  await cp(join(repoRoot, "apps/web/dist"), join(output, "assets"), { recursive: true });
   const config = JSON.parse(await readFile(join(edgeDirectory, "wrangler.json"), "utf8"));
+  await cp(resolve(edgeDirectory, config.assets.directory), join(output, "assets"), {
+    recursive: true,
+  });
   delete config.$schema;
   await writeFile(
     join(output, "wrangler.json"),

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { createDeferred } from "../../src/test/deferred";
 import { installRadarResponses } from "./fixtures/radar";
 import { expect, installUiAuth, selectControlOption, test as base } from "./support";
 
@@ -32,6 +33,51 @@ async function prepareManualChange(page: Page) {
   await expect(confirmation.getByRole("button", { name: "作品全体に適用する" })).toBeEnabled();
   return confirmation;
 }
+
+test("keeps recalculation available when a radar panel fails and recovers at the selected title", async ({
+  page,
+  radar,
+}) => {
+  const currentModule = /\/assets\/PlayerRadarAdministration-[^/]+\.js$/u;
+  const release = createDeferred();
+  await page.route(
+    currentModule,
+    async (route) => {
+      await release.promise;
+      await route.abort();
+    },
+    { times: 1 },
+  );
+  try {
+    await page.goto(`/admin/analysis?gameTitleId=${radar.gameTitleId}`);
+    const recalculation = page.getByRole("tab", { name: "分析の再計算" });
+    const criteria = page.getByRole("tab", { name: "レーダーの採点基準" });
+    const recalculate = page.getByRole("button", { name: "この作品を再計算" });
+    await expect(recalculate).toBeEnabled();
+    await criteria.click();
+    await expect(page.getByRole("status", { name: "採点基準を読み込み中" })).toBeVisible();
+    await recalculation.click();
+
+    const failure = page.waitForEvent("requestfailed", (request) =>
+      currentModule.test(request.url()),
+    );
+    release.resolve();
+    await failure;
+    await expect(recalculate).toBeEnabled();
+    await criteria.click();
+    const recovery = page.getByRole("alert").getByRole("button", { name: "画面を再読み込み" });
+    await expect(recovery).toBeVisible();
+    await recalculation.click();
+    await expect(recalculate).toBeEnabled();
+
+    await criteria.click();
+    await recovery.click();
+    await expect(page.getByRole("table", { name: "適用中の採点境界" })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("gameTitleId")).toBe(radar.gameTitleId);
+  } finally {
+    release.resolve();
+  }
+});
 
 test("keeps canceled edits, waits for discard, and browses another title's immutable history", async ({
   page,

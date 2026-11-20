@@ -1,5 +1,5 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { PlayerRadarLoading } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarLoading";
@@ -11,7 +11,7 @@ import {
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
 import { useSeriesAnalysisAdmin } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdmin";
 import { formatApiError } from "@/shared/api/problemDetails";
-import { loadLazyModule } from "@/shared/lib/moduleLoadError";
+import { reloadCurrentPage } from "@/shared/lib/moduleLoadError";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -25,39 +25,52 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
+function RadarPanelUnavailable() {
+  return (
+    <Notice
+      action={<Button onClick={reloadCurrentPage}>画面を再読み込み</Button>}
+      role="alert"
+      title="レーダーの画面を読み込めません"
+      tone="danger"
+    >
+      表示に必要なファイルを取得できませんでした。通信状態を確認して、画面を再読み込みしてください。
+    </Notice>
+  );
+}
+
+// An unavailable panel must leave the other tabs and their running commands mounted.
+const unavailablePanel = () => ({ default: RadarPanelUnavailable });
 const PlayerRadarAdministration = lazy(() =>
-  loadLazyModule(() =>
-    import("@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration").then((module) => ({
-      default: module.PlayerRadarAdministration,
-    })),
+  import("@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration").then(
+    (module) => ({ default: module.PlayerRadarAdministration }),
+    unavailablePanel,
   ),
 );
 const PlayerRadarHistory = lazy(() =>
-  loadLazyModule(() =>
-    import("@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory").then((module) => ({
-      default: module.PlayerRadarHistory,
-    })),
+  import("@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory").then(
+    (module) => ({ default: module.PlayerRadarHistory }),
+    unavailablePanel,
   ),
 );
-
-function usePanelOpened(active: boolean) {
-  const [opened, setOpened] = useState(active);
-  if (active && !opened) setOpened(true);
-  return active || opened;
-}
 
 /** Once opened, the selected title keeps its editor and pending operations across tab changes. */
 function CurrentRadarPanel({
   active = true,
   ...props
 }: ComponentProps<typeof PlayerRadarAdministration>) {
-  const opened = usePanelOpened(active);
-  if (!opened) return null;
+  const [opened, setOpened] = useState(false);
+  // Retain work after the panel commits. Leaving during the first import starts no hidden reads.
+  const retainPanel = useCallback((element: HTMLDivElement | null) => {
+    if (element) setOpened(true);
+  }, []);
+  if (!active && !opened) return null;
 
   return (
     <div className="mt-4 min-w-0">
       <Suspense fallback={<PlayerRadarLoading label="採点基準を読み込み中" />}>
-        <PlayerRadarAdministration active={active} {...props} />
+        <div ref={retainPanel}>
+          <PlayerRadarAdministration active={active} {...props} />
+        </div>
       </Suspense>
     </div>
   );
@@ -69,7 +82,6 @@ export function SeriesAnalysisAdminPage() {
     administration.navigation;
   const { data } = administration.resource;
   const { selectedTitle } = administration.selection;
-  const radarOpened = usePanelOpened(activeTab === "radar");
   return (
     <PageFrame width="analysis">
       <PageContentSurface
@@ -219,7 +231,7 @@ export function SeriesAnalysisAdminPage() {
               </div>
             ) : null}
           </TabsPanel>
-          <TabsPanel keepMounted={radarOpened} value="radar">
+          <TabsPanel keepMounted value="radar">
             <div className="mt-6 grid min-w-0 gap-4">
               <TabsRoot value={radarView} onValueChange={(value) => setRadarView(String(value))}>
                 <TabsList aria-label="採点基準の表示切替" variant="underline">

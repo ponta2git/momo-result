@@ -11,7 +11,7 @@ const structuredOcrWarningSchema = z.object({
   severity: z._default(z.string(), "warning"),
 });
 
-export const ocrWarningSchema = z.union([
+const ocrWarningSchema = z.union([
   structuredOcrWarningSchema,
   z.pipe(
     z.string(),
@@ -33,8 +33,8 @@ const ocrFieldSchema = <T extends z.ZodMiniType>(valueSchema: T) =>
     warnings: warningsSchema,
   });
 
-export const ocrNumberFieldSchema = ocrFieldSchema(z.number());
-export const ocrStringFieldSchema = ocrFieldSchema(z.string());
+const ocrNumberFieldSchema = ocrFieldSchema(z.number());
+const ocrStringFieldSchema = ocrFieldSchema(z.string());
 
 export const incidentNames = incidentOcrNames;
 
@@ -96,7 +96,7 @@ const baseDraftFields = {
  * `requested_screen_type` を判別子に持つ discriminated union で、
  * 画面種別ごとに紐づく `category_payload` の形を型レベルで限定する。
  */
-export const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
+const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
   z.object({
     requested_screen_type: z.literal("total_assets"),
     category_payload: z._default(

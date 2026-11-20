@@ -93,9 +93,6 @@ while IFS= read -r -d '' path; do
       runtime=true
       go_runtime=true
       ;;
-    contracts/runtime-tool-characterization-v1.json)
-      go_runtime=true
-      ;;
     apps/runtime/*_test.go)
       # Go module tests run in workflow-lint. The runtime binary excludes _test.go.
       ;;

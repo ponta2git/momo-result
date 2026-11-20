@@ -180,8 +180,6 @@ assert_case development-go-mod "$(expected workflow go_tools policy_scripts)" sc
 assert_case development-go-sum "$(expected workflow go_tools policy_scripts)" scripts/tools/go.sum
 assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
 assert_case runtime-db-contract "${runtime_go}" contracts/runtime-db-contract.json
-assert_case runtime-tool-characterization \
-  "$(expected workflow go_runtime)" contracts/runtime-tool-characterization-v1.json
 assert_case runtime-memory-smoke \
   "$(expected runtime workflow policy_scripts)" \
   scripts/ci/runtime-memory-smoke.sh

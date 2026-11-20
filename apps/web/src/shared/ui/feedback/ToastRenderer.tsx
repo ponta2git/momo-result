@@ -2,10 +2,11 @@ import { Toast } from "@base-ui/react/toast";
 import { X } from "lucide-react";
 import { AnimatePresence, m, useIsPresent, useReducedMotionConfig } from "motion/react";
 
-import { IconButton } from "@/shared/ui/actions/IconButton";
+import { DecorativeActionIcon, iconActionClassName } from "@/shared/ui/actions/actionRecipes";
 import { cn } from "@/shared/ui/cn";
 import { toastToneClass, toastViewportClassName } from "@/shared/ui/feedback/toastPresentation";
 import { instantMotionTransition, politeMotionTransition } from "@/shared/ui/motion/transitions";
+import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
 import { contentText } from "@/shared/ui/typography";
 
 const toastVisible = { opacity: 1 } as const;
@@ -16,6 +17,7 @@ type ToastItem = ReturnType<typeof Toast.useToastManager>["toasts"][number];
 function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; toast: ToastItem }) {
   const isPresent = useIsPresent();
   const inactive = !isPresent || toast.limited || toast.transitionStatus === "ending";
+  const closeRef = useSurfaceFeedback<HTMLButtonElement>();
 
   return (
     <m.div
@@ -45,10 +47,14 @@ function PresentToast({ reduceMotion, toast }: { reduceMotion: boolean | null; t
             <Toast.Close
               aria-hidden={false}
               aria-label="通知を閉じる"
-              render={
-                <IconButton aria-label="通知を閉じる" icon={<X />} size="sm" variant="quiet" />
-              }
-            />
+              className={iconActionClassName({ size: "sm", variant: "quiet" })}
+              ref={closeRef}
+              type="button"
+            >
+              <DecorativeActionIcon iconOnly>
+                <X />
+              </DecorativeActionIcon>
+            </Toast.Close>
           </div>
         </Toast.Content>
       </Toast.Root>

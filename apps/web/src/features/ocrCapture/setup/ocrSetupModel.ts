@@ -1,4 +1,4 @@
-import { ocrSetupSchema } from "@/features/ocrCapture/setup/ocrSetupSchema";
+import { validateOcrSetup } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
@@ -47,7 +47,7 @@ export function resolveOcrSetupValidation(
   enabled: boolean,
   choices: { ready: boolean; loading: boolean; refreshing: boolean },
 ): { resolution: OcrSetupResolution; blockedReason: string | undefined } {
-  const validation = ocrSetupSchema.safeParse(value);
+  const validation = validateOcrSetup(value);
   return {
     resolution:
       choices.ready && validation.success ? { kind: "ready", value } : { kind: "blocked" },

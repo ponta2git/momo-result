@@ -1,8 +1,9 @@
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import { matchFormInput } from "@/features/matches/workspace/matchNumericDrafts";
-import { confirmMatchSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
+import { confirmMatchFormSchema } from "@/features/matches/workspace/review/confirmMatchFormSchema";
 import { incidentDefinitions } from "@/shared/domain/incidents";
 import { memberDisplayName } from "@/shared/domain/members";
+import { safeParseSchema } from "@/shared/lib/schemaValidation";
 
 const playerValueLabels: Readonly<Record<string, string>> = {
   rank: "順位",
@@ -39,7 +40,7 @@ function pathToKey(path: Array<string | number>): string {
 }
 
 export function validateMatchForm(values: MatchFormValues): ValidationResult {
-  const result = confirmMatchSchema.safeParse(matchFormInput(values));
+  const result = safeParseSchema(confirmMatchFormSchema, matchFormInput(values));
   if (result.success) {
     return {
       messages: [],

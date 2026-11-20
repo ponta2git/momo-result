@@ -196,7 +196,7 @@ describe("app routing", () => {
     ).not.toBeInTheDocument();
     await selectOption(
       user,
-      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      await screen.findByRole("combobox", { name: "操作用アカウント" }),
       "account_eu",
     );
     await user.click(await screen.findByRole("link", { name: "試合" }));
@@ -772,7 +772,7 @@ describe("app routing", () => {
 
     await selectOption(
       user,
-      screen.getByRole("combobox", { name: "操作用アカウント" }),
+      await screen.findByRole("combobox", { name: "操作用アカウント" }),
       "account_ponta",
     );
     await waitFor(() => {

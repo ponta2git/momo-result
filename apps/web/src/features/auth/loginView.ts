@@ -7,12 +7,10 @@ export function buildLoginView({
   reason,
   requestedNextPath,
   selfAccountDisabled,
-  isDevelopment,
 }: {
   reason: string | null;
   requestedNextPath: string | null;
   selfAccountDisabled: boolean;
-  isDevelopment: boolean;
 }) {
   const notice: LoginNotice | undefined = selfAccountDisabled
     ? {
@@ -30,7 +28,5 @@ export function buildLoginView({
   return {
     notice,
     loginNextPath: sanitizeAppRedirectPath(requestedNextPath),
-    forceDevPicker: isDevelopment,
-    showAccountSwitchHint: !isDevelopment,
   };
 }

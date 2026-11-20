@@ -1,9 +1,10 @@
 import { Activity, Fragment, useEffect } from "react";
 import type { ReactNode } from "react";
-import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { AppGlobalNav } from "@/app/AppGlobalNav";
 import { AppPageCanvas } from "@/app/AppPageCanvas";
+import { RouteErrorBoundary } from "@/app/RouteErrorBoundary";
 import { RouteSuspenseFallback } from "@/app/RouteSuspenseFallback";
 import { RouteTerminalPage } from "@/app/RouteTerminalPage";
 import { clearAccountOperationNotice } from "@/shared/auth/accountOperationNotice";
@@ -113,14 +114,14 @@ function AuthUnavailable({ pending, onRetry }: { pending: boolean; onRetry: () =
 
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const auth = useAuthStatus();
-  const [searchParams] = useSearchParams();
+  const { pathname, search } = useLocation();
 
   if (auth.isChecking) {
     return <LoginAuthLoading />;
   }
 
   if (auth.isAuthenticated) {
-    const destination = sanitizeAppRedirectPath(searchParams.get("next")) ?? "/";
+    const destination = sanitizeAppRedirectPath(new URLSearchParams(search).get("next")) ?? "/";
     return <Navigate to={destination} replace />;
   }
 
@@ -132,7 +133,13 @@ export function PublicOnlyRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  return <StandaloneRouteMain>{children}</StandaloneRouteMain>;
+  return (
+    <StandaloneRouteMain>
+      <RouteErrorBoundary pathname={pathname} search={search}>
+        {children}
+      </RouteErrorBoundary>
+    </StandaloneRouteMain>
+  );
 }
 
 export function AuthenticatedRoute({ children }: { children: ReactNode }) {

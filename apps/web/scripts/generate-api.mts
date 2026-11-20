@@ -10,6 +10,8 @@ import openapiTS, { astToString } from "openapi-typescript";
 import type { OpenAPI3 } from "openapi-typescript";
 import { format } from "oxfmt";
 
+import { shareValidatorSchemas } from "./share-validator-schemas.mts";
+
 type ValidatorSchema = { exportName: string; schema: AnySchema };
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -232,11 +234,11 @@ function standaloneValidatorSource(schemas: ValidatorSchema[], sharedSchemas: An
     strict: true,
   });
   registerOwnerKeywords(ajv);
-  for (const schema of sharedSchemas) ajv.addSchema(schema);
+  for (const schema of sharedSchemas) ajv.addSchema(shareValidatorSchemas(schema));
 
   const validators: Record<string, string> = {};
   for (const { exportName, schema } of schemas) {
-    ajv.addSchema(schema, exportName);
+    ajv.addSchema(shareValidatorSchemas(schema), exportName);
     validators[exportName] = exportName;
   }
 

@@ -1,12 +1,9 @@
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { cloneElement, useContext, useId } from "react";
+import { cloneElement, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useDialogFloatingContainer } from "@/shared/ui/feedback/DialogFloatingContainer";
-import {
-  SharedTooltipProviderContext,
-  tooltipOpenDelayMs,
-} from "@/shared/ui/feedback/TooltipProvider";
+import { tooltipOpenDelayMs } from "@/shared/ui/feedback/TooltipProvider";
 
 export { TooltipProvider } from "@/shared/ui/feedback/TooltipProvider";
 
@@ -18,8 +15,12 @@ type TooltipProps = {
 };
 
 /** A supplementary description; the trigger remains responsible for its accessible name. */
-export function Tooltip({ children, content, delay, side = "top" }: TooltipProps) {
-  const hasSharedProvider = useContext(SharedTooltipProviderContext);
+export function Tooltip({
+  children,
+  content,
+  delay = tooltipOpenDelayMs,
+  side = "top",
+}: TooltipProps) {
   const floatingContainer = useDialogFloatingContainer();
   const descriptionId = useId();
   const trigger = cloneElement(children, {
@@ -30,10 +31,7 @@ export function Tooltip({ children, content, delay, side = "top" }: TooltipProps
 
   return (
     <BaseTooltip.Root>
-      <BaseTooltip.Trigger
-        delay={delay ?? (hasSharedProvider ? undefined : tooltipOpenDelayMs)}
-        render={trigger}
-      />
+      <BaseTooltip.Trigger delay={delay} render={trigger} />
       <BaseTooltip.Portal container={floatingContainer ?? undefined}>
         <BaseTooltip.Positioner
           className="pointer-events-auto z-[var(--z-tooltip)]"

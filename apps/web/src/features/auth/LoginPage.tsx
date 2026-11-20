@@ -6,7 +6,6 @@ import { AuthPanel } from "@/shared/auth/AuthPanel";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
-import { contentText } from "@/shared/ui/typography";
 
 function useLoginView() {
   const selfAccountDisabled = useSelfAccountDisabledNotice();
@@ -15,7 +14,6 @@ function useLoginView() {
     reason: searchParams.get("reason"),
     requestedNextPath: searchParams.get("next"),
     selfAccountDisabled,
-    isDevelopment: import.meta.env.DEV,
   });
 }
 
@@ -31,18 +29,7 @@ export function LoginPage() {
           </Notice>
         ) : null}
 
-        <AuthPanel
-          auth={undefined}
-          embedded
-          forceDevPicker={view.forceDevPicker}
-          loginNextPath={view.loginNextPath}
-        />
-
-        {view.showAccountSwitchHint ? (
-          <p className={contentText.supporting}>
-            別のDiscordアカウントを使う場合は、Discord側でログアウトするか、シークレットウィンドウで開きます。
-          </p>
-        ) : null}
+        <AuthPanel loginNextPath={view.loginNextPath} />
       </PageContentSurface>
     </PageFrame>
   );

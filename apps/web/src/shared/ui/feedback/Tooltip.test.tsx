@@ -1,10 +1,37 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Dialog } from "@/shared/ui/feedback/Dialog";
-import { Tooltip } from "@/shared/ui/feedback/Tooltip";
+import { Tooltip, TooltipProvider } from "@/shared/ui/feedback/Tooltip";
 
 describe("Tooltip", () => {
+  it("opens the next tooltip immediately while the hover group is active", async () => {
+    vi.useFakeTimers();
+    render(
+      <TooltipProvider>
+        <Tooltip content="最初の説明">
+          <button type="button">最初</button>
+        </Tooltip>
+        <Tooltip content="次の説明">
+          <button type="button">次</button>
+        </Tooltip>
+      </TooltipProvider>,
+    );
+    const first = screen.getByRole("button", { name: "最初" });
+    const next = screen.getByRole("button", { name: "次" });
+    fireEvent.mouseEnter(first);
+    fireEvent.mouseMove(first);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(250));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("最初の説明");
+
+    fireEvent.mouseLeave(first, { relatedTarget: next });
+    fireEvent.mouseEnter(next, { relatedTarget: first });
+    fireEvent.mouseMove(next);
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("次の説明");
+  });
+
   it("remains independently renderable and exposes accessible descriptive content", () => {
     vi.useFakeTimers();
     render(

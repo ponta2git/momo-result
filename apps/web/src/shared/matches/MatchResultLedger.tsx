@@ -10,7 +10,7 @@ import {
   WinnerCelebrationSurface,
 } from "@/shared/matches/WinnerCelebration";
 import { cn } from "@/shared/ui/cn";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText, momentText } from "@/shared/ui/typography";
 
 type MatchResultLedgerRow = MatchPerformanceContextRow & {
@@ -80,9 +80,7 @@ export function MatchResultLedger({
                 matchResultLedgerRowClass,
                 "border lg:grid-rows-subgrid",
                 withDetails ? "lg:row-span-5" : "lg:row-span-4",
-                celebrated
-                  ? "relative isolate border-[var(--color-celebration-border)]"
-                  : "border-[var(--color-border)]",
+                celebrated ? "relative isolate border-celebration-border" : "border-border",
                 presentation === "embedded" ? "rounded-sm" : "rounded-md",
               )}
             >
@@ -224,10 +222,10 @@ function trendLabel(row: MatchResultLedgerRow): string {
 /** Improvement and decline keep their analysis colors; the badge recipe owns size and type. */
 function trendTone(trend: MatchResultLedgerRow["trend"]): string {
   if (trend === "improved") {
-    return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10 text-[var(--color-analysis-positive)]";
+    return "border-analysis-positive/45 bg-analysis-positive/10 text-analysis-positive";
   }
   if (trend === "declined") {
-    return "border-[var(--color-analysis-negative)]/35 bg-[var(--color-analysis-negative)]/8 text-[var(--color-analysis-negative)]";
+    return "border-analysis-negative/35 bg-analysis-negative/8 text-analysis-negative";
   }
-  return compactBadgeToneClass.neutral;
+  return badgeToneClass.neutral;
 }

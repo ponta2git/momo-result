@@ -24,7 +24,7 @@ import { SelectField } from "@/shared/ui/forms/SelectField";
 import { PageContentSurface } from "@/shared/ui/layout/PageContentSurface";
 import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { StaleShield } from "@/shared/ui/motion/StaleShield";
-import { compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 /**
@@ -34,7 +34,7 @@ import { contentText } from "@/shared/ui/typography";
  */
 const achievedStampClass = cn(
   "inline-flex min-h-7 items-center gap-1 whitespace-nowrap rounded-xs border px-2 text-sm/5 font-emphasis",
-  compactBadgeToneClass.success,
+  badgeToneClass.success,
 );
 
 export function AchievementsPage() {
@@ -197,10 +197,7 @@ export function AchievementsPage() {
                             );
                           return player?.status === "achieved" ? (
                             <span className={achievedStampClass}>
-                              <Award
-                                aria-hidden="true"
-                                className="size-4 text-[var(--color-success)]"
-                              />
+                              <Award aria-hidden="true" className="size-4 text-success" />
                               {achievementStatusLabel(player.status)}
                             </span>
                           ) : (

@@ -1,0 +1,9 @@
+@import "tailwindcss" source("..");
+@import "./theme.css";
+@import "./base.css" layer(base);
+@import "./components/overlays.css" layer(components);
+@import "./components/surfaces.css" layer(components);
+@import "./utilities.css";
+
+/* The app and its design previews share the utilities generated from src and the HTML entry. */
+@source "../../index.html";

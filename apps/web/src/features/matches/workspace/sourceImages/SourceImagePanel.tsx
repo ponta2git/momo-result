@@ -74,7 +74,7 @@ function SourceImagePanelContent({
   });
 
   return (
-    <section className="grid gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-[var(--color-text-primary)]">
+    <section className="grid gap-4 rounded-md border border-border bg-surface p-4 text-text-primary">
       <div className="grid gap-1">
         <ContentWithActions
           actions={
@@ -142,7 +142,7 @@ function SourceImagePanelContent({
           {sourceImageKinds.map((kind) => (
             <TabsPanel keepMounted key={kind} value={kind}>
               {panel.activeKind === kind ? (
-                <div className="rounded-sm border border-[var(--color-border)] bg-[var(--color-surface-subtle)] p-3">
+                <div className="rounded-sm border border-border bg-surface-subtle p-3">
                   {loading ? (
                     <SourceImageLoadingFrame
                       detail="画像一覧を取得しています。"
@@ -186,7 +186,7 @@ function SourceImagePanelContent({
                       <div className={sourceImageFrameClass}>
                         <img
                           alt={`${sourceImageKindLabels[panel.activeState.kind]}の元画像`}
-                          className="size-full min-h-0 min-w-0 rounded-xs bg-[var(--color-media-canvas)] object-contain"
+                          className="size-full min-h-0 min-w-0 rounded-xs bg-media-canvas object-contain"
                           src={panel.displayUrl}
                         />
                       </div>

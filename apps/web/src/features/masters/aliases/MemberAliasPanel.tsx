@@ -106,7 +106,7 @@ export function MemberAliasPanel({
             {memberAliases.length === 0 ? (
               <p className={cn(contentText.supporting, "mt-2")}>別名なし</p>
             ) : (
-              <ul className="mt-2 divide-y divide-[var(--color-border)]">
+              <ul className="mt-2 divide-y divide-border">
                 {memberAliases.map((alias) => (
                   <li
                     className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2"

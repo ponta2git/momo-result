@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { generate, parse, walk } from "css-tree";
 import type { CssNode, WalkContext } from "css-tree";
 
-// Consumer inventory for dynamic sequence/chart paint; exact colors belong to styles.css.
+// Runtime consumers construct these names. The stylesheet owns their values.
 export const requiredThemeVariables = [
   ...[1, 2, 3, 4].map((sequence) => `--color-member-sequence-${sequence}`),
   ...[1, 2, 3, 4].map((playOrder) => `--color-play-order-${playOrder}`),

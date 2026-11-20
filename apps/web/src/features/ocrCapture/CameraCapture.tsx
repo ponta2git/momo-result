@@ -59,14 +59,14 @@ export function CameraCapture({
       {/* The tray and source image keep this 16:9 contain frame, so one screen keeps its framing. */}
       <div
         aria-label={`${slotLabel}の16:9カメラ画像枠`}
-        className="relative aspect-video w-full overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-media-canvas)]"
+        className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-media-canvas"
         role="group"
       >
         {camera.active ? null : (
-          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-[var(--color-text-inverse)]/75">
+          <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-text-inverse/75">
             <div>
               <CameraIcon aria-hidden="true" className="mx-auto size-7" />
-              <p className="font-plain mt-2 text-sm">カメラを開始して画面を撮影</p>
+              <p className="mt-2 text-sm font-plain">カメラを開始して画面を撮影</p>
             </div>
           </div>
         )}

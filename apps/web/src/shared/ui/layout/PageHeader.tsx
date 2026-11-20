@@ -37,7 +37,7 @@ export function PageHeader({
           ref={titleRef}
           aria-describedby={titleDescriptionId}
           tabIndex={titleRef ? -1 : undefined}
-          className="momo-heading font-structure text-2xl text-balance text-[var(--color-text-primary)] @3xl/page-header:text-3xl"
+          className="momo-heading text-2xl font-structure text-balance text-text-primary @3xl/page-header:text-3xl"
         >
           {title}
         </h1>

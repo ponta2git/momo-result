@@ -48,7 +48,7 @@ export function RecentRankStrips({
         <thead>
           <tr>
             <th
-              className="sticky left-0 z-[var(--z-sticky)] w-40 min-w-40 bg-[var(--color-surface)] pr-2 align-bottom"
+              className="sticky left-0 z-(--z-sticky) w-40 min-w-40 bg-surface pr-2 align-bottom"
               scope="col"
             >
               <span className="sr-only">プレーヤー</span>
@@ -87,7 +87,7 @@ export function RecentRankStrips({
             return (
               <tr key={player.memberId}>
                 <th
-                  className="sticky left-0 z-[var(--z-base)] w-40 min-w-40 bg-[var(--color-surface)] py-1 pr-2 pl-2 text-left align-middle"
+                  className="sticky left-0 z-(--z-base) w-40 min-w-40 bg-surface py-1 pr-2 pl-2 text-left align-middle"
                   scope="row"
                 >
                   <span className={cn(contentText.body, "block break-words")}>
@@ -243,7 +243,7 @@ function RecentRankScroller({
             ? `${Math.round((scrollMetrics.scrollLeft / maximumScrollLeft) * 100)}%`
             : "すべて表示"
         }
-        className="h-11 w-full cursor-ew-resize appearance-none bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-action)] disabled:cursor-default disabled:opacity-100 pointer-fine:h-3 [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[var(--color-surface-selected)] [&::-webkit-slider-thumb]:-mt-0.5 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-[var(--recent-rank-scroll-thumb-width)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-[var(--color-surface)] [&::-webkit-slider-thumb]:bg-[var(--color-text-muted)]"
+        className="h-11 w-full cursor-ew-resize appearance-none bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action disabled:cursor-default disabled:opacity-100 pointer-fine:h-3 [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-surface-selected [&::-webkit-slider-thumb]:-mt-0.5 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-(--recent-rank-scroll-thumb-width) [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-solid [&::-webkit-slider-thumb]:border-surface [&::-webkit-slider-thumb]:bg-text-muted"
         disabled={maximumScrollLeft === 0}
         max={Math.max(maximumScrollLeft, 1)}
         min={0}

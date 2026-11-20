@@ -481,8 +481,8 @@ function ListRowsSkeleton({ rows = 4 }: { rows?: number }) {
   const ids = Array.from({ length: rows }, (_, index) => index);
   return (
     <>
-      <div className="hidden border-y border-[var(--color-border-strong)] lg:block">
-        <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+      <div className="hidden border-y border-border-strong lg:block">
+        <div className="border-b border-border-strong px-3 py-2">
           <Skeleton className="h-4 w-full" />
         </div>
         {ids.map((id) => (
@@ -491,7 +491,7 @@ function ListRowsSkeleton({ rows = 4 }: { rows?: number }) {
           </div>
         ))}
       </div>
-      <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)] lg:hidden">
+      <div className="divide-y divide-border border-y border-border-strong lg:hidden">
         {ids.map((id) => (
           <div key={id} className="grid gap-2 py-3">
             <div className="grid gap-1">
@@ -526,7 +526,7 @@ function HeaderSkeleton({ shape }: { shape: PageLoadingHeaderShape | undefined }
         description={
           description
             ? (descriptionText ?? (
-                <Skeleton as="span" className="max-w-readable block h-5 w-full" />
+                <Skeleton as="span" className="block h-5 w-full max-w-readable" />
               ))
             : undefined
         }

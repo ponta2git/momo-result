@@ -1,7 +1,9 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "sortImports": true,
-  "sortTailwindcss": true,
+  "sortTailwindcss": {
+    "stylesheet": "./src/styles/index.css"
+  },
   "ignorePatterns": [
     "src/shared/api/generated.ts",
     "src/shared/api/generatedContracts/series-analysis-*-validators.generated.*"

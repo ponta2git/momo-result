@@ -107,8 +107,8 @@ const ScoreGridDesktopRow = memo(function ScoreGridDesktopRow({
   const playOrderReviewItem = reviewItemByCellId.get(playOrderCellId);
   const playOrderError = errorPathSet.has(keyToPath(rowIndex, "playOrder"));
   return (
-    <tr className="bg-[var(--color-surface-subtle)]">
-      <td className="sticky left-0 z-[var(--z-sticky)] rounded-l-md bg-[var(--color-surface-subtle)] px-2 py-3 align-top">
+    <tr className="bg-surface-subtle">
+      <td className="sticky left-0 z-(--z-sticky) rounded-l-md bg-surface-subtle px-2 py-3 align-top">
         <div className="min-w-0">
           <SelectControl
             ref={(node) => registerCellRef(memberCellId, node)}

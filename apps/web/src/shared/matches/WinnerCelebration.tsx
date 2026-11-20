@@ -23,7 +23,7 @@ export function WinnerCelebrationSurface() {
       className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[inherit]"
     >
       <m.span
-        className="absolute inset-0 bg-[var(--color-celebration-surface)]"
+        className="absolute inset-0 bg-celebration-surface"
         initial={reduceMotion ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={celebrationSurfaceTransition}
@@ -46,7 +46,7 @@ export function WinnerCelebrationMark() {
   return (
     <m.span
       aria-hidden="true"
-      className="inline-flex shrink-0 text-[var(--color-celebration-mark)]"
+      className="inline-flex shrink-0 text-celebration-mark"
       initial={reduceMotion ? false : { opacity: 0, rotate: -12, scale: 0.4 }}
       animate={settled}
       transition={celebrationMarkTransition}

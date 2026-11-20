@@ -31,13 +31,13 @@ export function ProgressBar({
     <BaseProgress.Root
       aria-label={ariaLabel}
       aria-valuetext={ariaValueText}
-      className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]"
+      className="h-2 w-full overflow-hidden rounded-full bg-border"
       max={progress.max}
       value={progress.value}
     >
       <m.div
         animate={{ scaleX: progress.ratio }}
-        className="h-full w-full origin-left bg-[var(--color-action)]"
+        className="h-full w-full origin-left bg-action"
         data-progress-indicator=""
         initial={false}
         transition={reduceMotion ? instantMotionTransition : politeMotionTransition}

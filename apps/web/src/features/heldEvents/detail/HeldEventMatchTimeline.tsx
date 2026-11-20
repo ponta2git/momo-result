@@ -41,12 +41,12 @@ export function HeldEventMatchTimeline({ matches }: { matches: readonly HeldEven
               {index < matches.length - 1 ? (
                 <span
                   aria-hidden="true"
-                  className="absolute top-4 -bottom-[calc(var(--timeline-gap)_+_1rem)] left-4 w-px -translate-x-1/2 bg-[var(--color-border-strong)]"
+                  className="absolute top-4 -bottom-[calc(var(--timeline-gap)_+_1rem)] left-4 w-px -translate-x-1/2 bg-border-strong"
                   data-timeline-connector
                 />
               ) : null}
-              <div aria-hidden="true" className="relative z-[var(--z-base)] flex justify-center">
-                <span className="font-plain flex size-8 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-xs tabular-nums">
+              <div aria-hidden="true" className="relative z-(--z-base) flex justify-center">
+                <span className="flex size-8 items-center justify-center rounded-full border border-border-strong bg-surface text-xs font-plain tabular-nums">
                   {match.matchNoInEvent}
                 </span>
               </div>

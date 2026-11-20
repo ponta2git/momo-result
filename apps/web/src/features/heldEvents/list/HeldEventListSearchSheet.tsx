@@ -118,7 +118,7 @@ function SearchSheetFields({
           onSortChange={(sort) => patch({ sort })}
         />
       </div>
-      <hr className="border-[var(--color-border)]" />
+      <hr className="border-border" />
       <SearchPeriodFields
         from={draft.from}
         layout="grid"

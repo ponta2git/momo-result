@@ -91,7 +91,7 @@ export function HeldEventsFilterBar({
                 />
               </div>
             </div>
-            <div className="max-w-readable w-full min-w-0">
+            <div className="w-full max-w-readable min-w-0">
               <HeldEventListMemoField value={memo} onChange={setMemo} onCommit={commitMemo} />
             </div>
             <HeldEventListMetricFields

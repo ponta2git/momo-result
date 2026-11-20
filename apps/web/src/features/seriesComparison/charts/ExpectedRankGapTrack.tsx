@@ -6,8 +6,8 @@ import type { GapAxis } from "@/features/seriesComparison/model/expectedRankGapP
 import { cn } from "@/shared/ui/cn";
 
 /** A data mark, not a surface: the neutral range that a gap reaches by chance. */
-const bandClass = "bg-[color-mix(in_oklab,var(--color-analysis-neutral)_22%,transparent)]";
-const markerClass = "bg-[var(--color-text-primary)]";
+const bandClass = "bg-analysis-neutral/22";
+const markerClass = "bg-text-primary";
 
 /**
  * One row of the diverging gap chart. The exact values live in the neighbouring cells, so the
@@ -38,9 +38,7 @@ export function ExpectedRankGapTrack({
         <span
           className={cn(
             "absolute w-px",
-            Math.abs(tick) < 1e-9
-              ? "inset-y-0 bg-[var(--color-border-strong)]"
-              : "inset-y-1 bg-[var(--color-border)]",
+            Math.abs(tick) < 1e-9 ? "inset-y-0 bg-border-strong" : "inset-y-1 bg-border",
           )}
           key={tick}
           style={{ left: `${gapAxisPosition(tick, axis.scale)}%` }}
@@ -50,9 +48,7 @@ export function ExpectedRankGapTrack({
         <span
           className={cn(
             "absolute inset-y-1",
-            value > 0
-              ? "rounded-r-xs bg-[var(--color-analysis-positive)]"
-              : "rounded-l-xs bg-[var(--color-analysis-negative)]",
+            value > 0 ? "rounded-r-xs bg-analysis-positive" : "rounded-l-xs bg-analysis-negative",
           )}
           style={
             value > 0
@@ -78,7 +74,7 @@ export function ExpectedRankGapTrack({
 export function ExpectedRankGapAxis({ axis, className }: { axis: GapAxis; className?: string }) {
   return (
     <div aria-hidden="true" className={cn("grid min-w-24 gap-0.5", className)}>
-      <div className="font-plain flex justify-between gap-2 text-xs/4 text-[var(--color-text-secondary)]">
+      <div className="flex justify-between gap-2 text-xs/4 font-plain text-text-secondary">
         <span>← 見込みより下位</span>
         <span>見込みより上位 →</span>
       </div>
@@ -96,7 +92,7 @@ function AxisTicks({ axis }: { axis: GapAxis }) {
         return (
           <span
             className={cn(
-              "absolute top-0 text-xs/4 font-plain whitespace-nowrap text-[var(--color-text-muted)] tabular-nums",
+              "absolute top-0 text-xs/4 font-plain whitespace-nowrap text-text-muted tabular-nums",
               first ? "" : last ? "-translate-x-full" : "-translate-x-1/2",
             )}
             key={tick}
@@ -117,7 +113,7 @@ function AxisTicks({ axis }: { axis: GapAxis }) {
 export function ExpectedRankGapLegend({ band, marker }: { band: boolean; marker: boolean }) {
   if (!band && !marker) return null;
   return (
-    <p className="font-plain flex flex-wrap items-center gap-x-4 gap-y-1 text-xs/4 text-[var(--color-text-muted)]">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs/4 font-plain text-text-muted">
       {band ? (
         <span className="inline-flex items-center gap-2">
           <span aria-hidden="true" className={cn("h-3 w-6", bandClass)} />

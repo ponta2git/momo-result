@@ -24,7 +24,7 @@ type AdjacentNavigationProps = {
 
 // Available destinations and known ends keep the same text, spacing, and alignment.
 const destinationClassName =
-  "row-span-2 grid min-h-11 min-w-0 grid-cols-1 grid-rows-subgrid items-start gap-1 border border-transparent px-5 py-3 text-base font-plain whitespace-normal break-words text-[var(--color-text-secondary)]";
+  "row-span-2 grid min-h-11 min-w-0 grid-cols-1 grid-rows-subgrid items-start gap-1 border border-transparent px-5 py-3 text-base font-plain whitespace-normal break-words text-text-secondary";
 
 /**
  * Keeps each direction and its destination together, including known ends and temporary pauses.

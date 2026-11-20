@@ -64,10 +64,7 @@ export function MatchDetailLoading() {
             {[1, 2, 3, 4].map((id) => (
               <div
                 key={id}
-                className={cn(
-                  matchResultLedgerRowClass,
-                  "rounded-md border border-[var(--color-border)]",
-                )}
+                className={cn(matchResultLedgerRowClass, "rounded-md border border-border")}
                 data-match-result-loading-row=""
               >
                 <div className="flex items-center gap-2">

@@ -14,23 +14,21 @@ const actionBaseClass =
 // Framed secondary actions share the subtle field outline color; the primary action is told
 // apart by fill, and quiet actions never gain a permanent frame.
 const surfaceVariantClass = {
-  secondary: "momo-surface-neutral border-[var(--color-secondary-border)]",
-  quiet: "border-transparent text-[var(--color-text-secondary)]",
-  danger: "momo-surface-danger border-[var(--color-danger)] text-[var(--color-text-inverse)]",
+  secondary: "momo-surface-neutral border-secondary-border",
+  quiet: "border-transparent text-text-secondary",
+  danger: "momo-surface-danger border-danger text-text-inverse",
 } as const satisfies Record<IconActionVariant, string>;
 
 const buttonVariantClass = {
-  primary:
-    "momo-surface-action border-[var(--color-action)] text-[var(--color-text-inverse)] focus-visible:outline-[var(--color-action)]",
-  secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-primary)]"),
+  primary: "momo-surface-action border-action text-text-inverse focus-visible:outline-action",
+  secondary: cn(surfaceVariantClass.secondary, "text-text-primary"),
   quiet: surfaceVariantClass.quiet,
-  danger: cn(surfaceVariantClass.danger, "focus-visible:outline-[var(--color-danger)]"),
-  dangerQuiet:
-    "border-transparent text-[var(--color-danger)] focus-visible:outline-[var(--color-danger)]",
+  danger: cn(surfaceVariantClass.danger, "focus-visible:outline-danger"),
+  dangerQuiet: "border-transparent text-danger focus-visible:outline-danger",
 } as const satisfies Record<ButtonVariant, string>;
 
 const iconActionVariantClass = {
-  secondary: cn(surfaceVariantClass.secondary, "text-[var(--color-text-secondary)]"),
+  secondary: cn(surfaceVariantClass.secondary, "text-text-secondary"),
   quiet: surfaceVariantClass.quiet,
   danger: surfaceVariantClass.danger,
 } as const satisfies Record<IconActionVariant, string>;

@@ -8,10 +8,10 @@ type NoticeTone = "info" | "success" | "warning" | "danger";
 type NoticePresentation = "contained" | "nested" | "bare";
 
 const toneClass = {
-  info: "border-[var(--color-border)] bg-[var(--color-surface-subtle)]",
-  success: "border-[var(--color-tone-success-border)] bg-[var(--color-tone-success-surface)]",
-  warning: "border-[var(--color-tone-warning-border)] bg-[var(--color-tone-warning-surface)]",
-  danger: "border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)]",
+  info: "border-border bg-surface-subtle",
+  success: "border-tone-success-border bg-tone-success-surface",
+  warning: "border-tone-warning-border bg-tone-warning-surface",
+  danger: "border-tone-danger-border bg-tone-danger-surface",
 } as const satisfies Record<NoticeTone, string>;
 
 const boundedPresentationClass = {

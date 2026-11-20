@@ -5,7 +5,9 @@ import { extendTailwindMerge } from "tailwind-merge";
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
+      container: ["readable", "page-default", "page-analysis", "page-workspace"],
       "font-weight": ["plain", "structure", "emphasis"],
+      shadow: ["raised", "dialog"],
     },
   },
 });

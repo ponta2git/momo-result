@@ -49,11 +49,11 @@ function TraySummary({ summary }: { summary: OcrStartSummary }) {
         return (
           <li
             key={definition.kind}
-            className="flex items-center gap-2 rounded-sm border border-[var(--color-border)] p-3"
+            className="flex items-center gap-2 rounded-sm border border-border p-3"
           >
             <span
               aria-hidden="true"
-              className={`font-plain flex size-7 shrink-0 items-center justify-center rounded-xs text-xs text-[var(--color-text-primary)] ${definition.accentClass}`}
+              className={`flex size-7 shrink-0 items-center justify-center rounded-xs text-xs font-plain text-text-primary ${definition.accentClass}`}
             >
               {selected ? <Check className="size-4" /> : definition.stationLabel}
             </span>

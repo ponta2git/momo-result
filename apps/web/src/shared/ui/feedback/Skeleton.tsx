@@ -11,7 +11,7 @@ export function Skeleton({ as: Component = "div", className, ...props }: Skeleto
     <Component
       aria-hidden="true"
       className={cn(
-        "rounded-xs bg-[var(--color-surface-selected)] motion-safe:animate-pulse motion-reduce:animate-none",
+        "rounded-xs bg-surface-selected motion-safe:animate-pulse motion-reduce:animate-none",
         className,
       )}
       {...props}

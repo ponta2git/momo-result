@@ -6,26 +6,11 @@
 export const compactBadgeClass =
   "inline-flex min-h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-xs border px-2 text-xs/4 font-plain";
 
-export type CompactBadgeTone =
-  | "attention"
-  | "danger"
-  | "neutral"
-  | "progress"
-  | "success"
-  | "warning";
-
-/** Uses the same tone strengths as notices, status badges, toasts, and controls. */
-export const compactBadgeToneClass = {
-  attention:
-    "border-[var(--color-tone-review-border)] bg-[var(--color-tone-review-surface)] text-[var(--color-text-primary)]",
-  danger:
-    "border-[var(--color-tone-danger-border)] bg-[var(--color-tone-danger-surface)] text-[var(--color-text-primary)]",
-  neutral:
-    "border-[var(--color-border)] bg-[var(--color-surface-subtle)] text-[var(--color-text-secondary)]",
-  progress:
-    "border-[var(--color-tone-info-border)] bg-[var(--color-tone-info-surface)] text-[var(--color-text-primary)]",
-  success:
-    "border-[var(--color-tone-success-border)] bg-[var(--color-tone-success-surface)] text-[var(--color-text-primary)]",
-  warning:
-    "border-[var(--color-tone-warning-border)] bg-[var(--color-tone-warning-surface)] text-[var(--color-text-primary)]",
-} as const satisfies Record<CompactBadgeTone, string>;
+export const badgeToneClass = {
+  attention: "border-tone-review-border bg-tone-review-surface text-text-primary",
+  danger: "border-tone-danger-border bg-tone-danger-surface text-text-primary",
+  neutral: "border-border bg-surface-subtle text-text-secondary",
+  progress: "border-tone-info-border bg-tone-info-surface text-text-primary",
+  success: "border-tone-success-border bg-tone-success-surface text-text-primary",
+  warning: "border-tone-warning-border bg-tone-warning-surface text-text-primary",
+} as const;

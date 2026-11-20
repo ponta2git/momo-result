@@ -3,7 +3,7 @@ import {
   formatDecimal,
 } from "@/features/seriesComparison/model/seriesAnalysisPresentation";
 import { cn } from "@/shared/ui/cn";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
 export type ChangeDirection =
   | "declined"
@@ -50,10 +50,10 @@ export function rankDeltaLabel(delta: number | null): string {
 /** Improvement and decline keep the analysis colors; only their border and surface override the recipe. */
 function changeTone(direction: ChangeDirection): string {
   if (direction === "improved") {
-    return "border-[var(--color-analysis-positive)]/45 bg-[var(--color-analysis-positive)]/10";
+    return "border-analysis-positive/45 bg-analysis-positive/10";
   }
   if (direction === "declined") {
-    return "border-[var(--color-analysis-negative)]/45 bg-[var(--color-analysis-negative)]/10";
+    return "border-analysis-negative/45 bg-analysis-negative/10";
   }
-  return compactBadgeToneClass.neutral;
+  return badgeToneClass.neutral;
 }

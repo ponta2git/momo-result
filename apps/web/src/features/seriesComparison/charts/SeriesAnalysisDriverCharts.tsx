@@ -1,3 +1,4 @@
+import { memberChartCardClass } from "@/features/seriesComparison/charts/chartPresentation";
 import { DataVizHistogramChart } from "@/features/seriesComparison/charts/dataViz/HistogramChart";
 import { DataVizScatterPlot } from "@/features/seriesComparison/charts/dataViz/ScatterPlot";
 import { MatrixValueLegend } from "@/features/seriesComparison/charts/SeriesAnalysisMatrix";
@@ -75,10 +76,7 @@ export function RevenueConversionMatrices({
       <div className="grid gap-4 lg:grid-cols-2">
         {entries.map((entry) => {
           return (
-            <article
-              className="grid min-w-0 content-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-              key={entry.memberId}
-            >
+            <article className={memberChartCardClass} key={entry.memberId}>
               <h3 className={contentText.heading}>
                 <MemberSequenceLabel memberId={entry.memberId}>
                   {entry.displayName}

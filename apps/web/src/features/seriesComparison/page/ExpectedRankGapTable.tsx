@@ -19,7 +19,7 @@ import type {
 import { SeriesAnalysisQualityAdvisory } from "@/features/seriesComparison/SeriesAnalysisQualityAdvisory";
 import { cn } from "@/shared/ui/cn";
 import { dataTableHeaderCellClassName } from "@/shared/ui/data/DataTable";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export const GAP_COLUMN_COUNT = 7;
@@ -70,7 +70,7 @@ export function GapTable({
         aria-label={caption}
         className={cn(
           contentText.body,
-          "min-w-0 border-t border-b border-[var(--color-border-strong)] lg:border-t-0",
+          "min-w-0 border-t border-b border-border-strong lg:border-t-0",
         )}
         role="table"
       >
@@ -154,14 +154,8 @@ export function GapRow({
 }) {
   const reported = isReportedSignal(summary.signal);
   return (
-    <div
-      className={cn(rowGridClass, "border-b border-[var(--color-border)] lg:border-b-0")}
-      role="row"
-    >
-      <div
-        className={cn(cellClass, placement.label, "text-[var(--color-text-primary)]")}
-        role="rowheader"
-      >
+    <div className={cn(rowGridClass, "border-b border-border lg:border-b-0")} role="row">
+      <div className={cn(cellClass, placement.label, "text-text-primary")} role="rowheader">
         {groupLabel ? (
           <>
             <span className="sr-only">{groupLabel}</span>{" "}
@@ -234,9 +228,7 @@ function GapJudgement({ summary }: { summary: ExpectedRankGapSummary }) {
       <span
         className={cn(
           compactBadgeClass,
-          summary.signal === "trend"
-            ? compactBadgeToneClass.attention
-            : compactBadgeToneClass.neutral,
+          summary.signal === "trend" ? badgeToneClass.attention : badgeToneClass.neutral,
         )}
       >
         {word}

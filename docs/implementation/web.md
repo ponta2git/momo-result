@@ -26,23 +26,39 @@ wire は [API 規約](api.md#wire-boundary)、分析の Web state 契約は [分
 - ファイル行数は責務混在を見つける signal とし、行数とは別に責務のまとまりを確かめて分割を判断する。
 - 層と所有は責務分離によって Web 全体の統率を保つための設計であり、本節を正本とする。個々の import の許可の現在値は oxlint 設定を正本とし、設定は本節の意図のうち module graph から一意に判定できる import 規則だけを投影する。shared の安定した基盤へ別の shared module を通じて application policy が入り込まないようにすることも、設定コメントが示す目的である。lint 設定の変更だけで層の責務を変えたことにはせず、意図を変える場合は本節も同じ変更で見直す。採用基準は [Change Gates](../development/workflow.md#change-gates) に従う。
 
+## CSS と Tailwind
+
+Web とデザインプレビューは同じビルド済み CSS を使う。画面内の配置は Tailwind の utility で書き、複数の画面で意味と状態を共有する表現は React 部品か既存の recipe にまとめる。この構成を選んだ理由は次のとおり。
+
+| 手法 | このプロジェクトでの判断 |
+| --- | --- |
+| Tailwind の utility とテーマ | 画面内で幅や余白を調整でき、ボタン・入力欄は既存の部品に variant を渡せる。色・影・幅の共通値をテーマで一度定義し、CSS と TSX の双方から使えるため採用した。[Tailwind CSS](https://tailwindcss.com/docs/theme) |
+| CSS Modules | 部品ごとのローカルスコープは名前の衝突を防ぐ。現状は部品内の配置を utility で表現でき、全体で共有する操作面やプレビュー用 CSS もあるため、各部品に個別の CSS import を持たせる利点は小さい。[CSS Modules](https://github.com/css-modules/css-modules) |
+| BEM | block・element・modifier の名前で共有 CSS の適用先を追える。操作面のような複合規則には既存の `momo-*` クラスで役割を示し、画面の各要素には React 部品と重なる命名体系を追加しない。[BEM](https://en.bem.info/methodology/quick-start/) |
+
+CSS の入口は [`src/styles/index.css`](../../apps/web/src/styles/index.css)。Tailwind の `theme → base → components → utilities` の順で適用し、`src/` と `index.html` から utility を生成する。
+
+- 配色の実値は `styles/palette.css`、用途別の色・文字・幅・影・重なり順は `styles/theme.css` で変更する。色や影は `bg-surface`、`border-tone-danger-border`、`shadow-dialog` のようにテーマから生成される名前で指定する。順位や系列を値から選ぶ SVG には `@theme static` が公開する CSS 変数を使う。
+- HTML 要素とキーボードフォーカスの既定値は `styles/base.css` に置く。安全領域を考慮したポップアップの配置と、選択・押下・操作制限によって変わる面の描画は `styles/components/` が所有する。複数の宣言で一つの働きをする文字 utility と低い画面向けの variant は `styles/utilities.css` に置く。
+- レイアウトは利用箇所、文字や操作状態の共通 recipe は `shared/ui/`、分析カードなど業務固有の表現は該当 feature が所有する。状態ごとの utility は完全なクラス名で列挙する。測定済みの幅や図表の座標など実行時に決まる値は、所有する部品の style または CSS 変数で渡す。
+
 ## Implementation Entry Points
 
 UI 規約は原則として役割で規則を書き、本表は役割から現在の実装へ進む入口である。全実装名の登録簿ではなく、要求が特定の primitive を指名する場合や、CSS utility のように役割名より具体名が短く正確な場合は、UI 規約・要求から直接参照してよい。名前の現在値は実装を正本とする。改名・移動時は本表に加え、その名前を直接参照する文書とコードも更新する。
 
 | 役割（UI 規約の呼称） | 現在の実装入口 |
 | --- | --- |
-| page frame / page-level content surface と幅の用途（readable / default / analysis / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`）、幅の値は `styles.css` の `--container-readable` / `--container-page-*`、route ごとの用途は `routePagePresentation` |
+| page frame / page-level content surface と幅の用途（readable / default / analysis / workspace）、内余白なしの variant | `PageFrame`、`PageContentSurface`（`padding="none"`）、幅の値は `styles/theme.css` の `--container-readable` / `--container-page-*`、route ごとの用途は `routePagePresentation` |
 | 共通の readable measure | `readableTextWidthClass`（`--container-readable`） |
-| 文字色の呼称 `text-primary` / `text-body` / `text-secondary` / `text-muted` | `styles.css` の `--color-text-primary` / `--color-text-body` / `--color-text-secondary` / `--color-text-muted` |
-| 文字ウェイト token と utility | global stylesheet `styles.css` |
+| 文字色の呼称 `text-primary` / `text-body` / `text-secondary` / `text-muted` | `styles/theme.css` の `--color-text-*`。たとえば前景の `text-primary` は utility の `text-text-primary` に対応する |
+| 文字ウェイト token と utility | `styles/theme.css` の `--font-weight-*` |
 | 共通文字 recipe（主要結論 `primary`、一覧用主要結果 `compactPrimary`、入力文字 `fieldText`） | `shared/ui/typography.ts` |
 | field / fieldset | `shared/ui/forms/Field.tsx` の `Field`、native `<fieldset>` |
 | 通常・invalid の境界 recipe と control の tone 優先順位 | `shared/ui/forms/controlPresentation` |
-| 状態 tone の枠・面の強さ | `styles.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
-| 分類・特徴など小さな標章の寸法・角丸・tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `compactBadgeToneClass` |
+| 状態 tone の枠・面の強さ | `styles/theme.css` の `--color-tone-*-border` / `--color-tone-*-surface` |
+| 分類・特徴など小さな標章の寸法・角丸、状態バッジと共通の tone | `shared/ui/status/badgeRecipes.ts` の `compactBadgeClass` / `badgeToneClass` |
 | ブラウザー title と主ナビの現在地（route の意味） | `app/router.tsx` の各 route の `handle`（`app/routeHandle.ts` の `RouteHandle` の `title` / `navArea`） |
-| global navigation の下で止める sticky の位置 | `styles.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
+| global navigation の下で止める sticky の位置 | `styles/theme.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |
 | 確認 dialog | `AlertDialog` |

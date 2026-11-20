@@ -9,7 +9,7 @@ import { router } from "@/app/router";
 import { TooltipProvider } from "@/shared/ui/feedback/TooltipProvider";
 import { AppMotionProvider } from "@/shared/ui/motion/AppMotionProvider";
 
-import "@/styles.css";
+import "@/styles/index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

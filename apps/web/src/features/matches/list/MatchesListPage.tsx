@@ -36,8 +36,8 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
     <div aria-label="試合一覧を読み込み中" role="status">
       <span className="sr-only">試合一覧を読み込み中</span>
       {showDesktopTable ? (
-        <div className="border-y border-[var(--color-border-strong)]">
-          <div className="border-b border-[var(--color-border-strong)] px-3 py-2">
+        <div className="border-y border-border-strong">
+          <div className="border-b border-border-strong px-3 py-2">
             <Skeleton className="h-4 w-full" />
           </div>
           {skeletonRowIds.map((id) => (
@@ -47,7 +47,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
           ))}
         </div>
       ) : (
-        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border-strong)]">
+        <div className="divide-y divide-border border-y border-border-strong">
           {skeletonRowIds.map((id) => (
             <div key={id} className="grid gap-2 py-3">
               <div className="grid gap-1">
@@ -67,7 +67,7 @@ function ListSkeleton({ showDesktopTable }: { showDesktopTable: boolean }) {
 function DraftNotice({ count, href }: { count: number | undefined; href: string }) {
   if (!count) return null;
   return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-[var(--color-surface-subtle)] p-3">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-surface-subtle p-3">
       <p className={cn(contentText.body, "inline-flex items-center gap-2 tabular-nums")}>
         <PencilLine aria-hidden="true" className="size-4 shrink-0" />
         確定前の下書き {count.toLocaleString()}件

@@ -177,7 +177,7 @@ export function DataVizLegend({
   );
 
   return (
-    <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-secondary)]">
+    <div className="flex w-full max-w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
       {series.map((item) => {
         const presentation = presentationForSeries(item.id);
         return (
@@ -214,9 +214,7 @@ export function DataVizLegend({
                 />
               </svg>
             )}
-            <span className="font-plain min-w-0 break-words text-[var(--color-text-primary)]">
-              {item.label}
-            </span>
+            <span className="min-w-0 font-plain break-words text-text-primary">{item.label}</span>
           </span>
         );
       })}

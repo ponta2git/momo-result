@@ -33,7 +33,7 @@ export function CaptureSlotFeedback({
       {slot.transportError ? <CaptureTransportError error={slot.transportError} /> : null}
       {slot.failureAction ? <CaptureJobFailure action={slot.failureAction} /> : null}
       {canRefreshStatus ? (
-        <div className={cn(contentText.body, "rounded-sm bg-[var(--color-surface-subtle)] p-3")}>
+        <div className={cn(contentText.body, "rounded-sm bg-surface-subtle p-3")}>
           <ContentWithActions
             actions={
               <Button

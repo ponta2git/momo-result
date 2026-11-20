@@ -12,7 +12,7 @@ import { MatchResultLedger } from "@/shared/matches/MatchResultLedger";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { ContentWithActions } from "@/shared/ui/layout/ContentWithActions";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 import { contentText } from "@/shared/ui/typography";
 
 export function SeriesAnalysisSelectedMatch({
@@ -34,7 +34,7 @@ export function SeriesAnalysisSelectedMatch({
   return (
     <section
       aria-label="選択中の試合"
-      className="grid min-w-0 gap-4 rounded-md border border-[var(--color-action)]/55 bg-[var(--color-surface-selected)] p-4"
+      className="grid min-w-0 gap-4 rounded-md border border-action/55 bg-surface-selected p-4"
     >
       <ContentWithActions
         actions={
@@ -44,7 +44,7 @@ export function SeriesAnalysisSelectedMatch({
         }
       >
         <div className="min-w-0">
-          <p className="font-plain text-xs text-[var(--color-action)]">選択中の試合</p>
+          <p className="text-xs font-plain text-action">選択中の試合</p>
           <h2 className={cn(contentText.heading, "mt-0.5")}>
             <SeriesAnalysisMatchLink
               ariaLabel={`${formatSeriesMatchIndex(context.match.matchIndex)}の試合結果を見る`}
@@ -64,7 +64,7 @@ export function SeriesAnalysisSelectedMatch({
         <ul aria-label="この試合の注目点" className="flex flex-wrap gap-2">
           {context.match.features.map((feature) => (
             <li
-              className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}
+              className={cn(compactBadgeClass, badgeToneClass.neutral)}
               key={`${feature.priority}:${feature.featureCode}`}
             >
               {matchFeatureLabel(feature.featureCode)}

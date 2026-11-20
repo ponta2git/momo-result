@@ -1,0 +1,50 @@
+html {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-momo-ui);
+  font-weight: var(--font-weight-plain);
+  font-feature-settings: "palt" 1;
+  font-kerning: normal;
+  line-break: strict;
+  line-height: 1.65;
+  text-rendering: optimizeLegibility;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-momo-data);
+  font-feature-settings: normal;
+}
+
+::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-momo-heading);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+th {
+  font-weight: var(--font-weight-plain);
+}
+
+*:focus-visible {
+  outline: 3px solid var(--color-action);
+  outline-offset: 3px;
+}

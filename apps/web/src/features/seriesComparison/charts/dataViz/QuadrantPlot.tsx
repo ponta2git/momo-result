@@ -59,7 +59,7 @@ export function DataVizQuadrantPlot({
       <div className="overflow-x-auto pb-1">
         <svg
           aria-label={ariaLabel}
-          className="block w-[620px] max-w-none min-w-[620px] rounded-sm bg-[var(--color-surface)]"
+          className="block w-[620px] max-w-none min-w-[620px] rounded-sm bg-surface"
           role="img"
           style={{ aspectRatio: `${width} / ${height}` }}
           viewBox={`0 0 ${width} ${height}`}

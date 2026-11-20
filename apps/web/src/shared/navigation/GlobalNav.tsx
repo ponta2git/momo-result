@@ -9,7 +9,7 @@ import { pageFrameWidthClass, pageViewportGutterClass } from "@/shared/ui/layout
 import type { PageFrameWidth } from "@/shared/ui/layout/PageFrame";
 import { globalNavigationId } from "@/shared/ui/layout/revealPageElement";
 import { useSurfaceFeedback } from "@/shared/ui/motion/useSurfaceFeedback";
-import { compactBadgeClass, compactBadgeToneClass } from "@/shared/ui/status/badgeRecipes";
+import { compactBadgeClass, badgeToneClass } from "@/shared/ui/status/badgeRecipes";
 
 export type GlobalNavItem = {
   current?: boolean;
@@ -21,7 +21,7 @@ export type GlobalNavItem = {
 const emptyNavItems: readonly GlobalNavItem[] = [];
 
 /** The current location's mark, shared by destinations and the action while it is in use. */
-const navCurrentClass = "momo-surface-nav-current border-[var(--color-action)]/60";
+const navCurrentClass = "momo-surface-nav-current border-action/60";
 
 type GlobalNavProps = {
   /**
@@ -55,9 +55,7 @@ function NavItemLink({ item }: { item: GlobalNavItem }) {
       aria-current={current ? "page" : undefined}
       className={cn(
         "momo-surface momo-surface-press momo-surface-nav inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-sm border px-3 py-2 text-sm font-plain pointer-fine:min-h-9 pointer-fine:min-w-0 pointer-fine:py-1",
-        current
-          ? cn(navCurrentClass, "text-[var(--color-text-primary)]")
-          : "text-[var(--color-text-secondary)]",
+        current ? cn(navCurrentClass, "text-text-primary") : "text-text-secondary",
       )}
     >
       <span aria-hidden="true" className="[&_svg]:size-4">
@@ -93,7 +91,7 @@ function BrandLink({ children, to }: { children: ReactNode; to: string }) {
   return (
     <Link
       ref={surfaceRef}
-      className="momo-surface momo-surface-press font-structure inline-flex min-h-11 items-center rounded-sm px-2 py-1 text-sm text-[var(--color-text-primary)] pointer-fine:min-h-9"
+      className="momo-surface momo-surface-press inline-flex min-h-11 items-center rounded-sm px-2 py-1 text-sm font-structure text-text-primary pointer-fine:min-h-9"
       to={to}
     >
       {children}
@@ -160,7 +158,7 @@ export function GlobalNav({
       aria-label="グローバルナビゲーション"
       id={globalNavigationId}
       className={cn(
-        "sticky top-0 z-[var(--z-sticky)] border-b border-[var(--color-border)] bg-[var(--color-surface)]",
+        "sticky top-0 z-(--z-sticky) border-b border-border bg-surface",
         pageViewportGutterClass,
       )}
     >
@@ -174,7 +172,7 @@ export function GlobalNav({
           <div className="flex min-w-0 items-center gap-2 lg:col-start-1 lg:row-start-1">
             <BrandLink to={brandTo}>{brandLabel}</BrandLink>
             {environmentLabel ? (
-              <span className={cn(compactBadgeClass, compactBadgeToneClass.neutral)}>
+              <span className={cn(compactBadgeClass, badgeToneClass.neutral)}>
                 {environmentLabel}
               </span>
             ) : null}
@@ -211,15 +209,13 @@ export function GlobalNav({
           ))}
           {managementItems.length > 0 ? (
             <>
-              <span aria-hidden="true" className="h-6 w-px shrink-0 bg-[var(--color-border)]" />
+              <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
               <div
                 aria-label={managementLabel}
                 className="flex min-w-0 shrink-0 items-center gap-2"
                 role="group"
               >
-                <span className="momo-label shrink-0 text-[var(--color-text-secondary)]">
-                  {managementLabel}
-                </span>
+                <span className="shrink-0 momo-label text-text-secondary">{managementLabel}</span>
                 {managementItems.map((item) => (
                   <NavItemLink key={item.to} item={item} />
                 ))}

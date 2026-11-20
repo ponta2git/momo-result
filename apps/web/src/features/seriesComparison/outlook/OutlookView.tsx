@@ -109,7 +109,7 @@ function OutlookWorkspace({
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
       <div
-        className="max-w-readable @container/outlook-people grid min-w-0 grid-cols-1 gap-2"
+        className="@container/outlook-people grid max-w-readable min-w-0 grid-cols-1 gap-2"
         data-outlook-preserve-draft
       >
         <div className="grid min-w-0 gap-4 @xs/outlook-people:grid-cols-2">

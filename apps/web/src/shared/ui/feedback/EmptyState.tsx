@@ -23,16 +23,13 @@ export function EmptyState({
     <section
       className={
         placement === "standalone"
-          ? "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+          ? "rounded-md border border-border bg-surface p-3"
           : "bg-transparent py-4"
       }
     >
       <div className="flex min-w-0 items-start gap-3">
         {icon ? (
-          <div
-            aria-hidden="true"
-            className="shrink-0 pt-0.5 text-[var(--color-text-secondary)] [&_svg]:size-5"
-          >
+          <div aria-hidden="true" className="shrink-0 pt-0.5 text-text-secondary [&_svg]:size-5">
             {icon}
           </div>
         ) : null}

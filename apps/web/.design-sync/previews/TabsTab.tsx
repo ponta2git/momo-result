@@ -8,7 +8,7 @@ export const SelectedSecond = () => (
       <TabsTab value="achievements">実績</TabsTab>
     </TabsList>
     <TabsPanel value="radar">
-      <p className="mt-3 text-sm text-[var(--color-text-secondary)]">現在の採点基準は第3版です。</p>
+      <p className="mt-3 text-sm text-text-secondary">現在の採点基準は第3版です。</p>
     </TabsPanel>
   </TabsRoot>
 );
@@ -23,7 +23,7 @@ export const DisabledTab = () => (
       </TabsTab>
     </TabsList>
     <TabsPanel value="current">
-      <p className="mt-3 text-sm text-[var(--color-text-secondary)]">第3版（2026/10/01 適用）</p>
+      <p className="mt-3 text-sm text-text-secondary">第3版（2026/10/01 適用）</p>
     </TabsPanel>
   </TabsRoot>
 );
@@ -38,9 +38,7 @@ export const NeedsReview = () => (
       </TabsTab>
     </TabsList>
     <TabsPanel value="assets">
-      <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-        資産力の境界値は保存済みです。
-      </p>
+      <p className="mt-3 text-sm text-text-secondary">資産力の境界値は保存済みです。</p>
     </TabsPanel>
   </TabsRoot>
 );

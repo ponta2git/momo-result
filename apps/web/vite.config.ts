@@ -12,6 +12,24 @@ const backendProxy = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            // Keep startup libraries cached across edits to shared UI.
+            {
+              name: "initial-vendor",
+              tags: ["$initial"],
+              test: /[/\\]node_modules[/\\]/u,
+              priority: 1,
+            },
+            { name: "initial-shared", tags: ["$initial"], minShareCount: 2 },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

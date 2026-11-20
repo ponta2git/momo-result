@@ -2,15 +2,13 @@ package momo.api.integration
 
 import java.time.Instant
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
-import doobie.{ConnectionIO, Transactor}
 
 import momo.api.adapters.postgres.{
   PostgresAppSessionsRepository,
-  PostgresLoginAccountAdministration,
   PostgresLoginAccountAdministrationRepository,
   PostgresLoginAccountsRepository,
   PostgresMeta
@@ -174,11 +172,10 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
         _ <- createAccount(backupAdminData)
         before <- accounts.find(primaryAdminId).map(_.getOrElse(fail("administrator missing")))
         session <- buildSession("delayed-login-session", "delayed-login-csrf")
-        results <- commitBefore(
-          PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(
-            primaryAdminId,
-            disableLogin
-          ),
+        results <- commitWhileBlocked(
+          xa =>
+            PostgresLoginAccountAdministrationRepository[IO](xa)
+              .updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin),
           administration.createIfAccountCurrent(session, before.updatedAt),
         )
         afterDisabling <- sessions.find(session.idHash)
@@ -212,8 +209,10 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
         _ <- createAccount(backupAdminData)
         before <- accounts.find(primaryAdminId).map(_.getOrElse(fail("administrator missing")))
         session <- buildSession("preceding-login-session", "preceding-login-csrf")
-        results <- commitBefore(
-          PostgresLoginAccountAdministration.createIfAccountCurrent(session, before.updatedAt),
+        results <- commitWhileBlocked(
+          xa =>
+            PostgresLoginAccountAdministrationRepository[IO](xa)
+              .createIfAccountCurrent(session, before.updatedAt),
           administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, disableLogin),
         )
         remaining <- sessions.find(session.idHash)
@@ -228,27 +227,12 @@ final class PostgresLoginAccountAdministrationRepositorySpec extends Integration
       precedingChange: UpdateLoginAccountData,
       waitingChange: UpdateLoginAccountData,
   ): IO[(LoginAccountAdministrationUpdateResult, LoginAccountAdministrationUpdateResult)] =
-    commitBefore(
-      PostgresLoginAccountAdministration.updateAndRevokeSessionsWhenDisabled(
-        backupAdminId,
-        precedingChange
-      ),
+    commitWhileBlocked(
+      xa =>
+        PostgresLoginAccountAdministrationRepository[IO](xa)
+          .updateAndRevokeSessionsWhenDisabled(backupAdminId, precedingChange),
       administration.updateAndRevokeSessionsWhenDisabled(primaryAdminId, waitingChange),
     )
-
-  private def commitBefore[A, B](preceding: ConnectionIO[A], waiting: IO[B]): IO[(A, B)] =
-    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
-      val xa = Transactor.fromConnection[IO](connection, None)
-      (for
-        _ <- IO.blocking(connection.setAutoCommit(false))
-        first <- xa.rawTrans.apply(preceding)
-        blocker <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
-        second <- waiting.background.use { completion =>
-          awaitBackendBlockedBy(blocker) *> IO.blocking(connection.commit()) *>
-            completion.flatMap(_.embedNever)
-        }
-      yield (first, second)).onError(_ => IO.blocking(connection.rollback()))
-    }
 
   private def createAccount(data: CreateLoginAccountData): IO[LoginAccount] = accounts.create(data)
     .map(_.fold(error => fail(s"could not create account fixture: $error"), identity))

@@ -2,40 +2,27 @@ name: web
 
 on:
   workflow_call:
+    inputs:
+      package_edge:
+        description: Package the verified Web and edge candidate for E2E and deployment
+        type: boolean
+        default: false
+    outputs:
+      edge_artifact_id:
+        value: ${{ jobs.browser-edge.outputs.edge_artifact_id }}
+      edge_artifact_digest:
+        value: ${{ jobs.browser-edge.outputs.edge_artifact_digest }}
+      edge_run_attempt:
+        value: ${{ jobs.browser-edge.outputs.edge_run_attempt }}
 
 permissions:
   contents: read
 
 jobs:
-  static:
-    name: Static checks
+  unit:
+    name: Unit, component, and runner tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          check-latest: true
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-        timeout-minutes: 5
-      - run: pnpm --filter web format:check
-        timeout-minutes: 2
-      - run: pnpm --filter web lint
-        timeout-minutes: 2
-      - run: pnpm --filter web contract:check
-        timeout-minutes: 2
-      - run: pnpm --filter web typecheck
-        timeout-minutes: 5
-
-  test-build:
-    name: Test and build
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,27 +46,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: pnpm --filter web test:coverage
         timeout-minutes: 5
-      - name: Install browser for UI contracts
-        run: pnpm --filter web exec playwright install --with-deps chromium
-        timeout-minutes: 10
-      - name: Verify browser UI contracts
-        run: pnpm --filter web e2e:ui
-        timeout-minutes: 10
-      - name: Upload browser UI evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: browser-ui-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            apps/web/playwright-ui-report/
-            apps/web/test-results-ui/
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Build structured CI tool
-        if: always() && github.event_name == 'pull_request'
+      - name: Build coverage summary tool
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
         uses: ./.github/actions/setup-ci-tool
-
       - name: Summarize coverage
         if: ${{ always() && github.event_name == 'pull_request' }}
         continue-on-error: true
@@ -100,4 +70,75 @@ jobs:
             apps/web/coverage/
             coverage-summary/web/
           if-no-files-found: ignore
+          retention-days: 30
+
+  browser-edge:
+    name: Static checks, browser, and edge
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      edge_artifact_id: ${{ steps.edge-upload.outputs.artifact-id }}
+      edge_artifact_digest: ${{ steps.edge-upload.outputs.artifact-digest }}
+      edge_run_attempt: ${{ steps.edge-candidate.outputs.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          check-latest: true
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        timeout-minutes: 5
+      - run: pnpm --filter web format:check
+        timeout-minutes: 2
+      - run: pnpm --filter web lint
+        timeout-minutes: 2
+      - run: pnpm --filter web contract:check
+        timeout-minutes: 2
+      - run: pnpm --filter web typecheck
+        timeout-minutes: 5
+      - name: Build and verify the deployable Web edge
+        run: pnpm edge:build && pnpm edge:check
+        timeout-minutes: 5
+      - name: Install browser for UI contracts
+        run: pnpm --filter web exec playwright install --with-deps chromium
+        timeout-minutes: 10
+      - name: Verify browser UI contracts
+        run: pnpm --filter web exec playwright test --config playwright.ui.config.ts
+        timeout-minutes: 10
+      - name: Upload browser UI evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: browser-ui-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-ui-report/
+            apps/web/test-results-ui/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Build candidate packaging tool
+        if: inputs.package_edge
+        uses: ./.github/actions/setup-ci-tool
+      - name: Record immutable Web edge candidate
+        if: inputs.package_edge
+        id: edge-candidate
+        run: |
+          mkdir -p web-edge-candidate
+          cp -R apps/edge/dist web-edge-candidate/edge
+          scripts/ci/ci-tool.sh create-edge-candidate \
+            --artifact-dir web-edge-candidate --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --commit "${GITHUB_SHA}" \
+            > web-edge-candidate/candidate.json
+          printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}" >> "${GITHUB_OUTPUT}"
+      - name: Upload verified Web edge candidate
+        if: inputs.package_edge
+        id: edge-upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: web-edge-${{ github.run_id }}-${{ github.run_attempt }}
+          path: web-edge-candidate/
+          if-no-files-found: error
           retention-days: 30

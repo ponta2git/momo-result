@@ -17,6 +17,7 @@ final case class AppConfig(
     sourceImageStorage: SourceImageStorageConfig = SourceImageStorageConfig.Local,
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
+    ingress: Option[IngressConfig] = None,
 ):
   override def toString: String =
     val sourceImageStorageMode = sourceImageStorage match
@@ -50,21 +51,24 @@ object AppConfig:
             ResourceLimitsConfigLoader.load[F](env),
             SourceImageStorageConfigLoader.load[F](env, appEnv),
             SeriesAnalysisReadConfigLoader.load[F](env),
-          ).mapN { (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead) =>
-            AppConfig(
-              appEnv = appEnv,
-              httpHost = base.httpHost,
-              httpPort = base.httpPort,
-              imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
-              devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
-                DefaultDevMemberIds
-              ),
-              auth = auth,
-              resourceLimits = resourceLimits,
-              sourceImageStorage = sourceImageStorage,
-              seriesAnalysisRead = seriesAnalysisRead,
-              database = database,
-            )
+            IngressConfig.load[F](env, appEnv),
+          ).mapN {
+            (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead, ingress) =>
+              AppConfig(
+                appEnv = appEnv,
+                httpHost = base.httpHost,
+                httpPort = base.httpPort,
+                imageTmpDir = Path.of(base.imageTmpDir).toAbsolutePath,
+                devMemberIds = base.rawDevMemberIds.map(parseDevMemberIds).getOrElse(
+                  DefaultDevMemberIds
+                ),
+                auth = auth,
+                resourceLimits = resourceLimits,
+                sourceImageStorage = sourceImageStorage,
+                seriesAnalysisRead = seriesAnalysisRead,
+                database = database,
+                ingress = ingress,
+              )
           }
         }
     }

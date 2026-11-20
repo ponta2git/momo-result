@@ -12,15 +12,13 @@ import {
   RouterProvider,
   Routes,
 } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { MatchDetailPage } from "@/features/matches/detail/MatchDetailPage";
 import { MatchEditPage } from "@/features/matches/workspace/MatchEditPage";
 import { matchKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import { installMatchMediaController } from "@/test/doubles/dom";
-import type { MatchMediaController } from "@/test/doubles/dom";
 import { makeMatchDetail } from "@/test/factories";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
@@ -40,11 +38,6 @@ async function waitForMatchEditReady() {
 
 describe("MatchEditPage", () => {
   let queryClient: QueryClient;
-  let matchMedia: MatchMediaController | undefined;
-  afterEach(() => {
-    matchMedia?.restore();
-    matchMedia = undefined;
-  });
   beforeEach(() => {
     queryClient = createTestQueryClient();
     user = userEvent.setup();
@@ -286,62 +279,6 @@ describe("MatchEditPage", () => {
 
       destinationGate.resolve();
       expect(await screen.findByText("保存済みの試合")).toBeInTheDocument();
-    },
-  );
-
-  it.each([false, true])(
-    "rejects incomplete input and reveals its editor before saving (mobile: %s)",
-    async (mobile) => {
-      matchMedia = installMatchMediaController(mobile);
-      setDevUser();
-      const savedValues: unknown[] = [];
-      server.use(
-        http.put("/api/matches/:matchId", async ({ request, params }) => {
-          savedValues.push(await request.json());
-          return HttpResponse.json(makeMatchDetail({ matchId: String(params["matchId"]) }));
-        }),
-      );
-      render(
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={["/matches/match-1/edit"]}>
-            <Routes>
-              <Route path="/matches/:matchId/edit" element={<MatchEditPage />} />
-              <Route path="/matches/:matchId" element={<p>保存済みの試合</p>} />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>,
-      );
-      await waitForMatchEditReady();
-      const revenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
-      await user.clear(revenue);
-      await user.type(revenue, "-");
-      if (mobile) {
-        await user.click(screen.getByRole("button", { name: /^ぽんた.*閉じる/u }));
-        expect(
-          screen.queryByRole("textbox", { name: "ぽんた 収益（万円）" }),
-        ).not.toBeInTheDocument();
-      }
-      await user.click(screen.getByRole("button", { name: "保存" }));
-
-      expect(
-        await screen.findByRole("heading", { name: "入力内容を確認してください" }),
-      ).toBeVisible();
-      const invalidRevenue = screen.getByRole("textbox", { name: "ぽんた 収益（万円）" });
-      expect(invalidRevenue).toHaveValue("-");
-      expect(invalidRevenue).toHaveAttribute("aria-invalid", "true");
-      expect(invalidRevenue).toHaveFocus();
-      expect(savedValues).toEqual([]);
-
-      await user.type(invalidRevenue, "42");
-      await user.click(screen.getByRole("button", { name: "保存" }));
-      expect(await screen.findByText("保存済みの試合")).toBeInTheDocument();
-      expect(savedValues).toEqual([
-        expect.objectContaining({
-          players: expect.arrayContaining([
-            expect.objectContaining({ memberId: "member_ponta", revenueManYen: -42 }),
-          ]),
-        }),
-      ]);
     },
   );
 

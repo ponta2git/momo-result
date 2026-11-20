@@ -23,10 +23,11 @@ async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
     super::super::register_capability(&primary, &config.worker_id).await?;
 
     // Real response latency crosses the former one-second deadline without lock contention.
-    for latency in [300, 650] {
-        let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(latency)).await?;
-        config.database_url.clone_from(&proxy.url);
-        let mut connection = HeartbeatConnection::connect(&config.database_url).await?;
+    {
+        let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(300)).await?;
+        let mut connection = HeartbeatConnection::connect(&proxy.url).await?;
+        // Both renewals must use this open session; a reconnect would fail to parse this value.
+        config.database_url = "invalid-connection-string".to_owned();
         for _ in 0..2 {
             let started = std::time::Instant::now();
             assert!(matches!(

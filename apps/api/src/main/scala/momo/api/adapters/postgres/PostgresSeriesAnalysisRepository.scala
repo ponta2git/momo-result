@@ -83,9 +83,12 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
                 ).flatMap(metadata =>
                   if request.kind == SeriesAnalysisChunkKind.Achievements then
                     PostgresAchievementDisplayOps.read(chunk.artifact.gameTitleId, chunk.payload)
-                      .map(value => metadata.copy(achievementMetadata = Some(value)))
-                  else metadata.pure[ConnectionIO]
-                ).map(_.asRight[AppError])
+                      .map(value => metadata.copy(achievementMetadata = Some(value)).asRight)
+                  else
+                    PostgresSeriesAnalysisEvidenceNotes
+                      .read(PostgresSeriesAnalysisEvidenceNotes.matchIds(chunk.payload))
+                      .map(_.map(notes => metadata.copy(matchNotes = notes)))
+                )
           )
       metadata.flatMap {
         case Left(error) => error.asLeft[SeriesAnalysisChunk].pure[F]
@@ -97,6 +100,7 @@ final class PostgresSeriesAnalysisRepository[F[_]: Async] private (
               readConfig,
               metadata.mapNames,
               metadata.achievementMetadata,
+              metadata.matchNotes,
             )
           )
       }

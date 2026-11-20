@@ -34,7 +34,7 @@ cp .env.example .env   # 必要な値を設定
 pnpm dev               # API + Web を起動
 ```
 
-- API の build・test の前に `scripts/ci/build-http4s-patch.sh` で固定 http4s fork を準備します（[開発作業規約](docs/dev-rule.md#environment)）。
+- API の build・test の前に `scripts/ci/build-http4s-patch.sh` で固定 http4s fork を準備します（[開発作業規約](docs/development/workflow.md#environment)）。
 - DB の起動と migration は `momo-db` checkout の scripts を使います。
 - Processing Worker は `pnpm dev` に含まれません。`apps/processing-worker/Dockerfile` から build した container で別に起動します。
 
@@ -47,4 +47,4 @@ pnpm analysis:lint && pnpm analysis:test
 pnpm e2e               # システム E2E（Docker が必要）
 ```
 
-詳しい手順や規約は [開発作業規約](docs/dev-rule.md) と [文書索引](docs/README.md) を参照してください。ブランチ運用は `develop` へ PR、`master` は release 専用です。
+詳しい手順や規約は [開発作業規約](docs/development/workflow.md) と [文書索引](docs/README.md) を参照してください。ブランチ運用は `develop` へ PR、`master` は release 専用です。

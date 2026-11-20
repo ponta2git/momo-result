@@ -27,7 +27,8 @@ import momo.api.config.AppEnv
  *     is an accepted MVP trade-off and is documented in `docs/architecture.md` (security section).
  *     `script-src 'self'` rules out third-party JS entirely.
  *
- * Existing headers are preserved except for API caching, which is always private and no-store.
+ * Existing headers are preserved except for caching. Every API service response, including
+ * health checks and ingress rejections, is private and no-store.
  */
 object SecurityHeadersMiddleware:
   private val Nosniff = Header.Raw(CIString("X-Content-Type-Options"), "nosniff")
@@ -64,16 +65,17 @@ object SecurityHeadersMiddleware:
   )
 
   def apply[F[_]: Sync](appEnv: AppEnv)(http: Http4sApp[F]): Http4sApp[F] =
+    Kleisli(request => http.run(request).map(secureResponse(appEnv, _)))
+
+  private[http] def secureResponse[F[_]](
+      appEnv: AppEnv,
+      response: org.http4s.Response[F],
+  ): org.http4s.Response[F] =
     val baseHeaders = List(Nosniff, FrameDeny, Referrer, Permissions, Csp)
     val headers = if appEnv == AppEnv.Prod then baseHeaders :+ Hsts else baseHeaders
 
-    Kleisli { request =>
-      http.run(request).map { response =>
-        val present = response.headers.headers.map(_.name).toSet
-        val toAdd = headers.filterNot(h => present.contains(h.name))
-        val secured =
-          if toAdd.isEmpty then response else response.putHeaders(toAdd.map(Header.ToRaw.rawToRaw)*)
-        if HttpRequestPaths.isApi(request) then secured.putHeaders(PrivateNoStore)
-        else secured
-      }
-    }
+    val present = response.headers.headers.map(_.name).toSet
+    val toAdd = headers.filterNot(h => present.contains(h.name))
+    val secured =
+      if toAdd.isEmpty then response else response.putHeaders(toAdd.map(Header.ToRaw.rawToRaw)*)
+    secured.putHeaders(PrivateNoStore)

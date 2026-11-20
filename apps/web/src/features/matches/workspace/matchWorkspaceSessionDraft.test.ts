@@ -88,6 +88,29 @@ describe("matchWorkspaceSessionDraft", () => {
     ).toBeNull();
   });
 
+  it("restores older v2 drafts that predate achievements and notes", () => {
+    const savedAt = "2026-08-03T12:00:00.000Z";
+    const raw = JSON.stringify({
+      accountId: scope.accountId,
+      acknowledgedCellIds: ["players.0.rank"],
+      baselineFingerprint: "base",
+      savedAt,
+      values: {
+        ...values,
+        achievements: undefined,
+        noteBody: undefined,
+        numericDrafts: { "players.0.rank": "-" },
+      },
+      version: 2,
+    });
+    expect(
+      parseMatchWorkspaceSessionDraft(raw, scope.accountId, Date.parse(savedAt)),
+    ).toMatchObject({
+      acknowledgedCellIds: ["players.0.rank"],
+      values: { achievements: [], noteBody: "", numericDrafts: { "players.0.rank": "-" } },
+    });
+  });
+
   it("isolates drafts by authenticated account even when workspace ids are equal", () => {
     const otherScope = { ...scope, accountId: "account_eu" };
     const draft = {

@@ -42,7 +42,7 @@ def serviceTestSettings(tag: String): Seq[Def.Setting[?]] = Defaults.testSetting
 )
 
 lazy val nettyVersion = "4.2.18.Final"
-lazy val http4sVersion = "0.23.37"
+lazy val http4sVersion = "0.23.38"
 lazy val http4sPatchedVersion =
   settingKey[Either[String, String]]("Pinned http4s fork version, or why it is unavailable")
 lazy val http4sPatchCheck =
@@ -178,13 +178,13 @@ lazy val root = (project in file("."))
     Compile / resourceGenerators += Def.task {
       Def.uncached {
         val schemaNames = Seq(
-          "series-analysis-aggregate-v6.schema.json",
+          "series-analysis-aggregate-v7.schema.json",
           "series-player-radar-basis-v1.schema.json",
           "series-player-radar-evaluation-v1.schema.json",
           "series-player-radar-candidate-v1.schema.json",
           "series-player-radar-monitoring-v1.schema.json",
           "series-player-radar-achievements-v1.schema.json",
-          "series-analysis-drilldown-v3.schema.json",
+          "series-analysis-drilldown-v4.schema.json",
           "series-analysis-match-context-v1.schema.json",
           "series-analysis-outlook-summary-v1.schema.json",
           "series-analysis-outlook-reference-v1.schema.json",

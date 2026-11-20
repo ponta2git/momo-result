@@ -18,6 +18,7 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   const trusted: Record<string, string> = {
     Host: options.canonicalHost,
     "X-Momo-Origin-Lock": options.originLockToken,
+    "X-Momo-Client-IP": "127.0.0.1",
   };
   const authenticated = { ...trusted, "X-Momo-Account-Id": options.accountId };
   async function request(label: string, path: string, headers = trusted, method = "GET") {
@@ -67,7 +68,7 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   }
   async function body(label: string, path: string, expected: string) {
     const response = await request(label, path, authenticated);
-    expect(response.status < 400 && response.body.includes(expected), label);
+    expect(response.status === 200 && response.body.includes(expected), label);
   }
   async function status(
     label: string,
@@ -80,8 +81,7 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   }
   async function header(label: string, path: string, expected: string) {
     const response = await request(label, path, authenticated);
-    // API and proxy may each emit Cache-Control. Preserve curl's per-line match
-    // instead of comparing Node's comma-joined representation of repeated headers.
+    // Preserve each Cache-Control line when checking the service response.
     expect(
       response.headers["cache-control"]?.some((value) => value.toLowerCase() === expected) === true,
       label,
@@ -92,22 +92,32 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   await checkHTTP2(`${baseUrl}/healthz`, options.canonicalHost, options.originLockToken, timeoutMs);
   await body("database health", "/healthz/details", '"database":"ok"');
   await body("account authentication", "/api/auth/me", `"accountId":"${options.accountId}"`);
-  await status("index", "/", 200);
-  await status("SPA deep link", "/matches/e2e-deep-link", 200);
-  await status("asset method rejection", "/assets/missing.js", 405, trusted, "POST");
+  await status("API-only root", "/", 404);
+  await status("API-only deep link", "/matches/e2e-deep-link", 404);
   await status("OpenAPI isolation", "/openapi.yaml", 404);
-
-  const index = await request("built asset discovery", "/");
-  const assetPath = index.body.match(/\/assets\/[^"\s<>]+/)?.[0];
-  expect(index.status < 400 && assetPath !== undefined, "built asset discovery");
-  await header("index cache", "/", "no-cache");
-  await header("SPA cache", "/matches/e2e-deep-link", "no-cache");
-  await header("asset cache", assetPath!, "public, max-age=31536000, immutable");
-  await header("health cache", "/healthz", "no-store");
-  await header("account cache", "/api/auth/me", "no-store");
-  await status("missing origin lock rejection", "/", 421, { Host: options.canonicalHost });
-  await status("provider host rejection", "/", 421, { ...trusted, Host: "momo-result.fly.dev" });
-  await status("unknown host rejection", "/", 421, { ...trusted, Host: "unknown.example" });
+  await status("internal probe without marker", "/api/__momo_runtime/http2-probe", 404);
+  await header("health cache", "/healthz", "private, no-store");
+  await header("account cache", "/api/auth/me", "private, no-store");
+  await status("missing origin lock rejection", "/api/auth/me", 421, {
+    Host: options.canonicalHost,
+  });
+  await status("wrong origin lock rejection", "/api/auth/me", 421, {
+    ...trusted,
+    "X-Momo-Origin-Lock": "invalid-origin-lock",
+  });
+  await status("provider host rejection", "/api/auth/me", 421, {
+    ...trusted,
+    Host: "momo-result.fly.dev",
+  });
+  await status("unknown host rejection", "/api/auth/me", 421, {
+    ...trusted,
+    Host: "unknown.example",
+  });
+  await status("protected health details", "/healthz/details", 421, {
+    Host: options.canonicalHost,
+  });
+  await status("health exemption method", "/healthz", 421, { Host: options.canonicalHost }, "POST");
+  await status("health exemption path", "/healthz/", 421, { Host: options.canonicalHost });
   await status("unlocked health", "/healthz", 200, { Host: options.canonicalHost });
 }
 
@@ -166,11 +176,13 @@ export async function checkHTTP2(
 if (import.meta.main) {
   try {
     if (process.argv.length !== 2) throw new SmokeFailure("runtime smoke accepts no arguments");
+    const token = process.env.MOMO_ORIGIN_LOCK_TOKEN;
+    if (!token) throw new SmokeFailure("runtime smoke requires an origin lock token");
     await runSmoke({
       baseUrl: process.env.APP_BASE_URL || "http://127.0.0.1:8080",
       accountId: process.env.DEV_ACCOUNT_ID || "account_ponta",
       canonicalHost: process.env.MOMO_CANONICAL_HOST || "momo-result.ponta.me",
-      originLockToken: process.env.MOMO_ORIGIN_LOCK_TOKEN || "dev-origin-lock",
+      originLockToken: token,
     });
   } catch (error) {
     // Never print transport errors, target URLs, headers, or response bodies.

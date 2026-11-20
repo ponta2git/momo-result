@@ -2102,7 +2102,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -2142,7 +2142,7 @@ export interface components {
             /** Format: int64 */
             confirmedMatchCount: number;
         };
-        /** Series Analysis Aggregate Resource v6 */
+        /** Series Analysis Aggregate Resource v7 */
         SeriesAnalysisAggregateV5Response: {
             assetStyleProfiles: {
                 blowoutWinThreshold: null | number;
@@ -2234,6 +2234,78 @@ export interface components {
                     okCount: number;
                     referenceCount: number;
                 };
+            };
+            expectedRankGap: {
+                hasMergedLayers: boolean;
+                items: {
+                    background: null | {
+                        rows: {
+                            levelIndex: number;
+                            values: {
+                                marked: boolean;
+                                value: number;
+                            }[];
+                        }[];
+                        summary: string;
+                        variables: ("revenue_share" | "total_assets" | "card_shop" | "plus_station" | "card_station" | "minus_station" | "ginji")[];
+                    };
+                    conclusion: null | string;
+                    /** @enum {string} */
+                    item: "card_shop" | "plus_station" | "card_station" | "minus_station" | "ginji";
+                    levels: {
+                        byPlayer: {
+                            averageRank: null | number;
+                            band: null | number;
+                            count: number;
+                            expectedRank: null | number;
+                            meanGap: null | number;
+                            memberId: string;
+                            /** @enum {string} */
+                            quality: "ok" | "reference" | "no_target";
+                            share: number;
+                            signal: null | ("trend" | "hint" | "chance");
+                            displayName: string;
+                        }[];
+                        maximumCount: null | number;
+                        minimumCount: number;
+                        overall: {
+                            averageRank: null | number;
+                            band: null | number;
+                            count: number;
+                            expectedRank: null | number;
+                            meanGap: null | number;
+                            /** @enum {string} */
+                            quality: "ok" | "reference" | "no_target";
+                            share: number;
+                            signal: null | ("trend" | "hint" | "chance");
+                        };
+                    }[];
+                }[];
+                layers: {
+                    count: number;
+                    destinationLevels: number[];
+                    expectedRank: number;
+                    revenueRank: number;
+                }[];
+                matchCount: number;
+                /** @constant */
+                permutationCount: 2000;
+                players: {
+                    averageRank: null | number;
+                    band: null | number;
+                    count: number;
+                    expectedRank: null | number;
+                    meanGap: null | number;
+                    memberId: string;
+                    /** @enum {string} */
+                    quality: "ok" | "reference" | "no_target";
+                    share: number;
+                    signal: null | ("trend" | "hint" | "chance");
+                    displayName: string;
+                }[];
+                reasonCodes: "insufficient_matches"[];
+                /** @enum {string} */
+                status: "ok" | "reference" | "no_target";
             };
             headToHead: {
                 entries: ({
@@ -3255,7 +3327,6 @@ export interface components {
                     status: "ok" | "reference" | "no_target";
                     successfulIterations: number;
                 };
-                defaultMemberId: null | string;
                 foldScores: {
                     baselineBrierScore: number;
                     baselineLogLoss: number;
@@ -3271,54 +3342,10 @@ export interface components {
                 matchCount: number;
                 /** @constant */
                 modelVersion: "rank-bt-v1";
-                rankSignalsByPlayer: {
-                    candidates: {
-                        candidateSharePercent: null | number;
-                        /** @enum {string} */
-                        direction: "more_is_higher" | "less_is_higher";
-                        importance: number;
-                        /** @enum {string} */
-                        signal: "revenue" | "destination" | "plus_station" | "minus_station" | "card_station" | "card_shop" | "ginji";
-                        /** @enum {string} */
-                        stabilityBand: "high" | "medium" | "low";
-                        stable: boolean;
-                        supportCount: number;
-                    }[];
-                    memberId: string;
-                    /** @enum {string} */
-                    status: "ok" | "reference" | "no_target";
-                    displayName: string;
-                }[];
                 reasonCodes: ("insufficient_matches" | "insufficient_events" | "model_not_better" | "unstable_signals" | "model_not_converged" | "calculation_failed" | "invalid_dataset")[];
                 requiredImprovedFoldCount: number;
                 /** @enum {string} */
                 status: "ok" | "reference" | "no_target";
-                unexpectedWinsByPlayer: {
-                    hasDetails: boolean;
-                    latest: null | {
-                        actualRank: number;
-                        evidence: {
-                            cardShopCount: number;
-                            cardStationCount: number;
-                            destinationCount: number;
-                            ginjiCount: number;
-                            minusStationCount: number;
-                            plusStationCount: number;
-                            revenueManYen: number;
-                        };
-                        expectedRank: number;
-                        heldEventId: string;
-                        matchId: string;
-                        matchNoInEvent: number;
-                        playedAt: string;
-                    };
-                    memberId: string;
-                    /** @enum {string} */
-                    status: "ok" | "reference" | "no_target";
-                    totalWinCount: number;
-                    unexpectedWinCount: number;
-                    displayName: string;
-                }[];
             };
             rankDistribution: {
                 cells: {
@@ -3368,7 +3395,7 @@ export interface components {
                 displayName: string;
             }[];
             /** @constant */
-            schemaVersion: 6;
+            schemaVersion: 7;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -3442,7 +3469,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3461,7 +3488,7 @@ export interface components {
             /** Format: int32 */
             artifactSchemaVersion: number;
         };
-        /** Series Analysis Drilldown Resource v3 */
+        /** Series Analysis Drilldown Resource v4 */
         SeriesAnalysisDrilldownResponse: {
             payload: {
                 eventRows: {
@@ -3509,7 +3536,7 @@ export interface components {
                 displayName: string;
             };
             /** @constant */
-            schemaVersion: 3;
+            schemaVersion: 4;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -3539,7 +3566,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3604,7 +3631,7 @@ export interface components {
                 displayName: string;
             };
             /** @constant */
-            schemaVersion: 3;
+            schemaVersion: 4;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -3634,7 +3661,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3643,91 +3670,7 @@ export interface components {
             };
         } | {
             payload: {
-                candidates: {
-                    candidateSharePercent: null | number;
-                    /** @enum {string} */
-                    direction: "more_is_higher" | "less_is_higher";
-                    foldRows: {
-                        comparisonCount: number;
-                        fold: number;
-                        heldEventCount: number;
-                        importance: number;
-                        supported: boolean;
-                    }[];
-                    importance: number;
-                    /** @enum {string} */
-                    signal: "revenue" | "destination" | "plus_station" | "minus_station" | "card_station" | "card_shop" | "ginji";
-                    /** @enum {string} */
-                    stabilityBand: "high" | "medium" | "low";
-                    stable: boolean;
-                    supportCount: number;
-                }[];
-                heldEventCount: number;
-                improvedFoldCount: number;
-                /** @constant */
-                kind: "rank_signals";
-                matchCount: number;
-                method: {
-                    fixedSeed: string;
-                    foldCount: number;
-                    minimumHeldEvents: number;
-                    minimumImportance: number;
-                    minimumMatches: number;
-                    /** @constant */
-                    modelVersion: "rank-bt-v1";
-                    requiredImprovedFoldCount: number;
-                };
-                reasonCodes: ("insufficient_matches" | "insufficient_events" | "model_not_better" | "unstable_signals" | "model_not_converged" | "calculation_failed" | "invalid_dataset")[];
-                /** @enum {string} */
-                status: "ok" | "reference" | "no_target";
-            };
-            player: {
-                memberId: string;
-                displayName: string;
-            };
-            /** @constant */
-            schemaVersion: 3;
-            scope: {
-                /** @constant */
-                kind: "overall";
-                matchCount: number;
-                displayName: string;
-            } | {
-                /** @constant */
-                kind: "season";
-                matchCount: number;
-                seasonMasterId: string;
-                displayName: string;
-            } | {
-                /** @constant */
-                kind: "map";
-                mapMasterId: string;
-                matchCount: number;
-                displayName: string;
-            } | {
-                /** @constant */
-                kind: "season_map";
-                mapMasterId: string;
-                matchCount: number;
-                seasonMasterId: string;
-                displayName: string;
-            };
-            artifact: {
-                algorithmVersion: string;
-                artifactId: string;
-                /** @constant */
-                artifactSchemaVersion: 10;
-                gameTitleId: string;
-                inputRevision: string;
-                publishedAt: string;
-                radarBasisCreatedAt: string | null;
-                radarBasisAppliedAt: string | null;
-            };
-        } | {
-            payload: {
-                /** @constant */
-                kind: "unexpected_wins";
-                rows: {
+                above: {
                     actualRank: number;
                     evidence: {
                         cardShopCount: number;
@@ -3739,20 +3682,44 @@ export interface components {
                         revenueManYen: number;
                     };
                     expectedRank: number;
+                    gap: number;
                     heldEventId: string;
                     matchId: string;
                     matchIndex: number;
                     matchNoInEvent: number;
                     playedAt: string;
+                    revenueRank: number;
+                    note: string | null;
                 }[];
+                below: {
+                    actualRank: number;
+                    evidence: {
+                        cardShopCount: number;
+                        cardStationCount: number;
+                        destinationCount: number;
+                        ginjiCount: number;
+                        minusStationCount: number;
+                        plusStationCount: number;
+                        revenueManYen: number;
+                    };
+                    expectedRank: number;
+                    gap: number;
+                    heldEventId: string;
+                    matchId: string;
+                    matchIndex: number;
+                    matchNoInEvent: number;
+                    playedAt: string;
+                    revenueRank: number;
+                    note: string | null;
+                }[];
+                /** @constant */
+                kind: "expected_rank_gap_evidence";
                 summary: {
-                    heldEventCount: number;
+                    aboveCount: number;
+                    belowCount: number;
                     matchCount: number;
-                    reasonCodes: ("insufficient_matches" | "insufficient_events" | "model_not_better" | "unstable_signals" | "model_not_converged" | "calculation_failed" | "invalid_dataset")[];
                     /** @enum {string} */
                     status: "ok" | "reference" | "no_target";
-                    totalWinCount: number;
-                    unexpectedWinCount: number;
                 };
             };
             player: {
@@ -3760,7 +3727,7 @@ export interface components {
                 displayName: string;
             };
             /** @constant */
-            schemaVersion: 3;
+            schemaVersion: 4;
             scope: {
                 /** @constant */
                 kind: "overall";
@@ -3790,7 +3757,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3944,7 +3911,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -3961,7 +3928,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4052,7 +4019,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4175,7 +4142,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4218,7 +4185,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -4439,7 +4406,7 @@ export interface components {
                 algorithmVersion: string;
                 artifactId: string;
                 /** @constant */
-                artifactSchemaVersion: 10;
+                artifactSchemaVersion: 11;
                 gameTitleId: string;
                 inputRevision: string;
                 publishedAt: string;
@@ -9878,7 +9845,7 @@ export interface operations {
                 gameTitleId: string;
                 artifactId: string;
                 memberId: string;
-                metricId: "rank.averageHistory" | "playOrder.rankHistory" | "rankAnalysis.rankSignals" | "rankAnalysis.unexpectedWins";
+                metricId: "rank.averageHistory" | "playOrder.rankHistory" | "expectedRankGap.evidence";
                 seasonMasterId?: string;
                 mapMasterId?: string;
             };

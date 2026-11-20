@@ -96,6 +96,7 @@ export function useSeriesComparisonSelection() {
       updateSeasonMasterId: selectionLocation.actions.updateSeasonMasterId,
       updateView: selectionLocation.actions.updateView,
       updateOwnerMetric: selectionLocation.actions.updateOwnerMetric,
+      updateExpectedRankGapMember: selectionLocation.actions.updateExpectedRankGapMember,
       updateOutlookMember: selectionLocation.actions.updateOutlookMember,
     },
     options: {

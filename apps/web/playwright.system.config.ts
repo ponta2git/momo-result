@@ -7,6 +7,7 @@ export default defineConfig({
   testDir: "./e2e/system",
   outputDir: "test-results-system",
   fullyParallel: false,
+  // Background recovery pauses this suite's shared Worker and notification receiver.
   workers: 1,
   retries: 0,
   timeout: 90_000,

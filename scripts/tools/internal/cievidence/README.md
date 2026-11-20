@@ -11,12 +11,14 @@ nonzero exit blocks its flow.
 | --- | --- |
 | `runtime-candidate` | No output. Checks the candidate, patch, regular artifact files, actual archive/config hashes, and checkout pin. `repoRoot` supplies `fly.toml` and `.http4s-ref`. |
 | `analysis-candidate` | Existing `key=value` candidate outputs after exact identity and digest checks. |
-| `runtime-deployment` | Existing `key=value` deployment outputs. Preserves schema v1/v2/v3 and the recorded producer attempt; historical patch revisions are not compared to the current checkout. |
+| `runtime-deployment` | Existing `key=value` deployment outputs. Requires schema v4 with the API image and Web edge from the same run/commit, preserving their separate producer attempts and the deployed edge version. Recorded patch revisions are not compared to the current checkout. |
 | `runtime-release-selection` | Selected artifact ID/name, producer attempt, and image reference as `key=value`. |
 | `analysis-release-selection` | No output. Checks the worker metadata artifact against its producer run/attempt and validates its digest. |
 | `e2e-artifact-selection` | No output. Checks a positive producer attempt, one positive artifact ID, and the upload digest format before downloading. |
+| `edge-candidate` | No output. Checks the complete prebuilt Worker/config/assets tree against the producer run/attempt/commit and candidate hash before system E2E or deployment. |
+| `edge-deployment` | Allowlisted Worker name/version JSON from one matching Wrangler structured deploy event; rejects ambiguous or malformed output. |
 | `e2e-candidate` | System E2E test artifact, not a release candidate. `controlled-worker` prints `image_ref`/`image_id` after archive sidecar and hash checks; `session-fixture` prints nothing after checking the JAR hash and its binding to the supplied, already verified Runtime image ID. Both check the producer run/attempt/commit and the artifact ID/digest format. |
-| `postdeploy-evidence` | `{"schemaVersion":1,"status":"ok"}`. Requires one document within the existing size limit and every required check. Legacy version omission remains accepted. Failure uses the existing structured error classification. |
+| `postdeploy-evidence` | `{"schemaVersion":1,"status":"ok"}`. Requires one document within the existing size limit and every required check. Requires runtime smoke schema v2. Failure uses the existing structured error classification. |
 | `worker-readiness` | JSON readiness report. Reads a provider JSON stream and requires all four events for the selected machine/workers with RFC3339 timestamps. Invalid inner application messages are ignored; malformed outer JSON rejects the input. Last occurrence uses stream order. |
 | `artifact-digest` | Canonical `sha256:` digest from a lowercase bare or prefixed digest. |
 | `analysis-archive` | Verified image ID. Checks archive bytes and sidecars; the caller still owns decompression, Docker loading, and pipeline failure propagation. |
@@ -25,8 +27,8 @@ nonzero exit blocks its flow.
 
 `analysis-candidate` and `runtime-deployment` accept `--config <file>` after their
 four positional arguments. The hash comparison completes before candidate or
-deployment outputs are emitted. Rollback callers supply the selected revision's
-configuration, not the current checkout's configuration.
+deployment outputs are emitted. The configuration must belong to the selected
+revision.
 
 Metadata creation and validation share private parsed objects, wire guards,
 archive/sidecar readers, and checkout pin rules in this package. No JSON
@@ -36,7 +38,7 @@ keys, postdeploy allows additional fields/checks, and readiness consumes a JSON
 stream. They do not share an invented universal report schema.
 
 `testdata` contains fixed synthetic baseline records for current candidate
-formats, deployment versions, and provider-wrapped readiness events. The archive
+formats, paired deployment metadata, and provider-wrapped readiness events. The archive
 bytes are deliberately opaque hash fixtures, not a Docker image. Tests also
 cover missing fields, wrong types, extra documents, stale producer identities,
 config/archive mismatches, symlinks, and safe errors. These local contracts do
@@ -53,10 +55,12 @@ All provider commands validate before publishing allowlisted evidence.
 | `create-runtime-candidate` | `--artifact-dir DIR --run-id ID --run-attempt N --commit SHA --image-ref REF` | Runtime candidate v2; checks recorded image identity/archive checksum, hashes archive and checkout config, validates patch pin |
 | `create-analysis-candidate` | Same flags plus `--artifact-id ID --artifact-digest DIGEST` | Analysis candidate v1; checks archive and image records, hashes checkout config, canonicalizes artifact digest |
 | `create-e2e-candidate` | `--kind controlled-worker\|session-fixture --artifact-dir DIR --run-id ID --run-attempt N --commit SHA`, plus `--runtime-image-id ID` for `session-fixture` only | E2E candidate v1 from the measured archive or JAR; the fixture must already be bound to that Runtime image ID |
-| `create-runtime-deployment` | `--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST` | Deployment v3; source attempt/commit/run/image identity come from the validated candidate; deployment attempt is explicit |
+| `create-edge-candidate` | `--artifact-dir DIR --run-id ID --run-attempt N --commit SHA` | Edge candidate v1; hashes regular files by relative path and content across the complete deployable tree |
+| `create-runtime-deployment` | `--candidate FILE --run-attempt N --registry-ref REF --source-artifact-id ID --source-artifact-digest DIGEST --manifest FILE --manifest-artifact-id ID --manifest-artifact-digest DIGEST --edge-candidate FILE --edge-artifact-id ID --edge-artifact-digest DIGEST --edge-deployment FILE` | Deployment v4; source attempt/commit/run/image identity come from the validated candidate; deployment attempt is explicit |
 
 `create-runtime-deployment` validates candidate metadata against checkout config
-and patch pin. The caller must still run the archive validator before loading an
+and patch pin, rechecks the prebuilt edge tree, and requires both candidates to
+refer to the same run and commit. The caller must still run the archive validator before loading an
 image; deployment generation does not reopen or load its archive.
 
 These commands interpret one JSON document on stdin, allowing additional
@@ -82,7 +86,7 @@ The Go canonical output is the baseline for compatibility between releases
 after this refactor. It is not a byte-compatibility guarantee with the former
 `jq` output. Fixtures cover OCI manifest fields and escaped U+2028/U+2029;
 canonicalizing the canonical result preserves its bytes. Numeric lexemes remain
-exact (no float64 conversion). Runtime/deployment tests use a frozen v3 document
+exact (no float64 conversion). Runtime/deployment tests use a frozen v4 document
 and the real consumer validators, including a different producer/deployer
 attempt. Provider tests cover stale generations, unrelated/ambiguous digests,
 invalid JSON streams, untrusted runs, missing readiness, and evidence redaction.

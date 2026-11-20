@@ -1,6 +1,6 @@
 # ドメイン規約
 
-目的: 用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV と認証・権限は [基本要求](requirements/base.md)、試合メモは [試合メモ要求](requirements/match-note.md)、DB の保存形と transaction は [DB 規約](db-rule.md)、OCR job の受付・実行・回復は [OCR job 契約](ocr-job-contract.md)、分析 job / artifact は [分析 batch 要求](requirements/series-analysis-batch.md) を正本とする。
+目的: 用語、不変条件、状態遷移、識別子の意味を定義する。CSV / TSV と認証・権限は [基本要求](requirements/base.md)、試合メモは [試合メモ要求](requirements/match-note.md)、DB の保存形と transaction は [DB 規約](implementation/database.md)、OCR job の受付・実行・回復は [OCR job 契約](implementation/ocr-job.md)、分析 job / artifact は [分析 batch 要求](requirements/series-analysis-batch.md) を正本とする。
 
 ## Terms
 
@@ -70,7 +70,7 @@
 
 - claim と terminal 遷移は atomic に行い、terminal は `queued` / `running` からだけ許可する。
 - success は保存した draft と報告値が一致する。`failed` は failure metadata を持ち、`cancelled` は持たない。draft payload を持つのは success だけとする。
-- 受付、claim、再試行、期限回復の契約は [OCR job 契約](ocr-job-contract.md) を正本とする。
+- 受付、claim、再試行、期限回復の契約は [OCR job 契約](implementation/ocr-job.md) を正本とする。
 
 ### OCR送出
 
@@ -84,7 +84,7 @@ member は未登録の `pending`、job に結び付いた `registered`、登録�
 
 job は1作品の計算を管理し、attempt は lease を持つ1回の実行を表す。attempt の終了は job の終端とは限らない。状態と再実行条件は [分析 batch 要求の Job / Delivery](requirements/series-analysis-batch.md#3-job--delivery) を正本とする。
 
-- 試合確定、確定済み試合の分析入力となる項目の更新、試合削除は、対象作品の再計算 intent を作る。初版の試合メモだけの更新は分析入力を変えず、再計算 intent を作らない。業務状態と intent を同じ transaction で確定する規則は [DB 規約](db-rule.md#durable-state-rules) に従う。
+- 試合確定、確定済み試合の分析入力となる項目の更新、試合削除は、対象作品の再計算 intent を作る。初版の試合メモだけの更新は分析入力を変えず、再計算 intent を作らない。業務状態と intent を同じ transaction で確定する規則は [DB 規約](implementation/database.md#durable-state-rules) に従う。
 - 1 attempt は一貫した入力 snapshot から1作品を計算し、完成した成果物だけを公開する。失敗や timeout の後も直前成功成果物を保つ。
 - 対象なし、分母0、件数不足、定義済みの model 非採用は、品質状態を持つ正常成果物とする。予期しない scope 失敗は job 全体を失敗させる。
 - 入力 version、algorithm version、artifact schema version、validation contract ID、radar basis / generation は、それぞれ別の識別として扱う。各 version の意味は [分析 batch 要求](requirements/series-analysis-batch.md#2-version--recalculation-intent) を正本とする。
@@ -92,5 +92,5 @@ job は1作品の計算を管理し、attempt は lease を持つ1回の実行�
 ## Masters / Held Events
 
 - master は `momo-db` が所有する。map / season は所属作品と整合し、OCR name alias は解決先を一意に定める。
-- layout family は OCR profile の安定した lowercase snake key とする。正規値と旧表記の解決は [OCR job 契約](ocr-job-contract.md#immutable-input) を正本とする。
+- layout family は OCR profile の安定した lowercase snake key とする。正規値と旧表記の解決は [OCR job 契約](implementation/ocr-job.md#immutable-input) を正本とする。
 - 1開催回に複数試合を持てる。開催回の削除は、参照中の試合と有効な下書きをすべて解消してから行う。

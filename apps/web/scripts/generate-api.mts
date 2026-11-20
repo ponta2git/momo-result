@@ -9,6 +9,9 @@ import standaloneModule from "ajv/dist/standalone/index.js";
 import openapiTS, { astToString } from "openapi-typescript";
 import type { OpenAPI3 } from "openapi-typescript";
 import { format } from "oxfmt";
+import ts from "typescript";
+
+import { prepareEnvelopeSchema, shareValidatorSchemas } from "./validator-schemas.mts";
 
 type ValidatorSchema = { exportName: string; schema: AnySchema };
 
@@ -45,36 +48,6 @@ const generatedArtifactPattern =
 const generatedValidatorPattern =
   /^series-analysis-(?:[a-z0-9-]+-)?validators\.generated\.(?:js|d\.ts)$/u;
 
-if (process.argv.length > (checkOnly ? 3 : 2)) {
-  throw new Error("Usage: node scripts/generate-api.mts [--check]");
-}
-
-function visit(
-  value: unknown,
-  visitor: (value: Record<string, unknown>) => Record<string, unknown>,
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map((child) => visit(child, visitor));
-  }
-  if (typeof value !== "object" || value === null) return value;
-  return visitor(
-    Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, visitor)])),
-  );
-}
-
-function referencedComponentNames(schema: unknown) {
-  const names = new Set<string>();
-  visit(schema, (value) => {
-    if (typeof value.$ref === "string") {
-      const match = /^#\/components\/schemas\/([^/]+)$/u.exec(value.$ref);
-      if (!match?.[1]) throw new Error(`Unsupported OpenAPI schema reference: ${value.$ref}`);
-      names.add(match[1]);
-    }
-    return value;
-  });
-  return names;
-}
-
 function envelopeSchemaDocument(openapi: OpenAPI3, roots: string[]) {
   const sourceSchemas = openapi.components?.schemas;
   if (typeof sourceSchemas !== "object" || sourceSchemas === null) {
@@ -82,40 +55,27 @@ function envelopeSchemaDocument(openapi: OpenAPI3, roots: string[]) {
   }
 
   const selected = new Set(roots);
-  const pending = [...roots];
-  for (const name of pending) {
+  const definitions = new Map<string, AnySchema>();
+  for (const name of selected) {
     const schema = sourceSchemas[name];
-    if (typeof schema !== "object" || schema === null) {
+    if (typeof schema === "boolean") {
+      definitions.set(name, schema);
+    } else if (typeof schema === "object" && schema !== null) {
+      definitions.set(
+        name,
+        prepareEnvelopeSchema(schema, (referenced) => selected.add(referenced)),
+      );
+    } else {
       throw new Error(`OpenAPI component schema is missing: ${name}`);
     }
-    for (const referenced of referencedComponentNames(schema)) {
-      if (!selected.has(referenced)) {
-        selected.add(referenced);
-        pending.push(referenced);
-      }
-    }
   }
-
-  const definitions = Object.fromEntries(
-    [...selected].toSorted().map((name) => {
-      const closed = visit(structuredClone(sourceSchemas[name]), (value) => {
-        if (typeof value.$ref === "string") {
-          value.$ref = value.$ref.replace("#/components/schemas/", "#/$defs/");
-        }
-        delete value.format;
-        if (value.properties !== undefined && value.additionalProperties === undefined) {
-          value.additionalProperties = false;
-        }
-        return value;
-      });
-      return [name, closed];
-    }),
-  );
 
   return {
     $comment:
       "Generated from apps/api/openapi.yaml by apps/web/scripts/generate-api.mts; do not edit by hand.",
-    $defs: definitions,
+    $defs: Object.fromEntries(
+      [...selected].toSorted().map((name) => [name, definitions.get(name)]),
+    ),
     $schema: "https://json-schema.org/draft/2020-12/schema",
   };
 }
@@ -223,20 +183,36 @@ function registerOwnerKeywords(ajv: Ajv2020) {
   ajv.addKeyword({ keyword: "x-momo-metricId", schemaType: "string", valid: true });
 }
 
-function standaloneValidatorSource(schemas: ValidatorSchema[], sharedSchemas: AnySchema[]) {
+function assertBrowserSyntax(node: ts.Node): void {
+  if (
+    (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+    ts.isIdentifier(node.expression) &&
+    ["require", "Function", "eval"].includes(node.expression.text)
+  ) {
+    throw new Error("Generated validators are not browser-CSP-safe.");
+  }
+  ts.forEachChild(node, assertBrowserSyntax);
+}
+
+export function standaloneValidatorSource(
+  schemas: ValidatorSchema[],
+  sharedSchemas: AnySchema[] = [],
+) {
   const ajv = new Ajv2020({
     allErrors: false,
     code: { esm: true, source: true },
     // Reuse referenced validators instead of expanding large nested schemas at every use.
     inlineRefs: false,
+    // The Web formats its own diagnostic from instancePath, keyword and params.
+    messages: false,
     strict: true,
   });
   registerOwnerKeywords(ajv);
-  for (const schema of sharedSchemas) ajv.addSchema(schema);
+  for (const schema of sharedSchemas) ajv.addSchema(shareValidatorSchemas(schema));
 
   const validators: Record<string, string> = {};
   for (const { exportName, schema } of schemas) {
-    ajv.addSchema(schema, exportName);
+    ajv.addSchema(shareValidatorSchemas(schema), exportName);
     validators[exportName] = exportName;
   }
 
@@ -245,9 +221,14 @@ function standaloneValidatorSource(schemas: ValidatorSchema[], sharedSchemas: An
     .replaceAll(
       /const (func\d+) = require\("ajv\/dist\/runtime\/ucs2length"\)\.default;/gu,
       "const $1 = ucs2length;",
+    )
+    .replaceAll(
+      /const (func\d+) = require\("ajv\/dist\/runtime\/equal"\)\.default;/gu,
+      'import $1Runtime from "ajv/dist/runtime/equal.js"; const $1 = $1Runtime.default ?? $1Runtime;',
     );
-  if (generated.includes("require(") || generated.includes("new Function(")) {
-    throw new Error("Generated validators are not browser-CSP-safe.");
+  if (/\b(?:require|Function|eval)\b/u.test(generated)) {
+    // A JSON literal can contain these strings. Inspect syntax before rejecting a contract.
+    assertBrowserSyntax(ts.createSourceFile("validator.js", generated, ts.ScriptTarget.ESNext));
   }
   return `// Generated by scripts/generate-api.mts; do not edit by hand.
 function ucs2length(value) {
@@ -362,9 +343,14 @@ async function removeUnexpectedGeneratedContracts(expectedPaths: string[]) {
   return true;
 }
 
-const generated = await generate();
-const results = await Promise.all([
-  removeUnexpectedGeneratedContracts(generated.map(({ output }) => output)),
-  ...generated.map(({ contents, output }) => updateOutput(output, contents)),
-]);
-if (results.includes(false)) process.exitCode = 1;
+if (import.meta.main) {
+  if (process.argv.length > (checkOnly ? 3 : 2)) {
+    throw new Error("Usage: node scripts/generate-api.mts [--check]");
+  }
+  const generated = await generate();
+  const results = await Promise.all([
+    removeUnexpectedGeneratedContracts(generated.map(({ output }) => output)),
+    ...generated.map(({ contents, output }) => updateOutput(output, contents)),
+  ]);
+  if (results.includes(false)) process.exitCode = 1;
+}

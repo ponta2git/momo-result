@@ -43,9 +43,9 @@ to satisfy this reference.
 ## Implement and Close
 
 Carry authorized changes through the affected boundary's verification. Choose evidence through
-[docs/test-rule.md](../../../../docs/test-rule.md) and required gates through
-[docs/dev-rule.md](../../../../docs/dev-rule.md#change-gates), including their stop and rerun
-conditions. Use `docs/test-architecture.md` only when changing test execution design.
+[docs/development/test-policy.md](../../../../docs/development/test-policy.md) and required gates through
+[docs/development/workflow.md](../../../../docs/development/workflow.md#change-gates), including their stop and rerun
+conditions. Use `docs/development/test-architecture.md` only when changing test execution design.
 
 - Distinguish `Open` (work or verification remains), `Deferred` (a stated decision/condition
   postpones work), and `Done` (the acceptance condition is evidenced). Use `Closed` for a

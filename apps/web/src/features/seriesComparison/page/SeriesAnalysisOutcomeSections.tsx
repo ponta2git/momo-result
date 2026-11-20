@@ -72,7 +72,7 @@ export function RevenueOutcomeSection({
                     {
                       id: "rank-delta",
                       label: "収益順位だけでは説明しない順位差",
-                      value: `${formatDecimal(metric.nonRevenue.rankDelta)}位`,
+                      value: formatRankDifference(metric.nonRevenue.rankDelta),
                     },
                     {
                       id: "high-revenue-no-win-rate",
@@ -138,13 +138,13 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
                 items={[
                   {
                     id: "conversion-delta",
-                    label: "到着多寡による入賞率差",
-                    value: formatPercent(metric.destination.conversionDelta),
+                    label: "目的地順位と最終順位の差",
+                    value: formatRankDifference(metric.destination.conversionDelta),
                   },
                   {
                     id: "dependence",
                     label: "目的地への依存度",
-                    value: formatPercent(metric.destination.dependenceScore),
+                    value: formatDependence(metric.destination.dependenceScore),
                   },
                   {
                     id: "upper-target",
@@ -168,6 +168,17 @@ export function DestinationOutcomeSection({ response }: { response: Response }) 
       </div>
     </AnalysisSection>
   );
+}
+
+/** Rank-scale differences, never percentages; a missing value reads as a dash alone. */
+function formatRankDifference(value: number | null): string {
+  return value === null ? "—" : `${formatDecimal(value)}位`;
+}
+
+/** Average rank of matches with more arrivals against those with fewer, with its direction. */
+function formatDependence(value: number | null): string {
+  if (value === null) return "—";
+  return `到着上位の試合が${formatDecimal(Math.abs(value))}位${value < 0 ? "下" : "上"}`;
 }
 
 function outcomeDetailsFact(id: string, label: string, outcome: Outcome): FactListItem {

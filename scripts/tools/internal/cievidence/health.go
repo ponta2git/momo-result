@@ -21,7 +21,7 @@ func postdeployEvidence(args []string) (string, error) {
 	if len(args) == 0 || args[0] == "" || len(args)%2 != 1 {
 		return "", &postdeployError{"InvalidArguments", 2}
 	}
-	required := []string{"database", "http", "http2", "processes", "web"}
+	required := []string{"database", "http", "http2", "processes"}
 	for index := 1; index < len(args); index += 2 {
 		if args[index] != "--require-check" {
 			return "", &postdeployError{"InvalidArguments", 2}
@@ -60,7 +60,7 @@ func postdeployEvidence(args []string) (string, error) {
 	if !evidence.equals("event", "runtime_postdeploy_smoke") {
 		return "", postdeployFailure("InvalidEvent")
 	}
-	if _, exists := evidence["schemaVersion"]; exists && !evidence.numberEquals("schemaVersion", 1) {
+	if !evidence.numberEquals("schemaVersion", 2) {
 		return "", postdeployFailure("UnsupportedSchemaVersion")
 	}
 	if !evidence.equals("status", "ok") {

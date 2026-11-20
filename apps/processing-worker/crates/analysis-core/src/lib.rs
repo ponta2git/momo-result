@@ -12,6 +12,7 @@ pub mod child;
 mod competition_rank;
 pub mod compute;
 pub mod contract;
+mod expected_rank_gap;
 pub mod model;
 mod numeric;
 mod outcome_model;

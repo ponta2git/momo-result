@@ -278,9 +278,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       _ <- seedSecondTitle
       _ <- sql"""
         UPDATE series_analysis_title_states
-        SET algorithm_version = 'series-analysis-v14',
-            artifact_schema_version = 10,
-            validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+        SET algorithm_version = 'series-analysis-v15',
+            artifact_schema_version = 11,
+            validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
         WHERE game_title_id IN ($gameTitleId, $secondGameTitleId)
       """.update.run.transact(transactor)
       _ <- createMatch(rec)
@@ -301,8 +301,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           (SELECT COUNT(*)::int FROM series_analysis_job_requests),
           (SELECT COUNT(*)::int FROM series_analysis_jobs WHERE status = 'queued' AND available_at <= now()),
           (SELECT COUNT(*)::int FROM matches WHERE id = ${rec.id}),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1') FROM series_analysis_jobs),
-          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1') FROM series_analysis_job_requests)
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2') FROM series_analysis_jobs),
+          (SELECT bool_and(validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2') FROM series_analysis_job_requests)
       """.query[(Int, Int, Int, Int, Boolean, Boolean)].unique.transact(transactor)
     yield
       assertEquals(deleted, true)
@@ -384,11 +384,8 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           ('detail-outside', $otherId, 92, 'draft_ready', 'account_ponta', 'member_ponta', $now, $now)
       """.update.run.transact(transactor)
       summary <- detail.summary(heldEventId)
-      snapshot <- (for
-        result <- PostgresHeldEventDetail.find(heldEventId)
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
-      yield (result, isolation, readOnly)).transact(transactor)
+      snapshot <-
+        assertReadSnapshot(xa => PostgresHeldEventDetailReadModel[IO](xa).find(heldEventId))
     yield
       assertEquals(absent, None)
       assertEquals(missingSummary, None)
@@ -397,7 +394,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(empty.map(_.nextMatchNo), Some(1))
       assertEquals(empty.map(_.matches), Some(Nil))
       assertEquals(empty.map(_.drafts), Some(Nil))
-      val result = snapshot._1.getOrElse(fail("held-event detail missing"))
+      val result = snapshot.getOrElse(fail("held-event detail missing"))
       assertEquals(result.event, HeldEvent(heldEventId, now))
       assertEquals(result.matches.map(_.id.value), List("detail-first", "detail-second"))
       assertEquals(result.matches.map(_.noteBody), List(Some(body.value), None))
@@ -420,8 +417,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       )
       assertEquals(result.drafts.head.labels, MatchLabels.empty)
       assertEquals(result.nextMatchNo, 5)
-      assertEquals(snapshot._2, "repeatable read")
-      assertEquals(snapshot._3, "on")
 
   test("match display metadata and note attribution belong to the result snapshot"):
     val record = sampleMatch("display-snapshot", 1).copy(playedAt = now.plusSeconds(3600))
@@ -438,13 +433,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       )
       identity <- details.identity(record.id)
       missing <- details.identity(MatchId.unsafeFromString("missing-identity"))
-      snapshot <- (for
-        result <- PostgresMatchDetail.find(record.id)
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
-      yield (result, isolation, readOnly)).transact(transactor)
+      snapshot <- assertReadSnapshot(xa => PostgresMatchDetailReadModel[IO](xa).find(record.id))
     yield
-      val detail = snapshot._1.getOrElse(fail("match detail missing"))
+      val detail = snapshot.getOrElse(fail("match detail missing"))
       assertEquals(detail.heldAt, Some(now))
       assertEquals(detail.record.playedAt, now.plusSeconds(3600))
       assertEquals(detail.labels, MatchLabels(Some("桃太郎電鉄ワールド"), Some("2024-spring"), Some("東日本編")))
@@ -463,8 +454,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         ))
       )
       assertEquals(missing, None)
-      assertEquals(snapshot._2, "repeatable read")
-      assertEquals(snapshot._3, "on")
 
   test("match neighbours follow the complete global order and changed live records"):
     val details = new PostgresMatchDetailReadModel[IO](transactor)
@@ -586,10 +575,12 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           ('held-list-cancelled', $heldEventId, 99, 'cancelled', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now),
           ('held-list-confirmed', $heldEventId, 100, 'confirmed', $gameTitleId, $seasonMasterId, 'account_ponta', $now, $now)
       """.update.run.transact(transactor)
-      latest <- reader.list(
-        HeldEventListSearchCriteria.empty,
-        HeldEventListSort.HeldDesc,
-        PageRequest(1, 1)
+      latest <- assertReadSnapshot(xa =>
+        PostgresHeldEventListReadModel[IO](xa).list(
+          HeldEventListSearchCriteria.empty,
+          HeldEventListSort.HeldDesc,
+          PageRequest(1, 1)
+        )
       )
       empty <- reader.list(
         HeldEventListSearchCriteria.empty,
@@ -611,17 +602,14 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         HeldEventListSort.HeldDesc,
         PageRequest(1, 20),
       )
-      snapshot <- (for
-        result <- PostgresHeldEventList.list(
-          HeldEventListSearchCriteria.empty,
-          HeldEventListSort.HeldDesc,
-          PageRequest(3, 1)
-        )
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
-      yield (result, isolation, readOnly)).transact(transactor)
+      third <- reader.list(
+        HeldEventListSearchCriteria.empty,
+        HeldEventListSort.HeldDesc,
+        PageRequest(3, 1)
+      )
     yield
       assertEquals(latest.page.totalItems, 3)
+      assert(latest.page.hasNextPage)
       assertEquals(latest.totalMatchCount, 3)
       assertEquals(latest.page.items.map(_.event.id), List(latestId))
       assertEquals(
@@ -638,13 +626,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(filtered.totalMatchCount, 2)
       assertEquals(missing.page.items, Nil)
       assertEquals(missing.totalMatchCount, 0)
-      val current = snapshot._1.page.items.headOption.getOrElse(fail("held event missing"))
+      val current = third.page.items.headOption.getOrElse(fail("held event missing"))
       assertEquals(current.event.id, heldEventId)
       assertEquals((current.matchCount, current.draftCount, current.nextMatchNo), (2, 4, 10))
       assertEquals(current.scopes.map(_.gameTitleName), List(Some("桃太郎電鉄ワールド"), Some("桃太郎電鉄ワールド")))
       assertEquals(current.scopes.map(_.seasonName), List(None, Some("2024-spring")))
-      assertEquals(snapshot._2, "repeatable read")
-      assertEquals(snapshot._3, "on")
 
   test("held-event detail rejects missing players instead of emitting a partial lineup"):
     val record = sampleMatch("detail-missing-player", 1)
@@ -761,11 +747,11 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
         .transact(transactor)
       _ <- sql"DELETE FROM match_players WHERE match_id = ${records.head.id}".update.run
         .transact(transactor)
-      single <- matchExports.project(
-        MatchExportsRepository.Selection(
+      single <- assertReadSnapshot(xa =>
+        PostgresMatchExportsRepository[IO](xa).project(MatchExportsRepository.Selection(
           matchId = Some(records.last.id),
           limit = 2,
-        )
+        ))
       )
       sameMillisecond <- matchExports.project(
         MatchExportsRepository.Selection(matchId = Some(records(1).id), limit = 2)
@@ -781,14 +767,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       recent <- matchExports.project(
         MatchExportsRepository.Selection(limit = 2)
       )
-      snapshot <- (for
-        rows <- PostgresMatchExports.alg.project(MatchExportsRepository.Selection(
-          matchId = Some(records.last.id),
-          limit = 2
-        ))
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
-      yield (rows, isolation, readOnly)).transact(transactor)
     yield
       assertEquals(other.map(row => row.seasonNo -> row.gameTitleMatchNo), List.fill(4)(1 -> 1))
       assertEquals(absent, Nil)
@@ -806,9 +784,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(recent.map(_.playedAt).distinct, records.takeRight(2).map(_.playedAt))
       assertEquals(recent.map(_.seasonNo), List.fill(4)(1) ++ List.fill(4)(2))
       assertEquals(recent.map(_.gameTitleMatchNo), List.fill(4)(3) ++ List.fill(4)(4))
-      assertEquals(snapshot._1, single)
-      assertEquals(snapshot._2, "repeatable read")
-      assertEquals(snapshot._3, "on")
 
   test("legacy oversized labels reject bounded views but do not block unrelated export selections"):
     val oversized = sampleMatch("export_budget_a", 1)
@@ -1019,23 +994,7 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(persisted, expected)
       assertEquals(after, before)
 
-  test("confirmation maps duplicate match_no_in_event to Conflict"):
-    val rec1 = sampleMatch("match_confirm_001", 1)
-    val rec2 = sampleMatch("match_confirm_002", 1)
-    for
-      _ <- seedPrereqs
-      inserted <- confirmations.confirm(rec1, None, now)
-      result <- confirmations.confirm(rec2, None, now)
-    yield
-      assertEquals(inserted, Right(MatchConfirmationResult.Confirmed))
-      assertEquals(
-        result,
-        Left(AppError.Conflict(
-          "matchNoInEvent 1 already exists for held event held_2026_04_30."
-        )),
-      )
-
-  test("confirmation rolls back draft and source-image changes when match insertion conflicts"):
+  test("a match number conflict preserves the draft and source image for a corrected confirmation"):
     val existing = sampleMatch("match_confirm_rollback_existing", 1)
     val conflicting = sampleMatch("match_confirm_rollback_conflicting", 1)
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-rollback")
@@ -1084,6 +1043,10 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       after <- persistedState
       conflictingMatch <- matches.find(conflicting.id)
       notificationAfter <- ResultNotificationFixture.state(transactor)
+      corrected = conflicting.copy(matchNoInEvent = MatchNoInEvent.unsafeFromInt(2))
+      retried <- confirmations.confirm(corrected, Some(snapshot), now.plusSeconds(3))
+      saved <- matches.find(corrected.id)
+      linked <- draftStatus(draftId)
     yield
       assertEquals(
         result,
@@ -1098,6 +1061,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       )
       assertEquals(conflictingMatch, None)
       assertEquals(notificationAfter, notificationBefore)
+      assertEquals(retried, Right(MatchConfirmationResult.Confirmed))
+      assertEquals(saved.map(_.matchNoInEvent), Some(corrected.matchNoInEvent))
+      assertEquals(linked, (MatchDraftStatus.Confirmed, Some(corrected.id)))
 
   test("confirmation rolls back source deletion when a prerequisite disappears"):
     val disappearingEventId = HeldEventId.unsafeFromString("held_disappearing_confirm")
@@ -1136,22 +1102,23 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(after, before)
       assertEquals(notificationAfter, notificationBefore)
 
-  test("confirmation from draft persists match and confirmed draft link"):
+  test("competing confirmations of one draft persist one match and one analysis request"):
     val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-success")
     val rec = sampleMatch("match_confirm_success", 1)
-    val snapshot = MatchDraftConfirmation(
-      draftId = draftId,
-      updatedAt = now,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-    )
+    val competing = sampleMatch("match_confirm_competing", 2)
+    val snapshot = MatchDraftConfirmation(draftId, now, None, None, None)
     for
       _ <- seedPrereqs
       _ <- insertMatchDraft(draftId, now)
       _ <- ResultNotificationFixture.seed("match_draft", draftId.value, now).transact(transactor)
-      confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
+      (confirmed, rejected) <- commitWhileBlocked(
+        xa =>
+          PostgresMatchConfirmationRepository[IO](xa)
+            .confirm(rec, Some(snapshot), now.plusSeconds(2)),
+        confirmations.confirm(competing, Some(snapshot), now.plusSeconds(3)),
+      )
       found <- matches.find(rec.id)
+      other <- matches.find(competing.id)
       status <- draftStatus(draftId)
       notification <- ResultNotificationFixture.state(transactor)
       analysisIntent <- sql"""
@@ -1171,7 +1138,9 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
     yield
       assertEquals(notification, ResultNotificationFixture.cancelled("draft_unavailable"))
       assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
+      assertEquals(rejected, Right(MatchConfirmationResult.DraftSnapshotMismatch))
       assertEquals(found.map(_.id), Some(rec.id))
+      assertEquals(other, None)
       assertEquals(status, (MatchDraftStatus.Confirmed, Some(rec.id)))
       assertEquals(
         analysisIntent,
@@ -1296,54 +1265,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       assertEquals(found, None)
       assertEquals(draftStillExists, false)
 
-  test("confirmation refuses a draft changed after the validated snapshot"):
-    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-stale")
-    val rec = sampleMatch("match_confirm_stale", 1)
-    val snapshot = MatchDraftConfirmation(
-      draftId = draftId,
-      updatedAt = now,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-    )
-    for
-      _ <- seedPrereqs
-      _ <- insertMatchDraft(draftId, now)
-      _ <- touchMatchDraft(draftId, now.plusSeconds(1))
-      confirmed <- confirmations.confirm(rec, Some(snapshot), now.plusSeconds(2))
-      found <- matches.find(rec.id)
-      status <- draftStatus(draftId)
-    yield
-      assertEquals(confirmed, Right(MatchConfirmationResult.DraftSnapshotMismatch))
-      assertEquals(found, None)
-      assertEquals(status, (MatchDraftStatus.DraftReady, Option.empty[MatchId]))
-
-  test("confirmation refuses a draft already confirmed by another request"):
-    val draftId = MatchDraftId.unsafeFromString("match-draft-confirm-race")
-    val firstRecord = sampleMatch("match_confirm_race_first", 1)
-    val secondRecord = sampleMatch("match_confirm_race_second", 2)
-    val snapshot = MatchDraftConfirmation(
-      draftId = draftId,
-      updatedAt = now,
-      totalAssetsDraftId = None,
-      revenueDraftId = None,
-      incidentLogDraftId = None,
-    )
-    for
-      _ <- seedPrereqs
-      _ <- insertMatchDraft(draftId, now)
-      first <- confirmations.confirm(firstRecord, Some(snapshot), now.plusSeconds(2))
-      second <- confirmations.confirm(secondRecord, Some(snapshot), now.plusSeconds(3))
-      foundFirst <- matches.find(firstRecord.id)
-      foundSecond <- matches.find(secondRecord.id)
-      status <- draftStatus(draftId)
-    yield
-      assertEquals(first, Right(MatchConfirmationResult.Confirmed))
-      assertEquals(second, Right(MatchConfirmationResult.DraftSnapshotMismatch))
-      assertEquals(foundFirst.map(_.id), Some(firstRecord.id))
-      assertEquals(foundSecond, None)
-      assertEquals(status, (MatchDraftStatus.Confirmed, Some(firstRecord.id)))
-
   private def insertMatchDraft(
       draftId: MatchDraftId,
       updatedAt: Instant,
@@ -1371,12 +1292,6 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       $id, 'account_ponta', ${s"source-images/${id.value}.png"}, ${"c" * 64}, 'AVAILABLE',
       'image/png', 128, ${"d" * 64}, 1920, 1080, $now, $now, $now
     )
-  """.update.run.transact(transactor)
-
-  private def touchMatchDraft(draftId: MatchDraftId, updatedAt: Instant): IO[Int] = sql"""
-    UPDATE match_drafts
-    SET match_no_in_event = 99, updated_at = $updatedAt
-    WHERE id = $draftId
   """.update.run.transact(transactor)
 
   private def draftStatus(draftId: MatchDraftId): IO[(MatchDraftStatus, Option[MatchId])] = sql"""

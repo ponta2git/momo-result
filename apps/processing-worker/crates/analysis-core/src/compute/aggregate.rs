@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use crate::{
     competition_rank::calculate_by_match as competition_ranks_by_match,
     contract::ScopeRef,
+    expected_rank_gap::ExpectedRankGap,
     model::{PlayerMatchInput, PlayerMatchesByMember},
     outcome_model::OutcomeModelAnalysis,
     radar::RadarAggregate,
@@ -36,6 +37,7 @@ pub(super) fn aggregate(
     player_matches_by_member: &PlayerMatchesByMember<'_>,
     groups: &[MatchGroup<'_>],
     outcome_model: &OutcomeModelAnalysis,
+    expected_rank_gap: &ExpectedRankGap<'_>,
     player_radar: &RadarAggregate,
 ) -> Value {
     let revenue_ranks = competition_ranks_by_match(rows, |row| row.revenue_man_yen);
@@ -66,7 +68,7 @@ pub(super) fn aggregate(
     let (leader_member_ids, rank_spread) = leader_summary(players, player_matches_by_member);
 
     object([
-        ("schemaVersion", 6.into()),
+        ("schemaVersion", 7.into()),
         ("playerRadar", json!(player_radar)),
         ("scope", scope_summary_json(scope, groups.len())),
         (
@@ -125,6 +127,7 @@ pub(super) fn aggregate(
         ("matchDigest", match_digest),
         ("matchNoInEvent", match_no_in_event(players, rows)),
         ("rankAnalysis", outcome_model.aggregate_json()),
+        ("expectedRankGap", expected_rank_gap.aggregate_json()),
         (
             "highlights",
             highlights(players, player_matches_by_member).into(),

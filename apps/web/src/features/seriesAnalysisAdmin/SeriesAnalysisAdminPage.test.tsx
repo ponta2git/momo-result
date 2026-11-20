@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { OperationsRoute } from "@/app/routeGuards";
 import { SeriesAnalysisAdminPage } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminPage";
-import { seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
+import { seriesAnalysisKeys, seriesPlayerRadarKeys } from "@/shared/api/queryKeys";
 import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { getAuthorization } from "@/shared/auth/authorizationQueryAdapter";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
@@ -60,7 +60,10 @@ function makePointPreview() {
   return preview;
 }
 
-function renderPage(guarded = false) {
+function renderPage(
+  guarded = false,
+  initialEntry = "/admin/series-analysis?gameTitleId=gt_momotetsu_2",
+) {
   setDevUser();
   const queryClient = createTestQueryClient();
   const router = createMemoryRouter(
@@ -81,7 +84,7 @@ function renderPage(guarded = false) {
         ),
       },
     ],
-    { initialEntries: ["/admin/series-analysis?gameTitleId=gt_momotetsu_2"] },
+    { initialEntries: [initialEntry] },
   );
   render(
     <QueryClientProvider client={queryClient}>
@@ -105,6 +108,25 @@ function rejectedCommand() {
 }
 
 describe("SeriesAnalysisAdminPage", () => {
+  it("loads revision history directly without starting the current title's radar reads", async () => {
+    const gameTitleId = "gt_momotetsu_2";
+    server.use(
+      http.get("/api/admin/series-analysis/radar/revisions", () =>
+        HttpResponse.json({ schemaVersion: 1, items: [], nextCursor: null }),
+      ),
+    );
+    const client = renderPage(
+      false,
+      `/admin/series-analysis?gameTitleId=${gameTitleId}&tab=history`,
+    );
+
+    expect(await screen.findByText("改訂履歴はありません")).toBeVisible();
+    await waitFor(() =>
+      expect(client.getQueryData(seriesAnalysisKeys.adminOverview(gameTitleId))).toBeDefined(),
+    );
+    expect(client.getQueryState(seriesPlayerRadarKeys.state(gameTitleId))).toBeUndefined();
+  });
+
   it("lets an unlinked operator recalculate the selected title without offering all-title commands", async () => {
     const user = userEvent.setup();
     const account = mswState.loginAccounts.find((entry) => entry.accountId === "account_ponta")!;
@@ -833,8 +855,9 @@ describe("SeriesAnalysisAdminPage", () => {
         );
       }),
     );
-    renderPage();
+    const client = renderPage();
     expect(await screen.findByRole("button", { name: "この作品を再計算" })).toBeEnabled();
+    expect(client.getQueryState(seriesPlayerRadarKeys.state("gt_momotetsu_2"))).toBeUndefined();
     expect(screen.queryByRole("button", { name: "この変更案を適用する" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "レーダーの採点基準" }));
     await user.click(await screen.findByRole("button", { name: "変更案を編集" }));

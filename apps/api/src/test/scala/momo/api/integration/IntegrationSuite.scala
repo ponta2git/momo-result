@@ -1,12 +1,14 @@
 package momo.api.integration
 
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.concurrent.duration.DurationInt
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
+import cats.syntax.applicative.*
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.{ConnectionIO, Transactor}
 import munit.AnyFixture
 
 import momo.api.MomoCatsEffectSuite
@@ -62,19 +64,44 @@ abstract class IntegrationSuite extends MomoCatsEffectSuite:
     ) ON CONFLICT (id) DO NOTHING
   """.update.run.transact(transactor)
 
-  /** Observe the transaction used by the public read facade before its normal commit. */
-  protected def assertReadSnapshot[A](read: doobie.Transactor[IO] => IO[A]): IO[A] =
+  /** Check that the entire public read came from a single read-only, repeatable-read snapshot. */
+  protected def assertReadSnapshot[A](read: Transactor[IO] => IO[A]): IO[A] = IO.defer {
+    val transactions = new AtomicInteger(0)
     val after =
       for
-        isolation <- sql"SHOW transaction_isolation".query[String].unique
-        readOnly <- sql"SHOW transaction_read_only".query[String].unique
+        settings <- sql"""
+          SELECT current_setting('transaction_isolation'), current_setting('transaction_read_only')
+        """.query[(String, String)].unique
         _ <- doobie.free.connection.delay {
-          assertEquals(isolation, "repeatable read")
-          assertEquals(readOnly, "on")
+          assertEquals(settings, ("repeatable read", "on"))
+          val _ = transactions.incrementAndGet()
         }
         _ <- doobie.free.connection.commit
       yield ()
-    read(doobie.Transactor.after.set(transactor, after))
+    read(Transactor.after.set(transactor, after)).map { result =>
+      assertEquals(transactions.get(), 1, "the result must come from one database transaction")
+      result
+    }
+  }
+
+  /** Hold the first write's commit until PostgreSQL observes the second operation waiting on it. */
+  protected def commitWhileBlocked[A, B](
+      first: Transactor[IO] => IO[A],
+      second: IO[B],
+  ): IO[(A, B)] =
+    Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+      val xa = Transactor.fromConnection[IO](connection, None)
+      val beforeCommit = Transactor.after.set(xa, ().pure[ConnectionIO])
+      for
+        written <- first(beforeCommit)
+        pid <- xa.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
+        waited <- second.background.use { completion =>
+          // Release the lock before joining the waiter, including on timeout or cancellation.
+          (awaitBackendBlockedBy(pid) *> IO.blocking(connection.commit()))
+            .guarantee(IO.blocking(connection.rollback())) *> completion.flatMap(_.embedNever)
+        }
+      yield written -> waited
+    }
 
   /** Wait until PostgreSQL, rather than elapsed wall time, confirms a backend is lock-blocked. */
   protected def awaitBackendBlockedBy(blockerPid: Int): IO[Unit] =

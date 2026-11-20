@@ -1,4 +1,4 @@
-//! Builds the four per-player drilldown resource payloads without owning resource ordering.
+//! Builds the three per-player drilldown resource payloads without owning resource ordering.
 
 use std::collections::BTreeMap;
 
@@ -6,9 +6,9 @@ use serde_json::{Value, json};
 
 use crate::{
     contract::ScopeRef,
+    expected_rank_gap::ExpectedRankGap,
     model::PlayerMatchInput,
     numeric::count_as_f64,
-    outcome_model::OutcomeModelAnalysis,
     stats::{average, quality_status, rate},
 };
 
@@ -59,18 +59,19 @@ pub(super) fn build(
     match_count: usize,
     member_id: &str,
     metric: DrilldownMetric,
-    outcome_model: &OutcomeModelAnalysis,
+    expected_rank_gap: &ExpectedRankGap<'_>,
 ) -> Value {
     let payload = match metric {
         DrilldownMetric::RankAverageHistory => rank_history_payload(member_matches),
         DrilldownMetric::PlayOrderRankHistory => {
             play_order_history_payload(member_matches, all_scope_matches)
         }
-        DrilldownMetric::RankSignals => outcome_model.signal_drilldown_json(member_id),
-        DrilldownMetric::UnexpectedWins => outcome_model.unexpected_wins_drilldown_json(member_id),
+        DrilldownMetric::ExpectedRankGapEvidence => {
+            expected_rank_gap.evidence_drilldown_json(member_id)
+        }
     };
     object([
-        ("schemaVersion", 3.into()),
+        ("schemaVersion", 4.into()),
         ("scope", scope_summary_json(scope, match_count)),
         ("player", member_ref_json(member_id)),
         ("payload", payload),

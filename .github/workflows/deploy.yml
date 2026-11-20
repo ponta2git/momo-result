@@ -92,6 +92,8 @@ jobs:
     needs: scope
     if: github.event_name != 'pull_request' && needs.scope.outputs.runtime == 'true'
     uses: ./.github/workflows/web.yml
+    with:
+      package_edge: true
 
   analysis-candidate:
     if: github.event_name != 'pull_request'
@@ -366,10 +368,13 @@ jobs:
 
   system-e2e:
     name: Verify assembled system candidate
-    needs: [runtime-image, analysis-candidate]
+    needs: [runtime-image, analysis-candidate, web]
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/system-e2e.yml
     with:
+      edge_artifact_id: ${{ needs.web.outputs.edge_artifact_id }}
+      edge_artifact_digest: ${{ needs.web.outputs.edge_artifact_digest }}
+      edge_run_attempt: ${{ needs.web.outputs.edge_run_attempt }}
       runtime_artifact_id: ${{ needs.runtime-image.outputs.artifact_id }}
       runtime_artifact_digest: ${{ needs.runtime-image.outputs.artifact_digest }}
       runtime_artifact_name: ${{ needs.runtime-image.outputs.artifact_name }}
@@ -438,6 +443,7 @@ jobs:
     timeout-minutes: 125
     needs:
       - release-ready
+      - web
       - runtime-image
       - analysis-candidate
     if: github.event_name != 'pull_request'
@@ -459,6 +465,37 @@ jobs:
 
       - name: Build structured CI tool
         uses: ./.github/actions/setup-ci-tool
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download verified Web edge candidate
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.web.outputs.edge_artifact_id }}
+          path: web-edge-candidate
+      - name: Validate Web edge candidate
+        env:
+          EDGE_ATTEMPT: ${{ needs.web.outputs.edge_run_attempt }}
+          EDGE_ID: ${{ needs.web.outputs.edge_artifact_id }}
+          EDGE_DIGEST: ${{ needs.web.outputs.edge_artifact_digest }}
+        run: |
+          scripts/ci/ci-tool.sh edge-candidate web-edge-candidate \
+            "${GITHUB_RUN_ID}" "${EDGE_ATTEMPT}" "${GITHUB_SHA}" "${EDGE_ID}" "${EDGE_DIGEST}"
+
+      - name: Verify deployment credentials are configured
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          [[ -n "${CLOUDFLARE_API_TOKEN}" && -n "${CLOUDFLARE_ACCOUNT_ID}" ]] || {
+            echo "Web edge deployment credentials are not configured." >&2
+            exit 1
+          }
 
       - name: Download smoke-tested image
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -529,31 +566,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Create immutable deployment provenance
-        env:
-          MANIFEST_ARTIFACT_DIGEST: ${{ steps.manifest-upload.outputs.artifact-digest }}
-          MANIFEST_ARTIFACT_ID: ${{ steps.manifest-upload.outputs.artifact-id }}
-          REGISTRY_REF: ${{ steps.registry.outputs.registry_ref }}
-          SOURCE_ARTIFACT_DIGEST: ${{ needs.runtime-image.outputs.artifact_digest }}
-          SOURCE_ARTIFACT_ID: ${{ needs.runtime-image.outputs.artifact_id }}
-        run: |
-          mkdir -p runtime-deployment-metadata
-          scripts/ci/ci-tool.sh create-runtime-deployment \
-            --candidate "${IMAGE_ARTIFACT_NAME}/candidate.json" \
-            --run-attempt "${GITHUB_RUN_ATTEMPT}" --registry-ref "${REGISTRY_REF}" \
-            --source-artifact-id "${SOURCE_ARTIFACT_ID}" --source-artifact-digest "${SOURCE_ARTIFACT_DIGEST}" \
-            --manifest "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" \
-            --manifest-artifact-id "${MANIFEST_ARTIFACT_ID}" --manifest-artifact-digest "${MANIFEST_ARTIFACT_DIGEST}" \
-            > runtime-deployment-metadata/deployment.json
-
-      - name: Upload immutable deployment provenance
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: runtime-deployment-metadata-${{ github.run_id }}-${{ github.run_attempt }}
-          path: runtime-deployment-metadata/deployment.json
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Reject a stale runtime release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -580,6 +592,55 @@ jobs:
             scripts/ci/ci-tool.sh runtime-machine-evidence "${{ steps.registry.outputs.registry_ref }}" \
             > runtime-production-evidence/deployment-state.json
         timeout-minutes: 2
+
+      - name: Deploy the verified Web edge
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/edge-deploy.jsonl
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_WRITE_LOGS: "false"
+          WRANGLER_LOG: error
+          WRANGLER_LOG_SANITIZE: "true"
+        run: |
+          # Account-local vars and secrets are prepared once. The tested bundle and
+          # asset tree are deployed unchanged; routing stays in provider settings.
+          pnpm --filter edge exec wrangler deploy \
+            --config "${GITHUB_WORKSPACE}/web-edge-candidate/edge/wrangler.json" \
+            --keep-vars --no-bundle
+          scripts/ci/ci-tool.sh edge-deployment "${WRANGLER_OUTPUT_FILE_PATH}" momo-result-web \
+            > "${RUNNER_TEMP}/edge-deployment.json"
+        timeout-minutes: 5
+
+      - name: Create immutable deployment provenance
+        env:
+          MANIFEST_ARTIFACT_DIGEST: ${{ steps.manifest-upload.outputs.artifact-digest }}
+          MANIFEST_ARTIFACT_ID: ${{ steps.manifest-upload.outputs.artifact-id }}
+          REGISTRY_REF: ${{ steps.registry.outputs.registry_ref }}
+          SOURCE_ARTIFACT_DIGEST: ${{ needs.runtime-image.outputs.artifact_digest }}
+          SOURCE_ARTIFACT_ID: ${{ needs.runtime-image.outputs.artifact_id }}
+          EDGE_ARTIFACT_ID: ${{ needs.web.outputs.edge_artifact_id }}
+          EDGE_ARTIFACT_DIGEST: ${{ needs.web.outputs.edge_artifact_digest }}
+        run: |
+          mkdir -p runtime-deployment-metadata
+          scripts/ci/ci-tool.sh create-runtime-deployment \
+            --candidate "${IMAGE_ARTIFACT_NAME}/candidate.json" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" --registry-ref "${REGISTRY_REF}" \
+            --source-artifact-id "${SOURCE_ARTIFACT_ID}" --source-artifact-digest "${SOURCE_ARTIFACT_DIGEST}" \
+            --manifest "${IMAGE_ARTIFACT_NAME}/registry-manifest.json" \
+            --manifest-artifact-id "${MANIFEST_ARTIFACT_ID}" --manifest-artifact-digest "${MANIFEST_ARTIFACT_DIGEST}" \
+            --edge-candidate web-edge-candidate/candidate.json \
+            --edge-artifact-id "${EDGE_ARTIFACT_ID}" --edge-artifact-digest "${EDGE_ARTIFACT_DIGEST}" \
+            --edge-deployment "${RUNNER_TEMP}/edge-deployment.json" \
+            > runtime-deployment-metadata/deployment.json
+
+      - name: Upload immutable deployment provenance
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: runtime-deployment-metadata-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-deployment-metadata/deployment.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Run post-deploy dependency, process, and public edge smoke
         env:

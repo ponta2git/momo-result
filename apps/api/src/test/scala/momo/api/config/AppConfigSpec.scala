@@ -10,6 +10,8 @@ import momo.api.adapters.discord.JavaDiscordOAuthClient
 class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
+    "MOMO_CANONICAL_HOST" -> "example.com",
+    "MOMO_ORIGIN_LOCK_TOKEN" -> "test-only-origin-credential-32-bytes",
     "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=verify-full",
     "DISCORD_CLIENT_ID" -> "client-id",
     "DISCORD_CLIENT_SECRET" -> "client-secret",

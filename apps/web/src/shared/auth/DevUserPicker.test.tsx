@@ -23,7 +23,7 @@ describe("DevUserPicker principal transition", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <DevUserPicker force />
+        <DevUserPicker />
       </QueryClientProvider>,
     );
 

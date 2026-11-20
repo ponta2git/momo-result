@@ -29,7 +29,7 @@ other than Linux/macOS, cancellation stops the direct pilot only.
 
 The paired result is explicitly a development-pilot result. `releaseDecisionAllowed` always remains
 false; calibration data cannot establish accuracy on an independent holdout. Release evidence is
-selected under the [test policy](../../../../docs/test-rule.md).
+selected under the [test policy](../../../../docs/development/test-policy.md).
 
 Example paths are intentionally omitted because real OCR samples and detailed results are private.
 Run `go run ./cmd/ocr-rust-evaluator -h` from `scripts/tools/` for the closed option set.

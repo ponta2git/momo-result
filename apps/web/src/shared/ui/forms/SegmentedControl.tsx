@@ -15,6 +15,11 @@ export type SegmentedControlProps = {
   label: string;
   onValueChange: (value: string) => void;
   options: readonly SegmentedOption[];
+  /**
+   * `framed` groups the modes as one control. `plain` drops the frame where the surrounding
+   * layout already names the group, such as a subject switch directly above the data it changes.
+   */
+  presentation?: "framed" | "plain" | undefined;
   value: string;
 };
 
@@ -27,6 +32,7 @@ export function SegmentedControl({
   label,
   onValueChange,
   options,
+  presentation = "framed",
   value,
 }: SegmentedControlProps) {
   const name = useId();
@@ -35,8 +41,13 @@ export function SegmentedControl({
     <fieldset
       disabled={disabled}
       className={cn(
-        "inline-flex max-w-full min-w-0 flex-wrap items-stretch gap-0.5 rounded-sm border bg-[var(--color-surface)] p-0.5",
-        controlBorderClass.default,
+        "inline-flex max-w-full min-w-0 flex-wrap items-stretch",
+        presentation === "framed"
+          ? cn(
+              "gap-0.5 rounded-sm border bg-[var(--color-surface)] p-0.5",
+              controlBorderClass.default,
+            )
+          : "gap-1",
       )}
     >
       <legend className="sr-only">{label}</legend>

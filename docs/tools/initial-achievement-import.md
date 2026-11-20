@@ -1,6 +1,6 @@
 # 実績の初期投入 command
 
-目的: 実績リストの定義と、提供 TSV に含まれる個人の達成情報（移行根拠）を consumer の初期化 command で投入する入口を示す。保存契約、dry-run と apply、再実行の冪等性は [DB 規約の Achievement Data](../db-rule.md#achievement-data)、業務上の移行規則は [実績要求の初期移行](../requirements/player-achievements.md#6-初期移行) を正本とする。引数名と入力検査の現在値は command の実装（`momo.api.tools.InitialAchievementImport` と `InitialAchievementInput`）を正本とし、ずれた場合は実装を直すか本書を更新する。
+目的: 実績リストの定義と、提供 TSV に含まれる個人の達成情報（移行根拠）を consumer の初期化 command で投入する入口を示す。保存契約、dry-run と apply、再実行の冪等性は [DB 規約の Achievement Data](../implementation/database.md#achievement-data)、業務上の移行規則は [実績要求の初期移行](../requirements/player-achievements.md#6-初期移行) を正本とする。引数名と入力検査の現在値は command の実装（`momo.api.tools.InitialAchievementImport` と `InitialAchievementInput`）を正本とし、ずれた場合は実装を直すか本書を更新する。
 
 ## 実行
 

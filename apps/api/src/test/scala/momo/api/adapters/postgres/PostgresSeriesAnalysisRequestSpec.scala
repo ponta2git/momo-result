@@ -2,9 +2,8 @@ package momo.api.adapters.postgres
 
 import java.time.Instant
 
-import cats.effect.{Deferred, IO, Resource}
+import cats.effect.IO
 import doobie.implicits.*
-import doobie.{ConnectionIO, Transactor}
 
 import momo.api.adapters.postgres.PostgresMeta.given
 import momo.api.config.SeriesAnalysisReadConfig
@@ -20,8 +19,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   private def seedTitle(id: GameTitleId): IO[Unit] =
     sql"""
       UPDATE series_analysis_release_state
-      SET algorithm_version = 'series-analysis-v14', artifact_schema_version = 10,
-          validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+      SET algorithm_version = 'series-analysis-v15', artifact_schema_version = 11,
+          validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
       WHERE singleton_key = 'current'
     """.update.run.transact(transactor) *>
       new PostgresGameTitlesRepository[IO](transactor)
@@ -32,15 +31,16 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       _ <- seedTitle(titleId)
       repository <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
-      results <- concurrentWithUncommittedFirst(
-        PostgresSeriesAnalysisTitleRequestOps.requestTitle(
-          titleId,
-          accountId,
-          "same-key",
-          "operation-one",
-          "request-one",
-          "job-one",
-        ),
+      results <- commitWhileBlocked(
+        xa =>
+          PostgresSeriesAnalysisTitleRequestOps.requestTitle(
+            titleId,
+            accountId,
+            "same-key",
+            "operation-one",
+            "request-one",
+            "job-one",
+          ).transact(xa),
         repository.requestTitleRecalculation(titleId, accountId, "same-key"),
       )
       counts <-
@@ -61,13 +61,14 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
       _ <- seedTitle(titleId)
       repository <-
         PostgresSeriesAnalysisRepository.create[IO](transactor, SeriesAnalysisReadConfig.defaults)
-      results <- concurrentWithUncommittedFirst(
-        PostgresSeriesAnalysisCampaignRequestOps.requestAll(
-          accountId,
-          "same-all-key",
-          "operation-all",
-          "campaign-all",
-        ),
+      results <- commitWhileBlocked(
+        xa =>
+          PostgresSeriesAnalysisCampaignRequestOps.requestAll(
+            accountId,
+            "same-all-key",
+            "operation-all",
+            "campaign-all",
+          ).transact(xa),
         repository.requestAllRecalculation(accountId, "same-all-key"),
       )
       counts <- sql"""
@@ -133,9 +134,9 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         initial,
         (
           0L,
-          "series-analysis-v14",
-          10,
-          Some("series-analysis-artifact-v10-full-validation-v1"),
+          "series-analysis-v15",
+          11,
+          Some("series-analysis-artifact-v11-full-validation-v2"),
           "initial"
         )
       )
@@ -149,13 +150,13 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
   test("creation waits for release promotion and inherits its committed tuple"):
     val createdTitle = GameTitle(titleId, "昇格後の作品", "momotetsu_2", 1, now)
     for
-      results <- concurrentWithUncommittedFirst(
-        sql"""
+      results <- commitWhileBlocked(
+        xa => sql"""
           UPDATE series_analysis_release_state SET algorithm_version = 'promoted-analysis',
-            artifact_schema_version = 10,
-            validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+            artifact_schema_version = 11,
+            validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
           WHERE singleton_key = 'current'
-        """.update.run,
+        """.update.run.transact(xa),
         new PostgresGameTitlesRepository[IO](transactor).createWithNextDisplayOrder(createdTitle),
       )
       state <- sql"""
@@ -168,8 +169,8 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
         state,
         (
           "promoted-analysis",
-          10,
-          Some("series-analysis-artifact-v10-full-validation-v1")
+          11,
+          Some("series-analysis-artifact-v11-full-validation-v2")
         )
       )
 
@@ -177,35 +178,3 @@ final class PostgresSeriesAnalysisRequestSpec extends IntegrationSuite:
     SELECT id, input_revision, radar_generation FROM series_analysis_jobs
     WHERE game_title_id = $titleId AND status = 'queued' AND work_kind = 'analysis'
   """.query[(String, Long, Long)].unique.transact(transactor)
-
-  private def concurrentWithUncommittedFirst[A, B](
-      first: ConnectionIO[A],
-      second: IO[B],
-  ): IO[(A, B)] =
-    for
-      ready <- Deferred[IO, (Int, A)]
-      release <- Deferred[IO, Unit]
-      result <- Resource.make(
-        Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
-          val transaction = Transactor.fromConnection[IO](connection, None)
-          (for
-            _ <- IO.blocking(connection.setAutoCommit(false))
-            accepted <- transaction.rawTrans.apply(first)
-            pid <- transaction.rawTrans.apply(sql"SELECT pg_backend_pid()".query[Int].unique)
-            _ <- ready.complete(pid -> accepted)
-            _ <- release.get
-            _ <- IO.blocking(connection.commit())
-          yield accepted).guarantee(IO.blocking(connection.rollback()))
-        }.start
-      )(fiber => release.complete(()).void *> fiber.cancel).use { holder =>
-        ready.get.flatMap { (pid, accepted) =>
-          Resource.make(second.start)(_.cancel).use { waiter =>
-            for
-              _ <- awaitBackendBlockedBy(pid).guarantee(release.complete(()).void)
-              _ <- holder.joinWithNever
-              retried <- waiter.joinWithNever
-            yield accepted -> retried
-          }
-        }
-      }
-    yield result

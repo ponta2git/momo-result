@@ -89,7 +89,7 @@
     "rowCount": 128,
     "matchCount": 32,
     "scopeCount": 9,
-    "resourceCount": 298,
+    "resourceCount": 262,
     "assetStyle": {
       "blowoutWinThreshold": 0,
       "nearMissSecondThreshold": -250,
@@ -102,6 +102,6 @@
       "otakaPrimaryKind": "asset_explosion",
       "otakaSecondaryKind": null
     },
-    "overallAggregateChecksum": "sha256:9bb6f0e14ff6bfa28c7d9f4a856db546c02b4bd3706f1be4cb0451239c942a5b"
+    "overallAggregateChecksum": "sha256:06fa161501d6784ef5d7f35b623c64b0fb78037c18725228017269687af0eea6"
   }
 }

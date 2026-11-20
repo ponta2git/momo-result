@@ -378,7 +378,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       yield assertEquals(notification, "CANCELLED")
     }
 
-  test("old record URLs, cursor ties and export numbering retain exact legacy order"):
+  test("old record URLs, evidence notes, cursor ties and export numbering retain legacy identity"):
     val firstEvent = "legacy-a"
     val secondEvent = "legacy-x"
     val firstMatch = "legacy-a"
@@ -412,6 +412,16 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       ).void
     for
       _ <- seedMasters *> seedRecord(firstEvent, firstMatch) *> seedRecord(secondEvent, secondMatch)
+      _ <- new PostgresMatchNotesRepository[IO](transactor, identities).replace(
+        MatchId.unsafeFromString(firstMatch),
+        MatchNoteVersion.Initial,
+        MatchNoteBody.fromString("先頭の試合のメモ").toOption.flatten,
+        account,
+        now,
+      )
+      evidenceNotes <- PostgresSeriesAnalysisEvidenceNotes.read(List(firstMatch, secondMatch))
+        .transact(transactor)
+      _ = assertEquals(evidenceNotes, Right(Map(firstMatch -> "先頭の試合のメモ")))
       _ <- httpAppResource("canonical-old-records").use { app =>
         val firstUuid = canonical(Entity.Matches, firstMatch).toString
         val secondUuid = canonical(Entity.Matches, secondMatch).toString
@@ -1042,7 +1052,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
     val artifactUuid = canonical(Entity.AnalysisArtifacts, artifactId)
     val titleId = canonical(Entity.GameTitles, title)
     val payload = Files.readAllBytes(
-      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v6.json")
+      repositoryFile("docs/schemas/fixtures/series-analysis/aggregate-payload-v7.json")
     )
     val size = payload.length
     def checksum(value: Array[Byte]): String = "sha256:" +
@@ -1067,7 +1077,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         validation_contract_id, source_input_checksum, root_checksum, status,
         aggregate_chunk_count, review_chunk_count, drilldown_chunk_count, match_context_chunk_count,
         outlook_summary_chunk_count, outlook_reference_chunk_count, encoded_bytes, decoded_bytes, scope_keys)
-        VALUES ($artifactId, $title, 0, 'series-analysis-v14', 10, NULL,
+        VALUES ($artifactId, $title, 0, 'series-analysis-v15', 11, NULL,
           ${"sha256:" + "c" * 64}, ${"sha256:" + "d" * 64}, 'staging',
           1, 0, 0, 0, 1, 4, ${size + 10}, ${size + 10}, ARRAY['overall'])""".update.run *>
         sql"""INSERT INTO series_analysis_scope_aggregate_artifacts
@@ -1079,7 +1089,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         sql"""INSERT INTO series_analysis_outlook_reference_artifacts
           (artifact_id, scope_key, scope_kind, member_id, payload, encoded_bytes, decoded_bytes, item_count, nesting_depth, checksum)
           SELECT $artifactId, 'overall', 'overall', legacy_id, $inventoryPayload, 2, 2, 1, 1, $inventoryHash FROM members""".update.run *>
-        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v10-full-validation-v1'
+        sql"""UPDATE series_analysis_artifacts SET validation_contract_id = 'series-analysis-artifact-v11-full-validation-v2'
           WHERE id = $artifactId AND status = 'staging'""".update.run *>
         sql"""UPDATE series_analysis_artifacts SET status = 'published', published_at = now()
           WHERE id = $artifactId AND status = 'staging'""".update.run *>

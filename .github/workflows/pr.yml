@@ -97,6 +97,8 @@ jobs:
     needs: classify
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.web == 'true'
     uses: ./.github/workflows/web.yml
+    with:
+      package_edge: ${{ needs.classify.outputs.system_e2e == 'true' }}
 
   analysis:
     name: Analysis worker
@@ -117,10 +119,13 @@ jobs:
 
   system-e2e:
     name: System E2E
-    needs: [classify, runtime, analysis]
+    needs: [classify, runtime, analysis, web]
     if: github.event.pull_request.base.ref != 'master' && needs.classify.outputs.system_e2e == 'true'
     uses: ./.github/workflows/system-e2e.yml
     with:
+      edge_artifact_id: ${{ needs.web.outputs.edge_artifact_id }}
+      edge_artifact_digest: ${{ needs.web.outputs.edge_artifact_digest }}
+      edge_run_attempt: ${{ needs.web.outputs.edge_run_attempt }}
       runtime_artifact_id: ${{ needs.runtime.outputs.artifact_id }}
       runtime_artifact_digest: ${{ needs.runtime.outputs.artifact_digest }}
       runtime_artifact_name: ${{ needs.runtime.outputs.artifact_name }}

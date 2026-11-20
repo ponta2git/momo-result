@@ -65,7 +65,7 @@ run_builder() {
   HTTP4S_REPOSITORY="${source_repo}" \
     HTTP4S_REF_FILE="${test_root}/ref" \
     HTTP4S_PATCH_OUTPUT_DIR="${test_root}/${case_name}/output" \
-    HTTP4S_SCALA_VERSION=3.3.6 HTTP4S_RUN_TESTS="${run_tests}" \
+    HTTP4S_SCALA_VERSION=3.3.8 HTTP4S_RUN_TESTS="${run_tests}" \
     SBT_COMMAND="${test_root}/sbt" \
     HTTP4S_TEST_SHA="${patch_sha}" \
     HTTP4S_TEST_DESCRIPTION="${description}" \
@@ -79,16 +79,16 @@ output_dir="${test_root}/with-tests/output"
 [[ "$(< "${output_dir}/source-sha.txt")" == "${patch_sha}" ]]
 [[ "$(< "${output_dir}/version.txt")" == "${description#v}" ]]
 [[ "$(< "${output_dir}/repository.txt")" == "${source_repo}" ]]
-[[ "$(< "${output_dir}/scala-version.txt")" == 3.3.6 ]]
+[[ "$(< "${output_dir}/scala-version.txt")" == 3.3.8 ]]
 [[ "$(< "${output_dir}/modules.txt")" == 'core server ember-core ember-server' ]]
 [[ "$(wc -l < "${test_root}/with-tests/invocations" | tr -d '[:space:]')" == 2 ]]
-printf '%s\n' ++3.3.6 ember-core/test \
+printf '%s\n' ++3.3.8 ember-core/test ember-server/test \
   core/publishLocal server/publishLocal ember-core/publishLocal ember-server/publishLocal \
   > "${test_root}/expected-tasks"
 diff -u "${test_root}/expected-tasks" "${test_root}/with-tests/tasks"
 
 run_builder without-tests 0
-sed '/^ember-core\/test$/d' "${test_root}/expected-tasks" > "${test_root}/without-test-tasks"
+sed -e '/^ember-core\/test$/d' -e '/^ember-server\/test$/d' "${test_root}/expected-tasks" > "${test_root}/without-test-tasks"
 diff -u "${test_root}/without-test-tasks" "${test_root}/without-tests/tasks"
 
 if HTTP4S_TEST_FAIL=1 run_builder failed-test 1 >/dev/null 2>&1; then

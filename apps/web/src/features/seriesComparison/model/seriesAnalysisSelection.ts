@@ -15,6 +15,7 @@ export type SeriesAnalysisViewId =
   | "outlook";
 
 export type SeriesAnalysisSelection = {
+  expectedRankGapMemberId?: string | undefined;
   ownerMetric?: OwnerMetricId | undefined;
   focusMatchId?: string | undefined;
   focusMemberId?: string | undefined;
@@ -31,6 +32,7 @@ export type SeriesAnalysisSelectionChange =
   | { kind: "map"; mapMasterId: string }
   | { kind: "view"; view: SeriesAnalysisViewId }
   | { kind: "ownerMetric"; ownerMetric: OwnerMetricId }
+  | { kind: "expectedRankGapMember"; memberId: string | undefined }
   | { kind: "focus"; matchId: string | undefined }
   | { kind: "clearScope" }
   | { kind: "member"; role: "focus" | "rival"; memberId: string };
@@ -46,6 +48,7 @@ export function changeSeriesAnalysisSelection(
         gameTitleId: change.gameTitleId,
         view: current.view ?? defaultSeriesAnalysisView,
         ownerMetric: current.ownerMetric,
+        expectedRankGapMemberId: current.expectedRankGapMemberId,
       };
     case "season":
       return {
@@ -59,6 +62,8 @@ export function changeSeriesAnalysisSelection(
       return { ...current, view: change.view };
     case "ownerMetric":
       return { ...current, ownerMetric: change.ownerMetric };
+    case "expectedRankGapMember":
+      return { ...current, expectedRankGapMemberId: change.memberId };
     case "focus":
       return { ...current, focusMatchId: change.matchId };
     case "clearScope":
@@ -130,6 +135,10 @@ export function normalizeSeriesAnalysisSelection(
     titles[0];
   const view = normalizeSeriesAnalysisView(selection.view);
   const ownerMetric = selection.ownerMetric ?? defaultOwnerMetric;
+  const expectedRankGapMemberId =
+    selection.expectedRankGapMemberId && isFixedMemberId(selection.expectedRankGapMemberId)
+      ? selection.expectedRankGapMemberId
+      : undefined;
   if (!selectedTitle) return { view, ownerMetric };
 
   const seasonMasterId = selectedTitle.seasons.some(
@@ -152,6 +161,7 @@ export function normalizeSeriesAnalysisSelection(
       ? normalizeOutlookPair(selection.focusMemberId, selection.rivalMemberId)
       : {}),
     ownerMetric,
+    ...(expectedRankGapMemberId ? { expectedRankGapMemberId } : {}),
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),
     ...(seasonMasterId ? { seasonMasterId } : {}),

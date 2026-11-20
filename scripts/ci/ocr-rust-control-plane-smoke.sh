@@ -24,13 +24,13 @@ tests=(
 )
 ignored_test_catalog="$(cargo test --manifest-path "${repo_root}/apps/processing-worker/Cargo.toml" --locked --lib -- --ignored --list)"
 
-# Job lease and lifecycle fixtures run sequentially in this isolated database.
 for test_name in "${tests[@]}"; do
   if ! grep -Fqx "${test_name}: test" <<<"${ignored_test_catalog}"; then
     echo "Required ignored Rust test was not found: ${test_name}" >&2
     exit 1
   fi
-  cargo test \
-    --manifest-path "${repo_root}/apps/processing-worker/Cargo.toml" \
-    --locked --lib "${test_name}" -- --ignored --exact
 done
+
+# Run the selected contracts once, serially against their shared job table.
+cargo test --manifest-path "${repo_root}/apps/processing-worker/Cargo.toml" \
+  --locked --lib -- --ignored --exact --test-threads=1 "${tests[@]}"

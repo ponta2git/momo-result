@@ -21,7 +21,7 @@ export default defineConfig({
   },
   projects: [{ name: "ui-chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "pnpm build && pnpm preview --host 127.0.0.1 --port 5174 --strictPort",
+    command: "pnpm preview --host 127.0.0.1 --port 5174 --strictPort",
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

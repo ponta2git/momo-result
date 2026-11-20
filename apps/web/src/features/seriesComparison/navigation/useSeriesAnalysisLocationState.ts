@@ -113,7 +113,7 @@ export function useSeriesAnalysisLocationState({
   const commitSelectionChange = useCallback(
     (
       change: SeriesAnalysisSelectionChange,
-      updateOptions: { replace?: boolean; displayOnly?: boolean } = {},
+      updateOptions: { replace?: boolean; displayHash?: string } = {},
     ) => {
       const previous = pendingNavigation.current;
       const inFlight =
@@ -122,13 +122,13 @@ export function useSeriesAnalysisLocationState({
           : undefined;
       const normalized = changeSelection(inFlight?.selection ?? normalizedSelection, change);
       const params = buildSeriesAnalysisSearchParams(normalized);
-      const hash = updateOptions.displayOnly ? "#metric-owner" : (inFlight?.hash ?? location.hash);
+      const hash = updateOptions.displayHash ?? inFlight?.hash ?? location.hash;
       const target = `${location.pathname}?${params.toString()}${hash}`;
       pendingNavigation.current = { sourceKey: location.key, target, selection: normalized, hash };
       setNormalization({ source: location.key, message: undefined });
       operation.current += 1;
       setDisplayIntent(
-        updateOptions.displayOnly
+        updateOptions.displayHash
           ? {
               operation: operation.current,
               sourceVisit: `${location.key}:${location.hash}`,
@@ -184,7 +184,15 @@ export function useSeriesAnalysisLocationState({
   );
   const updateOwnerMetric = useCallback(
     (ownerMetric: OwnerMetricId) =>
-      commitSelectionChange({ kind: "ownerMetric", ownerMetric }, { displayOnly: true }),
+      commitSelectionChange({ kind: "ownerMetric", ownerMetric }, { displayHash: "#metric-owner" }),
+    [commitSelectionChange],
+  );
+  const updateExpectedRankGapMember = useCallback(
+    (memberId: string | undefined) =>
+      commitSelectionChange(
+        { kind: "expectedRankGapMember", memberId },
+        { displayHash: "#metric-expected-rank-gap-items" },
+      ),
     [commitSelectionChange],
   );
   const focusMatch = useCallback(
@@ -215,6 +223,7 @@ export function useSeriesAnalysisLocationState({
       updateSeasonMasterId,
       updateView,
       updateOwnerMetric,
+      updateExpectedRankGapMember,
       updateOutlookMember,
     },
     activeView: selection.view ?? defaultSeriesAnalysisView,

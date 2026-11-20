@@ -13,7 +13,7 @@ import { contentText } from "@/shared/ui/typography";
 export function MetricDefinitions() {
   return (
     <Dialog
-      description="分析に共通する指標の比べ方を示します。"
+      description="どの指標も、選択した範囲で本人が参加した試合を分母にしています。"
       title="指標の読み方"
       trigger={
         <Button icon={<BookOpenText />} size="sm" variant="quiet">
@@ -88,10 +88,13 @@ export function AnalysisSubsection({
 
 export function AnalysisReadingGuide({
   ariaLabel,
+  children,
   items,
   summary = "読み方と使いどころ",
 }: {
   ariaLabel: string;
+  /** Reference material that belongs to the same reading, such as a basis table. */
+  children?: ReactNode;
   items: readonly AnalysisFact[];
   summary?: string | undefined;
 }) {
@@ -107,60 +110,72 @@ export function AnalysisReadingGuide({
         </span>
       }
     >
-      <div className={readableTextWidthClass}>
-        <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
+      <div className="grid gap-4">
+        <div className={readableTextWidthClass}>
+          <FactList ariaLabel={ariaLabel} items={items} layout="plain" />
+        </div>
+        {children}
       </div>
     </Disclosure>
   );
 }
 
+/**
+ * What each shared metric needs beyond its name: a baseline, what the value hides, how two
+ * columns relate, or where the rule-given part is read instead. Definitions that the name or
+ * unit already states are not repeated.
+ */
 const metricReadings = [
   {
     id: "rank.average",
     label: "平均順位",
-    value: "1位に近いほど上位です。順位分布と合わせ、平均に隠れた波を確認します。",
+    value:
+      "同順位がなければ4人を合わせた平均は2.5位で、2.5位より小さい人が4人の中で平均より上です。先頭と次点が近いときは「平均順位首位の確からしさ」で、開催の偏りで並んだだけかを確かめます。",
   },
   {
     id: "rank.distribution",
     label: "順位分布",
-    value: "1〜4位の内訳から、平均順位だけでは見えない安定と波を確認します。",
+    value:
+      "同じ平均順位でも、1位と4位が多い人と2・3位が多い人がいます。1位の多さと4位の少なさのどちらで平均を作っているかを見ます。",
+  },
+  {
+    id: "rank.standardDeviation",
+    label: "順位のぶれ",
+    value:
+      "毎試合の順位の散らばり（標準偏差）です。毎回同じ順位なら0、1〜4位を同じ回数ずつ取ると約1.1、1位と4位だけなら1.5です。",
+  },
+  {
+    id: "podium.rate",
+    label: "入賞率・下位率",
+    value: "入賞は1〜2位、下位は3〜4位で、2つを合わせると100%です。",
   },
   {
     id: "assets.average",
     label: "平均総資産",
-    value: "4人の金額差と分布を比べ、資産をどの水準で残したかを確認します。",
+    value:
+      "最終順位を直接決める値です。大勝した試合があると平均が大きく上がるため、中央値や分布と比べて、一部の試合に引っ張られていないかを見ます。",
   },
   {
     id: "revenue.average",
     label: "平均物件収益",
-    value: "物件収益順位と最終順位を一緒に見て、収益額の大きさだけで勝因を決めません。",
-  },
-  {
-    id: "podium.rate",
-    label: "入賞率",
-    value: "1〜2位で終えた割合です。対象戦数と下位率を一緒に比べます。",
-  },
-  {
-    id: "ginji.encounterRate",
-    label: "銀次遭遇率",
     value:
-      "対象試合のうち、1回以上銀次に遭遇した試合の割合です。1試合平均の遭遇回数とは異なります。",
+      "物件収益と目的地の到着が多いほど総資産が増え、上位になりやすいのはルール上当然です。この2つから見込まれる順位との差は「見込みとの差」で読みます。",
   },
   {
     id: "destination.average",
     label: "目的地到着回数（1試合平均）",
-    value:
-      "目的地への到着回数を対象戦数で割った回数（回/試合）です。オーナー比較では列の対象戦数を使います。",
-  },
-  {
-    id: "ginji.average",
-    label: "銀次遭遇回数（1試合平均）",
-    value:
-      "銀次の合計遭遇回数を対象戦数で割った回数（回/試合）です。同じ試合での複数回遭遇も含みます。",
+    value: "オーナー比較では列ごとに対象戦数が違い、その列の戦数で割ります。",
   },
   {
     id: "destination.conversionDelta",
     label: "目的地順位と最終順位の差",
-    value: "目的地順位と最終順位のずれを比べ、到着回数が順位へつながったかを確認します。",
+    value:
+      "平均目的地順位から平均最終順位を引いた値です。＋なら、到着回数の順位より上位で終えています。",
+  },
+  {
+    id: "ginji",
+    label: "銀次遭遇率・遭遇回数（1試合平均）",
+    value:
+      "遭遇率は1回以上遭った試合の割合で、同じ試合で何回遭っても1試合と数えます。遭遇回数を遭遇率で割ると、遭った試合での平均回数になります。",
   },
 ];

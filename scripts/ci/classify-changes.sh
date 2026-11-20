@@ -31,6 +31,13 @@ while IFS= read -r -d '' path; do
   [[ "${path}" == scripts/tools/* ]] && go_tools=true
 
   case "${path}" in
+    apps/edge/*.test.*)
+      web=true
+      ;;
+    apps/edge/*)
+      system_e2e=true
+      web=true
+      ;;
     apps/api/openapi.yaml)
       system_e2e=true
       api=true
@@ -54,7 +61,7 @@ while IFS= read -r -d '' path; do
     apps/web/scripts/e2e/*.test.*)
       web=true
       ;;
-    apps/web/scripts/e2e/runtime.mts | apps/web/scripts/e2e/ocr-fixtures.mts | apps/web/scripts/process.mts)
+    apps/web/scripts/e2e/*.mts | apps/web/scripts/process.mts)
       system_e2e=true
       web=true
       runtime=true
@@ -86,11 +93,8 @@ while IFS= read -r -d '' path; do
       runtime=true
       go_runtime=true
       ;;
-    contracts/runtime-tool-characterization-v1.json)
-      go_runtime=true
-      ;;
     apps/runtime/*_test.go)
-      runtime=true
+      # Go module tests run in workflow-lint. The runtime binary excludes _test.go.
       ;;
     apps/runtime/*)
       system_e2e=true
@@ -130,14 +134,9 @@ while IFS= read -r -d '' path; do
       go_tools=true
       select_all
       ;;
-    scripts/e2e/runtime-smoke*.test.*)
+    scripts/e2e/*.test.mts)
+      # Node runner contracts execute in scripts:check, independent of the images.
       web=true
-      runtime=true
-      ;;
-    scripts/e2e/*.test.*)
-      web=true
-      analysis=true
-      analysis_image=true
       ;;
     scripts/e2e/runtime-smoke*)
       system_e2e=true
@@ -149,6 +148,10 @@ while IFS= read -r -d '' path; do
       web=true
       analysis=true
       analysis_image=true
+      ;;
+    scripts/ci/analysis-rust-control-plane-smoke.sh | scripts/ci/ocr-rust-control-plane-smoke.sh)
+      # These are the host-side PostgreSQL suites in the Worker quality job.
+      analysis=true
       ;;
     scripts/ci/analysis-* | scripts/ci/ocr-rust-* | scripts/ci/processing-worker-* | \
       scripts/ci/series-analysis-*)
@@ -186,12 +189,10 @@ while IFS= read -r -d '' path; do
     .github/workflows/api.yml)
       api=true
       ;;
-    .summit-ref | .github/workflows/system-e2e.yml)
+    .summit-ref | .github/workflows/system-e2e.yml | .github/workflows/web.yml)
+      # Verify the Web producer's outputs through their assembled-system consumer.
       web=true
       system_e2e=true
-      ;;
-    .github/workflows/web.yml)
-      web=true
       ;;
     .github/workflows/processing-worker.yml)
       # Also produces the controlled E2E worker.
@@ -205,8 +206,6 @@ while IFS= read -r -d '' path; do
       # Also produces the System E2E session fixture.
       runtime=true
       system_e2e=true
-      ;;
-    .github/workflows/runtime-rollback.yml)
       ;;
     .github/workflows/runtime-release.yml)
       ;;
@@ -246,6 +245,7 @@ while IFS= read -r -d '' path; do
 done
 
 if [[ "${system_e2e}" == true ]]; then
+  web=true
   runtime=true
   analysis=true
   analysis_image=true

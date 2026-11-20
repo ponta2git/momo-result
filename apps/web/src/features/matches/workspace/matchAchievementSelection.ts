@@ -1,14 +1,16 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 
 import { fixedMemberIds } from "@/shared/domain/members";
 
+const version = z.string().check(z.regex(/^\d+$/u));
+
 /** Versions are captured when selected; refresh never silently accepts a concurrent correction. */
 export const matchAchievementSelectionSchema = z.object({
-  achievementId: z.string().min(1),
+  achievementId: z.string().check(z.minLength(1)),
   achievementName: z.string(),
   memberId: z.enum(fixedMemberIds),
-  expectedItemVersion: z.string().regex(/^\d+$/u),
-  expectedClaimVersion: z.string().regex(/^\d+$/u).nullable(),
+  expectedItemVersion: version,
+  expectedClaimVersion: z.nullable(version),
 });
 
 export type MatchAchievementSelection = z.infer<typeof matchAchievementSelectionSchema>;

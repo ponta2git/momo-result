@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 7,
+  "scope": {
+    "kind": "overall",
+    "matchCount": 0
+  },
+  "players": [],
+  "summary": {
+    "leaderMemberIds": [],
+    "averageRankSpread": null,
+    "rankSpreadSignal": "insufficient",
+    "totalGinjiCount": 0,
+    "quality": {
+      "okCount": 0,
+      "referenceCount": 0,
+      "noTargetCount": 0
+    }
+  },
+  "metricsByPlayer": [],
+  "rankDistribution": [],
+  "recentRanks": [],
+  "strategyScatter": {
+    "points": []
+  },
+  "playOrderComparison": [],
+  "revenueRankConversion": [],
+  "trends": [],
+  "histograms": {
+    "assets": {
+      "bins": [],
+      "series": []
+    },
+    "revenue": {
+      "bins": [],
+      "series": []
+    }
+  },
+  "headToHead": {
+    "entries": []
+  },
+  "momentumSwitch": [],
+  "performanceProfiles": {
+    "rankStandardDeviationMedian": null,
+    "averageRankScoreMedian": null,
+    "averageRevenueAssetRateMedian": null,
+    "entries": []
+  },
+  "assetStyleProfiles": {
+    "lowAssetThreshold": null,
+    "highAssetThreshold": null,
+    "blowoutWinThreshold": null,
+    "nearMissSecondThreshold": null,
+    "heavyLossThreshold": null,
+    "entries": []
+  },
+  "cardShopDestination": [],
+  "matchDigest": {
+    "totalCount": 0,
+    "shownCount": 0,
+    "hiddenCount": 0,
+    "flagCounts": {},
+    "recent": []
+  },
+  "matchNoInEvent": {
+    "entries": []
+  },
+  "rankAnalysis": {
+    "modelVersion": "rank-bt-v1",
+    "status": "no_target",
+    "reasonCodes": [
+      "insufficient_matches",
+      "insufficient_events"
+    ],
+    "heldEventCount": 0,
+    "matchCount": 0,
+    "improvedFoldCount": 0,
+    "requiredImprovedFoldCount": 4,
+    "foldScores": [],
+    "crownCertainty": {
+      "status": "no_target",
+      "bootstrapIterations": 0,
+      "successfulIterations": 0,
+      "leaderChangeCount": 0,
+      "shares": []
+    }
+  },
+  "expectedRankGap": {
+    "status": "no_target",
+    "reasonCodes": [
+      "insufficient_matches"
+    ],
+    "matchCount": 0,
+    "permutationCount": 2000,
+    "hasMergedLayers": false,
+    "layers": [],
+    "players": [],
+    "items": []
+  },
+  "highlights": [],
+  "dataQuality": {
+    "items": [],
+    "summary": {
+      "okCount": 0,
+      "referenceCount": 0,
+      "noTargetCount": 0
+    }
+  },
+  "source": {
+    "gameTitleId": "title-fixture"
+  },
+  "ownerComparison": {
+    "owners": [],
+    "rows": [],
+    "recordedOwnerCount": 0
+  },
+  "playerRadar": {
+    "basis": null,
+    "monitoring": null,
+    "evaluation": {
+      "definitionVersion": "player-radar-six-axes-v1",
+      "methodVersion": "player-radar-spread-v1",
+      "basisChecksum": null,
+      "sample": {
+        "matchCount": 0,
+        "heldEventCount": 0,
+        "quality": "no_target",
+        "firstMatch": null,
+        "lastMatch": null,
+        "mapCounts": []
+      },
+      "players": []
+    }
+  }
+}

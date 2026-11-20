@@ -33,7 +33,10 @@ export function createInterruptionSignal(label = "Process") {
 
 export async function stopProcessGroup(
   child: OwnedProcess | undefined,
-  { signal: initialSignal = "SIGTERM" }: { signal?: NodeJS.Signals } = {},
+  {
+    signal: initialSignal = "SIGTERM",
+    graceMs = PROCESS_STOP_TIMEOUT_MS,
+  }: { signal?: NodeJS.Signals; graceMs?: number } = {},
 ) {
   if (!child?.pid) return;
   const target = process.platform === "win32" ? child.pid : -child.pid;
@@ -70,7 +73,7 @@ export async function stopProcessGroup(
   // Arbitrary SIGKILL of that launcher is not covered by this process-group contract.
   if (!(await alive())) return;
   await signal(initialSignal);
-  if (await waitForStop(PROCESS_STOP_TIMEOUT_MS)) return;
+  if (await waitForStop(graceMs)) return;
   await signal("SIGKILL");
   if (!(await waitForStop(2_000))) throw new Error("An owned process group did not stop.");
 }

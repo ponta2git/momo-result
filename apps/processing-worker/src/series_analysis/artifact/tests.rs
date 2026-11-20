@@ -106,7 +106,7 @@ fn builds_and_stream_validates_a_complete_artifact() {
     assert_eq!(manifest.algorithm_version, "series-analysis-v1");
     assert_eq!(
         manifest.root_checksum,
-        "sha256:0b1b821623c8dcadebc61064f5b56c1306c600f29ba6520e36f1f2210fcb3077"
+        "sha256:3610eb35af8566bfe73656af2a10924cf102ea0c27bbae8000e4adeaaffd5d20"
     );
     let resource_counts = manifest.resources.iter().fold(
         (0_usize, 0_usize, 0_usize, 0_usize),
@@ -124,7 +124,8 @@ fn builds_and_stream_validates_a_complete_artifact() {
             }
         },
     );
-    assert_eq!(resource_counts, (4, 4, 64, 4));
+    // Four scopes × four players × three drilldown metrics.
+    assert_eq!(resource_counts, (4, 4, 48, 4));
     assert_eq!(
         manifest
             .resources

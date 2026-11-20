@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -11,6 +11,7 @@ import { promisify } from "node:util";
 import { GenericContainer, Wait } from "testcontainers";
 import type { StartedTestContainer } from "testcontainers";
 
+import { startEdge } from "../../apps/edge/scripts/local.mts";
 import {
   dockerFailure,
   workerTiming,
@@ -21,6 +22,7 @@ import {
   applyMigrations,
   childEnvironment,
   configureDockerHost,
+  findFreePort,
   startPostgres,
   stopProcessGroup,
 } from "../../apps/web/scripts/e2e/runtime.mts";
@@ -75,6 +77,10 @@ export async function withSystemEnvironment(
   const receiverNode = await summitNode();
   configureDockerHost();
   const runtimeImageId = await imageIdentity("MOMO_E2E_RUNTIME_IMAGE");
+  const edgeDirectory = process.env["MOMO_E2E_EDGE_DIR"];
+  if (!edgeDirectory || !isAbsolute(edgeDirectory))
+    throw new Error("MOMO_E2E_EDGE_DIR must be the absolute path of the prebuilt edge artifact.");
+  await readFile(join(edgeDirectory, "wrangler.json"));
   const workerImageId = await imageIdentity(
     controlled ? "MOMO_E2E_CONTROLLED_WORKER_IMAGE" : "MOMO_E2E_WORKER_IMAGE",
   );
@@ -185,8 +191,11 @@ export async function withSystemEnvironment(
     ]);
     checkpoint();
     // API object storage accepts loopback HTTP only. Sharing MinIO's network
-    // namespace preserves that contract while exposing the candidate proxy on 8080.
-    const webOrigin = `http://127.0.0.1:${storage.minio.getMappedPort(8080)}`;
+    // namespace preserves that contract; workerd fronts the exposed API port.
+    const apiOrigin = `http://127.0.0.1:${storage.minio.getMappedPort(8080)}`;
+    const edgePort = await findFreePort();
+    const webOrigin = `http://127.0.0.1:${edgePort}`;
+    const originLockToken = randomBytes(32).toString("hex");
     const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
     phase = "migrate disposable database";
     await applyMigrations(postgres, databaseName, signal);
@@ -281,6 +290,9 @@ export async function withSystemEnvironment(
       DATABASE_URL: containerURL(databaseUrl),
       DEV_MEMBER_IDS: devMembers,
       ...storage.r2,
+      MOMO_CANONICAL_HOST: "localhost",
+      MOMO_EXTRA_ALLOWED_HOSTS: "127.0.0.1",
+      MOMO_ORIGIN_LOCK_TOKEN: originLockToken,
       SOURCE_IMAGE_R2_ENDPOINT: "http://127.0.0.1:9000",
       MUTATION_RATE_LIMIT_PER_MINUTE: "240",
       MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE: "720",
@@ -299,6 +311,21 @@ export async function withSystemEnvironment(
       runtimeEnv,
       runtimeImageId,
     ]);
+    phase = "start candidate edge";
+    const edge = await startEdge({
+      artifactDirectory: edgeDirectory,
+      apiOrigin,
+      originLockToken,
+      runDirectory: runDir,
+      port: edgePort,
+      signal,
+      onProcess: (child) => {
+        if (child.pid) ownership.processIds.push(child.pid);
+        remember();
+      },
+    });
+    resources.push({ label: "edge Worker", close: edge.close });
+    phase = "check candidate API through edge";
     await until(
       async () => {
         const response = await fetch(`${webOrigin}/healthz/details`, {

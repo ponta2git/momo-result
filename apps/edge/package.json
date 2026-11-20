@@ -1,0 +1,20 @@
+{
+  "name": "edge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mts",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "format:check": "../web/node_modules/.bin/oxfmt --check .",
+    "format": "../web/node_modules/.bin/oxfmt --write .",
+    "lint": "../web/node_modules/.bin/oxlint .",
+    "typecheck": "tsc --pretty false && tsc --pretty false -p tsconfig.scripts.json",
+    "test": "node --test scripts/*.test.mts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "miniflare": "5.20261113.0-beta",
+    "typescript": "^6.0.3",
+    "wrangler": "4.162.0"
+  }
+}

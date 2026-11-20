@@ -106,6 +106,10 @@ export async function invalidateAfterMatchNoteReplaced(
     }),
     queryClient.invalidateQueries({ queryKey: matchKeys.collections() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.detailRoot() }),
+    // Evidence notes are live display metadata even while the calculation artifact is unchanged.
+    queryClient.invalidateQueries({
+      queryKey: seriesAnalysisKeys.drilldown({ metricId: "expectedRankGap.evidence" }),
+    }),
   ]);
 }
 

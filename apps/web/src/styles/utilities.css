@@ -1,0 +1,24 @@
+@custom-variant short-viewport (@media (max-height: 24rem));
+
+@utility momo-heading {
+  font-family: var(--font-momo-heading);
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+@utility momo-label {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-plain);
+  line-height: 1.5;
+}
+
+@utility momo-break-token {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@utility momo-data {
+  font-family: var(--font-momo-data);
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+}

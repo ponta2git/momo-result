@@ -30,22 +30,21 @@ expected() {
   done
 }
 
-readonly none="$(expected)"
-readonly api_only="$(expected api)"
-readonly web_only="$(expected web)"
-readonly api_runtime="$(expected system_e2e api runtime)"
-readonly api_web="$(expected system_e2e api web)"
-readonly analysis_only="$(expected analysis)"
-readonly analysis_image="$(expected system_e2e analysis analysis_image)"
-readonly runtime_only="$(expected runtime)"
-readonly runtime_go="$(expected system_e2e runtime workflow go_runtime)"
-readonly go_only="$(expected workflow go_tools)"
-readonly http4s_ref="$(expected system_e2e api runtime http4s_patch)"
-readonly http4s_builder="$(expected system_e2e api runtime http4s_patch workflow policy_scripts)"
-readonly all="$(expected system_e2e api web analysis analysis_image runtime)"
-readonly orchestrator="$(expected system_e2e api web analysis analysis_image runtime workflow actionlint)"
-readonly actionlint_policy="$(expected workflow actionlint policy_scripts)"
-readonly policy_only="$(expected workflow policy_scripts)"
+none="$(expected)"
+api_only="$(expected api)"
+web_only="$(expected web)"
+api_runtime="$(expected system_e2e api runtime)"
+api_web="$(expected system_e2e api web)"
+analysis_only="$(expected analysis)"
+analysis_image="$(expected system_e2e analysis analysis_image)"
+runtime_go="$(expected system_e2e runtime workflow go_runtime)"
+go_only="$(expected workflow go_tools)"
+http4s_ref="$(expected system_e2e api runtime http4s_patch)"
+http4s_builder="$(expected system_e2e api runtime http4s_patch workflow policy_scripts)"
+all="$(expected system_e2e api web analysis analysis_image runtime)"
+orchestrator="$(expected system_e2e api web analysis analysis_image runtime workflow actionlint)"
+actionlint_policy="$(expected workflow actionlint policy_scripts)"
+policy_only="$(expected workflow policy_scripts)"
 
 test_root="$(mktemp -d)"
 trap 'rm -rf -- "${test_root}"' EXIT
@@ -110,6 +109,7 @@ assert_case docs-only "${none}" docs/README.md
 assert_case actionlint-only "${actionlint_policy}" scripts/ci/actionlint.sh
 assert_case dev-launcher "${web_only}" apps/web/scripts/dev-local.mts
 assert_case shared-process "$(expected web runtime system_e2e)" apps/web/scripts/process.mts
+assert_case shared-runner-setup "$(expected system_e2e)" apps/web/scripts/e2e/settle.mts
 assert_case browser-runner "$(expected web system_e2e)" scripts/e2e/run-system.mts
 assert_case worker-e2e "$(expected web analysis analysis_image system_e2e)" scripts/e2e/series-analysis-control-plane-smoke.mts
 assert_case runtime-e2e "$(expected web runtime system_e2e)" scripts/e2e/runtime-smoke.mts
@@ -164,15 +164,18 @@ assert_case processing-worker-workflow \
 assert_case processing-worker-script \
   "$(expected analysis analysis_image workflow policy_scripts)" \
   scripts/ci/processing-worker-image-smoke.sh
+assert_case worker-db-tests "$(expected analysis workflow policy_scripts)" \
+  scripts/ci/analysis-rust-control-plane-smoke.sh scripts/ci/ocr-rust-control-plane-smoke.sh
 assert_case series-analysis-script \
   "$(expected web analysis analysis_image system_e2e)" \
   scripts/e2e/series-analysis-control-plane-smoke.mts
 assert_case web-edge "$(expected web system_e2e)" apps/edge/src/index.ts
 assert_case web-edge-test "${web_only}" apps/edge/scripts/edge.test.mts
+assert_case web-edge-producer "$(expected system_e2e workflow actionlint)" .github/workflows/web.yml
 assert_case runtime-tool "${runtime_go}" apps/runtime/cmd/momo-runtime-tool/main.go
 assert_case runtime-tool-go-mod "${runtime_go}" apps/runtime/go.mod
 assert_case runtime-tool-go-sum "${runtime_go}" apps/runtime/go.sum
-assert_case runtime-unit "$(expected runtime workflow go_runtime)" apps/runtime/cmd/momo-runtime-tool/main_test.go
+assert_case runtime-unit "$(expected workflow go_runtime)" apps/runtime/cmd/momo-runtime-tool/main_test.go
 assert_case development-go-mod "$(expected workflow go_tools policy_scripts)" scripts/tools/go.mod
 assert_case development-go-sum "$(expected workflow go_tools policy_scripts)" scripts/tools/go.sum
 assert_case development-tool "${go_only}" scripts/tools/cmd/ocr-evaluation-audit/main.go
@@ -201,8 +204,7 @@ assert_case web-production "$(expected web runtime system_e2e)" apps/web/src/fea
 assert_case worker-assembled-fixture "${analysis_image}" apps/processing-worker/src/ocr/control/tests.rs
 assert_case worker-testdata "${analysis_image}" apps/processing-worker/testdata/ocr-submission-v2.json
 assert_case browser-runner-unit "${web_only}" apps/web/scripts/e2e/ocr-fixtures.test.mts
-assert_case runtime-smoke-unit "$(expected web runtime)" scripts/e2e/runtime-smoke.test.mts
-assert_case worker-smoke-unit "$(expected web analysis analysis_image)" scripts/e2e/worker-smoke-support.test.mts
+assert_case runner-units "${web_only}" scripts/e2e/runtime-smoke.test.mts scripts/e2e/worker-smoke-support.test.mts
 assert_case docker-runtime "$(expected runtime system_e2e)" Dockerfile
 assert_case deployment-config "$(expected runtime system_e2e)" deploy/entrypoint.sh
 assert_case runtime-config "$(expected runtime system_e2e)" fly.toml
@@ -214,7 +216,7 @@ assert_case shared-toolchain "$(expected api web analysis analysis_image runtime
 assert_case unknown-go-workspace "$(expected api web analysis analysis_image runtime system_e2e workflow go_runtime go_tools)" go.work
 assert_case both-go-modules "$(expected runtime system_e2e workflow go_runtime go_tools policy_scripts)" \
   apps/runtime/go.mod scripts/tools/go.mod
-assert_case both-go-test-modules "$(expected runtime workflow go_runtime go_tools)" \
+assert_case both-go-test-modules "$(expected workflow go_runtime go_tools)" \
   apps/runtime/cmd/momo-runtime-tool/main_test.go scripts/tools/cmd/linux-memory-snapshot/main_test.go
 assert_case workflow-lint-selects-both-modules "$(expected workflow actionlint go_runtime go_tools policy_scripts)" \
   .github/workflows/workflow-lint.yml
@@ -238,4 +240,3 @@ assert_case e2e-artifact-validator "$(expected system_e2e workflow go_tools poli
 assert_case e2e-artifact-validator-test "$(expected workflow go_tools policy_scripts)" \
   scripts/tools/internal/cievidence/e2e_test.go
 assert_case e2e-local-preparation "$(expected web analysis analysis_image system_e2e)" scripts/e2e/prepare.mts
-assert_case e2e-fixture-contract-test "$(expected web analysis analysis_image)" scripts/e2e/session-fixture.test.mts

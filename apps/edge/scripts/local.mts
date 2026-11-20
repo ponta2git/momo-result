@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtempDisposable, readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,9 @@ export async function startEdge({
   port ??= await findFreePort();
   const artifact = resolve(artifactDirectory);
   const config = JSON.parse(await readFile(join(artifact, "wrangler.json"), "utf8"));
-  const localConfig = join(runDirectory, "edge-local.json");
+  await using startup = new AsyncDisposableStack();
+  const directory = startup.use(await mkdtempDisposable(resolve(runDirectory, "edge-")));
+  const localConfig = join(directory.path, "wrangler.json");
   await writeFile(
     localConfig,
     JSON.stringify({
@@ -64,7 +66,7 @@ export async function startEdge({
       "--no-show-interactive-dev-session",
     ],
     {
-      cwd: runDirectory,
+      cwd: directory.path,
       detached: true,
       // Wrangler's binding summary and transport errors may contain credentials.
       stdio: "ignore",
@@ -75,31 +77,27 @@ export async function startEdge({
       }),
     },
   );
+  startup.defer(() => stopProcessGroup(child));
   let failed = false;
   child.once("error", () => {
     failed = true;
   });
-  const close = () => stopProcessGroup(child);
   const origin = `http://127.0.0.1:${port}`;
-  try {
-    onProcess?.(child);
-    const deadline = Date.now() + 30_000;
-    while (Date.now() < deadline) {
-      signal.throwIfAborted();
-      if (failed || child.exitCode !== null || child.signalCode !== null)
-        throw new Error("Local edge exited before readiness.");
-      try {
-        const response = await fetch(`${origin}/`, { signal: AbortSignal.timeout(1_000) });
-        await response.body?.cancel();
-        if (response.ok) return { origin, close };
-      } catch {
-        // The local listener may still be binding.
-      }
-      await delay(100, undefined, { signal });
+  onProcess?.(child);
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    signal.throwIfAborted();
+    if (failed || child.exitCode !== null || child.signalCode !== null)
+      throw new Error("Local edge exited before readiness.");
+    const response = await fetch(`${origin}/`, {
+      method: "HEAD",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(1_000)]),
+    }).catch(() => undefined); // The listener may still be binding.
+    if (response?.ok) {
+      const resources = startup.move();
+      return { origin, close: () => resources.disposeAsync() };
     }
-    throw new Error("Local edge did not become ready.");
-  } catch (error) {
-    await close();
-    throw error;
+    await delay(100, undefined, { signal });
   }
+  throw new Error("Local edge did not become ready.");
 }

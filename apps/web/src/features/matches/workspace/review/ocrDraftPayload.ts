@@ -1,4 +1,4 @@
-import * as z from "zod/mini";
+import { _default as withDefault, z } from "zod/mini";
 
 import { incidentOcrNames } from "@/shared/domain/incidents";
 import type { IncidentOcrName } from "@/shared/domain/incidents";
@@ -6,9 +6,9 @@ import { parseSchema } from "@/shared/lib/schemaValidation";
 
 const structuredOcrWarningSchema = z.object({
   code: z.string(),
-  field_path: z._default(z.nullable(z.string()), null),
+  field_path: withDefault(z.nullable(z.string()), null),
   message: z.string(),
-  severity: z._default(z.string(), "warning"),
+  severity: withDefault(z.string(), "warning"),
 });
 
 const ocrWarningSchema = z.union([
@@ -24,7 +24,7 @@ const ocrWarningSchema = z.union([
   ),
 ]);
 
-const warningsSchema = z._default(z.array(ocrWarningSchema), []);
+const warningsSchema = withDefault(z.array(ocrWarningSchema), []);
 const ocrFieldSchema = <T extends z.ZodMiniType>(valueSchema: T) =>
   z.object({
     value: z.nullable(valueSchema),
@@ -47,7 +47,7 @@ const ocrPlayerEntrySchema = z.object({
   rank: ocrNumberFieldSchema,
   total_assets_man_yen: ocrNumberFieldSchema,
   revenue_man_yen: ocrNumberFieldSchema,
-  incidents: z._default(z.record(z.string(), ocrNumberFieldSchema), {}),
+  incidents: withDefault(z.record(z.string(), ocrNumberFieldSchema), {}),
 });
 
 /**
@@ -86,7 +86,7 @@ const legacyCategoryPayloadSchema = z.record(z.string(), z.unknown());
 const baseDraftFields = {
   detected_screen_type: z.nullable(z.string()),
   profile_id: z.nullable(z.string()),
-  players: z._default(z.array(ocrPlayerEntrySchema), []),
+  players: withDefault(z.array(ocrPlayerEntrySchema), []),
   warnings: warningsSchema,
   raw_snippets: z.unknown(),
 } as const;
@@ -99,7 +99,7 @@ const baseDraftFields = {
 const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
   z.object({
     requested_screen_type: z.literal("total_assets"),
-    category_payload: z._default(
+    category_payload: withDefault(
       z.union([totalAssetsCategoryPayloadSchema, legacyCategoryPayloadSchema]),
       {},
     ),
@@ -107,7 +107,7 @@ const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
   }),
   z.object({
     requested_screen_type: z.literal("revenue"),
-    category_payload: z._default(
+    category_payload: withDefault(
       z.union([revenueCategoryPayloadSchema, legacyCategoryPayloadSchema]),
       {},
     ),
@@ -115,7 +115,7 @@ const ocrDraftPayloadSchema = z.discriminatedUnion("requested_screen_type", [
   }),
   z.object({
     requested_screen_type: z.literal("incident_log"),
-    category_payload: z._default(
+    category_payload: withDefault(
       z.union([incidentLogCategoryPayloadSchema, legacyCategoryPayloadSchema]),
       {},
     ),

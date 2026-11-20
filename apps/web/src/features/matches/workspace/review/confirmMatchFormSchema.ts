@@ -1,4 +1,4 @@
-import * as z from "zod/mini";
+import { _default as withDefault, z } from "zod/mini";
 
 import { matchNoteMaximumCharacters, normalizeMatchNote } from "@/features/matches/matchNoteText";
 import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
@@ -41,7 +41,7 @@ export const confirmMatchFormSchema = z
     ownerMemberId: memberId,
     mapMasterId: z.string().check(z.minLength(1, "マップを選択してください")),
     playedAt: playedAtSchema,
-    achievements: z._default(z.array(matchAchievementSelectionSchema), []),
+    achievements: withDefault(z.array(matchAchievementSelectionSchema), []),
     matchDraftId: z.optional(z.string()),
     draftIds: z.object({
       totalAssets: z.optional(z.string()),
@@ -49,14 +49,12 @@ export const confirmMatchFormSchema = z
       incidentLog: z.optional(z.string()),
     }),
     players: z.array(playerSchema).check(z.length(4, "4人分の結果が必要です")),
-    noteBody: z
-      ._default(z.string(), "")
-      .check(
-        z.refine(
-          (value) => Array.from(normalizeMatchNote(value)).length <= matchNoteMaximumCharacters,
-          `試合メモは${matchNoteMaximumCharacters}字以内で入力してください`,
-        ),
+    noteBody: withDefault(z.string(), "").check(
+      z.refine(
+        (value) => Array.from(normalizeMatchNote(value)).length <= matchNoteMaximumCharacters,
+        `試合メモは${matchNoteMaximumCharacters}字以内で入力してください`,
       ),
+    ),
   })
   .check(
     z.superRefine((value, ctx) => {

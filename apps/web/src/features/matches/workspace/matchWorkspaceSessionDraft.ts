@@ -1,4 +1,4 @@
-import * as z from "zod/mini";
+import { _default as withDefault, z } from "zod/mini";
 
 import { matchAchievementSelectionSchema } from "@/features/matches/workspace/matchAchievementSelection";
 import type { MatchFormValues, WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
@@ -31,7 +31,7 @@ const matchFormValuesSchema = z.object({
   matchNoInEvent: z.number(),
   ownerMemberId: memberId,
   playedAt: z.string(),
-  achievements: z._default(z.array(matchAchievementSelectionSchema), []),
+  achievements: withDefault(z.array(matchAchievementSelectionSchema), []),
   expectedVersion: z.optional(z.string()),
   initialResultFingerprint: z.optional(z.string()),
   players: z
@@ -47,7 +47,7 @@ const matchFormValuesSchema = z.object({
     )
     .check(z.length(4)),
   seasonMasterId: z.string(),
-  noteBody: z._default(z.string(), ""),
+  noteBody: withDefault(z.string(), ""),
   numericDrafts: z.optional(z.record(z.string(), z.string())),
 });
 

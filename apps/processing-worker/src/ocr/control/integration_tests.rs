@@ -6,6 +6,7 @@ use tokio_postgres::Client;
 use momo_analysis_core::contract::ARTIFACT_SCHEMA_VERSION;
 
 use super::*;
+use crate::postgres::test_support::{CommitFault, DelayedDatabase};
 use crate::series_analysis::control::ALGORITHM_VERSION;
 
 type SmokeResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -111,7 +112,7 @@ async fn real_postgres_preserves_ocr_fencing_and_bounded_recovery() -> SmokeResu
 
     verify_candidate_integrity(&mut primary).await?;
     verify_expired_takeover(&mut primary, &mut stale).await?;
-    verify_success_and_terminal_duplicate(&mut primary).await?;
+    verify_success_across_commit_disconnects(&database_url, &mut primary).await?;
     verify_success_with_warnings(&mut primary).await?;
     verify_expired_analysis_recovery_emits_wake(&mut primary).await?;
     verify_independent_jobs_and_counter_exhaustion(&mut primary).await?;
@@ -290,29 +291,22 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
     Ok(())
 }
 
-async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeResult {
+async fn verify_success_across_commit_disconnects(
+    database_url: &str,
+    primary: &mut Client,
+) -> SmokeResult {
     let job_id = SUCCESS.job_id;
     let config = control_config("ocr-c2-worker-success")?;
     let legacy_hints = r#"{"layoutFamily":" MOMOTETSU_WORLD "}"#;
-    primary.execute(
+    let original_input: serde_json::Value = primary.query_one(
         r"
             UPDATE ocr_jobs
             SET input_snapshot = input_snapshot || jsonb_build_object('ocrHintsJson', CAST($2 AS text))
             WHERE ocr_jobs.legacy_id = $1
+            RETURNING input_snapshot
             ",
         &[&job_id, &legacy_hints],
-    ).await?;
-    let before = primary
-        .query_one(
-            r"
-                SELECT CAST(input_snapshot AS text)
-                FROM ocr_jobs
-                WHERE ocr_jobs.legacy_id = $1
-                ",
-            &[&job_id],
-        )
-        .await?
-        .try_get::<_, String>(0)?;
+    ).await?.try_get(0)?;
     let claim = claimed(claim_job(primary, job_id, &config).await?)?;
     assert_eq!(
         serde_json::to_value(claim.hints.as_ref())?
@@ -321,40 +315,56 @@ async fn verify_success_and_terminal_duplicate(primary: &mut Client) -> SmokeRes
         Some(" MOMOTETSU_WORLD ")
     );
     let completion = tests::valid_completion(RequestedScreenType::TotalAssets);
-    finish_success(primary, &claim, &config, &claim.hints, &completion).await?;
-    let after = primary
-        .query_one(
-            r"
-                SELECT CAST(input_snapshot AS text)
-                FROM ocr_jobs
-                WHERE ocr_jobs.legacy_id = $1
+    // The first disconnect rolls back. The same owner can finish on a new connection,
+    // even when the acknowledgement for that commit never reaches it.
+    for (fault, next_claim, job_status, draft_status, payload) in [
+        (
+            CommitFault::BeforeCommit,
+            OcrClaimResult::AlreadyRunning,
+            "running",
+            "ocr_running",
+            None,
+        ),
+        (
+            CommitFault::LostReply,
+            OcrClaimResult::MissingOrTerminal,
+            "succeeded",
+            "draft_ready",
+            Some(&completion.output.payload),
+        ),
+    ] {
+        let proxy = DelayedDatabase::commit_fault(database_url, fault).await?;
+        let mut writer = crate::identity::fixtures::connect(&proxy.url).await?;
+        let result = finish_success(&mut writer, &claim, &config, &claim.hints, &completion).await;
+        assert!(
+            matches!(result, Err(OcrControlError::Postgres(_))),
+            "worker must observe the disconnect: {result:?}"
+        );
+        assert_eq!(
+            claim_result(claim_job(primary, job_id, &config).await?)?,
+            next_claim
+        );
+        let row = primary
+            .query_one(
+                r"
+                SELECT j.status, j.attempt_count, j.input_snapshot, md.status, d.payload_json
+                FROM ocr_jobs AS j
+                JOIN match_drafts AS md ON md.total_assets_draft_id = j.draft_id
+                LEFT JOIN ocr_drafts AS d ON d.id = md.total_assets_draft_id AND d.job_id = j.id
+                WHERE j.legacy_id = $1 AND md.legacy_id = $2
                 ",
-            &[&job_id],
-        )
-        .await?
-        .try_get::<_, String>(0)?;
-    assert_eq!(
-        before, after,
-        "claim and durable completion preserve the old immutable input"
-    );
-    let row = primary
-        .query_one(
-            r"
-                SELECT j.status, CAST(count(d.legacy_id) AS bigint)
-                FROM ocr_jobs AS j LEFT JOIN ocr_drafts AS d ON d.legacy_job_id = j.legacy_id
-                WHERE j.legacy_id = $1
-                GROUP BY j.status
-                ",
-            &[&SUCCESS.job_id],
-        )
-        .await?;
-    assert_eq!(row.try_get::<_, String>(0)?, "succeeded");
-    assert_eq!(row.try_get::<_, i64>(1)?, 1);
-    assert_match_draft_status(primary, &SUCCESS, "draft_ready").await?;
-    assert!(matches!(
-        claim_result(claim_job(primary, job_id, &config).await?)?,
-        OcrClaimResult::MissingOrTerminal
-    ));
+                &[&job_id, &SUCCESS.match_draft_id],
+            )
+            .await?;
+        assert_eq!(row.try_get::<_, String>(0)?, job_status);
+        assert_eq!(row.try_get::<_, i32>(1)?, 1);
+        assert_eq!(row.try_get::<_, serde_json::Value>(2)?, original_input);
+        assert_eq!(row.try_get::<_, String>(3)?, draft_status);
+        assert_eq!(
+            row.try_get::<_, Option<serde_json::Value>>(4)?.as_ref(),
+            payload
+        );
+    }
     Ok(())
 }
 

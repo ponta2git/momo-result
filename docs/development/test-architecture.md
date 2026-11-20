@@ -25,11 +25,14 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 
 ## Subsystem Strategy
 
-| 領域 | coverage が主に扱う範囲 | coverage 外で選ぶ主な oracle |
+| 領域 | 主な実行境界 | そこで確かめる利用者の結果 |
 | --- | --- | --- |
-| Web | pure logic、request transform、API wrapper、ViewModel、component state | 主要 flow、URL、cache lifecycle、download / save を component / Playwright で確認 |
-| API | domain、usecase、codec、HTTP mapping | PostgreSQL / object storage と migration 前提を実 service で確認 |
-| Processing Worker | pure calculation、parser、codec、state machine、decision table | DB、native OCR、parent / child process、cgroup、queued priority、resource を専用 smoke で確認 |
+| Web | Vitest の domain・component、制御した HTTP とブラウザ | 編集対象と送信値、入力の保持、失敗後の訂正・再送、次の操作への到達 |
+| Edge | ビルドした Worker と静的ファイルを workerd で起動し、HTTP の送受信を観測 | 直接開いた URL で操作を始められる。ログイン応答、画像の upload、download が内容を保ち、切断時は転送を解放する |
+| API | domain・usecase・HTTP と、実 PostgreSQL・object storage | 同時確定や古い版での更新時にも、保存した試合・下書き・画像が正しい対象に残る |
+| Processing Worker | 計算・判定の Rust test、実 DB の job 遷移、native OCR と process の smoke | 中断後に再開できる。古い実行が結果を上書きせず、確定した結果を一度だけ公開する |
+| Runtime | Go の probe と、候補 image の起動・終了・依存先の smoke | リクエストを受け付けられる状態と、依存先を使えない状態を識別できる |
+| システム E2E | ブラウザから Edge・API・Worker を通し、保存した記録を読み直して出力や通知と照合 | 手入力・OCR、変更の競合と再試行、検索・出力までを同じ記録の ID と値で追える |
 
 - DB adapter の品質は、coverage ではなく production と同じ wire / transaction を通すことで確かめる。
 - performance / endurance の対象量、回数、上限は要求文書と private release gate を正本とし、本書ではその正本を参照する。
@@ -37,7 +40,7 @@ aggregate coverage は、PR review と推移確認の非 blocking report とす�
 ### Web の実行境界
 
 - `src` の Vitest は値変換と component / hook / MSW の証拠を扱う。app の route 接続と feature の resource lifecycle を区別し、後者の詳細は feature 側の suite に置く。
-- `e2e/ui` はビルド済み Web と制御した HTTP 応答で focus・描画・非同期遷移を検証し、未定義 API 通信を失敗させる。DB や Worker を起動せず、mock 応答を保存・生成・配送の証拠にしない。
+- `e2e/ui` はビルド済み Web と制御した HTTP 応答で focus・描画・非同期遷移を検証し、未定義 API 通信を失敗させる。CI では Edge に収めたものと同じ Web ビルドを preview で開く。実際の保存・生成・配送はシステム E2E が扱う。
 - `e2e/system` はビルド済みの Web edge 成果物と API・Worker の production image を使い、実 DB・画像 storage・固定した通知 consumer を通す。session fixture は既存 SessionService で生成し、ブラウザは通常 cookie / CSRF を使う。OAuth provider の handshake と callback はこの fixture の保証範囲に含めない。
 - session fixture は Test とは別の sbt config に置き、Runtime の build で compile 済みの API を再利用する Dockerfile target で JAR だけを作る。runner は候補 Runtime image の JVM と staged library で各 suite の新しい DB に対して実行し、本番 image には fixture class を含めない。制御 Worker（`e2e-test` target）も E2E job の外で build する。producer は artifact と来歴を作り、CI は producer の run・attempt・commit・hash と Runtime image ID との対応を検証し、runner は検証済みの入力を実行して可変な隔離環境だけを所有・回収する。
 - `e2e/recovery` は制御 Worker を使い、受付応答の喪失や処理失敗から利用者が操作を続けられることを確認する。実 Worker と同じ job DB に同時起動しない。通知本文・全画像待ちなどの詳細は API を入口にする `e2e/contracts`、全体状態を変える上限 fixture は独立した通知契約 runner が所有する。

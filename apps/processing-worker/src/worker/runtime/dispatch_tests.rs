@@ -29,6 +29,7 @@ const ANALYSIS: &str = "scheduler-dispatch-smoke-analysis-a";
 const WAITING: &str = "scheduler-dispatch-smoke-analysis-b";
 const OCR: &str = "scheduler-dispatch-smoke-ocr";
 const WORKER: &str = "scheduler-dispatch-smoke-worker";
+const SCAN_BUDGET: Duration = Duration::from_millis(10);
 
 #[tokio::test]
 #[ignore = "requires explicitly isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL"]
@@ -37,7 +38,8 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     let observer = crate::identity::fixtures::connect(&database_url).await?;
     cleanup(&observer).await?;
     insert_analysis(&observer).await?;
-    let proxy = DelayedDatabase::start(&database_url, Duration::from_millis(150)).await?;
+    // One database reply must exhaust the soft budget even on a fast runner.
+    let proxy = DelayedDatabase::start(&database_url, SCAN_BUDGET * 2).await?;
     let directory = TempDir::new()?;
     let (mut scheduler, _wake) = fixture(
         &proxy.url,
@@ -200,7 +202,7 @@ async fn verify_cursor_yield(
 
 fn budget() -> ScanBudget {
     ScanBudget {
-        until: time::Instant::now() + Duration::from_millis(250),
+        until: time::Instant::now() + SCAN_BUDGET,
         contended: false,
     }
 }

@@ -241,7 +241,7 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           )
         case Left(error) => fail(s"expected per-job audit, got $error")
 
-  test("admin overview returns the latest ten jobs across titles in stable order"):
+  test("admin overview returns its titles and latest ten jobs in one consistent snapshot"):
     val otherTitleId = GameTitleId.unsafeFromString("title-analysis-contract-other")
     val jobs = List.tabulate(12) { index =>
       val jobId = f"job-admin-recent-$index%02d"
@@ -269,10 +269,14 @@ final class PostgresSeriesAnalysisRepositorySpec extends IntegrationSuite with J
           )
         """.update.run.transact(transactor).void
       }
-      repo <- repository
-      result <- repo.adminOverview(Some(titleId))
+      result <- assertReadSnapshot(xa =>
+        PostgresSeriesAnalysisRepository.create[IO](xa, SeriesAnalysisReadConfig.defaults)
+          .flatMap(_.adminOverview(Some(titleId)))
+      )
     yield result match
       case Right(overview) =>
+        assertEquals(overview.titleOptions.map(_.gameTitleId).toSet, Set(titleId, otherTitleId))
+        assertEquals(overview.selectedTitle.map(_.gameTitleId), Some(titleId))
         assertEquals(overview.recentJobs.map(_.jobId), jobs.reverse.take(10).map(_._1))
         assertEquals(
           overview.recentJobs.map(_.gameTitleId).distinct.toSet,

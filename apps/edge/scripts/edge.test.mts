@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -14,7 +14,7 @@ import { Log, LogLevel, Miniflare } from "miniflare";
 
 import { startEdge } from "./local.mts";
 
-test("deployable Worker preserves the public HTTP boundary in workerd", async (t) => {
+test("public HTTP contracts in workerd", { concurrency: true }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "momo-edge-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const token = randomBytes(32).toString("hex");
@@ -154,14 +154,16 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
   );
 
   await t.test(
-    "API routes preserve bytes/query/auth and overwrite the trusted boundary",
+    "API writes preserve their operation key, bytes, query, and authentication",
     async () => {
       const body = Buffer.from([0, 255, 10, 13, 128]);
+      const operationKey = randomUUID();
       const response = await request("/api/upload?name=a%2Fb&name=c", {
         method: "POST",
         body,
         headers: {
           "Content-Type": "application/octet-stream",
+          "Idempotency-Key": operationKey,
           Cookie: "session=fixture",
           "X-CSRF-Token": "fixture",
           "X-Momo-Origin-Lock": "spoofed",
@@ -182,6 +184,7 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
       assert.equal(received.method, "POST");
       assert.deepEqual(received.body, body);
       assert.equal(received.headers["content-length"], String(body.length));
+      assert.equal(received.headers["idempotency-key"], operationKey);
       assert.equal(received.headers.cookie, "session=fixture");
       assert.equal(received.headers["x-csrf-token"], "fixture");
       assert.ok(received.headers["x-momo-origin-lock"] === token);
@@ -275,7 +278,8 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
     },
   );
 
-  await t.test(
+  // These independent requests must each cross the real response-header deadline.
+  const slowUpload = t.test(
     "slow uploads finish before the header wait starts and early rejection does not wait for EOF",
     async () => {
       const body = new ReadableStream<Uint8Array>({
@@ -298,7 +302,10 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
       const response = await fetch(`${directOrigin}/api/slow-upload`, init);
       assert.equal(response.status, 200);
       assert.deepEqual(new Uint8Array(await response.arrayBuffer()), new Uint8Array([1, 2]));
-      assert.equal(observed.at(-1)!.headers["content-length"], "2");
+      assert.equal(
+        observed.find((entry) => entry.path === "/api/slow-upload")?.headers["content-length"],
+        "2",
+      );
 
       let finishRejectedUpload = () => {};
       const rejectedBody = new ReadableStream<Uint8Array>({
@@ -328,7 +335,7 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
     },
   );
 
-  await t.test(
+  const headerTimeout = t.test(
     "an upstream without response headers times out and releases its connection",
     async () => {
       const closed = completion();
@@ -342,6 +349,7 @@ test("deployable Worker preserves the public HTTP boundary in workerd", async (t
       await within(closed.promise, 5_000);
     },
   );
+  await Promise.all([slowUpload, headerTimeout]);
 });
 
 function completion() {

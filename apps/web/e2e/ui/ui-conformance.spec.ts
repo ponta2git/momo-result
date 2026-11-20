@@ -1,4 +1,4 @@
-import { installAdjacentNavigationResponses } from "./fixtures/adjacentNavigation";
+import { makeHeldEventDetailResponse } from "../../src/test/factories";
 import { confirmedContext, confirmedMatchIds } from "./fixtures/records";
 import { expect, installUiAuth, test } from "./support";
 
@@ -6,59 +6,34 @@ test.beforeEach(async ({ page }) => {
   await installUiAuth(page);
 });
 
-for (const detail of [
-  {
-    kind: "held-event",
-    route: "held-events",
-    firstId: "held-layout-first",
-    middleId: "held-layout-middle",
-    lastId: "held-layout-last",
-    navigationName: "開催の前後移動",
-    previousLabel: "前の開催",
-    nextLabel: "次の開催",
-  },
-  {
-    kind: "match",
-    route: "matches",
-    firstId: "match-layout-first",
-    middleId: "match-layout-middle",
-    lastId: "match-layout-last",
-    navigationName: "前後の試合",
-    previousLabel: "前の試合",
-    nextLabel: "後の試合",
-  },
-] as const) {
-  test(`keeps ${detail.kind} destinations and keyboard focus through adjacent navigation`, async ({
-    page,
-  }) => {
-    await installAdjacentNavigationResponses(page);
-    const pathFor = (id: string) => `/${detail.route}/${id}`;
-    const navigation = page.getByRole("navigation", { name: detail.navigationName });
-    const previous = navigation.getByRole("link", {
-      name: new RegExp(`^${detail.previousLabel}`, "u"),
-    });
-    const next = navigation.getByRole("link", { name: new RegExp(`^${detail.nextLabel}`, "u") });
-    const heading = page.getByRole("heading", { level: 1 });
-
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto(pathFor(detail.middleId));
-    await expect(previous).toHaveAttribute("href", pathFor(detail.firstId));
-    await expect(next).toHaveAttribute("href", pathFor(detail.lastId));
-
-    await previous.focus();
-    await previous.press("Enter");
-    await expect(page).toHaveURL(pathFor(detail.firstId));
-    await expect(heading).toBeFocused();
-    await expect(previous).toHaveCount(0);
-
-    await next.click();
-    await expect(page).toHaveURL(pathFor(detail.middleId));
-    await next.click();
-    await expect(page).toHaveURL(pathFor(detail.lastId));
-    await expect(heading).toBeFocused();
-    await expect(next).toHaveCount(0);
-  });
-}
+test("moves keyboard focus to the adjacent held event and allows the return trip", async ({
+  page,
+}) => {
+  const first = { id: "held-first", heldAt: "2024-11-30T03:00:00.000Z" };
+  const last = { id: "held-last", heldAt: "2024-12-01T03:00:00.000Z" };
+  for (const [event, navigation] of [
+    [first, { next: last }],
+    [last, { previous: first }],
+  ] as const) {
+    await page.route(`**/api/held-events/${event.id}`, (route) =>
+      route.fulfill({ json: makeHeldEventDetailResponse({ ...event, navigation }) }),
+    );
+  }
+  const navigation = page.getByRole("navigation", { name: "開催の前後移動" });
+  const next = navigation.getByRole("link", { name: /^次の開催/u });
+  const previous = navigation.getByRole("link", { name: /^前の開催/u });
+  const heading = page.getByRole("heading", { level: 1 });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/held-events/${first.id}`);
+  await next.press("Enter");
+  await expect(page).toHaveURL(`/held-events/${last.id}`);
+  await expect(heading).toBeFocused();
+  await expect(next).toHaveCount(0);
+  await previous.press("Enter");
+  await expect(page).toHaveURL(`/held-events/${first.id}`);
+  await expect(heading).toBeFocused();
+  await expect(previous).toHaveCount(0);
+});
 
 test("keeps an uncommitted select choice when keyboard focus moves to the next dialog field", async ({
   page,

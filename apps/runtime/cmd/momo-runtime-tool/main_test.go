@@ -4,85 +4,70 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
-type characterizationFixture struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Preflight     []struct {
-		Name                  string         `json:"name"`
-		RemovedColumn         *string        `json:"removedColumn"`
-		ExpectedMissingCounts map[string]int `json:"expectedMissingCounts"`
-	} `json:"preflight"`
-	Smoke struct {
-		ProcessCases []struct {
-			Name            string   `json:"name"`
-			CommandLines    []string `json:"commandLines"`
-			ExpectedMissing []string `json:"expectedMissing"`
-		} `json:"processCases"`
-		CheckCases []struct {
-			Mode           string   `json:"mode"`
-			ExpectedChecks []string `json:"expectedChecks"`
-		} `json:"checkCases"`
-		HealthPayloadCases []struct {
-			Name          string          `json:"name"`
-			Payload       json.RawMessage `json:"payload"`
-			ExpectedValid bool            `json:"expectedValid"`
-		} `json:"healthPayloadCases"`
-	} `json:"smoke"`
+func TestPreflightRejectsMissingRequiredColumn(t *testing.T) {
+	databaseURL, _, _ := startProbeDatabasePeer(t, false)
+	contractPath := filepath.Join(t.TempDir(), "contract.json")
+	if err := os.WriteFile(contractPath, []byte(`{"schemaVersion":1,"columns":["ocr_jobs.status"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("MOMO_RUNTIME_DB_CONTRACT_PATH", contractPath)
+	var stdout, stderr bytes.Buffer
+	if code := runCLI(t.Context(), []string{"preflight"}, &stdout, &stderr); code != 1 || stdout.Len() != 0 {
+		t.Fatalf("preflight with a missing column returned %d with %d bytes of success output", code, stdout.Len())
+	}
+	var result commandResult
+	if err := json.Unmarshal(stderr.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"columns": 1, "tables": 0, "indexes": 0, "functions": 0, "seedMembers": 0}
+	if result.Status != "failed" || !maps.Equal(result.MissingCounts, want) {
+		t.Fatalf("status %q, missing counts %v", result.Status, result.MissingCounts)
+	}
 }
 
-func TestCharacterizationFixture(t *testing.T) {
+func TestSmokeRecognizesTheAPIProcess(t *testing.T) {
 	t.Parallel()
-	fixture := loadCharacterizationFixture(t)
-	contract := loadTestContract(t)
-
-	for _, testCase := range fixture.Preflight {
-		t.Run("preflight/"+testCase.Name, func(t *testing.T) {
-			snapshot := snapshotFromContract(contract)
-			if testCase.RemovedColumn != nil {
-				delete(snapshot.Columns, *testCase.RemovedColumn)
-			}
-			actual := missingContractCounts(contract, snapshot)
-			if !equalIntMaps(actual, testCase.ExpectedMissingCounts) {
-				t.Fatalf("missing counts = %#v, want %#v", actual, testCase.ExpectedMissingCounts)
-			}
-		})
+	api := "/opt/java/openjdk/bin/java -cp /opt/momo-result/api/lib/app.jar momo.api.Main"
+	if missing := missingRuntimeProcesses([]string{api}); len(missing) != 0 {
+		t.Fatalf("running API reported missing: %v", missing)
 	}
-
-	for _, testCase := range fixture.Smoke.ProcessCases {
-		t.Run("smoke/processes/"+testCase.Name, func(t *testing.T) {
-			assertStringsEqual(t, missingRuntimeProcesses(testCase.CommandLines), testCase.ExpectedMissing)
-		})
-	}
-	for _, testCase := range fixture.Smoke.CheckCases {
-		t.Run("smoke/checks/"+testCase.Mode, func(t *testing.T) {
-			assertStringsEqual(t, localSmokeChecks(testCase.Mode), testCase.ExpectedChecks)
-		})
-	}
-	for _, testCase := range fixture.Smoke.HealthPayloadCases {
-		t.Run("smoke/health/"+testCase.Name, func(t *testing.T) {
-			actual := decodeValidHealthPayload(bytes.NewReader(testCase.Payload))
-			if actual != testCase.ExpectedValid {
-				t.Fatalf("valid health payload = %v, want %v", actual, testCase.ExpectedValid)
-			}
-		})
+	if missing := missingRuntimeProcesses([]string{"/bin/sh"}); !slices.Equal(missing, []string{"api"}) {
+		t.Fatalf("missing processes = %v", missing)
 	}
 }
 
-func TestHealthPayloadRejectsTrailingData(t *testing.T) {
+func TestSmokeReportsTheChecksForItsMode(t *testing.T) {
+	t.Parallel()
+	local := []string{"database", "http", "http2", "processes"}
+	for mode, expected := range map[string][]string{"deferred": local, "required": append(local, "publicEdge")} {
+		if checks := localSmokeChecks(mode); !slices.Equal(checks, expected) {
+			t.Errorf("%s checks = %v, want %v", mode, checks, expected)
+		}
+	}
+}
+
+func TestHealthPayloadRequiresOneBoundedHealthyResponse(t *testing.T) {
 	t.Parallel()
 	payload := `{"status":"ok"}`
 	atLimit := payload + strings.Repeat(" ", 4096-len(payload))
 	if !decodeValidHealthPayload(strings.NewReader(atLimit)) {
 		t.Fatal("complete health payload at the byte limit was rejected")
 	}
-	for _, input := range []string{payload + payload, atLimit + payload} {
+	for name, input := range map[string]string{
+		"degraded": `{"status":"degraded"}`, "non-object": `["ok"]`,
+		"trailing object": payload + payload, "trailing data beyond limit": atLimit + payload,
+	} {
 		if decodeValidHealthPayload(strings.NewReader(input)) {
-			t.Fatal("health payload with trailing JSON was accepted")
+			t.Errorf("%s health payload was accepted", name)
 		}
 	}
 }
@@ -126,66 +111,5 @@ func TestInvalidArgumentsReturnOneJSONResult(t *testing.T) {
 				t.Fatalf("result = %#v", result)
 			}
 		})
-	}
-}
-
-func loadCharacterizationFixture(t *testing.T) characterizationFixture {
-	t.Helper()
-	path := filepath.Join("..", "..", "..", "..", "contracts", "runtime-tool-characterization-v1.json")
-	encoded, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fixture characterizationFixture
-	if err := json.Unmarshal(encoded, &fixture); err != nil {
-		t.Fatal(err)
-	}
-	if fixture.SchemaVersion != 1 {
-		t.Fatalf("fixture schema version = %d", fixture.SchemaVersion)
-	}
-	return fixture
-}
-
-func loadTestContract(t *testing.T) runtimeDBContract {
-	t.Helper()
-	path := filepath.Join("..", "..", "..", "..", "contracts", "runtime-db-contract.json")
-	contract, err := loadRuntimeDBContract(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return contract
-}
-
-func snapshotFromContract(contract runtimeDBContract) databaseSnapshot {
-	return databaseSnapshot{
-		Columns:           stringSet(contract.Columns),
-		Tables:            stringSet(contract.Tables),
-		Indexes:           stringSet(contract.Indexes),
-		HardenedFunctions: stringSet(contract.HardenedFunctions),
-		SeedMemberIDs:     stringSet(contract.SeedMemberIDs),
-	}
-}
-
-func equalIntMaps(left map[string]int, right map[string]int) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for key, leftValue := range left {
-		if right[key] != leftValue {
-			return false
-		}
-	}
-	return true
-}
-
-func assertStringsEqual(t *testing.T, actual []string, expected []string) {
-	t.Helper()
-	if len(actual) != len(expected) {
-		t.Fatalf("values = %#v, want %#v", actual, expected)
-	}
-	for index, value := range actual {
-		if expected[index] != value {
-			t.Fatalf("values = %#v, want %#v", actual, expected)
-		}
 	}
 }

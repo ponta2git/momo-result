@@ -24,7 +24,9 @@ export default defineConfig({
               test: /[/\\]node_modules[/\\]/u,
               priority: 1,
             },
-            { name: "initial-shared", tags: ["$initial"], minShareCount: 2 },
+            // Lazy pages import startup UI and API helpers from shared/. Keep them out of the
+            // entry, whose import list changes whenever a lazy page gets a new content hash.
+            { name: "initial-shared", tags: ["$initial"], test: /[/\\]src[/\\]shared[/\\]/u },
           ],
         },
       },

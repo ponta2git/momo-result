@@ -1,7 +1,8 @@
 import { Activity, Play, RefreshCw, RotateCw } from "lucide-react";
+import { lazy, Suspense, useState } from "react";
+import type { ComponentProps } from "react";
 
-import { PlayerRadarAdministration } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration";
-import { PlayerRadarHistory } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory";
+import { PlayerRadarLoading } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarLoading";
 import {
   AdminSkeleton,
   ExecutionStatus,
@@ -10,6 +11,7 @@ import {
 } from "@/features/seriesAnalysisAdmin/SeriesAnalysisAdminStatus";
 import { useSeriesAnalysisAdmin } from "@/features/seriesAnalysisAdmin/useSeriesAnalysisAdmin";
 import { formatApiError } from "@/shared/api/problemDetails";
+import { loadLazyModule } from "@/shared/lib/moduleLoadError";
 import { inlineActionGroupClass } from "@/shared/ui/actions/actionGroup";
 import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
@@ -23,12 +25,51 @@ import { PageFrame } from "@/shared/ui/layout/PageFrame";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { contentText } from "@/shared/ui/typography";
 
+const PlayerRadarAdministration = lazy(() =>
+  loadLazyModule(() =>
+    import("@/features/seriesAnalysisAdmin/radar/PlayerRadarAdministration").then((module) => ({
+      default: module.PlayerRadarAdministration,
+    })),
+  ),
+);
+const PlayerRadarHistory = lazy(() =>
+  loadLazyModule(() =>
+    import("@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory").then((module) => ({
+      default: module.PlayerRadarHistory,
+    })),
+  ),
+);
+
+function usePanelOpened(active: boolean) {
+  const [opened, setOpened] = useState(active);
+  if (active && !opened) setOpened(true);
+  return active || opened;
+}
+
+/** Once opened, the selected title keeps its editor and pending operations across tab changes. */
+function CurrentRadarPanel({
+  active = true,
+  ...props
+}: ComponentProps<typeof PlayerRadarAdministration>) {
+  const opened = usePanelOpened(active);
+  if (!opened) return null;
+
+  return (
+    <div className="mt-4 min-w-0">
+      <Suspense fallback={<PlayerRadarLoading label="採点基準を読み込み中" />}>
+        <PlayerRadarAdministration active={active} {...props} />
+      </Suspense>
+    </div>
+  );
+}
+
 export function SeriesAnalysisAdminPage() {
   const administration = useSeriesAnalysisAdmin();
   const { activeTab, radarView, allDialogOpen, setActiveTab, setRadarView, recalculationTabRef } =
     administration.navigation;
   const { data } = administration.resource;
   const { selectedTitle } = administration.selection;
+  const radarOpened = usePanelOpened(activeTab === "radar");
   return (
     <PageFrame width="analysis">
       <PageContentSurface
@@ -178,7 +219,7 @@ export function SeriesAnalysisAdminPage() {
               </div>
             ) : null}
           </TabsPanel>
-          <TabsPanel keepMounted value="radar">
+          <TabsPanel keepMounted={radarOpened} value="radar">
             <div className="mt-6 grid min-w-0 gap-4">
               <TabsRoot value={radarView} onValueChange={(value) => setRadarView(String(value))}>
                 <TabsList aria-label="採点基準の表示切替" variant="underline">
@@ -189,23 +230,23 @@ export function SeriesAnalysisAdminPage() {
                 </TabsList>
                 <TabsPanel keepMounted value="current">
                   {selectedTitle ? (
-                    <div className="mt-4 min-w-0">
-                      <PlayerRadarAdministration
-                        key={selectedTitle.gameTitleId}
-                        gameTitleId={selectedTitle.gameTitleId}
-                        gameTitleName={selectedTitle.gameTitleName}
-                        active={administration.navigation.radarVisible}
-                        onApplyAccepted={administration.navigation.onApplyAccepted}
-                        applyFinalFocus={administration.navigation.applyFinalFocus}
-                      />
-                    </div>
+                    <CurrentRadarPanel
+                      key={selectedTitle.gameTitleId}
+                      gameTitleId={selectedTitle.gameTitleId}
+                      gameTitleName={selectedTitle.gameTitleName}
+                      active={administration.navigation.radarVisible}
+                      onApplyAccepted={administration.navigation.onApplyAccepted}
+                      applyFinalFocus={administration.navigation.applyFinalFocus}
+                    />
                   ) : null}
                 </TabsPanel>
                 {administration.authorization.retainOperations ? (
                   <TabsPanel value="history">
                     {activeTab === "radar" && radarView === "history" ? (
                       <div className="mt-4 min-w-0">
-                        <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
+                        <Suspense fallback={<PlayerRadarLoading label="改訂履歴を読み込み中" />}>
+                          <PlayerRadarHistory titleOptions={data?.titleOptions ?? []} />
+                        </Suspense>
                       </div>
                     ) : null}
                   </TabsPanel>

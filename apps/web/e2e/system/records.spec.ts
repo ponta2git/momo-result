@@ -123,7 +123,7 @@ test("creates a held event, saves a result and finds it by its memo and player r
   });
 });
 
-test("finds a saved match, edits it and exports the saved values", async ({
+test("finds a saved match, retries a failed edit and exports the saved values", async ({
   e2eRun,
   page,
   request,
@@ -138,19 +138,36 @@ test("finds a saved match, edits it and exports the saved values", async ({
     .press("Space");
   await page.locator(`a[href="/m/${fixture.matchPublicId}"]:visible`).click();
   await page.getByRole("link", { name: "試合結果を編集" }).click();
-  await page.getByLabel("ぽんた 総資産（万円）", { exact: true }).fill("7654");
-  await page.getByRole("button", { exact: true, name: "保存" }).click();
+  const assets = page.getByLabel("ぽんた 総資産（万円）", { exact: true });
+  const save = page.getByRole("button", { exact: true, name: "保存" });
+  await assets.fill("7654");
+  const matchPath = `/api/matches/${fixture.matchId}`;
+  const endpoint = `**${matchPath}`;
+  await page.route(endpoint, (route) =>
+    route.request().method() === "PUT" ? route.abort("failed") : route.fallback(),
+  );
+  await save.click();
+  await expect(page.getByRole("heading", { name: "変更を保存できませんでした" })).toBeVisible();
+  await expect(assets).toHaveValue("7654");
+  const unchanged = await request.get(matchPath);
+  await expectOk(unchanged, "read original values after the failed edit");
+  expect(await readJsonObject(unchanged)).toMatchObject({
+    matchId: fixture.matchId,
+    players: expect.arrayContaining([
+      expect.objectContaining({ memberId: "member_ponta", totalAssetsManYen: 400 }),
+    ]),
+  });
+  await page.unroute(endpoint);
+  await save.click();
   await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
   await page.reload();
-  const saved = await request.get(`/api/matches/${fixture.matchId}`);
+  const saved = await request.get(matchPath);
   await expectOk(saved, "read edited match");
   expect(await readJsonObject(saved)).toMatchObject({
     matchId: fixture.matchId,
-    players: expect.arrayContaining(
-      [{ memberId: "member_ponta", totalAssetsManYen: 7654 }].map((value) =>
-        expect.objectContaining(value),
-      ),
-    ),
+    players: expect.arrayContaining([
+      expect.objectContaining({ memberId: "member_ponta", totalAssetsManYen: 7654 }),
+    ]),
   });
   await page.getByRole("link", { name: "この試合を出力" }).click();
   await page.getByRole("tab", { exact: true, name: "TSV" }).click();
@@ -246,41 +263,6 @@ async function selectMasters(
     ids.mapMasterId,
   );
 }
-
-test("keeps edited values after a failed save and completes the retry", async ({
-  e2eRun,
-  page,
-  request,
-}) => {
-  const fixture = await seedConfirmedContext(request, e2eRun);
-  await page.goto(`/matches/${fixture.matchId}/edit`);
-  const assets = page.getByLabel("ぽんた 総資産（万円）", { exact: true });
-  await assets.fill("9876");
-  const endpoint = `**/api/matches/${fixture.matchId}`;
-  await page.route(endpoint, async (route) => {
-    if (route.request().method() === "PUT") await route.abort("failed");
-    else await route.continue();
-  });
-  await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page.getByRole("heading", { name: "変更を保存できませんでした" })).toBeVisible();
-  await expect(assets).toHaveValue("9876");
-  const unchanged = await request.get(`/api/matches/${fixture.matchId}`);
-  expect(await readJsonObject(unchanged)).toMatchObject({
-    players: expect.arrayContaining([
-      expect.objectContaining({ memberId: "member_ponta", totalAssetsManYen: 400 }),
-    ]),
-  });
-  await page.unroute(endpoint);
-  await page.getByRole("button", { exact: true, name: "保存" }).click();
-  await expect(page).toHaveURL(`/m/${fixture.matchPublicId}`);
-  await page.reload();
-  const updated = await request.get(`/api/matches/${fixture.matchId}`);
-  expect(await readJsonObject(updated)).toMatchObject({
-    players: expect.arrayContaining([
-      expect.objectContaining({ memberId: "member_ponta", totalAssetsManYen: 9876 }),
-    ]),
-  });
-});
 
 test("a concurrent note save preserves both inputs until the user explicitly retries", async ({
   e2eRun,

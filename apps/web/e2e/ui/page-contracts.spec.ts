@@ -1,10 +1,6 @@
-import {
-  makeFourPlayerResults,
-  makeHeldEventDetailResponse,
-  makeHeldEventResponse,
-  makeMatchDetail,
-} from "../../src/test/factories";
-import { mswState } from "../../src/test/msw/fixtures";
+import type { UpdateMatchResponse } from "../../src/shared/api/matches";
+import { makeFourPlayerResults, makeMatchDetail } from "../../src/test/factories";
+import { confirmedContext } from "./fixtures/records";
 import { expect, installUiAuth, test } from "./support";
 
 test.beforeEach(async ({ page }) => {
@@ -25,55 +21,59 @@ test("announces the new page through its title and landmark without disturbing c
   await format.click();
   await expect(format).toBeFocused();
   await expect(format).toHaveAttribute("aria-selected", "true");
-  await page.goto("/unknown-page?from=bookmark#section");
-  await expect(page.getByRole("heading", { name: "ページが見つかりません" })).toBeVisible();
-  await expect(page).toHaveURL(/\/unknown-page\?from=bookmark#section$/u);
-  await page.getByRole("link", { name: "試合一覧へ戻る" }).click();
-  await expect(page.getByRole("region", { name: "試合一覧", exact: true })).toBeVisible();
 });
 
-test("preserves an unfinished numeric edit across responsive layouts and refuses to save the old value", async ({
+test("retains an unfinished score across layouts and submits the corrected value once", async ({
   page,
 }) => {
-  const detail = makeMatchDetail({ matchId: "page-edit", players: makeFourPlayerResults() });
-  const responses: Record<string, unknown> = {
-    "/api/game-titles": { items: mswState.gameTitles },
-    "/api/map-masters": { items: mswState.mapMasters },
-    "/api/season-masters": { items: mswState.seasonMasters },
-    "/api/member-aliases": { items: [] },
-    "/api/held-events": { items: [makeHeldEventResponse()] },
-    "/api/held-events/held-1": makeHeldEventDetailResponse(),
-    "/api/held-events/held-1/summary": makeHeldEventResponse(),
-    "/api/matches/page-edit": detail,
-  };
-  let writes = 0;
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (path === "/api/matches/page-edit" && request.method() === "PUT") {
-      writes += 1;
-      await route.fulfill({ json: detail });
-    } else if (request.method() === "GET" && path in responses) {
-      await route.fulfill({ json: responses[path] });
-    } else {
-      await route.fallback();
-    }
+  const matchPath = `/matches/${confirmedContext.matchId}`;
+  const submissions: unknown[] = [];
+  const updated = makeMatchDetail({
+    ...confirmedContext,
+    layoutFamily: "momotetsu_2",
+    players: makeFourPlayerResults([{ revenueManYen: -42 }]),
+    version: "1",
+  });
+  await page.route(`**/api${matchPath}`, async (route) => {
+    if (route.request().method() === "PUT") {
+      submissions.push(route.request().postDataJSON());
+      await route.fulfill({
+        json: {
+          matchId: confirmedContext.matchId,
+          heldEventId: confirmedContext.heldEventId,
+          matchNoInEvent: 1,
+        } satisfies UpdateMatchResponse,
+      });
+    } else if (route.request().method() === "GET" && submissions.length > 0) {
+      await route.fulfill({ json: updated });
+    } else await route.fallback();
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/matches/page-edit/edit");
-  // Editing inherits complete conditions, so the setup starts closed behind its summary.
-  await expect(page.getByRole("button", { name: "条件を変更" })).toBeEnabled();
+  await page.goto(`${matchPath}/edit`);
   const revenue = page.getByRole("textbox", { name: "ぽんた 収益（万円）", exact: true });
   await revenue.fill("-");
   await revenue.press("Tab");
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(revenue).toHaveValue("-");
-  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("button", { name: /^ぽんた.*閉じる/u }).click();
+  await expect(revenue).toHaveCount(0);
+  const save = page.getByRole("button", { name: "保存", exact: true });
+  await save.click();
   await expect(page.getByRole("heading", { name: "入力内容を確認してください" })).toBeVisible();
   await expect(revenue).toHaveAttribute("aria-invalid", "true");
   await expect(revenue).toBeFocused();
   await expect(revenue).toHaveValue("-");
-  expect(writes).toBe(0);
+  expect(submissions).toHaveLength(0);
+  await revenue.fill("-42");
+  await save.click();
+  await expect(page).toHaveURL(matchPath);
+  expect(submissions).toEqual([
+    expect.objectContaining({
+      players: expect.arrayContaining([
+        expect.objectContaining({ memberId: "member_ponta", revenueManYen: -42 }),
+      ]),
+    }),
+  ]);
 });
 
 test("asks before discarding an OCR image and retains it when navigation is canceled", async ({

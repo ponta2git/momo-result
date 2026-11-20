@@ -1,8 +1,14 @@
 import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
-import { cloneElement, createContext, useContext, useId } from "react";
+import { cloneElement, useContext, useId } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useDialogFloatingContainer } from "@/shared/ui/feedback/DialogFloatingContainer";
+import {
+  SharedTooltipProviderContext,
+  tooltipOpenDelayMs,
+} from "@/shared/ui/feedback/TooltipProvider";
+
+export { TooltipProvider } from "@/shared/ui/feedback/TooltipProvider";
 
 type TooltipProps = {
   children: ReactElement<{ "aria-describedby"?: string | undefined }>;
@@ -10,25 +16,6 @@ type TooltipProps = {
   delay?: number;
   side?: "top" | "right" | "bottom" | "left";
 };
-
-const tooltipOpenDelayMs = 250;
-const tooltipGroupTimeoutMs = 400;
-const SharedTooltipProviderContext = createContext(false);
-
-/** Owns the app-wide delay group while keeping Tooltip independently renderable in tests. */
-export function TooltipProvider({ children }: { children: ReactNode }) {
-  return (
-    <SharedTooltipProviderContext value>
-      <BaseTooltip.Provider
-        closeDelay={0}
-        delay={tooltipOpenDelayMs}
-        timeout={tooltipGroupTimeoutMs}
-      >
-        {children}
-      </BaseTooltip.Provider>
-    </SharedTooltipProviderContext>
-  );
-}
 
 /** A supplementary description; the trigger remains responsible for its accessible name. */
 export function Tooltip({ children, content, delay, side = "top" }: TooltipProps) {

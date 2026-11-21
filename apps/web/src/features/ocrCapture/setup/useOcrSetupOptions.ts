@@ -101,9 +101,8 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   const selectedHeldEvent = heldEvents.find((event) => event.id === value.heldEventId);
   const heldEventPicker = useHeldEventPickerDirectory({
     enabled,
-    readSelectedSummary: false,
     selectedEvent: selectedHeldEvent,
-    selectedId: value.heldEventId ?? "",
+    selectedId: selectedHeldEvent?.id ?? "",
   });
   const gameTitlesLoadFailed = shouldShowQueryError(gameTitlesQuery);
   const heldEventsLoadFailed = shouldShowQueryError(heldEventsQuery);

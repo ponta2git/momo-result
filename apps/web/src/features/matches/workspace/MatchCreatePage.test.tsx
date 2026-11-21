@@ -493,7 +493,9 @@ describe("MatchCreatePage", () => {
 
   it("prefills the requested held event with its server-supplied next match number", async () => {
     setDevUser();
+    const summary = vi.fn(() => new HttpResponse(null, { status: 500 }));
     server.use(
+      http.get("/api/held-events/held-requested/summary", summary),
       http.get("/api/held-events", () =>
         HttpResponse.json({
           items: [
@@ -535,6 +537,7 @@ describe("MatchCreatePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
+    expect(summary).not.toHaveBeenCalled();
   });
 
   it("numbers the match from a fresh read of its held event, not an older list entry", async () => {

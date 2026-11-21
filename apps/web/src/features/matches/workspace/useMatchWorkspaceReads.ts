@@ -146,10 +146,10 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
     needsRecordContext,
   );
   const initialHeldEventItems = preferHeldEventItem(pickerItems, recordContext.event);
+  const selectedEvent = initialHeldEventItems.find((event) => event.id === heldEventId);
   const heldEventPicker = useHeldEventPickerDirectory({
-    readSelectedSummary: !needsRecordContext,
-    selectedEvent: initialHeldEventItems.find((event) => event.id === heldEventId),
-    selectedId: heldEventId,
+    selectedEvent,
+    selectedId: needsRecordContext ? (selectedEvent?.id ?? "") : heldEventId,
   });
 
   const heldEventItems = mergeHeldEventItems(

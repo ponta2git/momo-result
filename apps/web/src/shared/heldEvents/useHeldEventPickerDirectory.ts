@@ -23,12 +23,10 @@ function pickerErrorMessage(error: unknown): string {
  */
 export function useHeldEventPickerDirectory({
   enabled = true,
-  readSelectedSummary = true,
   selectedEvent,
   selectedId,
 }: {
   enabled?: boolean | undefined;
-  readSelectedSummary?: boolean;
   selectedEvent?: HeldEventResponse | undefined;
   selectedId: string;
 }): HeldEventPickerDirectory {
@@ -44,19 +42,15 @@ export function useHeldEventPickerDirectory({
   const selectedSummaryQuery = useQuery(
     heldEventSummaryQueryOptions(
       selectedId,
-      enabled && readSelectedSummary && Boolean(selectedId) && !resolvedWithoutSummary,
+      enabled && Boolean(selectedId) && !resolvedWithoutSummary,
     ),
   );
-  const resolvedSelection =
-    resolvedWithoutSummary ?? (readSelectedSummary ? selectedSummaryQuery.data : undefined);
+  const resolvedSelection = resolvedWithoutSummary ?? selectedSummaryQuery.data;
   const scopeChanging = Boolean(directoryQuery.isPlaceholderData && directoryQuery.isFetching);
 
   const directoryFailed = shouldShowQueryError(directoryQuery);
   const selectionFailed = Boolean(
-    readSelectedSummary &&
-    selectedId &&
-    !resolvedSelection &&
-    shouldShowQueryError(selectedSummaryQuery),
+    selectedId && !resolvedSelection && shouldShowQueryError(selectedSummaryQuery),
   );
   const error = useRetryNotice(
     directoryFailed

@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { lazy, Suspense } from "react";
 import type { RouteObject } from "react-router-dom";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OcrCapturePage } from "@/features/ocrCapture/OcrCapturePage";
 import type { AuthMeResponse } from "@/shared/api/auth";
@@ -551,7 +551,9 @@ describe("OcrCapturePage", () => {
   it("inherits held-event context and returns to that event after starting OCR", async () => {
     setDevUser();
     const createdDrafts: MatchDraftRequestBody[] = [];
+    const summary = vi.fn(() => new HttpResponse(null, { status: 500 }));
     server.use(
+      http.get("/api/held-events/held-scoped/summary", summary),
       http.get("/api/held-events", () =>
         HttpResponse.json({
           items: [
@@ -593,6 +595,7 @@ describe("OcrCapturePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き1件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
+    expect(summary).not.toHaveBeenCalled();
     // A capture started from a held event's hub returns there when abandoned.
     expect(screen.getByRole("link", { name: "取り込みをやめる" })).toHaveAttribute(
       "href",

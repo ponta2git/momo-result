@@ -6,6 +6,9 @@ import cats.syntax.all.*
 import momo.api.domain.ids.HeldEventId
 import momo.api.domain.{
   HeldEventDetail,
+  HeldEventIdentity,
+  HeldEventMatchSetup,
+  HeldEventRecordContext,
   HeldEventSummary,
   PublicId,
   RecordNavigation,
@@ -85,3 +88,18 @@ final class InMemoryHeldEventDetailReadModel[F[_]: Monad](
   override def summary(id: HeldEventId): F[Option[HeldEventSummary]] = find(id).map(_.map(detail =>
     HeldEventSummary(detail.event, detail.matches.size, detail.drafts.size, detail.nextMatchNo)
   ))
+
+  override def latest: F[Option[HeldEventIdentity]] =
+    events.snapshot.map(_.maxOption(using RecordNavigationOrder.heldEvents)
+      .map(e => HeldEventIdentity(e.id, e.publicId)))
+
+  override def recordContext(id: HeldEventId): F[Option[HeldEventRecordContext]] =
+    find(id).map(_.map { detail =>
+      val previous = detail.matches.maxByOption(_.matchNoInEvent.value).map(m =>
+        HeldEventMatchSetup(m.gameTitleId, m.seasonMasterId, m.mapMasterId)
+      )
+      HeldEventRecordContext(
+        HeldEventSummary(detail.event, detail.matches.size, detail.drafts.size, detail.nextMatchNo),
+        previous
+      )
+    })

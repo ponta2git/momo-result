@@ -158,3 +158,36 @@ object HeldEventSummaryResponse:
       summary.nextMatchNo,
       summary.event.publicId.map(_.decimalString),
     )
+
+final case class LatestHeldEventResponse(
+    latestHeldEventId: Option[String],
+    publicId: Option[String]
+) derives Codec.AsObject
+
+object LatestHeldEventResponse:
+  def from(latest: Option[momo.api.domain.HeldEventIdentity]): LatestHeldEventResponse =
+    LatestHeldEventResponse(latest.map(_.id.value), latest.flatMap(_.publicId.map(_.decimalString)))
+
+final case class HeldEventMatchSetupResponse(
+    gameTitleId: String,
+    seasonMasterId: String,
+    mapMasterId: String
+) derives Codec.AsObject
+
+final case class HeldEventRecordContextResponse(
+    event: HeldEventSummaryResponse,
+    previousMatch: Option[HeldEventMatchSetupResponse]
+) derives Codec.AsObject
+
+object HeldEventRecordContextResponse:
+  def from(context: momo.api.domain.HeldEventRecordContext): HeldEventRecordContextResponse =
+    HeldEventRecordContextResponse(
+      HeldEventSummaryResponse.from(context.summary),
+      context.previousMatch.map(m =>
+        HeldEventMatchSetupResponse(
+          m.gameTitleId.value,
+          m.seasonMasterId.value,
+          m.mapMasterId.value
+        )
+      )
+    )

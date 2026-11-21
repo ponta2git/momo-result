@@ -33,6 +33,7 @@ export async function syncHeldEventCreatedCache(
   await queryClient.cancelQueries({ queryKey, exact: true });
   queryClient.setQueryData<HeldEventSummaryResponse>(queryKey, event);
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.latest() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() }),
     queryClient.invalidateQueries({
       queryKey: heldEventKeys.detailRoot(),
@@ -50,6 +51,7 @@ export async function syncHeldEventDeletedCache(
   await queryClient.cancelQueries(filter);
   queryClient.removeQueries(filter);
   await Promise.all([
+    queryClient.invalidateQueries({ queryKey: heldEventKeys.latest() }),
     queryClient.invalidateQueries({ queryKey: heldEventKeys.listRoot() }),
     queryClient.invalidateQueries({
       queryKey: heldEventKeys.detailRoot(),

@@ -148,9 +148,10 @@ test.describe("on a touch screen", () => {
     const original = recentMean(outlook).toFixed(2);
     await expect(average).toHaveValue(original);
     const slider = page.getByRole("slider", { name: "ぽんたの平均順位を動かす" });
-    await slider.scrollIntoViewIfNeeded();
+    const thumb = slider.locator("..");
+    await thumb.scrollIntoViewIfNeeded();
     const touch = await page.context().newCDPSession(page);
-    const thumb = await centerOf(slider.locator(".."));
+    const initial = await centerOf(thumb);
     const scrolled = await page.evaluate(() => window.scrollY);
     // The control around the track: the thumb sits inside it, so this is its full width.
     const track = await centerOf(
@@ -158,7 +159,7 @@ test.describe("on a touch screen", () => {
     );
 
     // A touch that only presses the thumb does not snap the exact value.
-    await touchPath(touch, [thumb, thumb]);
+    await touchPath(touch, [initial, initial]);
     await expect(average).toHaveValue(original);
     // A vertical touch on the track is scrolling, not a value change.
     const away = { x: track.x - 80, y: track.y };
@@ -166,8 +167,12 @@ test.describe("on a touch screen", () => {
     await expect(average).toHaveValue(original);
     await expect.poll(() => page.evaluate(() => window.scrollY)).not.toBe(scrolled);
     await settledScroll(page);
-    // A horizontal drag from the thumb moves the value.
-    const moved = await centerOf(slider.locator(".."));
+    // A fling can leave the thumb offscreen or under the fixed answer strip.
+    await thumb.evaluate((element) =>
+      element.scrollIntoView({ block: "center", behavior: "instant" }),
+    );
+    await thumb.tap({ trial: true });
+    const moved = await centerOf(thumb);
     await touchPath(touch, [
       moved,
       { x: moved.x + 20, y: moved.y },

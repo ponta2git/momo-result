@@ -20,6 +20,8 @@ object ApiEndpoints:
     OcrDraftEndpoints.get,
     OcrDraftEndpoints.listByIds,
     ExportEndpoints.matches,
+    HeldEventsEndpoints.latest,
+    HeldEventsEndpoints.recordContext,
     HeldEventsEndpoints.list,
     HeldEventsEndpoints.get,
     HeldEventsEndpoints.draftStatuses,

@@ -124,7 +124,9 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
     }
   }
 
-  test("whole-event detail rejects record overflow while the scalar summary remains available") {
+  test(
+    "whole-event detail rejects record overflow while the summary and record context remain available"
+  ) {
     val maximum = PostgresReadBudget.HeldEventRecords
     val detail = PostgresHeldEventDetailReadModel[IO](transactor)
     for
@@ -138,6 +140,7 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       rejected <- detail.find(eventId).attempt
       statusOverflow <- detail.draftStatuses(eventId).attempt
       summary <- detail.summary(eventId)
+      context <- detail.recordContext(eventId)
     yield
       assertEquals(empty, Some(Nil))
       assertEquals(missing, None)
@@ -146,6 +149,8 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       assertEquals(accepted.map(_.drafts.size), Some(maximum))
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
       assertEquals(summary.map(_.draftCount), Some(maximum + 1))
+      assertEquals(context.map(_.summary), summary)
+      assert(context.exists(_.previousMatch.isEmpty))
   }
 
   test("whole-event detail validates active draft labels and ignores discarded drafts") {

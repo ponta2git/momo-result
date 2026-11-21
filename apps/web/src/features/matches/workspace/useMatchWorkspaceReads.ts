@@ -138,18 +138,18 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
       memberAliasesQueryOptions(),
     ],
   });
-  // A record in a held event, requested or chosen by default, reads that event with its matches:
-  // the next match number and the previous match's conditions come from that one fresh read.
-  // Editing keeps the match's own conditions; review only needs it to choose a held event.
+  // Editing keeps the saved conditions. Review only needs defaults before an event is chosen.
   const pickerItems = heldEventsQuery.data?.items ?? [];
+  const needsRecordContext = mode === "create" || (mode === "review" && !heldEventId);
   const recordContext = useRecordContext(
     heldEventId || preferredHeldEventId || latestHeldEvent(pickerItems)?.id,
-    mode === "create" || (mode === "review" && !heldEventId),
+    needsRecordContext,
   );
   const initialHeldEventItems = preferHeldEventItem(pickerItems, recordContext.event);
+  const selectedEvent = initialHeldEventItems.find((event) => event.id === heldEventId);
   const heldEventPicker = useHeldEventPickerDirectory({
-    selectedEvent: initialHeldEventItems.find((event) => event.id === heldEventId),
-    selectedId: heldEventId,
+    selectedEvent,
+    selectedId: needsRecordContext ? (selectedEvent?.id ?? "") : heldEventId,
   });
 
   const heldEventItems = mergeHeldEventItems(

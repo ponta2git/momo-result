@@ -9,7 +9,7 @@ import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema"
 import { useOcrSetup } from "@/features/ocrCapture/setup/useOcrSetup";
 import { heldEventKeys, masterKeys } from "@/shared/api/queryKeys";
 import { createDeferred } from "@/test/deferred";
-import { makeHeldEventDetailResponse, makeHeldEventResponse } from "@/test/factories/heldEvents";
+import { makeHeldEventRecordContext, makeHeldEventResponse } from "@/test/factories/heldEvents";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -214,9 +214,9 @@ describe("useOcrSetup", () => {
       ],
     });
     server.use(
-      http.get("/api/held-events/held-requested", () =>
+      http.get("/api/held-events/held-requested/record-context", () =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({
+          makeHeldEventRecordContext({
             draftCount: 2,
             heldAt: "2026-01-02T00:00:00.000Z",
             id: "held-requested",
@@ -267,10 +267,9 @@ describe("useOcrSetup", () => {
     queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), {
       items: [heldEvent],
     });
-    queryClient.setQueryData(heldEventKeys.detail(heldEvent.id), {
+    queryClient.setQueryData(heldEventKeys.recordContext(heldEvent.id), {
       kind: "found",
-      detail: makeHeldEventDetailResponse({ ...heldEvent }),
-      navigation: { kind: "available" },
+      value: makeHeldEventRecordContext(heldEvent),
     });
 
     const refreshStarted = createDeferred();
@@ -293,9 +292,9 @@ describe("useOcrSetup", () => {
         await refreshResponse.promise;
         return HttpResponse.json({ items: [{ ...heldEvent, nextMatchNo: 9 }] });
       }),
-      http.get(`/api/held-events/${heldEvent.id}`, async () => {
+      http.get(`/api/held-events/${heldEvent.id}/record-context`, async () => {
         await refreshResponse.promise;
-        return HttpResponse.json(makeHeldEventDetailResponse({ ...heldEvent, nextMatchNo: 9 }));
+        return HttpResponse.json(makeHeldEventRecordContext({ ...heldEvent, nextMatchNo: 9 }));
       }),
     );
 
@@ -357,7 +356,7 @@ describe("useOcrSetup", () => {
     });
     queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     server.use(
-      http.get("/api/held-events/held-requested", () =>
+      http.get("/api/held-events/held-requested/record-context", () =>
         HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
       ),
     );
@@ -401,7 +400,7 @@ describe("useOcrSetup", () => {
     });
     queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     server.use(
-      http.get("/api/held-events/held-missing", () =>
+      http.get("/api/held-events/held-missing/record-context", () =>
         HttpResponse.json({ code: "NOT_FOUND", detail: "not found" }, { status: 404 }),
       ),
     );

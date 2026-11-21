@@ -360,8 +360,15 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
       empty <- detail.find(heldEventId)
       missingSummary <- detail.summary(absentId)
       emptySummary <- detail.summary(heldEventId)
+      missingContext <- detail.recordContext(absentId)
+      emptyContext <- detail.recordContext(heldEventId)
       _ <- heldEvents.create(HeldEvent(otherId, now))
-      _ <- createMatch(sampleMatch("detail-second", 2))
+      _ <- seedSecondTitle
+      _ <- createMatch(sampleMatch("detail-second", 2).copy(
+        gameTitleId = secondGameTitleId,
+        seasonMasterId = secondSeasonMasterId,
+        mapMasterId = secondMapMasterId,
+      ))
       _ <- createMatch(sampleMatch("detail-first", 1))
       _ <- createMatch(sampleMatch("detail-other", 9).copy(heldEventId = otherId))
       _ <- matchNotes.replace(
@@ -384,13 +391,23 @@ final class PostgresMatchesRepositorySpec extends IntegrationSuite
           ('detail-outside', $otherId, 92, 'draft_ready', 'account_ponta', 'member_ponta', $now, $now)
       """.update.run.transact(transactor)
       summary <- detail.summary(heldEventId)
+      context <- detail.recordContext(heldEventId)
       snapshot <-
         assertReadSnapshot(xa => PostgresHeldEventDetailReadModel[IO](xa).find(heldEventId))
     yield
       assertEquals(absent, None)
       assertEquals(missingSummary, None)
+      assertEquals(missingContext, None)
       assertEquals(emptySummary, Some(HeldEventSummary(HeldEvent(heldEventId, now), 0, 0, 1)))
+      assertEquals(emptyContext, emptySummary.map(HeldEventRecordContext(_, None)))
       assertEquals(summary, Some(HeldEventSummary(HeldEvent(heldEventId, now), 2, 3, 5)))
+      assertEquals(
+        context,
+        summary.map(HeldEventRecordContext(
+          _,
+          Some(HeldEventMatchSetup(secondGameTitleId, secondSeasonMasterId, secondMapMasterId))
+        ))
+      )
       assertEquals(empty.map(_.nextMatchNo), Some(1))
       assertEquals(empty.map(_.matches), Some(Nil))
       assertEquals(empty.map(_.drafts), Some(Nil))

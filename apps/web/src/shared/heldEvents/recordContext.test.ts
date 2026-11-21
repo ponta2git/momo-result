@@ -1,8 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { fillRecordSetup, previousMatchSetup } from "@/shared/heldEvents/recordContext";
-import { makeHeldEventDetailResponse } from "@/test/factories/heldEvents";
+import { fillRecordSetup } from "@/shared/heldEvents/recordContext";
 
 const titles = [{ id: "gt_2" }, { id: "gt_world" }];
 const seasons2 = [
@@ -17,21 +16,7 @@ const empty = { gameTitleId: "", seasonMasterId: "", mapMasterId: "" };
 const previous = { gameTitleId: "gt_2", seasonMasterId: "s_ss", mapMasterId: "m_west" };
 
 describe("record setup defaults", () => {
-  it("follows the held event's latest match, not its first or the lists' first entries", () => {
-    const detail = makeHeldEventDetailResponse({
-      matches: [3, 1, 2].map((matchNoInEvent) => ({
-        gameTitleId: "gt_2",
-        mapMasterId: matchNoInEvent === 3 ? "m_west" : "m_east",
-        matchId: `match-${matchNoInEvent}`,
-        matchNoInEvent,
-        ownerMemberId: "member_ponta",
-        playedAt: "2026-01-01T00:00:00.000Z",
-        seasonMasterId: matchNoInEvent === 3 ? "s_ss" : "s_aw",
-      })),
-    });
-    expect(previousMatchSetup(detail)).toEqual(previous);
-    expect(previousMatchSetup(makeHeldEventDetailResponse())).toBeUndefined();
-
+  it("carries the previous confirmed match's setup into an empty form", () => {
     expect(
       fillRecordSetup({ value: empty, previous, gameTitles: titles, seasons: [], maps: [] }),
     ).toEqual(previous);

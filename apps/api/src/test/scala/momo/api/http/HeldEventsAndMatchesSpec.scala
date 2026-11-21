@@ -53,10 +53,26 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"),
     )
     for
+      emptyLatest <- httpApp.run(readGet(uri"/api/held-events/lookup/latest"))
+      _ = assertEquals(emptyLatest.status, Status.Ok)
+      empty <- emptyLatest.as[Json]
+      _ = assertEquals(jsonField[Option[String]](empty, "latestHeldEventId"), None)
+      missingContext <-
+        httpApp.run(readGet(uri"/api/held-events/missing-held-event/record-context"))
+      _ <- assertProblem(missingContext, Status.NotFound, "NOT_FOUND", "held event was not found")
       createRes <- httpApp.run(createReq)
       _ = assertEquals(createRes.status, Status.Ok)
       body <- createRes.as[Json]
       id = jsonField[String](body, "id")
+      latestRes <- httpApp.run(readGet(uri"/api/held-events/lookup/latest"))
+      latest <- latestRes.as[Json]
+      _ = assertEquals(jsonField[String](latest, "latestHeldEventId"), id)
+      contextRes <-
+        httpApp.run(readGet(Uri.unsafeFromString(s"/api/held-events/$id/record-context")))
+      _ = assertEquals(contextRes.status, Status.Ok)
+      context <- contextRes.as[Json]
+      _ = assertEquals(jsonField[String](jsonField[Json](context, "event"), "id"), id)
+      _ = assertEquals(jsonField[Option[Json]](context, "previousMatch"), None)
       listRes <- httpApp.run(readGet(uri"/api/held-events"))
       _ = assertEquals(listRes.status, Status.Ok)
       listBody <- listRes.as[Json]

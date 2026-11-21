@@ -212,6 +212,14 @@ export function useSeriesAnalysisLocationState({
       commitSelectionChange({ kind: "member", role, memberId }, { replace: false }),
     [commitSelectionChange],
   );
+  const updateOutlookPair = useCallback(
+    (focusMemberId: string, rivalMemberId: string) =>
+      commitSelectionChange(
+        { kind: "memberPair", focusMemberId, rivalMemberId },
+        { replace: false },
+      ),
+    [commitSelectionChange],
+  );
 
   return {
     actions: {
@@ -225,6 +233,7 @@ export function useSeriesAnalysisLocationState({
       updateOwnerMetric,
       updateExpectedRankGapMember,
       updateOutlookMember,
+      updateOutlookPair,
     },
     activeView: selection.view ?? defaultSeriesAnalysisView,
     deferredSelection,

@@ -35,7 +35,8 @@ export type SeriesAnalysisSelectionChange =
   | { kind: "expectedRankGapMember"; memberId: string | undefined }
   | { kind: "focus"; matchId: string | undefined }
   | { kind: "clearScope" }
-  | { kind: "member"; role: "focus" | "rival"; memberId: string };
+  | { kind: "member"; role: "focus" | "rival"; memberId: string }
+  | { kind: "memberPair"; focusMemberId: string; rivalMemberId: string };
 
 /** A changed scope cannot inherit a match from the previous comparison. */
 export function changeSeriesAnalysisSelection(
@@ -77,6 +78,12 @@ export function changeSeriesAnalysisSelection(
       return {
         ...current,
         [change.role === "focus" ? "focusMemberId" : "rivalMemberId"]: change.memberId,
+      };
+    case "memberPair":
+      return {
+        ...current,
+        focusMemberId: change.focusMemberId,
+        rivalMemberId: change.rivalMemberId,
       };
   }
 }

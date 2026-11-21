@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useId, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import type { OutlookRelation } from "@/features/seriesComparison/outlook/calculation";
 import { OutlookChartScrubber } from "@/features/seriesComparison/outlook/OutlookChartScrubber";
@@ -20,6 +21,9 @@ export type OutlookChartPattern = {
   selected: OutlookChartSelection;
 };
 
+/** A rough width for a 12px label of Japanese names and digits. */
+const labelWidth = (text: string) => text.length * 12 + 4;
+
 /** Every pattern uses the same players, axes, and observation position. */
 export const OutlookChart = memo(function OutlookChart({
   pattern,
@@ -32,6 +36,9 @@ export const OutlookChart = memo(function OutlookChart({
   descriptionId,
   onHorizonChange,
   marker,
+  size = "regular",
+  caption,
+  valueLabels = false,
 }: {
   pattern: OutlookChartPattern;
   names: readonly [string, string];
@@ -43,6 +50,11 @@ export const OutlookChart = memo(function OutlookChart({
   descriptionId: string;
   onHorizonChange: (selection: { horizon: number; horizonText: string }) => void;
   marker?: { h: number; label: string; averages: readonly [number, number] } | null;
+  /** `compact` keeps the shared axes for small multiples beside a regular main chart. */
+  size?: "regular" | "compact";
+  caption?: ReactNode;
+  /** Name each line's value at the observed game, so the main chart reads without the table. */
+  valueLabels?: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(320);
@@ -72,11 +84,12 @@ export const OutlookChart = memo(function OutlookChart({
   const max = ticks.at(-1) ?? 4;
   const tickStep = (ticks[1] ?? max) - min;
   const tickDigits = Math.max(2, Math.min(4, Math.ceil(-Math.log10(tickStep))));
-  const left = 56;
-  const right = width - 16;
-  const top = 26;
-  const bottom = 190;
-  const height = 230;
+  const compact = size === "compact";
+  const left = compact ? 44 : 56;
+  const right = width - (compact ? 8 : 16);
+  const top = compact ? 18 : 26;
+  const height = compact ? 140 : 230;
+  const bottom = compact ? height - 26 : 190;
   const x = (h: number) => left + (h / range) * (right - left);
   const y = (average: number) => top + ((average - min) / (max - min)) * (bottom - top);
   const visible = pattern.points.filter((point) => point.h <= range);
@@ -85,11 +98,59 @@ export const OutlookChart = memo(function OutlookChart({
       .map((point, index) => `${index ? "L" : "M"}${x(point.h)},${y(point.averages[role])}`)
       .join(" ");
   const shownMarker = marker && marker.h <= range ? marker : null;
+  const renderValueLabels = () => {
+    const ys = people.map((person) => y(selected.averages[person.role]));
+    const [first, second] = ys as [number, number];
+    // The upper value sits above its dot and the lower one below.
+    const baselines = first <= second ? [first - 10, second + 16] : [first + 16, second - 10];
+    const texts = people.map(
+      (person) => `${names[person.role]} ${selected.formatted[person.role]}`,
+    );
+    // Pick the side of the observed game where the lines stay farthest from the labels.
+    const clearance = (side: 1 | -1) => {
+      let nearest = Number.POSITIVE_INFINITY;
+      texts.forEach((text, index) => {
+        const from = side === 1 ? x(horizon) + 9 : x(horizon) - 9 - labelWidth(text);
+        const to = from + labelWidth(text);
+        if (from < left || to > right) nearest = Math.min(nearest, -1);
+        const boxTop = (baselines[index] ?? 0) - 11;
+        const boxBottom = (baselines[index] ?? 0) + 3;
+        for (const point of visible) {
+          const px = x(point.h);
+          if (px < from || px > to) continue;
+          for (const value of point.averages) {
+            const py = y(value);
+            nearest = Math.min(
+              nearest,
+              py < boxTop ? boxTop - py : py > boxBottom ? py - boxBottom : 0,
+            );
+          }
+        }
+      });
+      return nearest;
+    };
+    const side = clearance(1) >= clearance(-1) ? 1 : -1;
+    return people.map((person, index) => (
+      <text
+        key={person.memberId}
+        x={x(horizon) + side * 9}
+        y={baselines[index] ?? 0}
+        textAnchor={side === 1 ? "start" : "end"}
+        fontSize="12"
+        fill="var(--color-text-primary)"
+        stroke="var(--color-surface)"
+        strokeWidth="3"
+        paintOrder="stroke"
+      >
+        {texts[index]}
+      </text>
+    ));
+  };
 
   return (
     <figure className="grid min-w-0 content-start gap-2" aria-labelledby={titleId}>
       <figcaption id={titleId} className={contentText.heading}>
-        {pattern.label}
+        {caption ?? pattern.label}
       </figcaption>
       <div ref={root} className="relative min-w-0">
         <svg
@@ -127,8 +188,10 @@ export const OutlookChart = memo(function OutlookChart({
               )}
               <text
                 x={x(h)}
-                y={bottom + 20}
-                textAnchor="middle"
+                y={bottom + (compact ? 17 : 20)}
+                textAnchor={
+                  compact ? (h === 0 ? "start" : h === range ? "end" : "middle") : "middle"
+                }
                 fontSize="12"
                 fill="var(--color-text-secondary)"
               >
@@ -136,15 +199,17 @@ export const OutlookChart = memo(function OutlookChart({
               </text>
             </g>
           ))}
-          <text
-            x={(left + right) / 2}
-            y={height - 2}
-            textAnchor="middle"
-            fontSize="12"
-            fill="var(--color-text-secondary)"
-          >
-            この先の試合数
-          </text>
+          {compact ? null : (
+            <text
+              x={(left + right) / 2}
+              y={height - 2}
+              textAnchor="middle"
+              fontSize="12"
+              fill="var(--color-text-secondary)"
+            >
+              この先の試合数
+            </text>
+          )}
           {people.map((person) => (
             <path
               key={person.memberId}
@@ -181,7 +246,7 @@ export const OutlookChart = memo(function OutlookChart({
               ))}
               <text
                 x={Math.max(left + 4, Math.min(right - 4, x(shownMarker.h)))}
-                y={14}
+                y={compact ? 12 : 14}
                 textAnchor={
                   shownMarker.h < range / 4
                     ? "start"
@@ -217,6 +282,7 @@ export const OutlookChart = memo(function OutlookChart({
                   strokeWidth="1.5"
                 />
               ))}
+              {valueLabels ? renderValueLabels() : null}
             </g>
           ) : null}
         </svg>

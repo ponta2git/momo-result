@@ -37,12 +37,19 @@ export function useOutlookExamples(
   response: SeriesAnalysisOutlookSummary,
   memberId: string,
   condition: OutlookExampleCondition,
+  /** A list that opens apart from the shared per-person disclosure owns its open state. */
+  openState?: { open: boolean; setOpen: (open: boolean) => void },
 ): OutlookExamplesModel {
   const store = useOutlookWorkspaceStore();
   const edit = useOutlookEdit();
   const role = condition.kind === "goal" ? 0 : condition.role;
-  const input = useOutlookProjection(
+  const sharedInput = useOutlookProjection(
     useCallback((state: OutlookWorkspaceState) => outlookReferenceInput(state, role), [role]),
+  );
+  const localOpen = openState?.open;
+  const input = useMemo(
+    () => (localOpen === undefined ? sharedInput : { ...sharedInput, open: localOpen }),
+    [sharedInput, localOpen],
   );
   const { examples: query } = useOutlookReferenceResources(
     response,
@@ -78,7 +85,7 @@ export function useOutlookExamples(
   return {
     ...view,
     query,
-    setOpen: (open: boolean) => edit({ kind: "examples-open", role, open }),
+    setOpen: openState?.setOpen ?? ((open: boolean) => edit({ kind: "examples-open", role, open })),
     apply,
   };
 }

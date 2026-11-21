@@ -66,8 +66,8 @@ const FlowView = lazy(loadFlowView);
 const ContextView = lazy(loadContextView);
 const loadOutlookView = () =>
   loadLazyModule(() =>
-    import("@/features/seriesComparison/outlook/OutlookView").then((module) => ({
-      default: module.OutlookView,
+    import("@/features/seriesComparison/outlook/workspace/OutlookWorkspaceView").then((module) => ({
+      default: module.OutlookWorkspaceView,
     })),
   );
 const OutlookView = lazy(loadOutlookView);
@@ -114,6 +114,7 @@ type SeriesAnalysisContentProps = {
   showPurposeTabs?: boolean;
   outlookSelection?: SeriesAnalysisSelection;
   onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
+  onOutlookPairChange?: (focusMemberId: string, rivalMemberId: string) => void;
   ownerMetric?: OwnerMetricId | undefined;
   onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
   activeView?: SeriesAnalysisViewId;
@@ -153,6 +154,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   showPurposeTabs = true,
   outlookSelection = emptyOutlookSelection,
   onOutlookMemberChange,
+  onOutlookPairChange,
 }: SeriesAnalysisContentProps) {
   const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
@@ -193,6 +195,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
                   summary={bundle.outlook}
                   selection={displayedSelection}
                   onMemberChange={onOutlookMemberChange}
+                  onPairChange={onOutlookPairChange}
                 />
                 <SeriesAnalysisArrival ready={navigationReady} root={root} />
               </Suspense>

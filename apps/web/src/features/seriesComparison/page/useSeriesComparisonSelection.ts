@@ -98,6 +98,7 @@ export function useSeriesComparisonSelection() {
       updateOwnerMetric: selectionLocation.actions.updateOwnerMetric,
       updateExpectedRankGapMember: selectionLocation.actions.updateExpectedRankGapMember,
       updateOutlookMember: selectionLocation.actions.updateOutlookMember,
+      updateOutlookPair: selectionLocation.actions.updateOutlookPair,
     },
     options: {
       hasError: optionsFailed,

@@ -68,6 +68,8 @@ export function OutlookBodyLayout({
       <div
         className={cn(
           "grid min-w-0 grid-cols-1 gap-x-10 gap-y-8 lg:items-start lg:gap-y-10",
+          // A control scrolled into view by focus stops below the navigation and the answer strip.
+          "[&_*]:scroll-mt-[calc(var(--global-nav-height)+6rem)] xl:[&_*]:scroll-mt-(--sticky-below-nav)",
           columnsClass,
         )}
       >

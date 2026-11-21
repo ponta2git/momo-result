@@ -1,91 +1,47 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 
-import {
-  outlookReferenceInput,
-  outlookReferenceView,
-} from "@/features/seriesComparison/outlook/outlookProjections";
 import type {
-  OutlookReferenceCondition,
-  OutlookReferenceView,
-} from "@/features/seriesComparison/outlook/outlookProjections";
-import { applyOutlookExample } from "@/features/seriesComparison/outlook/outlookProposals";
-import type {
-  HistoricalOutlookExample,
-  OutlookReferenceResources,
-} from "@/features/seriesComparison/outlook/outlookReferenceTypes";
-import {
-  useOutlookEdit,
-  useOutlookWorkspaceStore,
-  useOutlookProjection,
-} from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
-import type { OutlookWorkspaceState } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+  RankDistribution,
+  RequiredMean,
+} from "@/features/seriesComparison/outlook/calculation";
+import { outlookGoalExampleList } from "@/features/seriesComparison/outlook/outlookAnswers";
+import type { OutlookGoalExpectation } from "@/features/seriesComparison/outlook/outlookProposals";
+import type { HistoricalOutlookExample } from "@/features/seriesComparison/outlook/outlookReferenceTypes";
+import { useOutlookEdit } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import { useOutlookReferenceResources } from "@/features/seriesComparison/outlook/useOutlookReferenceResources";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 
-export type OutlookExampleCondition = OutlookReferenceCondition & {
-  onUsePerformance?: (() => void) | undefined;
-  pendingDescriptionId?: string | undefined;
-};
-export type OutlookExamplesModel = OutlookReferenceView &
-  Readonly<{
-    query: OutlookReferenceResources["examples"];
-    setOpen: (open: boolean) => void;
-    apply: (example: HistoricalOutlookExample) => void;
-  }>;
-
-export function useOutlookExamples(
-  response: SeriesAnalysisOutlookSummary,
-  memberId: string,
-  condition: OutlookExampleCondition,
-  /** A list that opens apart from the shared per-person disclosure owns its open state. */
-  openState?: { open: boolean; setOpen: (open: boolean) => void },
-): OutlookExamplesModel {
-  const store = useOutlookWorkspaceStore();
+/** The focus person's past 20-game examples that strictly meet the goal, read when opened. */
+export function useOutlookGoalExamples({
+  response,
+  focusMemberId,
+  open,
+  required,
+  rival,
+  expected,
+}: {
+  response: SeriesAnalysisOutlookSummary;
+  focusMemberId: string;
+  open: boolean;
+  required: RequiredMean;
+  rival: RankDistribution;
+  expected: OutlookGoalExpectation;
+}) {
   const edit = useOutlookEdit();
-  const role = condition.kind === "goal" ? 0 : condition.role;
-  const sharedInput = useOutlookProjection(
-    useCallback((state: OutlookWorkspaceState) => outlookReferenceInput(state, role), [role]),
-  );
-  const localOpen = openState?.open;
-  const input = useMemo(
-    () => (localOpen === undefined ? sharedInput : { ...sharedInput, open: localOpen }),
-    [sharedInput, localOpen],
-  );
   const { examples: query } = useOutlookReferenceResources(
     response,
-    memberId,
+    focusMemberId,
     undefined,
-    input.open,
+    open,
   );
-  const view = useMemo(
-    () => outlookReferenceView(input, condition, query.data),
-    [input, condition, query.data],
+  const list = useMemo(
+    () => outlookGoalExampleList(query.data, required, rival),
+    [query.data, required, rival],
   );
-  const apply = (example: HistoricalOutlookExample) => {
-    const current = store.read();
-    if (!current) return;
-    const result = applyOutlookExample(
-      current,
-      {
-        key: input.key,
-        artifactId: response.artifact.artifactId,
-        role,
-        target: input.target,
-        peer: input.peer,
-        condition:
-          condition.kind === "goal"
-            ? { kind: "goal", cumulative: condition.cumulative, horizon: input.goalHorizon }
-            : { kind: "mean" },
-      },
-      example,
-    );
-    store.commit(result.state);
-    if (result.applied && condition.kind === "goal") condition.onUsePerformance?.();
-  };
   return {
-    ...view,
     query,
-    setOpen: openState?.setOpen ?? ((open: boolean) => edit({ kind: "examples-open", role, open })),
-    apply,
+    list,
+    apply: (example: HistoricalOutlookExample) =>
+      edit({ kind: "apply-example", expected, example }),
   };
 }

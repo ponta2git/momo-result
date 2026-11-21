@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  needLineCrossing,
   needLinePoints,
   needLineScale,
   needLineThreshold,
@@ -17,18 +16,6 @@ describe("need line", () => {
     expect(needLineThreshold(behind, 2.55, 50)).toBeCloseTo(2.35);
     expect(needLineThreshold(behind, 2.55, 100)).toBeCloseTo(2.45);
     expect(needLineThreshold(ahead, 2.45, 100)).toBeCloseTo(2.49);
-  });
-
-  it("meets a constant future mean where the averages tie", () => {
-    expect(needLineCrossing(behind, 2.35, 2.55)).toBeCloseTo(50);
-    expect(needLineCrossing(ahead, 2.85, 2.45)).toBeCloseTo(10);
-    expect(needLineCrossing(ahead, 2.8, 2.45)).toBeCloseTo(11.43, 2);
-  });
-
-  it("has no crossing when the order never changes", () => {
-    expect(needLineCrossing(behind, 2.6, 2.55)).toBeNull();
-    expect(needLineCrossing(ahead, 2.4, 2.45)).toBeNull();
-    expect(needLineCrossing({ games: 10, focusRankSum: 25, rivalRankSum: 25 }, 2, 3)).toBeNull();
   });
 
   it("fits the axis around the compared lines inside the rank range", () => {

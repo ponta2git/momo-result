@@ -11,19 +11,6 @@ export function needLineThreshold(cumulative: CumulativePair, rivalMean: number,
   return rivalMean - (cumulative.focusRankSum - cumulative.rivalRankSum) / h;
 }
 
-/** Real-valued game count where a constant future mean meets the need line, if it ever does. */
-export function needLineCrossing(
-  cumulative: CumulativePair,
-  focusMean: number,
-  rivalMean: number,
-): number | null {
-  const gap = cumulative.focusRankSum - cumulative.rivalRankSum;
-  const speed = rivalMean - focusMean;
-  if (gap === 0 || speed === 0) return null;
-  const h = gap / speed;
-  return h > 0 ? h : null;
-}
-
 export type NeedLineScale = { min: number; max: number; ticks: number[] };
 
 /**

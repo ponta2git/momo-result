@@ -39,32 +39,25 @@ function randomWords(seed: string): () => number {
   };
 }
 
-type Candidate = {
-  ranks: Array<readonly [Rank, Rank]>;
-  difference: number;
-  signature: string;
-  index: number;
-};
+/** The drawn games, in canonical member order. They depend on no horizon, range, or role. */
+export type OutlookExampleCandidates = Readonly<{
+  canonicalMemberIds: readonly [string, string];
+  ranks: ReadonlyArray<ReadonlyArray<readonly [Rank, Rank]>>;
+  constantPerGameDifference: boolean;
+}>;
 
-/** Selection is canonical: reversing the displayed roles only reverses the resulting gaps. */
-export function generateOutlookExamples(input: {
+/**
+ * Draws the candidate futures once per title, canonical pair, joint distribution, and model
+ * version, so a different selection range reuses them.
+ */
+export function drawOutlookExampleCandidates(input: {
   gameTitleId: string;
   canonicalMemberIds: readonly [string, string];
-  focusMemberId: string;
-  cumulative: CumulativePair;
   joint: JointDistribution;
-  selectionRange?: 50 | 100 | 200;
-}): OutlookExamples {
-  validateCumulative(input.cumulative);
-  const { canonicalMemberIds, focusMemberId, joint } = input;
-  const selectionRange = input.selectionRange ?? 100;
-  if (![50, 100, 200].includes(selectionRange))
-    throw new RangeError("Example selection requires 50, 100, or 200 games.");
-  if (
-    canonicalMemberIds[0] === canonicalMemberIds[1] ||
-    !canonicalMemberIds.includes(focusMemberId)
-  )
-    throw new RangeError("Two distinct canonical members including the focus are required.");
+}): OutlookExampleCandidates {
+  const { canonicalMemberIds, joint } = input;
+  if (canonicalMemberIds[0] === canonicalMemberIds[1])
+    throw new RangeError("Two distinct canonical members are required.");
   const divisor = joint.weights.flat().reduce(gcd, 0n);
   if (divisor <= 0n) throw new RangeError("A nonempty legal joint distribution is required.");
   const cumulativeCells: Array<{ ranks: readonly [Rank, Rank]; end: bigint }> = [];
@@ -93,25 +86,55 @@ export function generateOutlookExamples(input: {
   const next = randomWords(
     JSON.stringify([OUTLOOK_MODEL_VERSION, input.gameTitleId, ...canonicalMemberIds]),
   );
-  const candidates: Candidate[] = [];
+  const ranks: Array<ReadonlyArray<readonly [Rank, Rank]>> = [];
   for (let index = 0; index < EXAMPLE_CANDIDATE_COUNT; index++) {
-    const ranks: Array<readonly [Rank, Rank]> = [];
-    const trajectory = [0];
-    let difference = 0;
+    const games: Array<readonly [Rank, Rank]> = [];
     // Drawing every candidate in full keeps its prefix identical for every selection range.
     for (let game = 0; game < EXAMPLE_GAME_COUNT; game++) {
       // Integer boundaries cannot select zero-mass/diagonal cells, even at either endpoint.
       const word = next();
       const cell = cells.find((candidate) => word < candidate.end);
       if (!cell) throw new RangeError("Joint mass did not cover the integer sample.");
-      ranks.push(cell.ranks);
-      if (game < selectionRange) {
-        difference += cell.ranks[1] - cell.ranks[0];
-        trajectory.push(difference);
-      }
+      games.push(cell.ranks);
     }
-    candidates.push({ ranks, difference, signature: trajectory.join(","), index });
+    ranks.push(games);
   }
+  return { canonicalMemberIds, ranks, constantPerGameDifference: differences.size === 1 };
+}
+
+type Candidate = {
+  ranks: ReadonlyArray<readonly [Rank, Rank]>;
+  difference: number;
+  signature: string;
+  index: number;
+};
+
+/** Selection is canonical: reversing the displayed roles only reverses the resulting gaps. */
+export function selectOutlookExamples(
+  drawn: OutlookExampleCandidates,
+  input: {
+    focusMemberId: string;
+    cumulative: CumulativePair;
+    selectionRange?: 50 | 100 | 200;
+  },
+): OutlookExamples {
+  validateCumulative(input.cumulative);
+  const { canonicalMemberIds } = drawn;
+  const { focusMemberId } = input;
+  const selectionRange = input.selectionRange ?? 100;
+  if (![50, 100, 200].includes(selectionRange))
+    throw new RangeError("Example selection requires 50, 100, or 200 games.");
+  if (!canonicalMemberIds.includes(focusMemberId))
+    throw new RangeError("Two distinct canonical members including the focus are required.");
+  const candidates: Candidate[] = drawn.ranks.map((ranks, index) => {
+    const trajectory = [0];
+    let difference = 0;
+    for (const [first, second] of ranks.slice(0, selectionRange)) {
+      difference += second - first;
+      trajectory.push(difference);
+    }
+    return { ranks, difference, signature: trajectory.join(","), index };
+  });
   candidates.sort((left, right) => left.difference - right.difference || left.index - right.index);
   const distinctCandidateCount = new Set(candidates.map((candidate) => candidate.signature)).size;
   const selected: Candidate[] = [];
@@ -168,6 +191,21 @@ export function generateOutlookExamples(input: {
   return {
     examples: [first, second, third],
     distinctCandidateCount,
-    constantPerGameDifference: differences.size === 1,
+    constantPerGameDifference: drawn.constantPerGameDifference,
   };
+}
+
+/** Draws and selects in one call; screens keep the draw and reselect when only the range moves. */
+export function generateOutlookExamples(input: {
+  gameTitleId: string;
+  canonicalMemberIds: readonly [string, string];
+  focusMemberId: string;
+  cumulative: CumulativePair;
+  joint: JointDistribution;
+  selectionRange?: 50 | 100 | 200;
+}): OutlookExamples {
+  validateCumulative(input.cumulative);
+  if (!input.canonicalMemberIds.includes(input.focusMemberId))
+    throw new RangeError("Two distinct canonical members including the focus are required.");
+  return selectOutlookExamples(drawOutlookExampleCandidates(input), input);
 }

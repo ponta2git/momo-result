@@ -2,7 +2,9 @@ import { X } from "lucide-react";
 import { useId, useRef } from "react";
 
 import {
+  compareRationals,
   distributionMean,
+  distributionsEqual,
   formatRational,
   meanLimits,
   nextMeanHundredths,
@@ -10,34 +12,23 @@ import {
   rationalToNumber,
   subtractRationals,
 } from "@/features/seriesComparison/outlook/calculation";
-import type {
-  CumulativePair,
-  RankDistribution,
-} from "@/features/seriesComparison/outlook/calculation";
-import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
+import type { RankDistribution, Rational } from "@/features/seriesComparison/outlook/calculation";
+import {
+  outlookAverage,
+  outlookSourceLabel,
+} from "@/features/seriesComparison/outlook/outlookPresentation";
 import type { OutlookRole } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { useOutlookPlayerEditor } from "@/features/seriesComparison/outlook/useOutlookPlayerEditor";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
+import { isImeComposing } from "@/shared/lib/ime";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
 import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
 import { InputControl } from "@/shared/ui/forms/Control";
 import { buildFieldDescribedBy } from "@/shared/ui/forms/Field";
+import { Slider } from "@/shared/ui/forms/Slider";
 import { contentText, fieldText } from "@/shared/ui/typography";
-
-const rangeKeys = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowDown",
-  "ArrowUp",
-  "Home",
-  "End",
-  "PageUp",
-  "PageDown",
-]);
-/** Native range thumbs travel inside the track by their radius; ticks follow the same path. */
-const THUMB_RADIUS_PX = 8;
 
 function differenceText(recent: RankDistribution, current: RankDistribution, games: number) {
   const difference = subtractRationals(distributionMean(recent), distributionMean(current));
@@ -49,58 +40,71 @@ function differenceText(recent: RankDistribution, current: RankDistribution, gam
   return `直近${games}戦より ${outlookAverage(absolute)} ${difference.numerator > 0n ? "良い" : "悪い"}`;
 }
 
-type Props = {
-  response: SeriesAnalysisOutlookSummary;
-  cumulative: CumulativePair;
-  names: readonly [string, string];
-  memberIds: readonly [string, string];
-  role: OutlookRole;
-  recent: RankDistribution;
-};
+/** The legal 0.01 value `steps` steps away, or null when none lies in that direction. */
+function stepped(mean: Rational, direction: -1 | 1, steps: number, opponent: RankDistribution) {
+  let value = mean;
+  let result: number | null = null;
+  for (let step = 0; step < steps; step++) {
+    const next = nextMeanHundredths(value, direction, opponent);
+    if (next === null) break;
+    result = next;
+    value = rational(BigInt(next), 100n);
+  }
+  return result;
+}
 
 /**
  * One person's future mean: the value, a slider with the recent mark, and a way back to it. The
- * slot right of the input holds either the pending commit/cancel pair or the way back, so neither
- * moves the input or the slider when it appears.
+ * slot right of the input holds either the pending commit and cancel pair or the way back, so
+ * neither moves the input or the slider when it appears.
  */
 export function OutlookAverageControl({
   response,
-  cumulative,
   names,
   memberIds,
   role,
   recent,
-}: Props) {
+}: {
+  response: SeriesAnalysisOutlookSummary;
+  names: readonly [string, string];
+  memberIds: readonly [string, string];
+  role: OutlookRole;
+  recent: RankDistribution;
+}) {
   const name = names[role];
   const headingId = useId();
   const inputId = useId();
-  const sliderId = useId();
   const statusId = `${inputId}-status`;
+  const sourceId = `${inputId}-source`;
   const inputRef = useRef<HTMLInputElement>(null);
-  const player = useOutlookPlayerEditor({
-    response,
-    role,
-    memberId: memberIds[role],
-    cumulative,
-    names,
-    showComparison: true,
-  });
-  const { editor, edit } = player;
-  const pending = editor.meanDraft !== undefined || editor.error !== undefined;
-  const currentMean = distributionMean(editor.distribution);
-  const limits = meanLimits(editor.opponent);
-  const min = Math.min(limits.minimumHundredths / 100, rationalToNumber(currentMean));
-  const max = Math.max(limits.maximumHundredths / 100, rationalToNumber(currentMean));
-  const position = (value: number) => (max === min ? 0 : (value - min) / (max - min));
-  const recentPosition = position(rationalToNumber(distributionMean(recent)));
-  const recentLeft = `calc(${THUMB_RADIUS_PX}px + (100% - ${THUMB_RADIUS_PX * 2}px) * ${recentPosition})`;
-
-  const begin = () => edit({ kind: "begin-gesture", role });
-  const finish = (cancel = false) => edit({ kind: "finish-gesture", cancel });
-  const commit = () => edit({ kind: "commit-mean", role });
+  const player = useOutlookPlayerEditor({ response, role, memberId: memberIds[role] });
+  const { view } = player;
+  const pending = view.meanDraft !== undefined || view.error !== undefined;
+  const currentMean = distributionMean(view.distribution);
+  const unchanged =
+    distributionsEqual(view.distribution, recent) &&
+    view.source.kind === "recent" &&
+    view.source.artifactId === view.artifactId &&
+    view.meanDraft === undefined;
+  const limits = meanLimits(view.opponent);
+  const legalMin = rational(BigInt(limits.minimumHundredths), 100n);
+  const legalMax = rational(BigInt(limits.maximumHundredths), 100n);
+  const outside =
+    compareRationals(currentMean, legalMin) < 0 || compareRationals(currentMean, legalMax) > 0;
+  const current = rationalToNumber(currentMean);
+  const source =
+    outlookSourceLabel(view.source, view.artifactId) ??
+    (outside
+      ? `この平均は、${names[role === 0 ? 1 : 0]}の今の指定と合わせて設定できる${(limits.minimumHundredths / 100).toFixed(2)}〜${(limits.maximumHundredths / 100).toFixed(2)}の外にあります`
+      : null);
+  const focusInput = () => inputRef.current?.focus({ preventScroll: true });
+  const commit = () => {
+    player.commit();
+    focusInput();
+  };
   const cancel = () => {
-    edit({ kind: "cancel-mean", role });
-    inputRef.current?.focus({ preventScroll: true });
+    player.cancel();
+    focusInput();
   };
 
   return (
@@ -112,7 +116,7 @@ export function OutlookAverageControl({
         <p id={statusId} className={cn(contentText.supporting, "tabular-nums")}>
           {pending
             ? `未反映・結果は ${outlookAverage(currentMean)}位 のまま`
-            : differenceText(recent, editor.distribution, response.recent.matchCount)}
+            : differenceText(recent, view.distribution, response.recent.matchCount)}
         </p>
       </div>
       <div className="flex min-w-0 items-center gap-2">
@@ -124,22 +128,22 @@ export function OutlookAverageControl({
             ref={inputRef}
             id={inputId}
             inputMode="decimal"
-            invalid={Boolean(editor.error)}
+            invalid={Boolean(view.error)}
             aria-describedby={buildFieldDescribedBy(
               statusId,
-              editor.error ? `${inputId}-error` : undefined,
+              view.error ? `${inputId}-error` : undefined,
             )}
-            value={editor.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")}
-            onChange={(event) => edit({ kind: "mean-draft", role, text: event.target.value })}
+            value={view.meanDraft ?? formatRational(currentMean, 4).replace(/(\.\d\d)0+$/u, "$1")}
+            onChange={(event) => player.draft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return;
+              if (isImeComposing(event)) return;
               if (event.key === "Enter") {
                 event.preventDefault();
-                commit();
+                player.commit();
               }
-              if (event.key === "Escape") {
+              if (event.key === "Escape" && pending) {
                 event.preventDefault();
-                cancel();
+                player.cancel();
               }
             }}
           />
@@ -157,23 +161,23 @@ export function OutlookAverageControl({
             <Button
               size="sm"
               variant="secondary"
-              disabled={editor.meanDraft === undefined}
+              disabled={view.meanDraft === undefined}
               aria-label={`${name}の平均順位を反映`}
               onClick={commit}
             >
               反映
             </Button>
           </span>
-        ) : editor.unchanged ? null : (
+        ) : unchanged ? null : (
           <span className="ml-auto">
             <Button
               size="sm"
               variant="quiet"
               aria-label={`${name}を直近の成績に戻す`}
               onClick={() => {
-                player.resetRecent();
-                // The action disappears once the value is back; keep focus on this person's input.
-                inputRef.current?.focus({ preventScroll: true });
+                player.restoreRecent();
+                // The action disappears once the value is back; keep focus on this input.
+                focusInput();
               }}
             >
               直近に戻す
@@ -181,80 +185,42 @@ export function OutlookAverageControl({
           </span>
         )}
       </div>
-      {editor.error ? (
+      {view.error ? (
         <p id={`${inputId}-error`} className={fieldText.error} role="alert">
-          {editor.error}
+          {view.error}
         </p>
       ) : null}
-      <div className="grid gap-0.5">
-        <div className="relative h-4" aria-hidden="true">
-          <span
-            className={cn(contentText.supporting, "absolute -translate-x-1/2 whitespace-nowrap")}
-            style={{ left: recentLeft }}
-          >
-            直近
-          </span>
-        </div>
-        <div className="relative">
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-text-secondary"
-            style={{ left: recentLeft }}
-          />
-          <label htmlFor={sliderId} className="sr-only">
-            {name}の平均順位を動かす
-          </label>
-          <input
-            id={sliderId}
-            type="range"
-            className="relative block min-h-11 w-full cursor-pointer accent-action focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action pointer-fine:min-h-8"
-            min={min}
-            max={max}
-            step="any"
-            value={rationalToNumber(currentMean)}
-            aria-describedby={statusId}
-            aria-valuetext={`${outlookAverage(currentMean)}位。小さいほど良い成績`}
-            onPointerDown={(event) => {
-              event.currentTarget.setPointerCapture(event.pointerId);
-              begin();
-            }}
-            onPointerUp={() => finish()}
-            onPointerCancel={() => finish(true)}
-            onBlur={() => finish()}
-            onChange={(event) =>
-              edit({ kind: "mean", role, hundredths: Math.round(Number(event.target.value) * 100) })
-            }
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                finish(true);
-                return;
-              }
-              if (!rangeKeys.has(event.key)) return;
-              event.preventDefault();
-              begin();
-              const value =
-                event.key === "Home"
-                  ? limits.minimumHundredths
-                  : event.key === "End"
-                    ? limits.maximumHundredths
-                    : nextMeanHundredths(
-                        currentMean,
-                        ["ArrowLeft", "ArrowDown", "PageDown"].includes(event.key) ? -1 : 1,
-                        editor.opponent,
-                      );
-              if (value !== null) edit({ kind: "mean", role, hundredths: value });
-            }}
-            onKeyUp={(event) => {
-              if (rangeKeys.has(event.key)) finish();
-            }}
-          />
-        </div>
-        <div className={cn(contentText.supporting, "flex justify-between tabular-nums")}>
-          <span>良い {(limits.minimumHundredths / 100).toFixed(2)}</span>
-          <span>{(limits.maximumHundredths / 100).toFixed(2)} 悪い</span>
-        </div>
-      </div>
+      <Slider
+        aria-label={`${name}の平均順位を動かす`}
+        aria-describedby={buildFieldDescribedBy(statusId, source ? sourceId : undefined)}
+        value={current}
+        min={Math.min(limits.minimumHundredths / 100, current)}
+        max={Math.max(limits.maximumHundredths / 100, current)}
+        valueText={`${outlookAverage(currentMean)}位。小さいほど良い成績`}
+        marks={[{ value: rationalToNumber(distributionMean(recent)), label: "直近" }]}
+        startLabel={`良い ${(limits.minimumHundredths / 100).toFixed(2)}`}
+        endLabel={`${(limits.maximumHundredths / 100).toFixed(2)} 悪い`}
+        onGestureStart={player.begin}
+        onGestureEnd={({ canceled }) => player.finish(canceled)}
+        onStep={(direction, large) => {
+          const next = stepped(currentMean, direction, large ? 10 : 1, view.opponent);
+          if (next !== null) player.setMean(next);
+        }}
+        onBoundary={(edge) =>
+          player.setMean(edge === "min" ? limits.minimumHundredths : limits.maximumHundredths)
+        }
+        onDrag={(value) =>
+          player.setMean(
+            Math.min(
+              limits.maximumHundredths,
+              Math.max(limits.minimumHundredths, Math.round(value * 100)),
+            ),
+          )
+        }
+      />
+      <p id={sourceId} className={cn(contentText.supporting, "min-h-4")}>
+        {source}
+      </p>
     </section>
   );
 }

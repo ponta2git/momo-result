@@ -1,133 +1,121 @@
 import { useCallback, useMemo } from "react";
 
-import { numberTicks } from "@/features/seriesComparison/charts/dataViz/scales";
 import {
   buildJointDistribution,
-  formatRational,
-  generateOutlookExamples,
+  drawOutlookExampleCandidates,
   jointFromCounts,
   projectOutlook,
   rational,
   rationalToNumber,
+  selectOutlookExamples,
 } from "@/features/seriesComparison/outlook/calculation";
 import type {
   CumulativePair,
   OutlookExample,
-  OutlookRelation,
+  OutlookExampleCandidates,
+  OutlookExamples,
   RankDistribution,
   Rational,
 } from "@/features/seriesComparison/outlook/calculation";
-import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
 
-export type OutlookChartPoint = { h: number; averages: readonly [number, number] };
-export type OutlookChartSelection = {
-  averages: readonly [number, number];
-  formatted: readonly [string, string];
-  relation: OutlookRelation;
-  gapText: string;
-};
-export type OutlookChartPattern = {
+type Pair = readonly [RankDistribution, RankDistribution];
+
+/** One line of the difference graph: float points for drawing, exact values for every label. */
+export type OutlookTrajectory = Readonly<{
   id: string;
   label: string;
-  points: readonly OutlookChartPoint[];
-  selected: OutlookChartSelection;
-};
+  kind: "average" | "example";
+  /** Rival average minus focus average after h games; positive means the focus person leads. */
+  points: ReadonlyArray<Readonly<{ h: number; gap: number }>>;
+  gapAt: (h: number) => Rational;
+}>;
 
-export function signedOutlookGap(gap: Rational) {
-  const absolute = rational(gap.numerator < 0n ? -gap.numerator : gap.numerator, gap.denominator);
-  return `${gap.numerator > 0n ? "+" : gap.numerator < 0n ? "−" : "±"}${formatRational(absolute, 2)}`;
-}
+export type OutlookTrajectoryStatus =
+  | "ready"
+  /** No joint ranks for this pair, or no legal joint table for the assumed distributions. */
+  | "unavailable"
+  /** The example calculation failed; the average line and every answer stay usable. */
+  | "failed";
 
-function averageSelection(
-  cumulative: CumulativePair,
-  focus: RankDistribution,
-  rival: RankDistribution,
-  h: number,
-): OutlookChartSelection {
-  const projected = projectOutlook(cumulative, focus, rival, h);
-  return {
-    averages: [rationalToNumber(projected.focusAverage), rationalToNumber(projected.rivalAverage)],
-    formatted: [
-      formatRational(projected.focusAverage, 2),
-      formatRational(projected.rivalAverage, 2),
-    ],
-    relation: projected.relation,
-    gapText: signedOutlookGap(projected.gap),
-  };
-}
+export type OutlookTrajectoryModel = Readonly<{
+  status: OutlookTrajectoryStatus;
+  /** The average line first, then the examples in favourable order for the focus person. */
+  trajectories: readonly OutlookTrajectory[];
+  /** Exact example differences at any horizon up to 1000, in the same order as the lines. */
+  exampleGapsAt: (h: number) => readonly Rational[];
+  tiedExamples: boolean;
+  distinctCandidateCount: number | null;
+  constantPerGameDifference: boolean;
+}>;
 
-function exampleSelection(
+/** The exact difference of one drawn example after h games. */
+export function outlookExampleGapAt(
   cumulative: CumulativePair,
   example: OutlookExample,
-  horizon: number,
-): OutlookChartSelection {
-  let focus = BigInt(cumulative.focusRankSum);
-  let rival = BigInt(cumulative.rivalRankSum);
-  for (const [first, second] of example.ranks.slice(0, horizon)) {
-    focus += BigInt(first);
-    rival += BigInt(second);
-  }
-  const count = BigInt(cumulative.games) + BigInt(horizon);
-  return {
-    averages: [Number(focus) / Number(count), Number(rival) / Number(count)],
-    formatted: [
-      formatRational(rational(focus, count), 2),
-      formatRational(rational(rival, count), 2),
-    ],
-    relation: focus < rival ? "ahead" : focus > rival ? "behind" : "tied",
-    gapText: signedOutlookGap(rational(rival - focus, count)),
-  };
+  h: number,
+): Rational {
+  let difference = BigInt(cumulative.rivalRankSum - cumulative.focusRankSum);
+  for (const [focusRank, rivalRank] of example.ranks.slice(0, h))
+    difference += BigInt(rivalRank - focusRank);
+  return rational(difference, BigInt(cumulative.games + h));
 }
 
-export type OutlookPatternModel = {
-  examples: ReturnType<typeof generateOutlookExamples> | null | undefined;
-  /** The mean pattern first, then the examples in favourable order for the focus member. */
-  patterns: OutlookChartPattern[];
-  /** The endpoint difference that ordered each example, in the same order as its pattern. */
-  endpointGaps: string[];
-  hasTiedExamples: boolean;
-  /** Each example's difference after `h` games, in the same order as its pattern. */
-  exampleGapsAt: (h: number) => string[];
-  ticks: number[];
-  current: OutlookChartSelection;
-  averageMarker: { h: number; label: string; averages: readonly [number, number] } | null;
-};
-
-/** Mean line, three examples, and one shared axis, computed only while the result is shown. */
-export function useOutlookPatterns({
-  active,
-  response,
-  cumulative,
-  view,
-  memberIds,
-  marker,
-  exampleLabel,
-}: {
-  active: boolean;
-  response: SeriesAnalysisOutlookSummary;
-  cumulative: CumulativePair;
-  view: OutlookResultView;
-  memberIds: readonly [string, string];
-  marker: { h: number; label: string } | null;
-  exampleLabel?: (index: number, tied: boolean) => string;
-}): OutlookPatternModel {
-  const focus = view.originFocus;
-  const rival = view.originRival;
-  const liveFocus = view.focus;
-  const liveRival = view.rival;
-  const range = view.chartRange;
-  const examples = useMemo(() => {
-    if (!active) return undefined;
-    const record = response.recent.jointRanks.find(
-      (pair) => memberIds.includes(pair.memberAId) && memberIds.includes(pair.memberBId),
+/**
+ * Orders the examples from favourable to unfavourable for the focus person by their exact
+ * difference at the range's end. If any two end equal, all three get neutral names instead of a
+ * better-or-worse order the values do not support.
+ */
+export function orderOutlookExamples(
+  examples: readonly OutlookExample[],
+  cumulative: CumulativePair,
+  range: number,
+): Array<OutlookTrajectory & { tied: boolean }> {
+  const ordered = examples
+    .map((example) => ({ example, end: outlookExampleGapAt(cumulative, example, range) }))
+    .toSorted((a, b) => {
+      const left = a.end.numerator * b.end.denominator;
+      const right = b.end.numerator * a.end.denominator;
+      return left === right ? 0 : left > right ? -1 : 1;
+    });
+  const tied = ordered.some((line, index) => {
+    const previous = ordered[index - 1];
+    return (
+      previous !== undefined &&
+      line.end.numerator * previous.end.denominator ===
+        previous.end.numerator * line.end.denominator
     );
-    if (!record) return null;
-    const canonicalIds = canonicalResultMemberIds.filter((id) => memberIds.includes(id)) as [
-      string,
-      string,
-    ];
+  });
+  const names = ["有利な例", "中間の例", "不利な例"];
+  return ordered.map(({ example }, index) => ({
+    id: `example-${index}`,
+    label: tied ? `展開例${index + 1}` : (names[index] ?? `展開例${index + 1}`),
+    kind: "example",
+    points: example.points
+      .filter((point) => point.games <= range)
+      .map((point) => ({ h: point.games, gap: point.gap })),
+    gapAt: (h: number) => outlookExampleGapAt(cumulative, example, h),
+    tied,
+  }));
+}
+
+function canonicalPair(memberIds: readonly [string, string]) {
+  return canonicalResultMemberIds.filter((id) => memberIds.includes(id)) as [string, string];
+}
+
+/** Draws candidates once per title, pair, and assumed joint table; never during a gesture. */
+function drawCandidates(
+  response: SeriesAnalysisOutlookSummary,
+  memberIds: readonly [string, string],
+  origin: Pair,
+): OutlookExampleCandidates | "unavailable" | "failed" {
+  const record = response.recent.jointRanks.find(
+    (pair) => memberIds.includes(pair.memberAId) && memberIds.includes(pair.memberBId),
+  );
+  if (!record) return "unavailable";
+  try {
+    const canonicalIds = canonicalPair(memberIds);
     const focusFirst = canonicalIds[0] === memberIds[0];
     const observed =
       record.memberAId === canonicalIds[0]
@@ -135,150 +123,106 @@ export function useOutlookPatterns({
         : [0, 1, 2, 3].map((column) =>
             record.rankCounts.map((row) => {
               const value = row[column];
-              if (value === undefined) throw new Error("Incomplete joint ranks");
+              if (value === undefined) throw new RangeError("Incomplete joint ranks");
               return value;
             }),
           );
     const joint = buildJointDistribution(
-      focusFirst ? focus : rival,
-      focusFirst ? rival : focus,
+      focusFirst ? origin[0] : origin[1],
+      focusFirst ? origin[1] : origin[0],
       jointFromCounts(observed),
     );
-    return joint
-      ? generateOutlookExamples({
-          gameTitleId: response.artifact.gameTitleId,
-          canonicalMemberIds: canonicalIds,
-          focusMemberId: memberIds[0],
-          cumulative,
-          joint,
-          selectionRange: range,
-        })
-      : null;
-  }, [active, response, memberIds, focus, rival, cumulative, range]);
+    if (!joint) return "unavailable";
+    return drawOutlookExampleCandidates({
+      gameTitleId: response.artifact.gameTitleId,
+      canonicalMemberIds: canonicalIds,
+      joint,
+    });
+  } catch {
+    return "failed";
+  }
+}
 
-  const meanPoints = useMemo<OutlookChartPoint[]>(() => {
-    if (!active) return [];
-    return Array.from({ length: range + 1 }, (_, h) => ({
-      h,
-      averages: averageSelection(cumulative, liveFocus, liveRival, h).averages,
-    }));
-  }, [active, cumulative, liveFocus, liveRival, range]);
-  const exampleSeries = useMemo(
-    () =>
-      examples?.examples
-        .map((example) => {
-          // Ranks are [focus, rival]; a positive sum means the focus member gained places.
-          const difference = example.ranks
-            .slice(0, range)
-            .reduce((sum, [first, second]) => sum + second - first, 0);
-          return {
-            example,
-            difference,
-            endpointGap: signedOutlookGap(
-              rational(
-                BigInt(cumulative.rivalRankSum - cumulative.focusRankSum + difference),
-                BigInt(cumulative.games + range),
-              ),
-            ),
-            points: example.points.map((point): OutlookChartPoint => ({
-              h: point.games,
-              averages: [point.focusAverage, point.rivalAverage],
-            })),
-          };
-        })
-        .toSorted((a, b) => b.difference - a.difference) ?? [],
-    [examples, range, cumulative],
+/**
+ * The average line and three examples of the difference, computed only while shown. During a
+ * gesture the examples keep the gesture's starting assumptions; a different range reselects from
+ * the same candidates.
+ */
+export function useOutlookPatterns({
+  active,
+  response,
+  cumulative,
+  pair,
+  origin,
+  memberIds,
+  range,
+}: {
+  active: boolean;
+  response: SeriesAnalysisOutlookSummary;
+  cumulative: CumulativePair;
+  /** The live assumptions, followed by the average line. */
+  pair: Pair;
+  /** The assumptions at the start of the current gesture, or the live ones. */
+  origin: Pair;
+  memberIds: readonly [string, string];
+  range: 50 | 100 | 200;
+}): OutlookTrajectoryModel {
+  const [originFocus, originRival] = origin;
+  const drawn = useMemo(
+    () => (active ? drawCandidates(response, memberIds, [originFocus, originRival]) : undefined),
+    [active, response, memberIds, originFocus, originRival],
   );
-  const exampleGapsAt = useCallback(
-    (h: number) =>
-      exampleSeries.map(({ example }) => exampleSelection(cumulative, example, h).gapText),
-    [exampleSeries, cumulative],
-  );
-  const hasTiedExamples = exampleSeries.some(
-    (series, index) => index > 0 && series.difference === exampleSeries[index - 1]?.difference,
-  );
-  const ticks = useMemo(() => {
-    if (!active) return [];
-    const bounds = meanPoints.flatMap((point) => [...point.averages]);
-    for (const { points } of exampleSeries) {
-      for (const point of points) if (point.h <= range) bounds.push(...point.averages);
+  const selected = useMemo((): OutlookExamples | "failed" | undefined => {
+    if (!drawn || typeof drawn === "string") return undefined;
+    try {
+      return selectOutlookExamples(drawn, {
+        focusMemberId: memberIds[0],
+        cumulative,
+        selectionRange: range,
+      });
+    } catch {
+      return "failed";
     }
-    // Keep the gesture's starting mean in view while the live mean changes.
-    bounds.push(...averageSelection(cumulative, focus, rival, range).averages);
-    const low = Math.min(...bounds);
-    const high = Math.max(...bounds);
-    const padding = (high - low) * 0.08 || 0.01;
-    const result = numberTicks(
-      Math.max(1, low - padding),
-      Math.min(4, high + padding),
-      6,
-      0.0001,
-    ).filter((tick) => tick >= 1 && tick <= 4);
-    if (result[0] !== undefined && result[0] > low) result.unshift(1);
-    const last = result.at(-1);
-    if (last !== undefined && last < high) result.push(4);
-    return result;
-  }, [active, cumulative, focus, rival, meanPoints, exampleSeries, range]);
-  const patterns = useMemo<OutlookChartPattern[]>(() => {
-    if (!active) return [];
-    return [
-      {
-        id: "average",
-        label: "平均",
-        points: meanPoints,
-        selected: averageSelection(cumulative, liveFocus, liveRival, view.horizon),
-      },
-      ...exampleSeries.map(({ example, points }, index): OutlookChartPattern => ({
-        id: `example-${index}`,
-        label: exampleLabel
-          ? exampleLabel(index, hasTiedExamples)
-          : hasTiedExamples
-            ? `展開例${index + 1}`
-            : index === 0
-              ? "有利な例"
-              : index === 1
-                ? "中間の例"
-                : "不利な例",
-        points,
-        selected: exampleSelection(cumulative, example, view.horizon),
+  }, [drawn, memberIds, cumulative, range]);
+  const examples = typeof selected === "object" ? selected : undefined;
+
+  const [focus, rival] = pair;
+  const average = useMemo((): OutlookTrajectory | undefined => {
+    if (!active) return undefined;
+    const gapAt = (h: number) => projectOutlook(cumulative, focus, rival, h).gap;
+    return {
+      id: "average",
+      label: "平均どおり",
+      kind: "average",
+      points: Array.from({ length: range + 1 }, (_, h) => ({
+        h,
+        gap: rationalToNumber(gapAt(h)),
       })),
-    ];
-  }, [
-    active,
-    cumulative,
-    liveFocus,
-    liveRival,
-    view.horizon,
-    meanPoints,
-    exampleSeries,
-    hasTiedExamples,
-    exampleLabel,
-  ]);
-  const markerHorizon = marker?.h;
-  const markerLabel = marker?.label;
-  const averageMarker = useMemo(
-    () =>
-      active && markerHorizon !== undefined && markerLabel !== undefined
-        ? {
-            h: markerHorizon,
-            label: markerLabel,
-            averages: averageSelection(cumulative, liveFocus, liveRival, markerHorizon).averages,
-          }
-        : null,
-    [active, cumulative, liveFocus, liveRival, markerHorizon, markerLabel],
+      gapAt,
+    };
+  }, [active, cumulative, focus, rival, range]);
+
+  const exampleLines = useMemo(
+    () => (examples ? orderOutlookExamples(examples.examples, cumulative, range) : []),
+    [examples, cumulative, range],
   );
-  const current = useMemo(
-    () => averageSelection(cumulative, liveFocus, liveRival, 0),
-    [cumulative, liveFocus, liveRival],
+
+  const exampleGapsAt = useCallback(
+    (h: number) => exampleLines.map((line) => line.gapAt(h)),
+    [exampleLines],
   );
+  const status: OutlookTrajectoryStatus =
+    drawn === "failed" || selected === "failed"
+      ? "failed"
+      : drawn === "unavailable"
+        ? "unavailable"
+        : "ready";
   return {
-    examples,
-    patterns,
-    endpointGaps: exampleSeries.map((series) => series.endpointGap),
+    status,
+    trajectories: average ? [average, ...exampleLines] : [],
     exampleGapsAt,
-    hasTiedExamples,
-    ticks,
-    current,
-    averageMarker,
+    tiedExamples: exampleLines.some((line) => line.tied),
+    distinctCandidateCount: examples?.distinctCandidateCount ?? null,
+    constantPerGameDifference: examples?.constantPerGameDifference ?? false,
   };
 }

@@ -9,14 +9,14 @@ import type { RankDistribution } from "@/features/seriesComparison/outlook/calcu
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 
 export type OutlookRole = 0 | 1;
-export type OutlookRankIndex = 0 | 1 | 2 | 3;
 type Period = NonNullable<SeriesAnalysisOutlookSummary["recent"]["period"]>;
-export type OutlookSource = {
-  kind: "recent" | "average" | "counts" | "example";
-  artifactId?: string;
-  matchCount?: number;
-  period?: Period;
-};
+
+/** Where a person's assumed distribution came from; values from results keep their artifact. */
+export type OutlookSource =
+  | { kind: "recent"; artifactId: string; matchCount: number; period?: Period | undefined }
+  | { kind: "average" }
+  | { kind: "example"; artifactId: string; period: Period };
+
 export type OutlookEntry = {
   distribution: RankDistribution;
   source: OutlookSource;
@@ -24,90 +24,35 @@ export type OutlookEntry = {
   error?: string | undefined;
 };
 type SavedEntry = Pick<OutlookEntry, "distribution" | "source">;
-type Pair = [SavedEntry, SavedEntry];
+type SavedPair = readonly [SavedEntry, SavedEntry];
 
+/** Shown once a newer artifact is adopted, until it is dismissed or the comparison changes. */
+export type OutlookNotice = "followed-recent" | "kept-assumptions";
+/** An application that was refused because the displayed condition no longer holds. */
+export type OutlookRejection = "goal" | "example";
+
+/**
+ * The temporary assumptions of one comparison: two distributions with their drafts, one
+ * continuous operation, and the goal. Everything else on the screen is derived.
+ */
 export type OutlookWorkspaceState = {
   key: string;
   scopeKey: string;
   artifactId: string;
   entries: [OutlookEntry, OutlookEntry];
-  history: Pair[];
-  pinned?: Pair | undefined;
-  gesture?: { role: OutlookRole; before: Pair } | undefined;
-  task: "performance" | "goal";
-  transfer: [OutlookRankIndex, OutlookRankIndex];
-  horizon: number;
-  horizonText: string;
-  chartRange: 50 | 100 | 200;
+  gesture?: { role: OutlookRole; before: SavedPair } | undefined;
   goalHorizon: number;
   goalHorizonText: string;
-  examplesOpen: boolean;
-  rivalExamplesOpen: boolean;
-  notice?: string | undefined;
+  notice?: OutlookNotice | undefined;
+  rejection?: OutlookRejection | undefined;
 };
 
 export const otherRole = (role: OutlookRole): OutlookRole => (role === 0 ? 1 : 0);
-function snapshot(state: OutlookWorkspaceState): Pair {
-  return state.entries.map(({ distribution, source }) => ({ distribution, source })) as Pair;
-}
 
-export function canPinOutlook(state: OutlookWorkspaceState): boolean {
-  if (
-    state.gesture ||
-    state.entries.some((entry) => entry.meanDraft !== undefined || entry.error !== undefined)
-  )
-    return false;
-  const pinned = state.pinned;
-  return (
-    !pinned ||
-    state.entries.some(
-      (entry, role) =>
-        !distributionsEqual(entry.distribution, pinned[role as OutlookRole].distribution),
-    )
-  );
-}
-
-export function pinOutlook(state: OutlookWorkspaceState): OutlookWorkspaceState {
-  return canPinOutlook(state) ? { ...state, pinned: snapshot(state), notice: undefined } : state;
-}
-
-/** Dialogs edit their own proposal; closing them leaves the page's conditions untouched. */
-export function draftOutlook(state: OutlookWorkspaceState): OutlookWorkspaceState {
-  return {
-    ...state,
-    entries: snapshot(state),
-    history: [],
-    gesture: undefined,
-    notice: undefined,
-  };
-}
-
-function restore(
-  state: OutlookWorkspaceState,
-  pair: Pair,
-  clearDrafts = true,
-): OutlookWorkspaceState {
-  return {
-    ...state,
-    entries: state.entries.map((entry, i) => ({
-      ...entry,
-      ...pair[i],
-      ...(clearDrafts ? { meanDraft: undefined, error: undefined } : {}),
-    })) as OutlookWorkspaceState["entries"],
-  };
-}
-function recentEntry(response: SeriesAnalysisOutlookSummary, memberId: string): OutlookEntry {
-  const player = outlookPlayer(response.recent.players, memberId);
-  return {
-    distribution: distributionFromCounts(player.rankCounts as [number, number, number, number]),
-    source: {
-      kind: "recent",
-      artifactId: response.artifact.artifactId,
-      matchCount: response.recent.matchCount,
-      ...(response.recent.period ? { period: response.recent.period } : {}),
-    },
-  };
-}
+const saved = (state: OutlookWorkspaceState): SavedPair => [
+  { distribution: state.entries[0].distribution, source: state.entries[0].source },
+  { distribution: state.entries[1].distribution, source: state.entries[1].source },
+];
 
 export function outlookPlayer<T extends { memberId: string }>(
   players: readonly T[],
@@ -116,6 +61,24 @@ export function outlookPlayer<T extends { memberId: string }>(
   const player = players.find((value) => value.memberId === memberId);
   if (!player) throw new Error("The outlook resource is missing a selected player.");
   return player;
+}
+
+/** A person's recent results in the given artifact, as an exact distribution with its source. */
+export function recentOutlookEntry(
+  response: SeriesAnalysisOutlookSummary,
+  memberId: string,
+): SavedEntry {
+  return {
+    distribution: distributionFromCounts(
+      outlookPlayer(response.recent.players, memberId).rankCounts,
+    ),
+    source: {
+      kind: "recent",
+      artifactId: response.artifact.artifactId,
+      matchCount: response.recent.matchCount,
+      period: response.recent.period ?? undefined,
+    },
+  };
 }
 
 /** Adoption happens atomically with the summary; editing never changes historical facts. */
@@ -133,46 +96,35 @@ export function adoptOutlookSummary(
   const key = outlookComparisonKey(scopeKey, memberIds);
   const artifactId = response.artifact.artifactId;
   if (current?.key === key && current.artifactId === artifactId) return current;
-  const recent = memberIds.map((id) =>
-    recentEntry(response, id),
-  ) as OutlookWorkspaceState["entries"];
+  const recent: [OutlookEntry, OutlookEntry] = [
+    recentOutlookEntry(response, memberIds[0]),
+    recentOutlookEntry(response, memberIds[1]),
+  ];
   if (!current || current.key !== key)
     return {
       key,
       scopeKey,
       artifactId,
       entries: recent,
-      history: [],
-      task: "performance",
-      transfer: [2, 3],
-      horizon: 20,
-      horizonText: "20",
-      chartRange: 100,
       goalHorizon: 100,
       goalHorizonText: "100",
-      examplesOpen: false,
-      rivalExamplesOpen: false,
     };
+  // Only values that still are this comparison's current recent results follow the update.
   const followRecent = current.entries.every(
     (entry) => entry.source.kind === "recent" && entry.source.artifactId === current.artifactId,
   );
   return {
     ...current,
     artifactId,
-    history: [],
-    pinned: undefined,
     gesture: undefined,
+    rejection: undefined,
     entries: followRecent
-      ? (recent.map((entry, i) => ({
-          ...entry,
-          meanDraft: current.entries[i as OutlookRole].meanDraft,
-        })) as OutlookWorkspaceState["entries"])
+      ? [
+          { ...recent[0], meanDraft: current.entries[0].meanDraft },
+          { ...recent[1], meanDraft: current.entries[1].meanDraft },
+        ]
       : current.entries,
-    notice:
-      (followRecent
-        ? "直近の成績と総合成績を更新しました。"
-        : "試している成績を残して実績を更新しました。") +
-      (current.pinned ? "比較の基準に残した成績を解除しました。" : ""),
+    notice: followRecent ? "followed-recent" : "kept-assumptions",
   };
 }
 
@@ -181,49 +133,45 @@ export function updateOutlookEntry(
   role: OutlookRole,
   patch: Partial<OutlookEntry>,
 ): OutlookWorkspaceState {
-  const entries = [...state.entries] as OutlookWorkspaceState["entries"];
+  const entries: [OutlookEntry, OutlookEntry] = [state.entries[0], state.entries[1]];
   entries[role] = { ...entries[role], ...patch };
   return { ...state, entries };
 }
 
+/**
+ * Sets one person's distribution if it can share games with the other person's distribution.
+ * An incompatible value is refused with the ranks that overflow; neither person changes.
+ */
 export function applyOutlookDistribution(
   state: OutlookWorkspaceState,
   role: OutlookRole,
   distribution: RankDistribution,
   source: OutlookSource,
 ): OutlookWorkspaceState {
-  if (!areDistributionsCompatible(distribution, state.entries[otherRole(role)].distribution)) {
+  const other = state.entries[otherRole(role)].distribution;
+  if (!areDistributionsCompatible(distribution, other))
     return updateOutlookEntry(state, role, {
-      error: `${incompatibleRanks(distribution, state.entries[otherRole(role)].distribution)
+      error: `${incompatibleRanks(distribution, other)
         .map((rank) => `${rank}位`)
         .join(
           "・",
         )}は、相手と合わせると20戦あたり20回を超えます。相手の平均を変えてから試してください。`,
     });
-  }
   const prior = state.entries[role];
-  if (
-    distributionsEqual(prior.distribution, distribution) &&
-    !(
-      source.kind === "recent" &&
-      (prior.source.kind !== "recent" || source.artifactId !== prior.source.artifactId)
-    )
-  )
-    return updateOutlookEntry(state, role, {
+  const sameSource =
+    prior.source.kind === source.kind &&
+    (source.kind !== "recent" ||
+      (prior.source.kind === "recent" && prior.source.artifactId === source.artifactId));
+  if (distributionsEqual(prior.distribution, distribution) && sameSource)
+    return updateOutlookEntry(state, role, { meanDraft: undefined, error: undefined });
+  return {
+    ...updateOutlookEntry(state, role, {
+      distribution,
+      source,
       meanDraft: undefined,
       error: undefined,
-    });
-  const next = updateOutlookEntry(state, role, {
-    distribution,
-    source,
-    meanDraft: undefined,
-    error: undefined,
-  });
-  // Fifty complete gestures bound this one ephemeral comparison's history.
-  return {
-    ...next,
-    history: state.gesture ? state.history : [...state.history, snapshot(state)].slice(-50),
-    notice: undefined,
+    }),
+    rejection: undefined,
   };
 }
 
@@ -231,9 +179,10 @@ export function beginOutlookGesture(
   state: OutlookWorkspaceState,
   role: OutlookRole,
 ): OutlookWorkspaceState {
-  return state.gesture ? state : { ...state, gesture: { role, before: snapshot(state) } };
+  return state.gesture ? state : { ...state, gesture: { role, before: saved(state) } };
 }
 
+/** Ends one drag or key hold; cancelling, or ending where it began, restores the exact start. */
 export function finishOutlookGesture(
   state: OutlookWorkspaceState,
   cancel = false,
@@ -243,19 +192,22 @@ export function finishOutlookGesture(
   const unchanged = state.entries.every((entry, i) =>
     distributionsEqual(entry.distribution, before[i as OutlookRole].distribution),
   );
-  const next =
-    cancel || unchanged
-      ? restore(state, before, false)
-      : { ...state, history: [...state.history, before].slice(-50) };
-  return { ...next, gesture: undefined };
+  if (!cancel && !unchanged) return { ...state, gesture: undefined };
+  return {
+    ...state,
+    gesture: undefined,
+    entries: [
+      { ...state.entries[0], ...before[0] },
+      { ...state.entries[1], ...before[1] },
+    ],
+  };
 }
 
-export function undoOutlook(state: OutlookWorkspaceState): OutlookWorkspaceState {
-  const last = state.history.at(-1);
-  if (state.gesture || !last) return state;
-  return {
-    ...restore(state, last),
-    history: state.history.slice(0, -1),
-    notice: undefined,
-  };
+/** True while the given person, or either person, has unapplied text or an error. */
+export function outlookHasPendingInput(state: OutlookWorkspaceState, role?: OutlookRole): boolean {
+  const roles: OutlookRole[] = role === undefined ? [0, 1] : [role];
+  return roles.some(
+    (value) =>
+      state.entries[value].meanDraft !== undefined || state.entries[value].error !== undefined,
+  );
 }

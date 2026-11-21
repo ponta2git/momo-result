@@ -1,6 +1,8 @@
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { OutlookSummaryBoundary } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
+import { OutlookComparisonRow } from "@/features/seriesComparison/outlook/workspace/OutlookComparisonRow";
 import { OutlookWorkspace } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspace";
+import { OutlookWorkspaceFrame } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspaceLayout";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { cn } from "@/shared/ui/cn";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
@@ -14,19 +16,32 @@ export type OutlookWorkspaceProps = {
 };
 
 /** The outlook view: one workspace that answers both questions without sub-tabs. */
-export function OutlookWorkspaceView(props: OutlookWorkspaceProps) {
-  const { summary, selection } = props;
+export function OutlookWorkspaceView({
+  summary,
+  selection,
+  onMemberChange,
+  onPairChange,
+}: OutlookWorkspaceProps) {
+  const empty = (
+    <p className={cn(contentText.body, readableTextWidthClass)}>
+      この範囲に確定済みの試合がありません。
+    </p>
+  );
+  if (summary.players.length === 0) return empty;
   return (
-    <OutlookSummaryBoundary
-      response={summary}
-      selection={selection}
-      empty={
-        <p className={cn(contentText.body, readableTextWidthClass)}>
-          この範囲に確定済みの試合がありません。
-        </p>
+    <OutlookWorkspaceFrame
+      comparison={
+        <OutlookComparisonRow
+          summary={summary}
+          selection={selection}
+          onMemberChange={onMemberChange}
+          onPairChange={onPairChange}
+        />
       }
     >
-      <OutlookWorkspace {...props} />
-    </OutlookSummaryBoundary>
+      <OutlookSummaryBoundary response={summary} selection={selection} empty={empty}>
+        <OutlookWorkspace summary={summary} selection={selection} />
+      </OutlookSummaryBoundary>
+    </OutlookWorkspaceFrame>
   );
 }

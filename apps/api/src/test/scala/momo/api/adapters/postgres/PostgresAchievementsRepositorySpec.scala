@@ -398,6 +398,100 @@ final class PostgresAchievementsRepositorySpec extends IntegrationSuite with Htt
       assertEquals(revisionAfterEdit, after)
 
   test(
+    "a map deleted during draft confirmation rolls back the image, result, claims and analysis together"
+  ):
+    val draft = UUID.randomUUID()
+    val image = UUID.randomUUID()
+    val removed = UUID.randomUUID()
+    val snapshot = Some(MatchDraftConfirmation(
+      MatchDraftId.unsafeFromString(draft.toString),
+      now,
+      None,
+      None,
+      None
+    ))
+    val storedState =
+      sql"""SELECT d.status, d.confirmed_match_id::text, d.source_images_deleted_at, i.status,
+      (SELECT COUNT(*)::int FROM matches), (SELECT COUNT(*)::int FROM achievement_claims),
+      (SELECT COUNT(*)::int FROM series_analysis_job_requests)
+      FROM match_drafts d JOIN source_images i ON i.legacy_id = d.total_assets_image_id
+      WHERE d.id = $draft""".query[(
+          String,
+          Option[String],
+          Option[Instant],
+          String,
+          Int,
+          Int,
+          Int
+      )].unique.transact(transactor)
+    for
+      world <- seed
+      repo <- repository
+      item <- repo.create(definition(world), context).map(right)
+      _ <- maps.createWithNextDisplayOrder(MapMaster(
+        MapMasterId.unsafeFromString(removed.toString),
+        world.title,
+        "Other",
+        2,
+        now
+      )).map(right)
+      matched = record(world, 1)
+      addition = List(AddMatchAchievement(item.id, member, item.version, None))
+      actor = identityMode.lookup(Entity.Accounts, account.value)
+      _ <- sql"""INSERT INTO source_images
+          (id, legacy_id, owner_account_id, object_key, idempotency_key_hash, status,
+           media_type, byte_length, sha256_hex, width, height, available_at, created_at, updated_at)
+        VALUES ($image, ${image.toString}, $actor, ${s"source-images/$image"}, repeat('a', 64), 'AVAILABLE',
+          'image/png', 128, repeat('b', 64), 1, 1, $now, $now, $now)""".update.run.transact(
+        transactor
+      )
+      _ <-
+        sql"""INSERT INTO match_drafts(id, legacy_id, created_by_account_id, status, total_assets_image_id, created_at, updated_at)
+        VALUES ($draft, ${draft.toString}, $actor, 'draft_ready', ${image.toString}, $now, $now)""".update.run.transact(
+          transactor
+        )
+      before <- storedState
+      beforeRevision <- revision(world)
+      // The header still sees the map. Its FK check waits for the deleting transaction.
+      (deleted, rejected) <- commitWhileBlocked(
+        xa => sql"DELETE FROM map_masters WHERE id = $removed".update.run.transact(xa),
+        confirmations.confirm(
+          matched.copy(mapMasterId = MapMasterId.unsafeFromString(removed.toString)),
+          snapshot,
+          now,
+          addition
+        ),
+      )
+      after <- storedState
+      afterRevision <- revision(world)
+      (confirmed, competing) <- commitWhileBlocked(
+        xa =>
+          new PostgresMatchConfirmationRepository[IO](
+            xa,
+            identityMode
+          ).confirm(matched, snapshot, now.plusSeconds(1), addition),
+        confirmations.confirm(record(world, 2), snapshot, now.plusSeconds(2), addition),
+      )
+      duplicate <- confirmations.confirm(record(world, 1), None, now.plusSeconds(3), addition)
+      committed <- storedState
+      committedRevision <- revision(world)
+    yield
+      assertEquals(deleted, 1)
+      assertEquals(
+        rejected,
+        Left(AppError.Conflict("Match prerequisites changed before confirmation completed."))
+      )
+      assertEquals((after, afterRevision), (before, beforeRevision))
+      assertEquals(confirmed, Right(MatchConfirmationResult.Confirmed))
+      assertEquals(competing, Right(MatchConfirmationResult.DraftSnapshotMismatch))
+      assert(duplicate.left.exists(isConflict))
+      assertEquals(
+        (committed._1, committed._2, committed._3, committed._4),
+        ("confirmed", Some(matched.id.value), Some(now.plusSeconds(1)), "DELETE_PENDING")
+      )
+      assertEquals((committed._5, committed._6, committedRevision), (1, 1, beforeRevision + 1))
+
+  test(
     "achievement-only writes preserve results while match corrections follow or unlink evidence"
   ):
     for

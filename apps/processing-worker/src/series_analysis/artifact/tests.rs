@@ -96,6 +96,7 @@ fn builds_and_stream_validates_a_complete_artifact() {
     let validated =
         validate(directory.path()).unwrap_or_else(|error| panic!("artifact validation: {error}"));
     assert_eq!(validated.manifest(), &manifest);
+    assert_eq!(validated.radar_monitoring(), Some(&Value::Null));
     assert_eq!(
         validated.validation_contract_id(),
         ARTIFACT_VALIDATION_CONTRACT_ID
@@ -156,6 +157,50 @@ fn builds_and_stream_validates_a_complete_artifact() {
             .count(),
         manifest.resources.len() + 1
     );
+}
+
+#[test]
+fn missing_monitoring_is_rejected_even_with_a_matching_checksum()
+-> Result<(), Box<dyn std::error::Error>> {
+    let directory = TempDir::new()?;
+    let mut manifest = build(input(), &request(), directory.path())?;
+    let overall = manifest
+        .resources
+        .iter_mut()
+        .find_map(|resource| {
+            if let ResourceManifest::Aggregate { common } = resource
+                && common.scope == momo_analysis_core::contract::ScopeRef::Overall
+            {
+                Some(common)
+            } else {
+                None
+            }
+        })
+        .ok_or("missing overall aggregate")?;
+    let path = directory.path().join(&overall.path);
+    let mut payload: Value = serde_json::from_slice(&fs::read(&path)?)?;
+    let radar = payload
+        .get_mut("playerRadar")
+        .and_then(Value::as_object_mut)
+        .ok_or("missing player radar")?;
+    radar
+        .remove("monitoring")
+        .ok_or("missing monitoring in fixture")?;
+    let bytes = canonicalize_value(&payload)?;
+    overall.encoded_bytes = u64::try_from(bytes.len())?;
+    overall.decoded_bytes = overall.encoded_bytes;
+    overall.nesting_depth = nesting_depth(&payload);
+    overall.checksum = sha256_prefixed(&bytes);
+    fs::write(path, bytes)?;
+    rewrite_manifest(directory.path(), &mut manifest);
+    if matches!(
+        validate(directory.path()),
+        Err(ArtifactError::Payload(payload::PayloadError::InvalidSchema))
+    ) {
+        Ok(())
+    } else {
+        Err("expected a missing monitoring field to fail schema validation".into())
+    }
 }
 
 #[test]

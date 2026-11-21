@@ -3,22 +3,40 @@
 use tokio_postgres::Transaction;
 
 use super::{ClaimedJob, ControlError};
+use crate::series_analysis::artifact::ValidatedArtifact;
 mod completion;
 mod materialize;
 pub(super) use completion::complete_preparation;
 pub(super) use materialize::materialize_next;
 pub(crate) use materialize::materialize_pending;
 
-pub(super) async fn desired_matches(
+pub(super) enum PublicationState {
+    Missing,
+    Existing { has_active_operation: bool },
+}
+
+pub(super) async fn lock_matching_state(
     tx: &Transaction<'_>,
     claim: &ClaimedJob,
-) -> Result<bool, ControlError> {
-    let row = tx.query_opt("SELECT (SELECT legacy_id FROM series_radar_basis_identities WHERE id=desired_basis_id), generation FROM series_radar_title_states WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1) FOR UPDATE", &[&claim.game_title_id]).await?;
-    let (basis, generation): (Option<String>, i64) = row
-        .map(|r| Ok::<_, tokio_postgres::Error>((r.try_get(0)?, r.try_get(1)?)))
-        .transpose()?
-        .unwrap_or((None, 0));
-    Ok(basis == claim.radar_basis_id && generation == claim.radar_generation)
+) -> Result<Option<PublicationState>, ControlError> {
+    let row = tx.query_opt(
+        "SELECT (SELECT legacy_id FROM series_radar_basis_identities WHERE id=desired_basis_id),
+                generation, active_operation_id IS NOT NULL
+         FROM series_radar_title_states
+         WHERE game_title_id = (SELECT id FROM game_titles WHERE legacy_id=$1) FOR UPDATE",
+        &[&claim.game_title_id],
+    ).await?;
+    let (basis, generation, state): (Option<String>, i64, _) = match row {
+        Some(row) => (
+            row.try_get(0)?,
+            row.try_get(1)?,
+            PublicationState::Existing {
+                has_active_operation: row.try_get(2)?,
+            },
+        ),
+        None => (None, 0, PublicationState::Missing),
+    };
+    Ok((basis == claim.radar_basis_id && generation == claim.radar_generation).then_some(state))
 }
 
 /// Roll back only the failed application generation; late failures cannot undo newer commands.
@@ -55,13 +73,50 @@ pub(crate) async fn terminal_failure_for_job(
 pub(super) async fn record_publication(
     tx: &Transaction<'_>,
     claim: &ClaimedJob,
+    artifact: &ValidatedArtifact,
+    state: PublicationState,
+) -> Result<(), ControlError> {
+    let artifact_id = &artifact.manifest().artifact_id;
+    let check_application = match state {
+        PublicationState::Existing {
+            has_active_operation,
+        } => has_active_operation,
+        PublicationState::Missing => {
+            // A newly initialized title has no operation. If another initializer won, keep
+            // the generation and operation checks in the application SQL below.
+            let inserted = tx
+                .execute(
+                    "INSERT INTO series_radar_title_states (game_title_id)
+                 VALUES ((SELECT id FROM game_titles WHERE legacy_id=$1)) ON CONFLICT DO NOTHING",
+                    &[&claim.game_title_id],
+                )
+                .await?;
+            inserted == 0
+        }
+    };
+    if check_application {
+        finish_application(tx, claim, artifact_id).await?;
+    }
+    let updated = tx.execute(
+        "UPDATE series_radar_title_states s
+         SET previous_basis_id=CASE WHEN current_basis_id IS DISTINCT FROM b.id THEN current_basis_id ELSE previous_basis_id END,
+             previous_applied_at=CASE WHEN current_basis_id IS DISTINCT FROM b.id THEN current_applied_at ELSE previous_applied_at END,
+             current_basis_id=b.id, current_applied_at=a.radar_applied_at, active_operation_id=NULL,
+             monitor=$5, updated_at=clock_timestamp()
+         FROM series_analysis_artifacts a LEFT JOIN series_radar_basis_identities b ON b.legacy_id=$2
+         WHERE s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)
+           AND s.generation=$3 AND a.id=$4",
+        &[&claim.game_title_id, &claim.radar_basis_id, &claim.radar_generation,
+          artifact_id, &artifact.radar_monitoring()],
+    ).await?;
+    super::publication::require_publication_row(updated)
+}
+
+async fn finish_application(
+    tx: &Transaction<'_>,
+    claim: &ClaimedJob,
     artifact_id: &str,
 ) -> Result<(), ControlError> {
-    tx.execute(
-        "INSERT INTO series_radar_title_states (game_title_id) VALUES ((SELECT id FROM game_titles WHERE legacy_id=$1)) ON CONFLICT DO NOTHING",
-        &[&claim.game_title_id],
-    )
-    .await?;
     // Application history is committed with the artifact pointer and immutable criteria. Normal
     // recalculation has no active application and cannot create another revision.
     tx.execute(
@@ -77,8 +132,5 @@ pub(super) async fn record_publication(
     ).await?;
     tx.execute("UPDATE series_radar_candidates c SET status='applied',updated_at=clock_timestamp() FROM series_radar_operations o JOIN series_radar_title_states s ON s.active_operation_id=o.id WHERE c.id=o.candidate_id AND s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND s.generation=$2 AND o.kind='apply' AND o.status IN ('pending','running')", &[&claim.game_title_id,&claim.radar_generation]).await?;
     tx.execute("UPDATE series_radar_operations o SET status='succeeded',finished_at=clock_timestamp(),updated_at=clock_timestamp() FROM series_radar_title_states s WHERE s.active_operation_id=o.id AND s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND s.generation=$2 AND o.kind='apply' AND o.status IN ('pending','running')", &[&claim.game_title_id,&claim.radar_generation]).await?;
-    tx.execute("UPDATE series_radar_title_states s SET previous_basis_id=CASE WHEN current_basis_id IS DISTINCT FROM (SELECT id FROM series_radar_basis_identities WHERE legacy_id=$2) THEN current_basis_id ELSE previous_basis_id END,previous_applied_at=CASE WHEN current_basis_id IS DISTINCT FROM (SELECT id FROM series_radar_basis_identities WHERE legacy_id=$2) THEN current_applied_at ELSE previous_applied_at END,current_basis_id=(SELECT id FROM series_radar_basis_identities WHERE legacy_id=$2),current_applied_at=a.radar_applied_at,active_operation_id=NULL,updated_at=clock_timestamp() FROM series_analysis_artifacts a WHERE s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND s.generation=$3 AND a.id=$4", &[&claim.game_title_id,&claim.radar_basis_id,&claim.radar_generation,&artifact_id]).await?;
-    // This chunk was validated and copied before its header was attested. No statistics run here.
-    tx.execute("UPDATE series_radar_title_states s SET monitor=(convert_from(c.payload,'UTF8')::jsonb #> '{playerRadar,monitoring}') FROM series_analysis_scope_aggregate_artifacts c WHERE s.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND c.artifact_id=$2 AND c.scope_key='overall'", &[&claim.game_title_id,&artifact_id]).await?;
     Ok(())
 }

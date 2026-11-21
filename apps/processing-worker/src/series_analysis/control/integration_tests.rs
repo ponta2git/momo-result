@@ -225,7 +225,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     let transaction = primary.transaction().await?;
     lock_owned(&transaction, &new_claim, NEW_WORKER_ID).await?;
     validate_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
-    publish_staged_artifact(&transaction, &new_claim, &new_manifest).await?;
+    publish_matching_artifact(&transaction, &new_claim, &new_manifest).await?;
     transaction
         .execute(
             r"
@@ -282,7 +282,7 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
             .is_err(),
         "a child mutation must wait while publication holds the parent lock"
     );
-    publish_staged_artifact(&publication, &new_claim, &new_manifest).await?;
+    publish_matching_artifact(&publication, &new_claim, &new_manifest).await?;
     let mut effects = TransactionEffects::empty();
     finish_success(
         &publication,
@@ -331,6 +331,15 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
         .await?;
     assert_eq!(cleaned, 1);
     assert_current(&secondary, Some(&new_manifest.manifest().artifact_id)).await?;
+    let monitor: Option<serde_json::Value> = secondary.query_one(
+        "SELECT monitor FROM series_radar_title_states WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+        &[&TITLE_ID],
+    ).await?.try_get(0)?;
+    assert_eq!(
+        monitor,
+        Some(serde_json::Value::Null),
+        "preserve an explicit JSON null on first publication"
+    );
 
     cleanup_database(&secondary).await?;
     prepare_owned_attempt(&secondary).await?;
@@ -358,6 +367,18 @@ fn claim(attempt_id: &str, attempt_no: i32, fencing_token: i64) -> SmokeResult<C
         attempt_no,
         fencing_token,
     })
+}
+
+async fn publish_matching_artifact(
+    transaction: &Transaction<'_>,
+    claim: &ClaimedJob,
+    artifact: &ValidatedArtifact,
+) -> SmokeResult {
+    let radar_state = super::radar::lock_matching_state(transaction, claim)
+        .await?
+        .ok_or("fixture radar generation no longer matches")?;
+    publish_staged_artifact(transaction, claim, artifact, radar_state).await?;
+    Ok(())
 }
 
 fn build_manifest(

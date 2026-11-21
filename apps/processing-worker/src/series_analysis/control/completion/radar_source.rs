@@ -7,7 +7,7 @@ use momo_analysis_core::{
 use tokio_postgres::Transaction;
 
 use crate::series_analysis::{
-    control::{ClaimedJob, ControlError},
+    control::{ClaimedJob, ControlError, radar::PublicationState},
     input_repository::{self, InputRepositoryError},
     radar_prepare,
 };
@@ -17,9 +17,17 @@ use crate::series_analysis::{
 pub(super) async fn validate(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
+    radar_state: &PublicationState,
 ) -> Result<bool, ControlError> {
-    let active = transaction
-        .query_opt(
+    let active = if matches!(
+        radar_state,
+        PublicationState::Existing {
+            has_active_operation: false
+        }
+    ) {
+        None
+    } else {
+        transaction.query_opt(
             "SELECT c.legacy_id,(SELECT legacy_id FROM series_radar_previews WHERE id=o.preview_id) FROM series_radar_title_states s \
              JOIN series_radar_operations o ON o.id=s.active_operation_id \
              JOIN series_radar_candidates c ON c.id=o.candidate_id AND c.game_title_id=s.game_title_id \
@@ -29,7 +37,8 @@ pub(super) async fn validate(
                AND o.kind='apply' AND o.status IN ('pending','running')",
             &[&claim.game_title_id, &claim.radar_generation, &claim.radar_basis_id],
         )
-        .await?;
+        .await?
+    };
     let has_candidates: bool = transaction.query_one(
         "SELECT EXISTS(SELECT 1 FROM series_radar_candidates WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1) AND origin_kind='generated' AND status IN ('ready','unavailable','failed') AND result->'achievementGeneration'->'source' IS NOT NULL)",
         &[&claim.game_title_id],

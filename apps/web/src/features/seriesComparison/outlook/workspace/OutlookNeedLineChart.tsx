@@ -30,7 +30,7 @@ type Props = {
   rival: RankDistribution;
   baseline: readonly [RankDistribution, RankDistribution] | undefined;
   preview: OutlookPreview;
-  range: 50 | 100 | 200;
+  range: number;
   goal: { horizon: number; label: string } | null;
   crossingLabel: string | null;
   ariaLabel: string;
@@ -123,25 +123,21 @@ export function OutlookNeedLineChart({
     previewFocus !== null ? needLineCrossing(cumulative, previewFocus, rivalMean) : null;
   const goalValue = goalShown ? needLineThreshold(cumulative, rivalMean, goalShown.horizon) : null;
 
-  // Name each line at its right end, on the side away from the need line, and keep labels apart.
+  // Name each line at its right end. Two close lines take opposite sides (upper above, lower
+  // below); otherwise each label sits on the side away from the need line.
   const edge = needLineThreshold(cumulative, rivalMean, range);
+  const lineValues = [focusMean, rivalMean] as const;
+  const close = Math.abs(y(focusMean) - y(rivalMean)) < 30;
   const lineLabels = ([0, 1] as const).map((role) => {
-    const value = role === 0 ? focusMean : rivalMean;
-    const below = value >= edge;
+    const value = lineValues[role];
+    const other = lineValues[role === 0 ? 1 : 0];
+    const below = close ? value > other || (value === other && role === 1) : value >= edge;
     return {
       role,
       text: `${names[role]} ${outlookAverage(distributionMean(role === 0 ? focus : rival))}`,
       y: y(value) + (below ? 15 : -6),
     };
   });
-  const [firstLabel, secondLabel] = lineLabels;
-  if (firstLabel && secondLabel && Math.abs(firstLabel.y - secondLabel.y) < 14) {
-    const upper = firstLabel.y <= secondLabel.y ? firstLabel : secondLabel;
-    const lower = upper === firstLabel ? secondLabel : firstLabel;
-    const middle = (upper.y + lower.y) / 2;
-    upper.y = middle - 7;
-    lower.y = middle + 7;
-  }
   for (const label of lineLabels) label.y = Math.min(bottom - 3, Math.max(top + 11, label.y));
 
   const topLabels: Array<{ key: string; h: number; text: string }> = [];
@@ -180,7 +176,7 @@ export function OutlookNeedLineChart({
             </text>
           </g>
         ))}
-        {[0, range / 2, range].map((h) => (
+        {[0, Math.round(range / 2), range].map((h) => (
           <text
             key={h}
             x={x(h)}

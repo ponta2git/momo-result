@@ -64,6 +64,8 @@ type Props = {
   recent: RankDistribution;
   baseline: RankDistribution | undefined;
   onPreviewChange: (preview: OutlookPreview) => void;
+  /** The lite layout keeps only the mean and the way back to the recent record. */
+  minimal?: boolean;
 };
 
 /** One person's future mean: value, slider, and the three ways to set it otherwise. */
@@ -76,6 +78,7 @@ export function OutlookAverageControl({
   recent,
   baseline,
   onPreviewChange,
+  minimal = false,
 }: Props) {
   const name = names[role];
   const headingId = useId();
@@ -277,18 +280,22 @@ export function OutlookAverageControl({
         </div>
       </div>
       <div className="-ml-2 flex flex-wrap items-center gap-x-1" data-outlook-preserve-draft>
-        <OutlookCountsSheet
-          name={name}
-          opponentName={names[role === 0 ? 1 : 0]}
-          appliedMean={outlookAverage(currentMean)}
-          dialog={dialog}
-        />
-        <OutlookExampleToggle
-          response={response}
-          memberId={memberIds[role]}
-          role={role}
-          controlsId={examplesId}
-        />
+        {minimal ? null : (
+          <>
+            <OutlookCountsSheet
+              name={name}
+              opponentName={names[role === 0 ? 1 : 0]}
+              appliedMean={outlookAverage(currentMean)}
+              dialog={dialog}
+            />
+            <OutlookExampleToggle
+              response={response}
+              memberId={memberIds[role]}
+              role={role}
+              controlsId={examplesId}
+            />
+          </>
+        )}
         <Button
           size="sm"
           variant="quiet"
@@ -299,13 +306,15 @@ export function OutlookAverageControl({
           直近に戻す
         </Button>
       </div>
-      <OutlookExampleList
-        id={examplesId}
-        response={response}
-        memberId={memberIds[role]}
-        memberName={name}
-        condition={{ kind: "mean", role }}
-      />
+      {minimal ? null : (
+        <OutlookExampleList
+          id={examplesId}
+          response={response}
+          memberId={memberIds[role]}
+          memberName={name}
+          condition={{ kind: "mean", role }}
+        />
+      )}
     </section>
   );
 }

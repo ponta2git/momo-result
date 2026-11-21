@@ -56,12 +56,15 @@ type Props = {
 };
 
 /**
- * Prototype of the rebuilt outlook (one workspace, no sub-tabs). `outlookLayout=current`
- * keeps the released layout reachable for side-by-side trials.
+ * Prototype of the rebuilt outlook (one workspace, no sub-tabs). For side-by-side trials,
+ * `outlookLayout=current` keeps the released layout and `outlookLayout=lite` drops the
+ * overlapping tools (baseline comparison, count editing, per-person examples, trajectory,
+ * variability examples, chart range and undo).
  */
 export function OutlookWorkspaceView({ summary, selection, onMemberChange, onPairChange }: Props) {
   const location = useLocation();
-  if (new URLSearchParams(location.search).get("outlookLayout") === "current")
+  const layout = new URLSearchParams(location.search).get("outlookLayout");
+  if (layout === "current")
     return <OutlookView summary={summary} selection={selection} onMemberChange={onMemberChange} />;
   return (
     <OutlookSummaryBoundary
@@ -78,12 +81,19 @@ export function OutlookWorkspaceView({ summary, selection, onMemberChange, onPai
         selection={selection}
         onMemberChange={onMemberChange}
         onPairChange={onPairChange}
+        lite={layout === "lite"}
       />
     </OutlookSummaryBoundary>
   );
 }
 
-function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) {
+function Workspace({
+  summary,
+  selection,
+  onMemberChange,
+  onPairChange,
+  lite,
+}: Props & { lite: boolean }) {
   const workspace = useOutlookWorkspace(summary, selection);
   const {
     view,
@@ -133,6 +143,11 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
     });
   };
   const goalLabel = `目標 ${goal.goalHorizon}戦後`;
+  const needRange = lite ? Math.max(10, goal.goalHorizon) : view.chartRange;
+  const eventBeyondChart =
+    outcome.eventHorizon !== null && outcome.eventHorizon > BigInt(needRange)
+      ? outcome.eventHorizon
+      : null;
   const goalSummary =
     goal.maximum !== null && !goal.reaches
       ? `目標${goal.goalHorizon}戦後：平均${(goal.maximum / 100).toFixed(2)}位以下`
@@ -217,7 +232,8 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
             outcome={outcome}
             eventHorizon={eventHorizon}
             nextOutcomes={nextOutcomes}
-            onShowHorizon={showHorizon}
+            onShowHorizon={lite ? undefined : showHorizon}
+            recentPair={lite ? recent : undefined}
           />
           <section className="grid min-w-0 gap-5" aria-labelledby="outlook-assumptions">
             <div className="grid gap-1">
@@ -228,7 +244,7 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
                 <h2 id="outlook-assumptions" className={contentText.heading}>
                   これからの平均順位
                 </h2>
-                <div className="-mr-2 flex items-center">
+                <div className={cn("-mr-2 flex items-center", lite && "hidden")}>
                   <Button
                     variant="quiet"
                     size="sm"
@@ -256,7 +272,9 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
                 </div>
               </div>
               <p id="outlook-assumptions-note" className={contentText.supporting}>
-                {pending ? "残して比べる前に、入力を反映するか取り消してください。" : initialNote}
+                {pending && !lite
+                  ? "残して比べる前に、入力を反映するか取り消してください。"
+                  : initialNote}
               </p>
             </div>
             {([0, 1] as const).map((role) => (
@@ -268,8 +286,9 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
                 memberIds={memberIds}
                 role={role}
                 recent={recent[role]}
-                baseline={role === 0 ? view.pinnedFocus : view.pinnedRival}
+                baseline={lite ? undefined : role === 0 ? view.pinnedFocus : view.pinnedRival}
                 onPreviewChange={previewChange}
+                minimal={lite}
               />
             ))}
           </section>
@@ -285,6 +304,7 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
             reviewHref={reviewHref}
             matchHref={matchHref}
             seasonSelected={Boolean(selection.seasonMasterId)}
+            minimal={lite}
           />
           <section className="grid min-w-0 gap-3" aria-labelledby="outlook-need-line">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -294,23 +314,25 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
                   {names[1]}が {outlookAverage(distributionMean(view.rival))}位を続ける場合
                 </span>
               </h2>
-              <SegmentedControl
-                label="グラフの範囲"
-                value={String(view.chartRange)}
-                options={[50, 100, 200].map((range) => ({
-                  value: String(range),
-                  label: `${range}戦`,
-                }))}
-                onValueChange={(value) =>
-                  edit({ kind: "chart-range", range: Number(value) as 50 | 100 | 200 })
-                }
-              />
+              {lite ? null : (
+                <SegmentedControl
+                  label="グラフの範囲"
+                  value={String(view.chartRange)}
+                  options={[50, 100, 200].map((range) => ({
+                    value: String(range),
+                    label: `${range}戦`,
+                  }))}
+                  onValueChange={(value) =>
+                    edit({ kind: "chart-range", range: Number(value) as 50 | 100 | 200 })
+                  }
+                />
+              )}
             </div>
             <NeedLineLegend
               names={names}
               memberIds={memberIds}
               preview={preview}
-              pinned={toolbar.view.pinned}
+              pinned={!lite && toolbar.view.pinned}
             />
             <OutlookNeedLineChart
               names={names}
@@ -319,12 +341,12 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
               focus={view.focus}
               rival={view.rival}
               baseline={
-                view.pinnedFocus && view.pinnedRival
+                !lite && view.pinnedFocus && view.pinnedRival
                   ? [view.pinnedFocus, view.pinnedRival]
                   : undefined
               }
               preview={preview}
-              range={view.chartRange}
+              range={needRange}
               goal={{ horizon: goal.goalHorizon, label: goalLabel }}
               crossingLabel={
                 outcome.crossing.exactTie !== null && outcome.crossing.exactTie > 0n
@@ -338,18 +360,26 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
             <p className={contentText.supporting}>
               縦軸は平均順位で、上ほど良い成績です。黒い線より上の平均を続ければ、その戦数で
               {names[0]}が上にいます。
+              {lite
+                ? "実際は試合ごとに上下するので、一度上回っても途中で抜き返されることがあります。"
+                : null}
+              {lite && eventBeyondChart !== null
+                ? `順番が入れ替わるのは${eventBeyondChart}戦後で、図の範囲より先です。目標の戦数を増やすと図に出ます。`
+                : null}
             </p>
           </section>
-          <OutlookTrajectory
-            ref={trajectory}
-            response={summary}
-            cumulative={cumulative}
-            names={names}
-            memberIds={memberIds}
-            displayRoles={displayRoles}
-            outcome={outcome}
-            eventHorizon={eventHorizon}
-          />
+          {lite ? null : (
+            <OutlookTrajectory
+              ref={trajectory}
+              response={summary}
+              cumulative={cumulative}
+              names={names}
+              memberIds={memberIds}
+              displayRoles={displayRoles}
+              outcome={outcome}
+              eventHorizon={eventHorizon}
+            />
+          )}
           <Disclosure
             summary="詳しい数値と計算の前提"
             ariaLabel="詳しい数値と計算の前提"
@@ -413,7 +443,7 @@ function Workspace({ summary, selection, onMemberChange, onPairChange }: Props) 
           aria-hidden="true"
         >
           <p className={contentText.supporting}>
-            {toolbar.view.pinned ? "残した条件と比べると" : "この平均が続くと"}
+            {!lite && toolbar.view.pinned ? "残した条件と比べると" : "この平均が続くと"}
           </p>
           <p className={contentText.compactPrimary}>{outcome.headline}</p>
           <p className={contentText.supporting}>{goalSummary}</p>

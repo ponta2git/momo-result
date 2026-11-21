@@ -24,6 +24,8 @@ export type SeriesAnalysisSelection = {
   mapMasterId?: string | undefined;
   seasonMasterId?: string | undefined;
   view?: SeriesAnalysisViewId | undefined;
+  /** Prototype only: compare the rebuilt outlook with the released or the lite layout. */
+  outlookLayout?: "current" | "lite" | undefined;
 };
 
 export type SeriesAnalysisSelectionChange =
@@ -172,6 +174,9 @@ export function normalizeSeriesAnalysisSelection(
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),
     ...(seasonMasterId ? { seasonMasterId } : {}),
+    ...(view === "outlook" && selection.outlookLayout
+      ? { outlookLayout: selection.outlookLayout }
+      : {}),
     view,
   };
 }

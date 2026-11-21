@@ -3,6 +3,7 @@ import type { Ref } from "react";
 
 import {
   areDistributionsCompatible,
+  distributionsEqual,
   formatRational,
 } from "@/features/seriesComparison/outlook/calculation";
 import type {
@@ -45,6 +46,7 @@ export function OutlookConclusion({
   eventHorizon,
   nextOutcomes,
   onShowHorizon,
+  recentPair,
 }: {
   ref?: Ref<HTMLElement>;
   cumulative: CumulativePair;
@@ -52,12 +54,17 @@ export function OutlookConclusion({
   outcome: OutlookOutcome;
   eventHorizon: number | null;
   nextOutcomes: NextOutcomes;
-  onShowHorizon: (horizon: number) => void;
+  onShowHorizon?: ((horizon: number) => void) | undefined;
+  /** Lite: compare with the recent record in a reserved line, instead of a kept baseline. */
+  recentPair?: readonly [RankDistribution, RankDistribution] | undefined;
 }) {
   const headingId = useId();
   const view = useOutlookResultView();
+  // Lite compares with the recent record only, even if a baseline was kept in the full layout.
   const pinned =
-    view.pinnedFocus && view.pinnedRival ? ([view.pinnedFocus, view.pinnedRival] as const) : null;
+    !recentPair && view.pinnedFocus && view.pinnedRival
+      ? ([view.pinnedFocus, view.pinnedRival] as const)
+      : null;
   const current = [view.focus, view.rival] as const;
   return (
     <section ref={ref} className="grid min-w-0 gap-1" aria-labelledby={headingId}>
@@ -87,7 +94,7 @@ export function OutlookConclusion({
       ) : (
         <p className={cn(contentText.supporting, "flex min-h-5 flex-wrap items-center gap-x-2")}>
           {outcome.detail ? <span>{outcome.detail}</span> : null}
-          {eventHorizon !== null ? (
+          {eventHorizon !== null && onShowHorizon ? (
             <button
               type="button"
               className="rounded-xs text-action underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -98,7 +105,15 @@ export function OutlookConclusion({
           ) : null}
         </p>
       )}
-      {nextOutcomes.length ? (
+      {recentPair ? (
+        <p className={cn(contentText.supporting, "min-h-4")}>
+          {distributionsEqual(view.focus, recentPair[0]) &&
+          distributionsEqual(view.rival, recentPair[1])
+            ? "2人とも直近20戦の成績で計算しています"
+            : `直近20戦のままなら：${outlookOutcome(cumulative, recentPair, names).headline}`}
+        </p>
+      ) : null}
+      {nextOutcomes.length > 0 ? (
         <p className={contentText.supporting}>
           次戦で動く組み合わせ：
           {nextOutcomes
@@ -124,6 +139,7 @@ export function OutlookGoalSummary({
   reviewHref,
   matchHref,
   seasonSelected,
+  minimal = false,
 }: {
   response: SeriesAnalysisOutlookSummary;
   cumulative: CumulativePair;
@@ -134,6 +150,7 @@ export function OutlookGoalSummary({
   reviewHref: string;
   matchHref: string;
   seasonSelected: boolean;
+  minimal?: boolean;
 }) {
   const headingId = useId();
   const inputId = useId();
@@ -287,9 +304,11 @@ export function OutlookGoalSummary({
           <LinkButton size="sm" variant="quiet" to={reviewHref}>
             {names[0]}の行動仮説
           </LinkButton>
-          <LinkButton size="sm" variant="quiet" to={matchHref}>
-            {seasonSelected ? "このシーズンの確定戦績" : "この作品の確定戦績"}
-          </LinkButton>
+          {minimal ? null : (
+            <LinkButton size="sm" variant="quiet" to={matchHref}>
+              {seasonSelected ? "このシーズンの確定戦績" : "この作品の確定戦績"}
+            </LinkButton>
+          )}
         </span>
       </p>
     </section>

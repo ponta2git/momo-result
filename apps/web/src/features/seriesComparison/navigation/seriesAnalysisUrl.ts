@@ -20,6 +20,8 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const focusMemberId = params.get("focusMemberId")?.trim() || undefined;
   const rivalMemberId = params.get("rivalMemberId")?.trim() || undefined;
   const expectedRankGapMemberId = params.get("expectedRankGapMemberId")?.trim() || undefined;
+  const rawLayout = params.get("outlookLayout")?.trim();
+  const outlookLayout = rawLayout === "current" || rawLayout === "lite" ? rawLayout : undefined;
   return {
     focusMatchId,
     gameTitleId,
@@ -30,6 +32,7 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
     ...(focusMemberId ? { focusMemberId } : {}),
     ...(rivalMemberId ? { rivalMemberId } : {}),
     ...(expectedRankGapMemberId ? { expectedRankGapMemberId } : {}),
+    ...(outlookLayout ? { outlookLayout } : {}),
   };
 }
 
@@ -47,6 +50,7 @@ export function buildSeriesAnalysisSearchParams(state: SeriesAnalysisSelection):
     params.set("expectedRankGapMemberId", state.expectedRankGapMemberId);
   const view = normalizeSeriesAnalysisView(state.view);
   if (view !== defaultSeriesAnalysisView) params.set("view", view);
+  if (view === "outlook" && state.outlookLayout) params.set("outlookLayout", state.outlookLayout);
   return params;
 }
 

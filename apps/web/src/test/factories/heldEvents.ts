@@ -3,6 +3,8 @@ import type {
   HeldEventListItemResponse,
   HeldEventListPlayerResultResponse,
   HeldEventResponse,
+  HeldEventRecordContextResponse,
+  HeldEventSummaryResponse,
 } from "@/shared/api/heldEvents";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
 import { compact } from "@/shared/lib/compact";
@@ -21,6 +23,13 @@ export function makeHeldEventResponse(
     nextMatchNo: matchCount + 1,
     ...overrides,
   };
+}
+
+export function makeHeldEventRecordContext(
+  event: Partial<HeldEventSummaryResponse> = {},
+  previousMatch?: NonNullable<HeldEventRecordContextResponse["previousMatch"]>,
+): HeldEventRecordContextResponse {
+  return { event: makeHeldEventResponse(event), ...(previousMatch && { previousMatch }) };
 }
 
 /** A list row; `averageRanks` lists canonical members' averages, deriving plausible rank counts. */

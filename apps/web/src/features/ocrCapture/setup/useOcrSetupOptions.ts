@@ -79,8 +79,7 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
     ...heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
     enabled,
   });
-  // The chosen held event is read with its matches: its next number and previous match decide
-  // the defaults by the same rule as manual entry.
+  // The event summary and previous confirmed conditions arrive together, as in manual entry.
   const recordContext = useRecordContext(value.heldEventId, enabled);
   const mapMastersQuery = useQuery({
     ...mapMastersQueryOptions(value.gameTitleId, Boolean(value.gameTitleId)),
@@ -102,6 +101,7 @@ export function useOcrSetupOptions({ enabled, value }: OcrSetupOptionsParams) {
   const selectedHeldEvent = heldEvents.find((event) => event.id === value.heldEventId);
   const heldEventPicker = useHeldEventPickerDirectory({
     enabled,
+    readSelectedSummary: false,
     selectedEvent: selectedHeldEvent,
     selectedId: value.heldEventId ?? "",
   });

@@ -53,10 +53,17 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
       HttpRequestBodies.Matches.createHeldEvent("2024-01-01T00:00:00Z"),
     )
     for
+      emptyLatest <- httpApp.run(readGet(uri"/api/held-events/lookup/latest"))
+      _ = assertEquals(emptyLatest.status, Status.Ok)
+      empty <- emptyLatest.as[Json]
+      _ = assertEquals(jsonField[Option[String]](empty, "latestHeldEventId"), None)
       createRes <- httpApp.run(createReq)
       _ = assertEquals(createRes.status, Status.Ok)
       body <- createRes.as[Json]
       id = jsonField[String](body, "id")
+      latestRes <- httpApp.run(readGet(uri"/api/held-events/lookup/latest"))
+      latest <- latestRes.as[Json]
+      _ = assertEquals(jsonField[String](latest, "latestHeldEventId"), id)
       listRes <- httpApp.run(readGet(uri"/api/held-events"))
       _ = assertEquals(listRes.status, Status.Ok)
       listBody <- listRes.as[Json]
@@ -104,9 +111,15 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   }
 
   app.test("GET /api/held-events/:id returns 404 for a missing event") { httpApp =>
-    httpApp.run(readGet(uri"/api/held-events/missing-held-event")).flatMap { res =>
-      assertProblem(res, Status.NotFound, "NOT_FOUND", "held event was not found")
-    }
+    List(
+      uri"/api/held-events/missing-held-event",
+      uri"/api/held-events/missing-held-event/record-context"
+    )
+      .traverse_(uri =>
+        httpApp.run(readGet(uri)).flatMap(res =>
+          assertProblem(res, Status.NotFound, "NOT_FOUND", "held event was not found")
+        )
+      )
   }
 
   app.test("detail navigation exposes live adjacent identities across held events") { httpApp =>

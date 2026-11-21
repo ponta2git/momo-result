@@ -430,6 +430,9 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           byUuid <- get(app, s"/api/matches/$firstUuid")
           public <- get(app, s"/api/public/matches/${jsonField[String](old, "publicId")}")
           event <- get(app, s"/api/held-events/${canonical(Entity.HeldEvents, firstEvent)}")
+          context <-
+            get(app, s"/api/held-events/${canonical(Entity.HeldEvents, firstEvent)}/record-context")
+          latest <- get(app, "/api/held-events/lookup/latest")
           firstPage <- get(app, "/api/matches?sort=held_asc&pageSize=1")
           cursor = jsonField[String](jsonField[Json](firstPage, "pagination"), "nextCursor")
           nextPage <- json(
@@ -502,6 +505,16 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
             val heldItems = jsonField[List[Json]](heldSearch, "items")
             assertEquals(heldItems.map(jsonField[String](_, "id")), List(firstEvent, secondEvent))
             assertEquals(jsonField[String](heldSearch, "latestHeldEventId"), secondEvent)
+            assertEquals(jsonField[String](latest, "latestHeldEventId"), secondEvent)
+            assertEquals(
+              jsonField[String](latest, "publicId"),
+              jsonField[String](heldItems.last, "publicId")
+            )
+            assertEquals(jsonField[String](jsonField[Json](context, "event"), "id"), firstEvent)
+            val previousSetup = jsonField[Json](context, "previousMatch")
+            assertEquals(jsonField[String](previousSetup, "gameTitleId"), title)
+            assertEquals(jsonField[String](previousSetup, "seasonMasterId"), season)
+            assertEquals(jsonField[String](previousSetup, "mapMasterId"), map)
             assertEquals(
               jsonField[List[Json]](heldItems.head, "playerResults")
                 .map(result =>

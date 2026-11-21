@@ -9,6 +9,9 @@ export type HeldEventListPlayerResultResponse =
   components["schemas"]["HeldEventListPlayerResultResponse"];
 export type HeldEventNoteMatchResponse = components["schemas"]["HeldEventNoteMatchResponse"];
 export type HeldEventSummaryResponse = components["schemas"]["HeldEventSummaryResponse"];
+export type LatestHeldEventResponse = components["schemas"]["LatestHeldEventResponse"];
+export type HeldEventRecordContextResponse =
+  components["schemas"]["HeldEventRecordContextResponse"];
 export type HeldEventDetailResponse = components["schemas"]["HeldEventDetailResponse"];
 export type HeldEventMatchResponse = components["schemas"]["HeldEventMatchResponse"];
 export type HeldEventDraftResponse = components["schemas"]["HeldEventDraftResponse"];
@@ -117,6 +120,17 @@ export async function deleteHeldEvent(
 export function getHeldEventSummary(heldEventId: string, options: ApiSignalOptions = {}) {
   return apiRequest<HeldEventSummaryResponse>(
     `/api/held-events/${encodeURIComponent(heldEventId)}/summary`,
+    options,
+  );
+}
+
+export function getLatestHeldEvent(options: ApiSignalOptions = {}) {
+  return apiRequest<LatestHeldEventResponse>("/api/held-events/lookup/latest", options);
+}
+
+export function getHeldEventRecordContext(heldEventId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<HeldEventRecordContextResponse>(
+    `/api/held-events/${encodeURIComponent(heldEventId)}/record-context`,
     options,
   );
 }

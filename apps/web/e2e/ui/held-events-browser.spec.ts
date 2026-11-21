@@ -2,6 +2,25 @@ import { createDeferred } from "../../src/test/deferred";
 import { confirmedContext } from "./fixtures/records";
 import { expect, installUiAuth, selectControlOption, test } from "./support";
 
+test("opens the latest event and starts manual and OCR records with its current defaults", async ({
+  page,
+}) => {
+  await installUiAuth(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(`/held-events/${confirmedContext.heldEventId}`);
+  await page.getByRole("link", { name: "手入力", exact: true }).click();
+  await expect(page.getByLabel("試合番号", { exact: true })).toHaveValue("5");
+  await expect(page.getByRole("combobox", { name: "マップ（必須）" })).toHaveText(
+    confirmedContext.mapName,
+  );
+  await page.goBack();
+  await page.getByRole("link", { name: "OCR取り込み", exact: true }).click();
+  await expect(page.getByLabel("試合番号", { exact: true })).toHaveValue("5");
+  await expect(page.getByRole("combobox", { name: "マップ", exact: true })).toHaveText(
+    confirmedContext.mapName,
+  );
+});
+
 test("keeps keyboard filtering usable while stale held events are protected and the request is retried", async ({
   page,
 }) => {

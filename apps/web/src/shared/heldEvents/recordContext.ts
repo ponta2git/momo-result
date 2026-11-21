@@ -1,41 +1,11 @@
-import type { HeldEventDetailResponse, HeldEventResponse } from "@/shared/api/heldEvents";
+import type { HeldEventRecordContextResponse } from "@/shared/api/heldEvents";
 
 /** The match conditions a new record inside a held event can carry over. */
-export type RecordSetupChoice = {
-  readonly gameTitleId: string;
-  readonly seasonMasterId: string;
-  readonly mapMasterId: string;
-};
+export type RecordSetupChoice = Readonly<
+  NonNullable<HeldEventRecordContextResponse["previousMatch"]>
+>;
 
 type Candidate = { readonly id: string; readonly gameTitleId?: string };
-
-/** The held event as a picker choice, with the next number read together with its matches. */
-export function heldEventFromDetail(detail: HeldEventDetailResponse): HeldEventResponse {
-  return {
-    draftCount: detail.draftCount,
-    heldAt: detail.heldAt,
-    id: detail.id,
-    matchCount: detail.matchCount,
-    nextMatchNo: detail.nextMatchNo,
-    ...(detail.publicId ? { publicId: detail.publicId } : {}),
-  };
-}
-
-/** The conditions of the held event's latest confirmed match, the one the next record follows. */
-export function previousMatchSetup(
-  detail: HeldEventDetailResponse | undefined,
-): RecordSetupChoice | undefined {
-  const latest = (detail?.matches ?? []).toSorted(
-    (left, right) => right.matchNoInEvent - left.matchNoInEvent,
-  )[0];
-  return latest
-    ? {
-        gameTitleId: latest.gameTitleId,
-        mapMasterId: latest.mapMasterId,
-        seasonMasterId: latest.seasonMasterId,
-      }
-    : undefined;
-}
 
 function onlyCandidate(
   candidates: readonly Candidate[] | undefined,

@@ -209,6 +209,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/held-events/lookup/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsLookupLatest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/held-events/{heldEventId}/record-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsHeldeventidRecord-context"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/held-events": {
         parameters: {
             query?: never;
@@ -1441,6 +1473,12 @@ export interface components {
             mapName?: string;
             publicId?: string;
         };
+        /** HeldEventMatchSetupResponse */
+        HeldEventMatchSetupResponse: {
+            gameTitleId: string;
+            seasonMasterId: string;
+            mapMasterId: string;
+        };
         /** HeldEventNavigationResponse */
         HeldEventNavigationResponse: {
             previous?: components["schemas"]["AdjacentHeldEventResponse"];
@@ -1466,6 +1504,11 @@ export interface components {
             totalAssetsManYen: number;
             /** Format: int32 */
             revenueManYen: number;
+        };
+        /** HeldEventRecordContextResponse */
+        HeldEventRecordContextResponse: {
+            event: components["schemas"]["HeldEventSummaryResponse"];
+            previousMatch?: components["schemas"]["HeldEventMatchSetupResponse"];
         };
         /** HeldEventResponse */
         HeldEventResponse: {
@@ -1540,6 +1583,11 @@ export interface components {
             displayName: string;
             /** Format: int32 */
             displayOrder: number;
+        };
+        /** LatestHeldEventResponse */
+        LatestHeldEventResponse: {
+            latestHeldEventId?: string;
+            publicId?: string;
         };
         /** LoginAccountListResponse */
         LoginAccountListResponse: {
@@ -8338,6 +8386,68 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiHeld-eventsLookupLatest": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestHeldEventResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiHeld-eventsHeldeventidRecord-context": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                heldEventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldEventRecordContextResponse"];
                 };
             };
             default: {

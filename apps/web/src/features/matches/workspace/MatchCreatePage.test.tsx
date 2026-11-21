@@ -26,7 +26,7 @@ import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
-import { makeHeldEventDetailResponse, makeHeldEventListItem } from "@/test/factories/heldEvents";
+import { makeHeldEventRecordContext, makeHeldEventListItem } from "@/test/factories/heldEvents";
 import { makeMatchDraftReviewResponse } from "@/test/factories/matchDraftReview";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
@@ -213,12 +213,12 @@ describe("MatchCreatePage", () => {
         });
       }),
     );
-    const detailReads: string[] = [];
+    const contextReads: string[] = [];
     server.use(
-      http.get("/api/held-events/:heldEventId", ({ params }) => {
-        detailReads.push(String(params["heldEventId"]));
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) => {
+        contextReads.push(String(params["heldEventId"]));
         return HttpResponse.json(
-          makeHeldEventDetailResponse({
+          makeHeldEventRecordContext({
             heldAt: "2026-06-01T00:00:00Z",
             id: String(params["heldEventId"]),
             matchCount: 8,
@@ -239,7 +239,7 @@ describe("MatchCreatePage", () => {
     await waitForMatchCreateReady();
     await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
     // The newest event is read on its own for its number and previous match, not a second page.
-    expect(detailReads).toEqual(["held-latest"]);
+    expect(contextReads).toEqual(["held-latest"]);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.get("page")).toBe("1");
     expect(requests[0]?.get("pageSize")).toBe("20");
@@ -379,9 +379,9 @@ describe("MatchCreatePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({
+          makeHeldEventRecordContext({
             heldAt: "2026-03-01T00:00:00.000Z",
             id: String(params["heldEventId"]),
             matchCount: 8,
@@ -507,9 +507,9 @@ describe("MatchCreatePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({
+          makeHeldEventRecordContext({
             draftCount: 2,
             heldAt: "2026-01-01T00:00:00.000Z",
             id: String(params["heldEventId"]),
@@ -556,9 +556,9 @@ describe("MatchCreatePage", () => {
       },
     );
     server.use(
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({ id: String(params["heldEventId"]), nextMatchNo: 2 }),
+          makeHeldEventRecordContext({ id: String(params["heldEventId"]), nextMatchNo: 2 }),
         ),
       ),
     );
@@ -599,22 +599,20 @@ describe("MatchCreatePage", () => {
       { ...mswState.mapMasters[0]!, gameTitleId: "gt_world", id: "map_world", name: "世界" },
     );
     server.use(
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({
-            id: String(params["heldEventId"]),
-            matchCount: 2,
-            nextMatchNo: 3,
-            matches: [1, 2].map((matchNoInEvent) => ({
+          makeHeldEventRecordContext(
+            {
+              id: String(params["heldEventId"]),
+              matchCount: 2,
+              nextMatchNo: 3,
+            },
+            {
               gameTitleId: "gt_momotetsu_2",
-              mapMasterId: matchNoInEvent === 2 ? "map_west" : "map_east",
-              matchId: `match-${matchNoInEvent}`,
-              matchNoInEvent,
-              ownerMemberId: "member_ponta",
-              playedAt: "2026-01-01T00:00:00.000Z",
-              seasonMasterId: matchNoInEvent === 2 ? "season_next" : "season_current",
-            })),
-          }),
+              mapMasterId: "map_west",
+              seasonMasterId: "season_next",
+            },
+          ),
         ),
       ),
     );

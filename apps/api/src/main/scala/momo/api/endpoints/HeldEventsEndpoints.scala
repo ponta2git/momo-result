@@ -66,6 +66,22 @@ object HeldEventsEndpoints:
     .and(query[Option[String]]("metricRange").description("gte (default) or lte; requires metric."))
     .mapTo[ListInput]
 
+  val latest: CommonEndpoint.SecuredRead[Unit, LatestHeldEventResponse] = endpoint
+    .get
+    .in("api" / "held-events" / "lookup" / "latest")
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[LatestHeldEventResponse])
+    .tag("held-events")
+
+  val recordContext: CommonEndpoint.SecuredRead[GetInput, HeldEventRecordContextResponse] = endpoint
+    .get
+    .in("api" / "held-events" / path[String]("heldEventId") / "record-context")
+    .securityIn(CommonEndpoint.accountHeader)
+    .errorOut(CommonEndpoint.errorOut)
+    .out(jsonBody[HeldEventRecordContextResponse])
+    .tag("held-events")
+
   val list: CommonEndpoint.SecuredRead[ListInput, HeldEventListResponse] = endpoint
     .get
     .in("api" / "held-events")

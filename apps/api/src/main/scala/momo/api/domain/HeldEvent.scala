@@ -11,3 +11,5 @@ import momo.api.domain.ids.HeldEventId
  * 一覧・要約の read model で計算する。
  */
 final case class HeldEvent(id: HeldEventId, heldAt: Instant, publicId: Option[PublicId] = None)
+
+final case class HeldEventIdentity(id: HeldEventId, publicId: Option[PublicId])

@@ -18,14 +18,17 @@ import { appRoutes } from "@/app/router";
 import type { AuthMeResponse } from "@/shared/api/auth";
 import { getCsrfToken } from "@/shared/api/csrfTokenStore";
 import { adminAccountKeys, matchKeys } from "@/shared/api/queryKeys";
-import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
+import { latestHeldEventQueryOptions } from "@/shared/api/queryOptions";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
 import { decodeSeriesAnalysisAdminOverview } from "@/shared/api/seriesAnalysisEnvelopeSchemas";
 import { authMeQueryKey, authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
-import { makeFourPlayerResults, makeMatchDetail } from "@/test/factories";
-import { makeHeldEventListItem } from "@/test/factories/heldEvents";
+import {
+  makeFourPlayerResults,
+  makeHeldEventDetailResponse,
+  makeMatchDetail,
+} from "@/test/factories";
 import { mswState } from "@/test/msw/fixtures";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
@@ -516,53 +519,32 @@ describe("app routing", () => {
     expect(router.state.historyAction).toBe("REPLACE");
   });
 
-  it("waits for its own read of the newest held event instead of a cached list", async () => {
+  it("waits for its own read of the newest held event before using a cached identity", async () => {
     setDevUser();
     const read = createDeferred();
     server.use(
-      http.get("/api/held-events", async () => {
+      http.get("/api/held-events/lookup/latest", async () => {
         await read.promise;
-        return HttpResponse.json({
-          items: [makeHeldEventListItem({ id: "held-tonight", heldAt: "2026-11-03T10:00:00Z" })],
-          latestHeldEventId: "held-tonight",
-          pagination: {
-            hasNextPage: false,
-            hasPreviousPage: false,
-            page: 1,
-            pageSize: 1,
-            totalItems: 1,
-            totalPages: 1,
-          },
-          totalMatchCount: 0,
-        });
+        return HttpResponse.json({ latestHeldEventId: "held-tonight", publicId: "24" });
       }),
+      http.get("/api/public/held-events/24", () =>
+        HttpResponse.json(makeHeldEventDetailResponse({ id: "held-tonight", publicId: "24" })),
+      ),
     );
     const { queryClient, router } = renderApp("/");
-    queryClient.setQueryData(
-      heldEventsQueryOptions({ page: 1, pageSize: 1, sort: "held_desc" }).queryKey,
-      {
-        items: [makeHeldEventListItem({ id: "held-last-week" })],
-        latestHeldEventId: "held-last-week",
-        pagination: {
-          hasNextPage: false,
-          hasPreviousPage: false,
-          page: 1,
-          pageSize: 1,
-          totalItems: 1,
-          totalPages: 1,
-        },
-        totalMatchCount: 0,
-      },
-    );
+    queryClient.setQueryData(latestHeldEventQueryOptions().queryKey, {
+      latestHeldEventId: "held-last-week",
+    });
     expect(await screen.findByLabelText("開催詳細を読み込み中")).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/");
     read.resolve();
-    await waitFor(() => expect(router.state.location.pathname).toBe("/held-events/held-tonight"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/e/24"));
   });
 
   it("opens the held-event history at / before any held event exists", async () => {
     setDevUser();
     server.use(
+      http.get("/api/held-events/lookup/latest", () => HttpResponse.json({})),
       http.get("/api/held-events", () =>
         HttpResponse.json({
           items: [],
@@ -590,26 +572,17 @@ describe("app routing", () => {
     setDevUser();
     let attempts = 0;
     server.use(
-      http.get("/api/held-events", () => {
+      http.get("/api/held-events/lookup/latest", () => {
         attempts += 1;
         return attempts === 1
           ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 })
-          : HttpResponse.json({
-              items: [makeHeldEventListItem({ id: "held-1" })],
-              latestHeldEventId: "held-1",
-              pagination: {
-                hasNextPage: false,
-                hasPreviousPage: false,
-                page: 1,
-                pageSize: 1,
-                totalItems: 1,
-                totalPages: 1,
-              },
-              totalMatchCount: 0,
-            });
+          : HttpResponse.json({ latestHeldEventId: "held-1" });
       }),
     );
-    const { router } = renderApp("/");
+    const { queryClient, router } = renderApp("/");
+    queryClient.setQueryData(latestHeldEventQueryOptions().queryKey, {
+      latestHeldEventId: "held-last-week",
+    });
 
     expect(
       await screen.findByRole("heading", { name: "最新の開催を確認できませんでした" }),

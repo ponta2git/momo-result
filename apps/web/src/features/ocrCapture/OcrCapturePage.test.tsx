@@ -19,7 +19,7 @@ import { clearPrincipalClientState } from "@/shared/auth/principalClientState";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { installObjectUrlMock } from "@/test/doubles/dom";
-import { makeHeldEventDetailResponse } from "@/test/factories/heldEvents";
+import { makeHeldEventRecordContext } from "@/test/factories/heldEvents";
 import { setupMsw } from "@/test/msw/lifecycle";
 import { server } from "@/test/msw/server";
 import { createTestQueryClient } from "@/test/queryClient";
@@ -565,9 +565,9 @@ describe("OcrCapturePage", () => {
           ],
         }),
       ),
-      http.get("/api/held-events/:heldEventId", ({ params }) =>
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
-          makeHeldEventDetailResponse({
+          makeHeldEventRecordContext({
             draftCount: 1,
             heldAt: "2026-02-03T04:05:06.000Z",
             id: String(params["heldEventId"]),

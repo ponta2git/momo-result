@@ -57,3 +57,14 @@ final case class HeldEventSummary(
     draftCount: Int,
     nextMatchNo: Int,
 )
+
+final case class HeldEventMatchSetup(
+    gameTitleId: GameTitleId,
+    seasonMasterId: SeasonMasterId,
+    mapMasterId: MapMasterId,
+)
+
+final case class HeldEventRecordContext(
+    summary: HeldEventSummary,
+    previousMatch: Option[HeldEventMatchSetup]
+)

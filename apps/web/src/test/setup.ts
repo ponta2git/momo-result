@@ -3,6 +3,7 @@ import { cleanup } from "@testing-library/react/pure";
 import { afterEach, beforeEach, expect, vi } from "vitest";
 
 import { clearCsrfToken } from "@/shared/api/csrfTokenStore";
+import { installPointerCapture } from "@/test/pointerCapture";
 import { resetTestQueryClients } from "@/test/queryClient";
 import { resetResizeObservers } from "@/test/resizeObserver";
 
@@ -44,6 +45,7 @@ function formatConsoleArgs(args: unknown[]): string {
 beforeEach(() => {
   if (hasDom) {
     vi.stubGlobal("ResizeObserver", resetResizeObservers());
+    installPointerCapture();
     vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   }
   if (hasDom && !window.localStorage) {

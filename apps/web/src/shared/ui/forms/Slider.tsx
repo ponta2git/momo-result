@@ -68,7 +68,8 @@ export function Slider({
   const upper = max > min ? max : min + span;
   const active = useRef<"pointer" | "keyboard" | null>(null);
   const discard = useRef(false);
-  const touch = useRef<{ onThumb: boolean } | null>(null);
+  // The current press: touch presses move the value only from the thumb.
+  const press = useRef<{ touch: boolean; onThumb: boolean } | null>(null);
   const latestEnd = useRef(onGestureEnd);
   useLayoutEffect(() => {
     latestEnd.current = onGestureEnd;
@@ -149,11 +150,11 @@ export function Slider({
         disabled={disabled}
         thumbAlignment="center"
         onValueChange={(next, details) => {
-          const fromTouch = touch.current !== null;
+          const touch = press.current?.touch ? press.current : null;
           if (
             discard.current ||
-            (fromTouch && !touch.current?.onThumb) ||
-            (details.reason === "track-press" && touch.current?.onThumb)
+            (touch && !touch.onThumb) ||
+            (touch && details.reason === "track-press")
           ) {
             details.cancel();
             return;
@@ -169,23 +170,27 @@ export function Slider({
           }
           if (details.reason === "drag" || details.reason === "track-press") onDrag(next);
         }}
-        onTouchStartCapture={(event) => {
-          const target = event.target instanceof Element ? event.target : null;
-          touch.current = { onThumb: Boolean(target?.closest("[data-slider-thumb]")) };
-        }}
-        onTouchEndCapture={() => {
-          touch.current = null;
-        }}
-        onTouchCancelCapture={() => {
-          touch.current = null;
-        }}
         onPointerDownCapture={(event) => {
           if (disabled || !event.isPrimary || event.button > 0) return;
+          // Pointer events precede the touch events Base UI also handles, so the press is known
+          // before any value from either arrives.
+          const target = event.target instanceof Element ? event.target : null;
+          press.current = {
+            touch: event.pointerType === "touch",
+            onThumb: Boolean(target?.closest("[data-slider-thumb]")),
+          };
           start("pointer");
         }}
-        onPointerUpCapture={() => end(false)}
-        onPointerCancelCapture={() => end(true)}
+        onPointerUpCapture={() => {
+          press.current = null;
+          end(false);
+        }}
+        onPointerCancelCapture={() => {
+          press.current = null;
+          end(true);
+        }}
         onLostPointerCaptureCapture={() => {
+          press.current = null;
           if (active.current === "pointer") end(false);
         }}
         className="min-w-0"

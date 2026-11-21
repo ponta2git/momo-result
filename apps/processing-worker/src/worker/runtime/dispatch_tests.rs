@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use tokio::sync::watch;
 use tokio_postgres::Client;
 
-use super::{ScanBudget, WorkState, WorkerError, claim_analysis, claim_ocr, time};
+use super::{CandidateScan, WorkState, WorkerError, claim_analysis, claim_ocr, selection, time};
 use crate::{
     cgroup::{CgroupHierarchy, ChildCgroup},
     notifications::NotificationSink,
@@ -53,12 +53,17 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     assert_job(&observer, ANALYSIS, "queued", 0).await?;
     shutdown.send_replace(false);
 
-    // Exercise both production scans with the same budget, as claim_next does.
+    // Even when the first read exhausts the shared budget, its candidate must reach claim.
     let mut shared = budget();
-    assert!(!claim_ocr(&mut scheduler, &stopped, &mut shared).await?);
+    let selection::FirstScan::Analysis(page) =
+        selection::first_scan(&scheduler.database, true, true).await?
+    else {
+        return Err("expected analysis when OCR is empty".into());
+    };
+    shared.first_page = Some(page);
     assert!(
         shared.exhausted(),
-        "the empty OCR query must consume the shared budget"
+        "the delayed candidate page must consume the scan budget"
     );
     let analysis_claim = Box::pin(claim_analysis(&mut scheduler, &stopped, &mut shared)).await;
     assert!(matches!(
@@ -84,6 +89,7 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
 
     // Queued OCR must leave the running analysis and its reservation untouched.
     insert_ocr(&observer).await?;
+    let ocr_page = verify_queue_priority(&observer).await?;
     assert!(
         scheduler.resources.is_reserved(),
         "a committed claim retains its reservation"
@@ -107,6 +113,7 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     scheduler.resources.release();
 
     // No child is installed: UnsupportedPlatform occurs only after the real DB claim commits.
+    verify_rescheduled_ocr(&observer, &mut scheduler, &stopped, ocr_page).await?;
     let ocr_claim = claim_ocr(&mut scheduler, &stopped, &mut budget()).await;
     assert!(matches!(ocr_claim, Err(WorkerError::UnsupportedPlatform)));
     let row = observer
@@ -141,6 +148,63 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     Ok(())
 }
 
+async fn verify_rescheduled_ocr(
+    observer: &Client,
+    scheduler: &mut WorkState,
+    stopped: &watch::Receiver<bool>,
+    page: Vec<selection::Cursor>,
+) -> TestResult {
+    // Another transaction changes availability after discovery but before claim.
+    observer.execute("UPDATE ocr_jobs SET available_at = statement_timestamp() + interval '30 seconds' WHERE legacy_id=$1", &[&OCR]).await?;
+    let mut scan = budget();
+    scan.first_page = Some(page);
+    assert!(!claim_ocr(scheduler, stopped, &mut scan).await?);
+    assert!(!scheduler.resources.is_reserved());
+    let selection::FirstScan::Idle(Some(deadline)) =
+        selection::first_scan(observer, true, false).await?
+    else {
+        return Err("future OCR must wake before the five-minute running lease".into());
+    };
+    let due = deadline.saturating_duration_since(time::Instant::now());
+    assert!(due > Duration::ZERO && due <= Duration::from_secs(30));
+    observer
+        .execute(
+            "UPDATE ocr_jobs SET available_at = statement_timestamp() WHERE legacy_id=$1",
+            &[&OCR],
+        )
+        .await?;
+    Ok(())
+}
+
+async fn verify_queue_priority(observer: &Client) -> TestResult<Vec<selection::Cursor>> {
+    let first_ocr = selection::first_scan(observer, true, true).await?;
+    let selection::FirstScan::Ocr(page) = first_ocr else {
+        return Err("waiting OCR must precede compatible queued analysis".into());
+    };
+    assert_eq!(page.first().map(|cursor| cursor.id.as_str()), Some(OCR));
+    assert!(matches!(
+        selection::first_scan(observer, true, false).await?,
+        selection::FirstScan::Ocr(_)
+    ));
+    let selection::FirstScan::Analysis(analysis) =
+        selection::first_scan(observer, false, true).await?
+    else {
+        return Err("disabled OCR must not hide the waiting analysis".into());
+    };
+    assert_eq!(
+        analysis.first().map(|cursor| cursor.id.as_str()),
+        Some(WAITING)
+    );
+    assert!(
+        matches!(
+            selection::first_scan(observer, false, false).await?,
+            selection::FirstScan::Idle(Some(_))
+        ),
+        "running lease recovery stays enabled when neither queue can claim"
+    );
+    Ok(page)
+}
+
 async fn verify_cursor_yield(
     database_url: &str,
     delayed_url: &str,
@@ -169,6 +233,12 @@ async fn verify_cursor_yield(
 
     // The first candidate is attempted but contended. Yield before advancing over B.
     let mut scan = budget();
+    let selection::FirstScan::Analysis(page) =
+        selection::first_scan(&scheduler.database, false, true).await?
+    else {
+        return Err("expected queued analysis even while the claim lock is held".into());
+    };
+    scan.first_page = Some(page);
     assert!(Box::pin(claim_analysis(&mut scheduler, &stopped, &mut scan)).await?);
     assert!(scan.contended);
     assert_eq!(
@@ -200,8 +270,9 @@ async fn verify_cursor_yield(
     Ok(())
 }
 
-fn budget() -> ScanBudget {
-    ScanBudget {
+fn budget() -> CandidateScan {
+    CandidateScan {
+        first_page: None,
         until: time::Instant::now() + SCAN_BUDGET,
         contended: false,
     }

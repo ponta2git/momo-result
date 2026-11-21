@@ -3,11 +3,24 @@ use super::{PendingExecution, WorkState, WorkerError, bounded, ocr, selection, s
 use std::time::Duration;
 use tokio::{sync::watch, time};
 
-struct ScanBudget {
+struct CandidateScan {
+    first_page: Option<Vec<selection::Cursor>>,
     until: time::Instant,
     contended: bool,
 }
-impl ScanBudget {
+impl CandidateScan {
+    async fn page(
+        &mut self,
+        client: &tokio_postgres::Client,
+        ocr: bool,
+        after: Option<&selection::Cursor>,
+    ) -> Result<Vec<selection::Cursor>, tokio_postgres::Error> {
+        match self.first_page.take() {
+            Some(jobs) => Ok(jobs),
+            None => selection::candidates(client, ocr, after).await,
+        }
+    }
+
     fn exhausted(&self) -> bool {
         time::Instant::now() >= self.until
     }
@@ -16,38 +29,65 @@ pub(super) fn stopping(shutdown: &watch::Receiver<bool>) -> bool {
     *shutdown.borrow() || shutdown.has_changed().is_err()
 }
 
+pub(super) enum ScanResult {
+    More,
+    Exhausted,
+    Idle(Option<time::Instant>),
+}
+
 pub(super) async fn claim_next(
     scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
-) -> Result<bool, WorkerError> {
+) -> Result<ScanResult, WorkerError> {
     if scheduler
         .retry_after
         .is_some_and(|deadline| deadline > time::Instant::now())
     {
-        return Ok(false);
+        return Ok(ScanResult::Exhausted);
     }
     scheduler.retry_after = None;
     if scheduler.resources.is_reserved() {
-        return Ok(false);
+        return Ok(ScanResult::Exhausted);
     }
-    let mut budget = ScanBudget {
+    let mut budget = CandidateScan {
+        first_page: None,
         until: time::Instant::now() + Duration::from_millis(250),
         contended: false,
     };
-    if scheduler.ocr.is_some() && claim_ocr(scheduler, shutdown, &mut budget).await? {
-        return Ok(true);
+    let mut scan_ocr = scheduler.ocr.is_some();
+    if scheduler.ocr_cursor.is_none() && scheduler.analysis_cursor.is_none() {
+        let first = bounded(
+            scheduler.settings.operation_timeout,
+            selection::first_scan(&scheduler.database, scan_ocr, scheduler.config.is_some()),
+        )
+        .await?;
+        match first {
+            selection::FirstScan::Idle(deadline) => return Ok(ScanResult::Idle(deadline)),
+            selection::FirstScan::Ocr(jobs) => budget.first_page = Some(jobs),
+            selection::FirstScan::Analysis(jobs) => {
+                scan_ocr = false;
+                budget.first_page = Some(jobs);
+            }
+        }
+    }
+    if scan_ocr && claim_ocr(scheduler, shutdown, &mut budget).await? {
+        return Ok(ScanResult::More);
     }
     if stopping(shutdown) || scheduler.resources.is_reserved() || scheduler.retry_after.is_some() {
         if budget.contended && scheduler.retry_after.is_none() {
             defer_claims(scheduler);
         }
-        return Ok(false);
+        return Ok(ScanResult::Exhausted);
     }
     let more = Box::pin(claim_analysis(scheduler, shutdown, &mut budget)).await?;
     if budget.contended && !more {
         defer_claims(scheduler);
     }
-    Ok(more)
+    Ok(if more {
+        ScanResult::More
+    } else {
+        ScanResult::Exhausted
+    })
 }
 
 fn defer_claims(scheduler: &mut WorkState) {
@@ -57,7 +97,7 @@ fn defer_claims(scheduler: &mut WorkState) {
 async fn claim_ocr(
     scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
-    budget: &mut ScanBudget,
+    budget: &mut CandidateScan,
 ) -> Result<bool, WorkerError> {
     if scheduler.resources.is_reserved() {
         return Ok(false);
@@ -71,10 +111,10 @@ async fn claim_ocr(
     for _ in 0..4 {
         let jobs = bounded(
             timeout,
-            selection::candidates(&scheduler.database, true, scheduler.ocr_cursor.as_ref()),
+            budget.page(&scheduler.database, true, scheduler.ocr_cursor.as_ref()),
         )
         .await?;
-        let complete = jobs.len() < 64;
+        let complete = jobs.len() < usize::from(selection::PAGE);
         for cursor in jobs {
             if stopping(shutdown) {
                 return Ok(false);
@@ -124,7 +164,7 @@ async fn claim_ocr(
 async fn claim_analysis(
     scheduler: &mut WorkState,
     shutdown: &watch::Receiver<bool>,
-    budget: &mut ScanBudget,
+    budget: &mut CandidateScan,
 ) -> Result<bool, WorkerError> {
     if scheduler.resources.is_reserved() {
         return Ok(false);
@@ -137,14 +177,14 @@ async fn claim_analysis(
     for _ in 0..4 {
         let jobs = bounded(
             timeout,
-            selection::candidates(
+            budget.page(
                 &scheduler.database,
                 false,
                 scheduler.analysis_cursor.as_ref(),
             ),
         )
         .await?;
-        let complete = jobs.len() < 64;
+        let complete = jobs.len() < usize::from(selection::PAGE);
         for cursor in jobs {
             if stopping(shutdown) {
                 return Ok(false);

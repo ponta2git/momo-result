@@ -30,6 +30,42 @@ fn runtime() -> (watch::Sender<bool>, Runtime) {
 }
 
 #[tokio::test]
+async fn wake_during_a_scan_skips_the_next_sleep_once() {
+    let (_stop, mut runtime) = runtime();
+    let (sink, wake) = PostCommitSink::channel();
+    runtime.wake = Some(wake);
+    let (finish_scan, finished) = oneshot::channel();
+    let mut scan = Box::pin(runtime.operation(async move {
+        finished.await.unwrap();
+        Ok(())
+    }));
+    assert!(scan.as_mut().now_or_never().is_none());
+    sink.submit(crate::worker::PostCommitEffects::WakeJobs)
+        .unwrap();
+    assert!(scan.as_mut().now_or_never().is_none());
+    finish_scan.send(()).unwrap();
+    scan.await.unwrap();
+
+    let sleep = || std::future::pending::<Result<(), WorkerError>>();
+    assert!(matches!(
+        runtime.observe(sleep(), Observation::Idle).now_or_never(),
+        Some(Ok(None))
+    ));
+    assert!(
+        runtime
+            .observe(sleep(), Observation::Idle)
+            .now_or_never()
+            .is_none()
+    );
+    sink.submit(crate::worker::PostCommitEffects::WakeJobs)
+        .unwrap();
+    assert!(matches!(
+        runtime.observe(sleep(), Observation::Idle).now_or_never(),
+        Some(Ok(None))
+    ));
+}
+
+#[tokio::test]
 async fn stop_signals_siblings_without_dropping_the_in_flight_operation() {
     let (external, mut runtime) = runtime();
     let mut stopped = runtime.stopped.clone();

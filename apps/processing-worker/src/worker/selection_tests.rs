@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, error::Error, time::Duration};
 use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_CONTRACT_ID};
 use tokio_postgres::Client;
 
-use super::{candidates, next_due, recover, recover_page};
+use super::{FirstScan, candidates, first_scan, next_due, recover, recover_page};
 use crate::{series_analysis::control::ALGORITHM_VERSION, worker::PostCommitSink};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -26,10 +26,10 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
     let baseline = client.query_one("SELECT (SELECT count(*) FROM series_analysis_jobs WHERE status IN ('queued','running')), (SELECT count(*) FROM ocr_jobs WHERE status IN ('queued','running'))", &[]).await?;
     assert_eq!(baseline.try_get::<_, i64>(0)?, 0);
     assert_eq!(baseline.try_get::<_, i64>(1)?, 0);
-    assert_eq!(
-        next_due(&client, true, Duration::from_secs(30)).await?,
-        Duration::from_secs(30)
-    );
+    assert!(matches!(
+        first_scan(&client, true, true).await?,
+        FirstScan::Idle(None)
+    ));
     client.execute(r"
         WITH fixture_titles AS (
                INSERT INTO game_titles (id, legacy_id, name, layout_family, display_order)
@@ -43,26 +43,28 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
           ON CONFLICT (game_title_id) DO NOTHING
         ", &[&TITLE]).await?;
     insert_jobs(&client).await?;
-    assert!(candidates(&client, false, None).await?.is_empty());
-    let due = next_due(&client, true, Duration::from_secs(30)).await?;
+    let FirstScan::Idle(Some(at)) = first_scan(&client, true, true).await? else {
+        return Err("future compatible analysis must set the wake deadline".into());
+    };
+    let due = at.saturating_duration_since(tokio::time::Instant::now());
     assert!(due > Duration::ZERO && due <= Duration::from_secs(20));
-    assert_eq!(
-        next_due(&client, true, Duration::from_secs(1)).await?,
-        Duration::from_secs(1)
-    );
+    assert!(matches!(
+        first_scan(&client, true, false).await?,
+        FirstScan::Idle(None)
+    ));
     client.execute(r"
         UPDATE series_analysis_jobs
         SET available_at = CAST('2020-01-01' AS timestamptz), requested_at = CAST('2020-01-01' AS timestamptz)
         WHERE series_analysis_jobs.legacy_id LIKE $1
         ", &[&format!("{PREFIX}%")]).await?;
-    let mut cursor = None;
+    let FirstScan::Analysis(first) = first_scan(&client, false, true).await? else {
+        return Err("expected the first compatible analysis page".into());
+    };
+    assert_eq!(first.len(), 64);
+    let mut page = first;
     let mut ids = BTreeSet::new();
     let mut pages = 0;
-    loop {
-        let page = candidates(&client, false, cursor.as_ref()).await?;
-        if page.is_empty() {
-            break;
-        }
+    while !page.is_empty() {
         assert!(page.len() <= 64);
         pages += 1;
         for candidate in &page {
@@ -71,14 +73,14 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
                 "keyset pagination repeated a job"
             );
         }
-        cursor = page.last().cloned();
+        page = candidates(&client, false, page.last()).await?;
     }
     assert_eq!(ids.len(), 300);
     assert_eq!(pages, 5);
     assert!(!ids.contains("scheduler-selection-smoke-unsupported"));
     assert_eq!(
-        next_due(&client, true, Duration::from_secs(30)).await?,
-        Duration::from_secs(30),
+        next_due(&client, true, true).await?,
+        None,
         "already due blocked jobs must not create a zero-delay retry loop"
     );
     client

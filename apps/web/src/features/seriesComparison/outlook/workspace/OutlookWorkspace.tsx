@@ -55,10 +55,10 @@ function monthRange(startedAt: string, endedAt: string) {
 }
 
 /**
- * Lite prototype: what is assumed on the left, the two questions on the right, each answered by
- * one sentence and one chart. Layout carries the reading order, so the text names only facts.
+ * What is assumed on the left, the two questions on the right, each answered by one sentence and
+ * one chart. Layout carries the reading order, so the text names only facts.
  */
-export function OutlookLiteWorkspace({
+export function OutlookWorkspace({
   summary,
   selection,
   onMemberChange,
@@ -99,7 +99,6 @@ export function OutlookLiteWorkspace({
   });
   const left = useRef<HTMLElement>(null);
   const sticky = useStickyWhenFits(left);
-  const noop = useCallback(() => undefined, []);
 
   const now = projectionRows.find((row) => row.h === 0) ?? {
     h: 0,
@@ -176,13 +175,13 @@ export function OutlookLiteWorkspace({
       >
         <section
           ref={left}
-          aria-labelledby="outlook-lite-assumptions"
+          aria-labelledby="outlook-assumptions"
           className={cn(
             "grid min-w-0 content-start gap-6",
             sticky && "lg:sticky lg:top-(--sticky-below-nav)",
           )}
         >
-          <h2 id="outlook-lite-assumptions" className={contentText.heading}>
+          <h2 id="outlook-assumptions" className={contentText.heading}>
             これからの平均順位
           </h2>
           {([0, 1] as const).map((role) => (
@@ -194,16 +193,13 @@ export function OutlookLiteWorkspace({
               memberIds={memberIds}
               role={role}
               recent={recent[role]}
-              baseline={undefined}
-              onPreviewChange={noop}
-              minimal
             />
           ))}
         </section>
         <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-10 xl:grid-cols-2">
-          <section className={questionClass} aria-labelledby="outlook-lite-q1">
+          <section className={questionClass} aria-labelledby="outlook-question-trend">
             <div className="grid content-start gap-1">
-              <h2 id="outlook-lite-q1" className={cn(contentText.body, "text-text-primary")}>
+              <h2 id="outlook-question-trend" className={cn(contentText.body, "text-text-primary")}>
                 この平均が続くと
               </h2>
               <div className="grid gap-1 max-lg:sr-only">
@@ -260,13 +256,9 @@ export function OutlookLiteWorkspace({
                 cumulative={cumulative}
                 focus={view.focus}
                 rival={view.rival}
-                baseline={undefined}
-                preview={null}
                 range={range}
                 goal={{ horizon: goal.goalHorizon, label: "目標" }}
                 crossingLabel={crossingLabel}
-                regionLabels
-                outsideLabels
                 ariaLabel={`${names[0]}が${names[1]}より上にいるのに必要なこれからの平均。目標${goal.goalHorizon}戦後。`}
               />
             }

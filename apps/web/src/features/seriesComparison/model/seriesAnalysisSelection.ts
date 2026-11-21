@@ -24,8 +24,8 @@ export type SeriesAnalysisSelection = {
   mapMasterId?: string | undefined;
   seasonMasterId?: string | undefined;
   view?: SeriesAnalysisViewId | undefined;
-  /** Prototype only: compare the rebuilt outlook with the released or the lite layout. */
-  outlookLayout?: "current" | "lite" | undefined;
+  /** Prototype only: show the released outlook layout for side-by-side trials. */
+  outlookLayout?: "current" | undefined;
 };
 
 export type SeriesAnalysisSelectionChange =

@@ -21,7 +21,7 @@ export function parseSeriesAnalysisSearchParams(params: URLSearchParams): Series
   const rivalMemberId = params.get("rivalMemberId")?.trim() || undefined;
   const expectedRankGapMemberId = params.get("expectedRankGapMemberId")?.trim() || undefined;
   const rawLayout = params.get("outlookLayout")?.trim();
-  const outlookLayout = rawLayout === "current" || rawLayout === "lite" ? rawLayout : undefined;
+  const outlookLayout = rawLayout === "current" ? rawLayout : undefined;
   return {
     focusMatchId,
     gameTitleId,

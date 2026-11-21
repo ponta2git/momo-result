@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
 import {
   distributionMean,
@@ -17,12 +17,6 @@ import type {
 import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
 import type { OutlookRole } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { useOutlookPlayerEditor } from "@/features/seriesComparison/outlook/useOutlookPlayerEditor";
-import { OutlookCountsSheet } from "@/features/seriesComparison/outlook/workspace/OutlookCountsSheet";
-import {
-  OutlookExampleList,
-  OutlookExampleToggle,
-} from "@/features/seriesComparison/outlook/workspace/OutlookExampleList";
-import type { OutlookPreview } from "@/features/seriesComparison/outlook/workspace/OutlookNeedLineChart";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { MemberSequenceLabel } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
@@ -62,13 +56,9 @@ type Props = {
   memberIds: readonly [string, string];
   role: OutlookRole;
   recent: RankDistribution;
-  baseline: RankDistribution | undefined;
-  onPreviewChange: (preview: OutlookPreview) => void;
-  /** The lite layout keeps only the mean and the way back to the recent record. */
-  minimal?: boolean;
 };
 
-/** One person's future mean: value, slider, and the three ways to set it otherwise. */
+/** One person's future mean: the value, a slider with the recent mark, and a way back to it. */
 export function OutlookAverageControl({
   response,
   cumulative,
@@ -76,16 +66,12 @@ export function OutlookAverageControl({
   memberIds,
   role,
   recent,
-  baseline,
-  onPreviewChange,
-  minimal = false,
 }: Props) {
   const name = names[role];
   const headingId = useId();
   const inputId = useId();
   const sliderId = useId();
   const statusId = `${inputId}-status`;
-  const examplesId = `${inputId}-examples`;
   const inputRef = useRef<HTMLInputElement>(null);
   const player = useOutlookPlayerEditor({
     response,
@@ -95,32 +81,15 @@ export function OutlookAverageControl({
     names,
     showComparison: true,
   });
-  const { editor, edit, dialog } = player;
+  const { editor, edit } = player;
   const pending = editor.meanDraft !== undefined || editor.error !== undefined;
   const currentMean = distributionMean(editor.distribution);
   const limits = meanLimits(editor.opponent);
   const min = Math.min(limits.minimumHundredths / 100, rationalToNumber(currentMean));
   const max = Math.max(limits.maximumHundredths / 100, rationalToNumber(currentMean));
   const position = (value: number) => (max === min ? 0 : (value - min) / (max - min));
-  const recentTick = {
-    key: "recent",
-    label: "直近",
-    value: rationalToNumber(distributionMean(recent)),
-  };
-  const baselineTick = baseline
-    ? { key: "baseline", label: "残した", value: rationalToNumber(distributionMean(baseline)) }
-    : null;
-  const ticks = baselineTick ? [recentTick, baselineTick] : [recentTick];
-  // Two close ticks share one label instead of overlapping.
-  const tickLabels =
-    baselineTick && Math.abs(position(recentTick.value) - position(baselineTick.value)) < 0.06
-      ? [{ ...recentTick, label: "直近・残した" }]
-      : ticks;
-
-  const proposalDistribution = dialog.proposal?.editor.distribution;
-  useEffect(() => {
-    onPreviewChange(proposalDistribution ? { role, distribution: proposalDistribution } : null);
-  }, [onPreviewChange, proposalDistribution, role]);
+  const recentPosition = position(rationalToNumber(distributionMean(recent)));
+  const recentLeft = `calc(${THUMB_RADIUS_PX}px + (100% - ${THUMB_RADIUS_PX * 2}px) * ${recentPosition})`;
 
   const begin = () => edit({ kind: "begin-gesture", role });
   const finish = (cancel = false) => edit({ kind: "finish-gesture", cancel });
@@ -143,7 +112,7 @@ export function OutlookAverageControl({
           {pending
             ? `未反映・結果は ${outlookAverage(currentMean)}位 のまま`
             : differenceText(recent, editor.distribution)}
-          {minimal && !editor.unchanged && !pending ? (
+          {!editor.unchanged && !pending ? (
             <button
               type="button"
               className="rounded-xs text-action underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
@@ -212,32 +181,19 @@ export function OutlookAverageControl({
       ) : null}
       <div className="grid gap-0.5">
         <div className="relative h-4" aria-hidden="true">
-          {tickLabels.map((tick) => (
-            <span
-              key={tick.key}
-              className={cn(contentText.supporting, "absolute -translate-x-1/2 whitespace-nowrap")}
-              style={{
-                left: `calc(${THUMB_RADIUS_PX}px + (100% - ${THUMB_RADIUS_PX * 2}px) * ${position(tick.value)})`,
-              }}
-            >
-              {tick.label}
-            </span>
-          ))}
+          <span
+            className={cn(contentText.supporting, "absolute -translate-x-1/2 whitespace-nowrap")}
+            style={{ left: recentLeft }}
+          >
+            直近
+          </span>
         </div>
         <div className="relative">
-          {ticks.map((tick) => (
-            <span
-              key={tick.key}
-              aria-hidden="true"
-              className={cn(
-                "pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                tick.key === "recent" ? "bg-text-secondary" : "bg-action",
-              )}
-              style={{
-                left: `calc(${THUMB_RADIUS_PX}px + (100% - ${THUMB_RADIUS_PX * 2}px) * ${position(tick.value)})`,
-              }}
-            />
-          ))}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-text-secondary"
+            style={{ left: recentLeft }}
+          />
           <label htmlFor={sliderId} className="sr-only">
             {name}の平均順位を動かす
           </label>
@@ -292,40 +248,6 @@ export function OutlookAverageControl({
           <span>{(limits.maximumHundredths / 100).toFixed(2)} 悪い</span>
         </div>
       </div>
-      {minimal ? null : (
-        <div className="-ml-2 flex flex-wrap items-center gap-x-1" data-outlook-preserve-draft>
-          <OutlookCountsSheet
-            name={name}
-            opponentName={names[role === 0 ? 1 : 0]}
-            appliedMean={outlookAverage(currentMean)}
-            dialog={dialog}
-          />
-          <OutlookExampleToggle
-            response={response}
-            memberId={memberIds[role]}
-            role={role}
-            controlsId={examplesId}
-          />
-          <Button
-            size="sm"
-            variant="quiet"
-            disabled={editor.unchanged}
-            aria-label={`${name}を直近の成績に戻す`}
-            onClick={player.resetRecent}
-          >
-            直近に戻す
-          </Button>
-        </div>
-      )}
-      {minimal ? null : (
-        <OutlookExampleList
-          id={examplesId}
-          response={response}
-          memberId={memberIds[role]}
-          memberName={name}
-          condition={{ kind: "mean", role }}
-        />
-      )}
     </section>
   );
 }

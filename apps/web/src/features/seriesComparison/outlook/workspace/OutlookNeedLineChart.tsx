@@ -2,7 +2,6 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import {
   distributionMean,
-  distributionsEqual,
   rationalToNumber,
 } from "@/features/seriesComparison/outlook/calculation";
 import type {
@@ -20,43 +19,35 @@ import {
 import { orderFixedMembers } from "@/shared/domain/members";
 import { memberSequencePresentation } from "@/shared/matches/MemberSequenceLabel";
 
-export type OutlookPreview = { role: OutlookRole; distribution: RankDistribution } | null;
-
 type Props = {
   names: readonly [string, string];
   memberIds: readonly [string, string];
   cumulative: CumulativePair;
   focus: RankDistribution;
   rival: RankDistribution;
-  baseline: readonly [RankDistribution, RankDistribution] | undefined;
-  preview: OutlookPreview;
   range: number;
   goal: { horizon: number; label: string } | null;
   crossingLabel: string | null;
   ariaLabel: string;
-  /** Name the two regions inside the plot instead of a legend (right corners are always correct). */
-  regionLabels?: boolean;
-  /** Name the lines in a right margin, matching the difference chart beside it. */
-  outsideLabels?: boolean;
 };
 
 const mean = (distribution: RankDistribution) => rationalToNumber(distributionMean(distribution));
 
-/** Both questions on one plot: where a kept-up mean meets the line, and how high it is at the goal. */
+/**
+ * Both questions on one plot: where a kept-up mean meets the need line, and how high the line is
+ * at the goal. Lines are named in the right margin, as in the difference chart beside it, and the
+ * two regions are named inside the plot (the right corners are always on the correct side).
+ */
 export function OutlookNeedLineChart({
   names,
   memberIds,
   cumulative,
   focus,
   rival,
-  baseline,
-  preview,
   range,
   goal,
   crossingLabel,
   ariaLabel,
-  regionLabels = false,
-  outsideLabels = false,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const clipId = useId();
@@ -74,43 +65,33 @@ export function OutlookNeedLineChart({
 
   const focusMean = mean(focus);
   const rivalMean = mean(rival);
-  const baselineFocus =
-    baseline && !distributionsEqual(baseline[0], focus) ? mean(baseline[0]) : null;
-  const baselineRival =
-    baseline && !distributionsEqual(baseline[1], rival) ? mean(baseline[1]) : null;
-  const previewFocus = preview?.role === 0 ? mean(preview.distribution) : null;
-  const previewRival = preview?.role === 1 ? mean(preview.distribution) : null;
   const goalShown = goal && goal.horizon <= range ? goal : null;
-
+  const edge = needLineThreshold(cumulative, rivalMean, range);
   const scale = needLineScale([
     focusMean,
     rivalMean,
-    needLineThreshold(cumulative, rivalMean, range),
+    edge,
     ...(goalShown ? [needLineThreshold(cumulative, rivalMean, goalShown.horizon)] : []),
-    ...[baselineFocus, baselineRival, previewFocus, previewRival].filter(
-      (value): value is number => value !== null,
-    ),
   ]);
   const height = width < 480 ? 210 : 240;
   const left = 46;
-  const right = width - (outsideLabels ? (width < 420 ? 108 : 120) : 12);
+  const right = width - (width < 420 ? 108 : 120);
   const top = 22;
   const bottom = height - 40;
   const x = (h: number) => left + (h / range) * (right - left);
   const y = (value: number) =>
     top + ((value - scale.min) / (scale.max - scale.min)) * (bottom - top);
   const clamp = (value: number) => Math.min(scale.max + 1, Math.max(scale.min - 1, value));
-  const curve = (rivalValue: number) =>
-    needLinePoints(cumulative, rivalValue, range)
-      .map(
-        ([h, value], index) =>
-          `${index ? "L" : "M"}${x(h).toFixed(1)},${y(clamp(value)).toFixed(1)}`,
-      )
-      .join(" ");
-  const firstH = 0.25;
-  const region = `M${x(0)},${y(scale.min - 1)} L${x(0)},${y(clamp(needLineThreshold(cumulative, rivalMean, firstH)))} ${curve(rivalMean).replace(/^M/u, "L")} L${x(range)},${y(scale.min - 1)} Z`;
+  const points = needLinePoints(cumulative, rivalMean, range);
+  const curve = points
+    .map(
+      ([h, value], index) => `${index ? "L" : "M"}${x(h).toFixed(1)},${y(clamp(value)).toFixed(1)}`,
+    )
+    .join(" ");
+  const first = points[0];
+  const region = `M${x(0)},${y(scale.min - 1)} L${x(0)},${y(clamp(first?.[1] ?? edge))} ${curve.replace(/^M/u, "L")} L${x(range)},${y(scale.min - 1)} Z`;
 
-  // Line style follows the canonical order, as in the trajectory charts: the second is dashed.
+  // Line style follows the canonical order, as in the other charts: the second is dashed.
   const canonical = orderFixedMembers(
     memberIds.map((memberId, role) => ({ memberId, role: role as OutlookRole })),
   );
@@ -121,40 +102,19 @@ export function OutlookNeedLineChart({
 
   const crossing = needLineCrossing(cumulative, focusMean, rivalMean);
   const crossingShown = crossing !== null && crossing <= range ? crossing : null;
-  const baselineCrossing =
-    baselineFocus !== null && baselineRival === null
-      ? needLineCrossing(cumulative, baselineFocus, rivalMean)
-      : null;
-  const previewCrossing =
-    previewFocus !== null ? needLineCrossing(cumulative, previewFocus, rivalMean) : null;
   const goalValue = goalShown ? needLineThreshold(cumulative, rivalMean, goalShown.horizon) : null;
 
-  // Name each line at its right end. Two close lines take opposite sides (upper above, lower
-  // below); otherwise each label sits on the side away from the need line.
-  const edge = needLineThreshold(cumulative, rivalMean, range);
+  // Labels follow their line's end in the margin and are only pushed apart.
   const lineValues = [focusMean, rivalMean] as const;
-  const close = Math.abs(y(focusMean) - y(rivalMean)) < 30;
-  const lineLabels = ([0, 1] as const).map((role) => {
-    const value = lineValues[role];
-    const other = lineValues[role === 0 ? 1 : 0];
-    const below = close ? value > other || (value === other && role === 1) : value >= edge;
-    return {
-      role,
-      text: `${names[role]} ${outlookAverage(distributionMean(role === 0 ? focus : rival))}`,
-      y: y(value) + (below ? 15 : -6),
-    };
-  });
-  for (const label of lineLabels) label.y = Math.min(bottom - 3, Math.max(top + 11, label.y));
-  // Outside the plot, labels follow their line's end and are only pushed apart.
-  const outsideEnds = ([0, 1] as const)
+  const ends = ([0, 1] as const)
     .map((role) => ({
       role,
-      text: lineLabels[role]?.text ?? "",
+      text: `${names[role]} ${outlookAverage(distributionMean(role === 0 ? focus : rival))}`,
       lineY: y(lineValues[role]),
       y: y(lineValues[role]) + 4,
     }))
     .toSorted((a, b) => a.y - b.y);
-  const [upperEnd, lowerEnd] = outsideEnds;
+  const [upperEnd, lowerEnd] = ends;
   if (upperEnd && lowerEnd && lowerEnd.y < upperEnd.y + 14) {
     const middle = (upperEnd.y + lowerEnd.y) / 2;
     upperEnd.y = middle - 7;
@@ -220,71 +180,32 @@ export function OutlookNeedLineChart({
         </text>
         <g clipPath={`url(#${clipId})`}>
           <path d={region} fill={style(0).color} fillOpacity="0.09" />
-          {baselineRival !== null ? (
-            <path
-              d={curve(baselineRival)}
-              fill="none"
-              stroke="var(--color-text-secondary)"
-              strokeOpacity="0.6"
-              strokeWidth="1.5"
-              strokeDasharray="2 3"
+          <path d={curve} fill="none" stroke="var(--color-text-primary)" strokeWidth="2" />
+          {([1, 0] as const).map((role) => (
+            <line
+              key={role}
+              x1={x(0)}
+              x2={x(range)}
+              y1={y(lineValues[role])}
+              y2={y(lineValues[role])}
+              stroke={style(role).color}
+              strokeWidth="2.5"
+              strokeDasharray={style(role).dash}
             />
-          ) : null}
-          {previewRival !== null ? (
-            <path
-              d={curve(previewRival)}
-              fill="none"
-              stroke="var(--color-text-primary)"
-              strokeOpacity="0.7"
-              strokeWidth="1.5"
-              strokeDasharray="2 3"
-            />
-          ) : null}
-          <path
-            d={curve(rivalMean)}
-            fill="none"
-            stroke="var(--color-text-primary)"
-            strokeWidth="2"
-          />
-          {(
-            [
-              ["rival", 1, rivalMean, 1, undefined],
-              ["baseline", 0, baselineFocus, 0.5, "2 3"],
-              ["preview", 0, previewFocus, 0.8, "2 3"],
-              ["focus", 0, focusMean, 1, undefined],
-            ] as const
-          ).map(([key, role, value, opacity, dash]) =>
-            value === null ? null : (
-              <line
-                key={key}
-                x1={x(0)}
-                x2={x(range)}
-                y1={y(value)}
-                y2={y(value)}
-                stroke={style(role).color}
-                strokeOpacity={opacity}
-                strokeWidth={dash ? 2 : 2.5}
-                strokeDasharray={dash ?? style(role).dash}
-              />
-            ),
-          )}
+          ))}
         </g>
-        {regionLabels ? (
-          <g fontSize="12" fill="var(--color-text-secondary)">
-            {y(edge) - top >= 24 &&
-            (outsideLabels || lineLabels.every((label) => label.y > top + 32)) ? (
-              <text x={right - 6} y={top + 15} textAnchor="end">
-                {names[0]}が上
-              </text>
-            ) : null}
-            {bottom - y(edge) >= 24 &&
-            (outsideLabels || lineLabels.every((label) => label.y < bottom - 22)) ? (
-              <text x={right - 6} y={bottom - 7} textAnchor="end">
-                {names[1]}が上
-              </text>
-            ) : null}
-          </g>
-        ) : null}
+        <g fontSize="12" fill="var(--color-text-secondary)">
+          {y(edge) - top >= 24 ? (
+            <text x={right - 6} y={top + 15} textAnchor="end">
+              {names[0]}が上
+            </text>
+          ) : null}
+          {bottom - y(edge) >= 24 ? (
+            <text x={right - 6} y={bottom - 7} textAnchor="end">
+              {names[1]}が上
+            </text>
+          ) : null}
+        </g>
         {topLabels.map((label) => {
           const lx = x(label.h);
           return (
@@ -344,54 +265,19 @@ export function OutlookNeedLineChart({
             />
           </g>
         ) : null}
-        {(
-          [
-            ["baseline", baselineCrossing, baselineFocus],
-            ["preview", previewCrossing, previewFocus],
-          ] as const
-        ).map(([key, h, value]) =>
-          h === null || value === null || h > range ? null : (
-            <circle
-              key={key}
-              cx={x(h)}
-              cy={y(value)}
-              r="4.5"
-              fill="var(--color-surface)"
-              stroke={style(0).color}
-              strokeWidth="2"
+        {ends.map((end) => (
+          <g key={end.role}>
+            <line
+              x1={right}
+              x2={right + 4}
+              y1={end.lineY}
+              y2={end.y - 4}
+              stroke="var(--color-border-strong)"
             />
-          ),
-        )}
-        {outsideLabels
-          ? outsideEnds.map((end) => (
-              <g key={end.role}>
-                <line
-                  x1={right}
-                  x2={right + 4}
-                  y1={end.lineY}
-                  y2={end.y - 4}
-                  stroke="var(--color-border-strong)"
-                />
-                <text x={right + 7} y={end.y} fontSize="12" fill="var(--color-text-primary)">
-                  {end.text}
-                </text>
-              </g>
-            ))
-          : null}
-        {(outsideLabels ? [] : lineLabels).map((label) => (
-          <text
-            key={label.role}
-            x={right - 4}
-            y={label.y}
-            textAnchor="end"
-            fontSize="12"
-            fill="var(--color-text-primary)"
-            stroke="var(--color-surface)"
-            strokeWidth="3"
-            paintOrder="stroke"
-          >
-            {label.text}
-          </text>
+            <text x={right + 7} y={end.y} fontSize="12" fill="var(--color-text-primary)">
+              {end.text}
+            </text>
+          </g>
         ))}
       </svg>
     </div>

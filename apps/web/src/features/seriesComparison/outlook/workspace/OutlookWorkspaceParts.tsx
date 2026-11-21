@@ -1,5 +1,5 @@
 import { ArrowLeftRight } from "lucide-react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import type { RefObject } from "react";
 
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
@@ -210,23 +210,4 @@ export function useStickyWhenFits(ref: RefObject<HTMLElement | null>) {
     };
   }, [ref]);
   return fits;
-}
-
-/** True once the element has scrolled under the sticky navigation. */
-export function useScrolledPast(ref: RefObject<HTMLElement | null>) {
-  const [passed, setPassed] = useState(false);
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const nav = navHeight();
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry) setPassed(!entry.isIntersecting && entry.boundingClientRect.top < nav);
-      },
-      { rootMargin: `-${Math.round(nav)}px 0px 0px 0px` },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return passed;
 }

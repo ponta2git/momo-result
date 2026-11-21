@@ -81,8 +81,8 @@ function DraftNotice({ count, href }: { count: number | undefined; href: string 
 
 export function MatchesListPage() {
   const showDesktopTable = useMediaQuery("(min-width: 1024px)");
-  const { draftCount, filters, list, navigation } = useMatchesList();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const { draftCount, filters, list, navigation } = useMatchesList(showDesktopTable, sheetOpen);
   const retryOwnsFeedback = list.loadFailed || list.refreshFailed;
   const listPending = list.refresh.pending || list.scopeChanging || list.sameScopeRefreshing;
   const toolbarPending = listPending && !list.loading && !retryOwnsFeedback;
@@ -137,9 +137,11 @@ export function MatchesListPage() {
           <MatchesFilterBar
             actions={filters.actions}
             candidates={filters.candidates}
+            detailsOpen={filters.detailsOpen}
             hasConditions={filters.hasConditions}
             pending={filters.pending}
             search={filters.search}
+            onDetailsOpenChange={filters.setDetailsOpen}
           />
         ) : null}
         <MatchListSearchSheet

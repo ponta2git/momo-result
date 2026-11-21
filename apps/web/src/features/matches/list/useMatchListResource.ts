@@ -60,19 +60,35 @@ export function useMatchListResource({
   deferredSearch,
   locationSettling,
   manualRefresh,
+  showHeldEventOptions,
+  showMasterOptions,
 }: {
   currentSearch: MatchListSearch;
   deferredSearch: MatchListSearch;
   locationSettling: boolean;
   manualRefresh: { pending: boolean; failed: boolean };
+  showHeldEventOptions: boolean;
+  showMasterOptions: boolean;
 }): MatchListResource {
   const queryClient = useQueryClient();
 
-  const heldEventPicker = useHeldEventPickerDirectory({ selectedId: currentSearch.heldEventId });
-  const gameTitlesQuery = useQuery(gameTitlesQueryOptions());
-  // All seasons and maps are read once so a draft title in the search sheet can scope them locally.
-  const seasonsQuery = useQuery(seasonMastersQueryOptions(undefined));
-  const mapsQuery = useQuery(mapMastersQueryOptions(undefined));
+  const heldEventPicker = useHeldEventPickerDirectory({
+    includeDirectory: showHeldEventOptions,
+    selectedId: currentSearch.heldEventId,
+  });
+  const gameTitlesQuery = useQuery({
+    ...gameTitlesQueryOptions(),
+    enabled: showMasterOptions || Boolean(currentSearch.gameTitleId),
+  });
+  const seasonsQuery = useQuery(
+    seasonMastersQueryOptions(
+      undefined,
+      showMasterOptions || Boolean(currentSearch.seasonMasterId),
+    ),
+  );
+  const mapsQuery = useQuery(
+    mapMastersQueryOptions(undefined, showMasterOptions || Boolean(currentSearch.mapMasterId)),
+  );
   const matchesQuery = useQuery({
     ...matchListQueryOptions(buildMatchListApiQuery(deferredSearch)),
     staleTime: matchListStaleTimeMs,
@@ -100,11 +116,14 @@ export function useMatchListResource({
     matchesQuery.isFetching || manualRefresh.pending,
     currentSearchScope,
   );
-  const candidateQueries = [gameTitlesQuery, seasonsQuery, mapsQuery];
+  const candidateQueries = [gameTitlesQuery, seasonsQuery, mapsQuery].filter((q) => q.isEnabled);
+  const candidatesPending =
+    candidateQueries.some((query) => query.isFetching) || heldEventPicker.pending;
   const filtersFailed = useRetryNotice(
     candidateQueries.some((query) => shouldShowBlockingQueryError(query)) ||
       Boolean(heldEventPicker.error),
-    candidateQueries.some((query) => query.isFetching) || heldEventPicker.pending,
+    candidatesPending,
+    `${showMasterOptions}:${showHeldEventOptions}:${currentSearchScope}`,
   );
   const refreshFailed = useRetryNotice(
     manualRefresh.failed || matchesQuery.isRefetchError,
@@ -150,7 +169,7 @@ export function useMatchListResource({
       },
       loadFailed: filtersFailed,
       refresh: {
-        pending: candidateQueries.some((query) => query.isFetching) || heldEventPicker.pending,
+        pending: candidatesPending,
         run: () => {
           for (const query of candidateQueries) {
             if (shouldShowBlockingQueryError(query)) void query.refetch();

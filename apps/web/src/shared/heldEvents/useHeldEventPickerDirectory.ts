@@ -23,17 +23,20 @@ function pickerErrorMessage(error: unknown): string {
  */
 export function useHeldEventPickerDirectory({
   enabled = true,
+  includeDirectory = true,
   selectedEvent,
   selectedId,
 }: {
   enabled?: boolean | undefined;
+  /** Applied-condition labels need only their selected event while the picker is closed. */
+  includeDirectory?: boolean;
   selectedEvent?: HeldEventResponse | undefined;
   selectedId: string;
 }): HeldEventPickerDirectory {
   const [page, setPage] = useState(1);
   const directoryQuery = useQuery({
     ...heldEventsQueryOptions({ page, pageSize: heldEventPickerPageSize }),
-    enabled,
+    enabled: enabled && includeDirectory,
   });
   const heldEvents = directoryQuery.data?.items ?? [];
   const selectedOnPage = heldEvents.find((event) => event.id === selectedId);
@@ -46,31 +49,33 @@ export function useHeldEventPickerDirectory({
     ),
   );
   const resolvedSelection = resolvedWithoutSummary ?? selectedSummaryQuery.data;
-  const scopeChanging = Boolean(directoryQuery.isPlaceholderData && directoryQuery.isFetching);
+  const directoryPending = directoryQuery.isEnabled && directoryQuery.isFetching;
+  const selectionPending =
+    selectedSummaryQuery.isEnabled && !resolvedSelection && selectedSummaryQuery.isFetching;
+  const scopeChanging = directoryQuery.isPlaceholderData && directoryPending;
 
-  const directoryFailed = shouldShowQueryError(directoryQuery);
-  const selectionFailed = Boolean(
-    selectedId && !resolvedSelection && shouldShowQueryError(selectedSummaryQuery),
-  );
+  const directoryFailed = directoryQuery.isEnabled && shouldShowQueryError(directoryQuery);
+  const selectionFailed =
+    selectedSummaryQuery.isEnabled &&
+    !resolvedSelection &&
+    shouldShowQueryError(selectedSummaryQuery);
   const error = useRetryNotice(
     directoryFailed
       ? pickerErrorMessage(directoryQuery.error)
       : selectionFailed
         ? pickerErrorMessage(selectedSummaryQuery.error)
         : undefined,
-    directoryQuery.isFetching || selectedSummaryQuery.isFetching,
-    `${page}:${selectedId}`,
+    directoryPending || selectionPending,
+    `${includeDirectory}:${page}:${selectedId}`,
   );
 
   return {
     error,
     heldEvents,
     pagination: directoryQuery.data?.pagination,
-    pending:
-      directoryQuery.isFetching ||
-      Boolean(selectedId && !resolvedSelection && selectedSummaryQuery.isFetching),
+    pending: directoryPending || selectionPending,
     refresh: async () => {
-      await directoryQuery.refetch({ cancelRefetch: false });
+      if (directoryQuery.isEnabled) await directoryQuery.refetch({ cancelRefetch: false });
       if (selectionFailed) await selectedSummaryQuery.refetch({ cancelRefetch: false });
     },
     selectedHeldEvent: resolvedSelection,

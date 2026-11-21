@@ -647,7 +647,7 @@ describe("MatchesListPage", () => {
     expect(listRequests).toBe(listRequestsBeforeRetry);
   });
 
-  it("retries the paged held-event condition directory", async () => {
+  it("loads the desktop held-event directory on expansion and retries it independently", async () => {
     let failPicker = true;
     let pickerAttempts = 0;
     server.use(
@@ -674,6 +674,9 @@ describe("MatchesListPage", () => {
     );
     renderList();
 
+    await screen.findByRole("link", { name: "第1試合・東日本編" });
+    expect(pickerAttempts).toBe(0);
+    await user.click(screen.getByRole("button", { name: "詳細条件" }));
     expect(await screen.findByText("検索条件の候補を一部読み込めません")).toBeInTheDocument();
     expect(pickerAttempts).toBe(1);
 
@@ -689,6 +692,52 @@ describe("MatchesListPage", () => {
     beforeEach(() => {
       matchMedia.restore();
       matchMedia = installMatchMediaController(false);
+    });
+
+    it("loads only the list and draft count until filter options are shown", async () => {
+      const reads: string[] = [];
+      server.use(
+        http.get("/api/*", ({ request }) => {
+          reads.push(new URL(request.url).pathname);
+        }),
+      );
+
+      renderList();
+      await screen.findByRole("link", { name: "第1試合・東日本編" });
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      expect(reads.toSorted()).toEqual(["/api/matches", "/api/matches/summary"]);
+
+      await user.click(screen.getByRole("button", { name: "検索条件" }));
+      await waitFor(() =>
+        expect(reads.toSorted()).toEqual([
+          "/api/game-titles",
+          "/api/held-events",
+          "/api/map-masters",
+          "/api/matches",
+          "/api/matches/summary",
+          "/api/season-masters",
+        ]),
+      );
+    });
+
+    it("resolves applied URL labels with only the selected master and held-event summary", async () => {
+      const reads: string[] = [];
+      server.use(
+        http.get("/api/*", ({ request }) => {
+          reads.push(new URL(request.url).pathname);
+        }),
+      );
+      renderList("/matches?mapMasterId=map_east&heldEventId=off-page");
+
+      expect(await screen.findByRole("button", { name: "マップ 東日本編 を解除" })).toBeVisible();
+      expect(await screen.findByRole("button", { name: /開催 .*\d.* を解除/u })).toBeVisible();
+      await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+      expect(reads.toSorted()).toEqual([
+        "/api/held-events/off-page/summary",
+        "/api/map-masters",
+        "/api/matches",
+        "/api/matches/summary",
+      ]);
     });
 
     it("edits every condition in the sheet and searches only when applied", async () => {

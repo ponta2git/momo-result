@@ -1,5 +1,4 @@
 import { Filter } from "lucide-react";
-import { useState } from "react";
 
 import {
   MatchListHeldEventField,
@@ -25,9 +24,11 @@ import { FilterBar } from "@/shared/ui/forms/FilterBar";
 type MatchesFilterBarProps = {
   actions: MatchListFilterActions;
   candidates: MatchListFilterCandidates;
+  detailsOpen: boolean;
   hasConditions: boolean;
   pending?: boolean | undefined;
   search: MatchListSearch;
+  onDetailsOpenChange: (open: boolean) => void;
 };
 
 const recordSignature = (condition: MatchListRecordCondition) => JSON.stringify(condition);
@@ -35,17 +36,12 @@ const recordSignature = (condition: MatchListRecordCondition) => JSON.stringify(
 export function MatchesFilterBar({
   actions,
   candidates,
+  detailsOpen,
   hasConditions,
   pending = false,
   search,
+  onDetailsOpenChange,
 }: MatchesFilterBarProps) {
-  const hasDetailConditions =
-    search.heldEventId !== "" ||
-    search.from !== "" ||
-    search.to !== "" ||
-    search.q !== "" ||
-    isCompleteMatchListRecord(search.record);
-  const [detailOpen, setDetailOpen] = useState(hasDetailConditions);
   const [period, setPeriod] = useCommittedDraft(
     { from: search.from, to: search.to },
     (value) => `${value.from}~${value.to}`,
@@ -105,8 +101,8 @@ export function MatchesFilterBar({
             詳細条件
           </span>
         ),
-        onOpenChange: setDetailOpen,
-        open: detailOpen,
+        onOpenChange: onDetailsOpenChange,
+        open: detailsOpen,
       }}
       primary={
         <div className="grid min-w-0 grid-cols-4 items-start gap-4">

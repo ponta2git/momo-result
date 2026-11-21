@@ -700,14 +700,15 @@ async fn fail_locked_queued_job(
     if updated != 1 {
         return Err(OcrControlError::OwnerLost);
     }
-    sync_match_draft_status(transaction, job_id).await
+    sync_match_draft_status(transaction, job_id).await?;
+    Ok(())
 }
 
 async fn sync_match_draft_status(
     transaction: &Transaction<'_>,
     job_id: &str,
-) -> Result<(), OcrControlError> {
-    transaction
+) -> Result<bool, OcrControlError> {
+    let updated = transaction
         .execute(
             "WITH touched AS (\x20\
                SELECT md.id FROM match_drafts md JOIN ocr_jobs j ON j.legacy_id = $1\x20\
@@ -737,7 +738,7 @@ async fn sync_match_draft_status(
             &[&job_id],
         )
         .await?;
-    Ok(())
+    Ok(updated != 0)
 }
 
 // Cross-language lock order: match_drafts -> ocr_jobs. The API cancellation path deletes/locks the

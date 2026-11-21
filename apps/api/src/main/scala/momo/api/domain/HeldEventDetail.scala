@@ -16,6 +16,8 @@ final case class HeldEventDetail(
       drafts.iterator.flatMap(_.matchNoInEvent.map(_.value))).maxOption.getOrElse(0) + 1
 
 object HeldEventDetail:
+  final case class DraftStatus(id: MatchDraftId, status: MatchDraftStatus)
+
   final case class Player(
       memberId: MemberId,
       playOrder: PlayOrder,

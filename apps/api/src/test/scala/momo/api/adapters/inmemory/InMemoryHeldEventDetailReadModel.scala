@@ -77,6 +77,11 @@ final class InMemoryHeldEventDetailReadModel[F[_]: Monad](
       )
     })
 
+  override def draftStatuses(id: HeldEventId): F[Option[List[HeldEventDetail.DraftStatus]]] =
+    find(
+      id
+    ).map(_.map(_.drafts.map(d => HeldEventDetail.DraftStatus(d.id, d.status)).sortBy(_.id.value)))
+
   override def summary(id: HeldEventId): F[Option[HeldEventSummary]] = find(id).map(_.map(detail =>
     HeldEventSummary(detail.event, detail.matches.size, detail.drafts.size, detail.nextMatchNo)
   ))

@@ -11,6 +11,7 @@ export type HeldEventNoteMatchResponse = components["schemas"]["HeldEventNoteMat
 export type HeldEventSummaryResponse = components["schemas"]["HeldEventSummaryResponse"];
 export type HeldEventDetailResponse = components["schemas"]["HeldEventDetailResponse"];
 export type HeldEventMatchResponse = components["schemas"]["HeldEventMatchResponse"];
+export type HeldEventDraftStatusResponse = components["schemas"]["HeldEventDraftStatusResponse"];
 export type HeldEventDraftResponse = components["schemas"]["HeldEventDraftResponse"];
 export type HeldEventPlayerResultResponse = components["schemas"]["HeldEventPlayerResultResponse"];
 export type CreateHeldEventRequest = components["schemas"]["CreateHeldEventRequest"];
@@ -90,6 +91,13 @@ export async function getHeldEventDetail(
 ): Promise<HeldEventDetailResponse> {
   return apiRequest<HeldEventDetailResponse>(
     `/api/held-events/${encodeURIComponent(heldEventId)}`,
+    options,
+  );
+}
+
+export function getHeldEventDraftStatuses(heldEventId: string, options: ApiSignalOptions = {}) {
+  return apiRequest<HeldEventDraftStatusResponse[]>(
+    `/api/held-events/${encodeURIComponent(heldEventId)}/draft-statuses`,
     options,
   );
 }

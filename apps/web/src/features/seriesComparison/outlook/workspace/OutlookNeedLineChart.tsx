@@ -34,6 +34,10 @@ type Props = {
   goal: { horizon: number; label: string } | null;
   crossingLabel: string | null;
   ariaLabel: string;
+  /** Name the two regions inside the plot instead of a legend (right corners are always correct). */
+  regionLabels?: boolean;
+  /** Name the lines in a right margin, matching the difference chart beside it. */
+  outsideLabels?: boolean;
 };
 
 const mean = (distribution: RankDistribution) => rationalToNumber(distributionMean(distribution));
@@ -51,6 +55,8 @@ export function OutlookNeedLineChart({
   goal,
   crossingLabel,
   ariaLabel,
+  regionLabels = false,
+  outsideLabels = false,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const clipId = useId();
@@ -86,8 +92,8 @@ export function OutlookNeedLineChart({
     ),
   ]);
   const height = width < 480 ? 210 : 240;
-  const left = 44;
-  const right = width - 12;
+  const left = 46;
+  const right = width - (outsideLabels ? (width < 420 ? 108 : 120) : 12);
   const top = 22;
   const bottom = height - 40;
   const x = (h: number) => left + (h / range) * (right - left);
@@ -139,6 +145,21 @@ export function OutlookNeedLineChart({
     };
   });
   for (const label of lineLabels) label.y = Math.min(bottom - 3, Math.max(top + 11, label.y));
+  // Outside the plot, labels follow their line's end and are only pushed apart.
+  const outsideEnds = ([0, 1] as const)
+    .map((role) => ({
+      role,
+      text: lineLabels[role]?.text ?? "",
+      lineY: y(lineValues[role]),
+      y: y(lineValues[role]) + 4,
+    }))
+    .toSorted((a, b) => a.y - b.y);
+  const [upperEnd, lowerEnd] = outsideEnds;
+  if (upperEnd && lowerEnd && lowerEnd.y < upperEnd.y + 14) {
+    const middle = (upperEnd.y + lowerEnd.y) / 2;
+    upperEnd.y = middle - 7;
+    lowerEnd.y = middle + 7;
+  }
 
   const topLabels: Array<{ key: string; h: number; text: string }> = [];
   if (goalShown) topLabels.push({ key: "goal", h: goalShown.horizon, text: goalShown.label });
@@ -248,6 +269,22 @@ export function OutlookNeedLineChart({
             ),
           )}
         </g>
+        {regionLabels ? (
+          <g fontSize="12" fill="var(--color-text-secondary)">
+            {y(edge) - top >= 24 &&
+            (outsideLabels || lineLabels.every((label) => label.y > top + 32)) ? (
+              <text x={right - 6} y={top + 15} textAnchor="end">
+                {names[0]}が上
+              </text>
+            ) : null}
+            {bottom - y(edge) >= 24 &&
+            (outsideLabels || lineLabels.every((label) => label.y < bottom - 22)) ? (
+              <text x={right - 6} y={bottom - 7} textAnchor="end">
+                {names[1]}が上
+              </text>
+            ) : null}
+          </g>
+        ) : null}
         {topLabels.map((label) => {
           const lx = x(label.h);
           return (
@@ -325,7 +362,23 @@ export function OutlookNeedLineChart({
             />
           ),
         )}
-        {lineLabels.map((label) => (
+        {outsideLabels
+          ? outsideEnds.map((end) => (
+              <g key={end.role}>
+                <line
+                  x1={right}
+                  x2={right + 4}
+                  y1={end.lineY}
+                  y2={end.y - 4}
+                  stroke="var(--color-border-strong)"
+                />
+                <text x={right + 7} y={end.y} fontSize="12" fill="var(--color-text-primary)">
+                  {end.text}
+                </text>
+              </g>
+            ))
+          : null}
+        {(outsideLabels ? [] : lineLabels).map((label) => (
           <text
             key={label.role}
             x={right - 4}

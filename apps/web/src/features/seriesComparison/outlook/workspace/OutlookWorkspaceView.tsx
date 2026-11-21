@@ -1,19 +1,10 @@
-import { ArrowLeftRight, Pin, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { Pin, Undo2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
-import {
-  distributionMean,
-  formatRational,
-  projectOutlook,
-  rational,
-} from "@/features/seriesComparison/outlook/calculation";
-import {
-  exactAverageFraction,
-  outlookAverage,
-} from "@/features/seriesComparison/outlook/outlookPresentation";
+import { distributionMean, projectOutlook } from "@/features/seriesComparison/outlook/calculation";
+import { outlookAverage } from "@/features/seriesComparison/outlook/outlookPresentation";
 import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
 import { OutlookSummaryBoundary } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import { useOutlookGoal } from "@/features/seriesComparison/outlook/useOutlookGoal";
@@ -26,42 +17,44 @@ import {
   OutlookGoalSummary,
 } from "@/features/seriesComparison/outlook/workspace/OutlookAnswer";
 import { OutlookAverageControl } from "@/features/seriesComparison/outlook/workspace/OutlookAverageControl";
+import { OutlookLiteWorkspace } from "@/features/seriesComparison/outlook/workspace/OutlookLiteWorkspace";
 import { OutlookNeedLineChart } from "@/features/seriesComparison/outlook/workspace/OutlookNeedLineChart";
 import type { OutlookPreview } from "@/features/seriesComparison/outlook/workspace/OutlookNeedLineChart";
 import { OutlookTrajectory } from "@/features/seriesComparison/outlook/workspace/OutlookTrajectory";
+import {
+  OutlookComparisonRow,
+  OutlookDetails,
+  useScrolledPast,
+  useStickyWhenFits,
+} from "@/features/seriesComparison/outlook/workspace/OutlookWorkspaceParts";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
-import {
-  MemberSequenceLabel,
-  memberSequencePresentation,
-} from "@/shared/matches/MemberSequenceLabel";
+import { memberSequencePresentation } from "@/shared/matches/MemberSequenceLabel";
 import { Button } from "@/shared/ui/actions/Button";
-import { IconButton } from "@/shared/ui/actions/IconButton";
 import { cn } from "@/shared/ui/cn";
-import { Disclosure } from "@/shared/ui/data/Collapsible";
-import { DataTable } from "@/shared/ui/data/DataTable";
 import { Notice } from "@/shared/ui/feedback/Notice";
 import { SegmentedControl } from "@/shared/ui/forms/SegmentedControl";
-import { SelectField } from "@/shared/ui/forms/SelectField";
 import { readableTextWidthClass } from "@/shared/ui/layout/readableText";
 import { revealPageElement } from "@/shared/ui/layout/revealPageElement";
 import { contentText } from "@/shared/ui/typography";
 
-type Props = {
+export type OutlookWorkspaceProps = {
   summary: SeriesAnalysisOutlookSummary;
   selection: SeriesAnalysisSelection;
   onMemberChange?: ((role: "focus" | "rival", memberId: string) => void) | undefined;
   onPairChange?: ((focusMemberId: string, rivalMemberId: string) => void) | undefined;
 };
 
+const columnsClass = "lg:grid-cols-[minmax(20rem,25rem)_minmax(0,1fr)]";
+
 /**
  * Prototype of the rebuilt outlook (one workspace, no sub-tabs). For side-by-side trials,
- * `outlookLayout=current` keeps the released layout and `outlookLayout=lite` drops the
- * overlapping tools (baseline comparison, count editing, per-person examples, trajectory,
- * variability examples, chart range and undo).
+ * `outlookLayout=current` keeps the released layout and `outlookLayout=lite` keeps only the
+ * tools that answer the two questions directly.
  */
-export function OutlookWorkspaceView({ summary, selection, onMemberChange, onPairChange }: Props) {
+export function OutlookWorkspaceView(props: OutlookWorkspaceProps) {
+  const { summary, selection, onMemberChange } = props;
   const location = useLocation();
   const layout = new URLSearchParams(location.search).get("outlookLayout");
   if (layout === "current")
@@ -76,24 +69,12 @@ export function OutlookWorkspaceView({ summary, selection, onMemberChange, onPai
         </p>
       }
     >
-      <Workspace
-        summary={summary}
-        selection={selection}
-        onMemberChange={onMemberChange}
-        onPairChange={onPairChange}
-        lite={layout === "lite"}
-      />
+      {layout === "lite" ? <OutlookLiteWorkspace {...props} /> : <Workspace {...props} />}
     </OutlookSummaryBoundary>
   );
 }
 
-function Workspace({
-  summary,
-  selection,
-  onMemberChange,
-  onPairChange,
-  lite,
-}: Props & { lite: boolean }) {
+function Workspace({ summary, selection, onMemberChange, onPairChange }: OutlookWorkspaceProps) {
   const workspace = useOutlookWorkspace(summary, selection);
   const {
     view,
@@ -119,20 +100,10 @@ function Workspace({
   const trajectory = useRef<HTMLElement>(null);
   const sticky = useStickyWhenFits(left);
   const conclusionPassed = useScrolledPast(conclusion);
-
-  const now =
-    projectionRows.find((row) => row.h === 0) ??
-    projectOutlook(cumulative, view.focus, view.rival, 0);
-  const nowGap =
-    now.relation === "tied"
-      ? "同率"
-      : `${now.relation === "ahead" ? names[0] : names[1]}が ${formatRational(
-          rational(
-            now.gap.numerator < 0n ? -now.gap.numerator : now.gap.numerator,
-            now.gap.denominator,
-          ),
-          2,
-        )} 先行`;
+  const now = projectionRows.find((row) => row.h === 0) ?? {
+    h: 0,
+    ...projectOutlook(cumulative, view.focus, view.rival, 0),
+  };
   const showHorizon = (horizon: number) => {
     edit({ kind: "show-horizon", horizon });
     requestAnimationFrame(() => {
@@ -143,81 +114,37 @@ function Workspace({
     });
   };
   const goalLabel = `目標 ${goal.goalHorizon}戦後`;
-  const needRange = lite ? Math.max(10, goal.goalHorizon) : view.chartRange;
-  const eventBeyondChart =
-    outcome.eventHorizon !== null && outcome.eventHorizon > BigInt(needRange)
-      ? outcome.eventHorizon
-      : null;
   const goalSummary =
     goal.maximum !== null && !goal.reaches
       ? `目標${goal.goalHorizon}戦後：平均${(goal.maximum / 100).toFixed(2)}位以下`
       : goal.reaches
         ? `目標${goal.goalHorizon}戦後：今の平均で届く`
         : `目標${goal.goalHorizon}戦後：届かない条件`;
-  const pending = toolbar.view.pending;
   const initialNote = `初期値は作品全体の直近${summary.recent.matchCount}戦${
     summary.recent.period
       ? `（${formatDateOnly(summary.recent.period.startedAt)}〜${formatDateOnly(summary.recent.period.endedAt)}）`
       : ""
-  }。小さいほど上位。${summary.recent.qualityStatus === "reference" ? "直近の実績が少ないため参考値です。" : ""}`;
+  }。小さいほど上位。`;
 
   return (
     <div className="grid min-w-0 grid-cols-1 gap-6">
-      <div
-        className="grid min-w-0 grid-cols-1 items-end gap-x-10 gap-y-4 lg:grid-cols-[minmax(20rem,25rem)_minmax(0,1fr)]"
-        data-outlook-preserve-draft
-      >
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
-          {([0, 1] as const).map((role) => (
-            <SelectField
-              key={role}
-              label={role === 0 ? "注目する人" : "比較する相手"}
-              value={memberIds[role]}
-              options={orderFixedMembers(summary.players).map((player) => ({
-                label: player.displayName,
-                value: player.memberId,
-                disabled: player.memberId === memberIds[role === 0 ? 1 : 0],
-              }))}
-              onValueChange={(id) => onMemberChange?.(role === 0 ? "focus" : "rival", id)}
-            />
-          ))}
-          <IconButton
-            variant="quiet"
-            icon={<ArrowLeftRight />}
-            aria-label="注目する人と比較する相手を入れ替える"
-            tooltip="入れ替える"
-            onClick={() => onPairChange?.(memberIds[1], memberIds[0])}
-          />
-        </div>
-        <div className="grid min-w-0 gap-2">
-          <p className={contentText.supporting}>
-            {selection.seasonMasterId ? "今のシーズン総合平均" : "今の総合平均"}（
-            {summary.scope.matchCount}戦）
-          </p>
-          <p
-            className={cn(
-              contentText.body,
-              "flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 tabular-nums",
-            )}
-          >
-            {displayRoles.map(({ memberId, role }) => (
-              <span key={memberId} className="inline-flex items-center">
-                <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
-                <span className="ml-1.5">
-                  {formatRational(role === 0 ? now.focusAverage : now.rivalAverage, 2)}位
-                </span>
-              </span>
-            ))}
-            <span className="text-text-primary">{nowGap}</span>
-          </p>
-        </div>
-      </div>
+      <OutlookComparisonRow
+        summary={summary}
+        selection={selection}
+        memberIds={memberIds}
+        names={names}
+        displayRoles={displayRoles}
+        now={now}
+        columnsClass={columnsClass}
+        onMemberChange={onMemberChange}
+        onPairChange={onPairChange}
+      />
       {view.notice ? (
         <Notice presentation="bare" tone="info">
           {view.notice}
         </Notice>
       ) : null}
-      <div className="grid min-w-0 grid-cols-1 gap-x-12 gap-y-8 lg:grid-cols-[minmax(20rem,25rem)_minmax(0,1fr)] lg:items-start">
+      <div className={cn("grid min-w-0 grid-cols-1 gap-x-12 gap-y-8 lg:items-start", columnsClass)}>
         <div
           ref={left}
           className={cn(
@@ -232,8 +159,7 @@ function Workspace({
             outcome={outcome}
             eventHorizon={eventHorizon}
             nextOutcomes={nextOutcomes}
-            onShowHorizon={lite ? undefined : showHorizon}
-            recentPair={lite ? recent : undefined}
+            onShowHorizon={showHorizon}
           />
           <section className="grid min-w-0 gap-5" aria-labelledby="outlook-assumptions">
             <div className="grid gap-1">
@@ -244,7 +170,7 @@ function Workspace({
                 <h2 id="outlook-assumptions" className={contentText.heading}>
                   これからの平均順位
                 </h2>
-                <div className={cn("-mr-2 flex items-center", lite && "hidden")}>
+                <div className="-mr-2 flex items-center">
                   <Button
                     variant="quiet"
                     size="sm"
@@ -272,7 +198,7 @@ function Workspace({
                 </div>
               </div>
               <p id="outlook-assumptions-note" className={contentText.supporting}>
-                {pending && !lite
+                {toolbar.view.pending
                   ? "残して比べる前に、入力を反映するか取り消してください。"
                   : initialNote}
               </p>
@@ -286,9 +212,8 @@ function Workspace({
                 memberIds={memberIds}
                 role={role}
                 recent={recent[role]}
-                baseline={lite ? undefined : role === 0 ? view.pinnedFocus : view.pinnedRival}
+                baseline={role === 0 ? view.pinnedFocus : view.pinnedRival}
                 onPreviewChange={previewChange}
-                minimal={lite}
               />
             ))}
           </section>
@@ -304,7 +229,6 @@ function Workspace({
             reviewHref={reviewHref}
             matchHref={matchHref}
             seasonSelected={Boolean(selection.seasonMasterId)}
-            minimal={lite}
           />
           <section className="grid min-w-0 gap-3" aria-labelledby="outlook-need-line">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -314,25 +238,23 @@ function Workspace({
                   {names[1]}が {outlookAverage(distributionMean(view.rival))}位を続ける場合
                 </span>
               </h2>
-              {lite ? null : (
-                <SegmentedControl
-                  label="グラフの範囲"
-                  value={String(view.chartRange)}
-                  options={[50, 100, 200].map((range) => ({
-                    value: String(range),
-                    label: `${range}戦`,
-                  }))}
-                  onValueChange={(value) =>
-                    edit({ kind: "chart-range", range: Number(value) as 50 | 100 | 200 })
-                  }
-                />
-              )}
+              <SegmentedControl
+                label="グラフの範囲"
+                value={String(view.chartRange)}
+                options={[50, 100, 200].map((range) => ({
+                  value: String(range),
+                  label: `${range}戦`,
+                }))}
+                onValueChange={(value) =>
+                  edit({ kind: "chart-range", range: Number(value) as 50 | 100 | 200 })
+                }
+              />
             </div>
             <NeedLineLegend
               names={names}
               memberIds={memberIds}
               preview={preview}
-              pinned={!lite && toolbar.view.pinned}
+              pinned={toolbar.view.pinned}
             />
             <OutlookNeedLineChart
               names={names}
@@ -341,12 +263,12 @@ function Workspace({
               focus={view.focus}
               rival={view.rival}
               baseline={
-                !lite && view.pinnedFocus && view.pinnedRival
+                view.pinnedFocus && view.pinnedRival
                   ? [view.pinnedFocus, view.pinnedRival]
                   : undefined
               }
               preview={preview}
-              range={needRange}
+              range={view.chartRange}
               goal={{ horizon: goal.goalHorizon, label: goalLabel }}
               crossingLabel={
                 outcome.crossing.exactTie !== null && outcome.crossing.exactTie > 0n
@@ -360,81 +282,25 @@ function Workspace({
             <p className={contentText.supporting}>
               縦軸は平均順位で、上ほど良い成績です。黒い線より上の平均を続ければ、その戦数で
               {names[0]}が上にいます。
-              {lite
-                ? "実際は試合ごとに上下するので、一度上回っても途中で抜き返されることがあります。"
-                : null}
-              {lite && eventBeyondChart !== null
-                ? `順番が入れ替わるのは${eventBeyondChart}戦後で、図の範囲より先です。目標の戦数を増やすと図に出ます。`
-                : null}
             </p>
           </section>
-          {lite ? null : (
-            <OutlookTrajectory
-              ref={trajectory}
-              response={summary}
-              cumulative={cumulative}
-              names={names}
-              memberIds={memberIds}
-              displayRoles={displayRoles}
-              outcome={outcome}
-              eventHorizon={eventHorizon}
-            />
-          )}
-          <Disclosure
-            summary="詳しい数値と計算の前提"
-            ariaLabel="詳しい数値と計算の前提"
-            panelSpacing="sm"
-          >
-            <div className="grid min-w-0 grid-cols-1 gap-4">
-              <DataTable
-                caption={{ content: "今後の総合平均順位の詳しい数値", visibility: "screen-reader" }}
-                rows={projectionRows}
-                getRowKey={(row) => String(row.h)}
-                density="compact"
-                minWidth="32rem"
-                stickyRowHeader
-                columns={[
-                  {
-                    key: "h",
-                    header: "この先",
-                    rowHeader: true,
-                    renderCell: (row) => (row.h === 0 ? "今" : `${row.h}戦後`),
-                  },
-                  ...displayRoles.map(({ memberId, role }) => ({
-                    key: memberId,
-                    header: (
-                      <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>
-                    ),
-                    align: "right" as const,
-                    tabular: true,
-                    renderCell: (row: (typeof projectionRows)[number]) =>
-                      `${outlookAverage(role === 0 ? row.focusAverage : row.rivalAverage)}位`,
-                  })),
-                  {
-                    key: "gap",
-                    header: "平均順位の差",
-                    align: "right",
-                    tabular: true,
-                    renderCell: (row) =>
-                      `${formatRational(row.gap, 4)}・${row.relation === "tied" ? "同率" : `${row.relation === "ahead" ? names[0] : names[1]}が上`}`,
-                  },
-                ]}
-              />
-              <div className={cn("grid gap-2", readableTextWidthClass)}>
-                <p className={contentText.body}>
-                  今の総合平均は選んだ範囲の{summary.scope.matchCount}
-                  戦、これからの平均の初期値は作品全体の直近
-                  {summary.recent.matchCount}
-                  戦です。この先も同じ平均の成績が続く条件で計算しています。
-                </p>
-                <p className={contentText.supporting}>
-                  表示を丸めても、同率・逆転は丸め前の値で判定しています。{names[0]}の直近平均：
-                  {exactAverageFraction(recent[0])}、{names[1]}：{exactAverageFraction(recent[1])}
-                  （順位合計 / 戦数）。
-                </p>
-              </div>
-            </div>
-          </Disclosure>
+          <OutlookTrajectory
+            ref={trajectory}
+            response={summary}
+            cumulative={cumulative}
+            names={names}
+            memberIds={memberIds}
+            displayRoles={displayRoles}
+            outcome={outcome}
+            eventHorizon={eventHorizon}
+          />
+          <OutlookDetails
+            summary={summary}
+            names={names}
+            displayRoles={displayRoles}
+            recent={recent}
+            projectionRows={projectionRows}
+          />
         </div>
       </div>
       {conclusionPassed ? (
@@ -443,7 +309,7 @@ function Workspace({
           aria-hidden="true"
         >
           <p className={contentText.supporting}>
-            {!lite && toolbar.view.pinned ? "残した条件と比べると" : "この平均が続くと"}
+            {toolbar.view.pinned ? "残した条件と比べると" : "この平均が続くと"}
           </p>
           <p className={contentText.compactPrimary}>{outcome.headline}</p>
           <p className={contentText.supporting}>{goalSummary}</p>
@@ -515,50 +381,4 @@ function NeedLineLegend({
         : null}
     </div>
   );
-}
-
-/** Keep the inputs and the result in view while reading charts, only if the column fits. */
-function useStickyWhenFits(ref: RefObject<HTMLElement | null>) {
-  const [fits, setFits] = useState(false);
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    const check = () => {
-      const nav = Number.parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue("--global-nav-height") || "0",
-      );
-      setFits(element.offsetHeight + (Number.isFinite(nav) ? nav : 0) + 32 <= window.innerHeight);
-    };
-    check();
-    const observer = new ResizeObserver(check);
-    observer.observe(element);
-    window.addEventListener("resize", check);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", check);
-    };
-  }, [ref]);
-  return fits;
-}
-
-/** True once the element has scrolled above the viewport top, so a compact copy can take over. */
-function useScrolledPast(ref: RefObject<HTMLElement | null>) {
-  const [passed, setPassed] = useState(false);
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    // The sticky global navigation covers the top of the viewport; treat that band as outside.
-    const nav = Number.parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue("--global-nav-height") || "0",
-    );
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry) setPassed(!entry.isIntersecting && entry.boundingClientRect.top < nav);
-      },
-      { rootMargin: `-${Number.isFinite(nav) ? Math.round(nav) : 0}px 0px 0px 0px` },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return passed;
 }

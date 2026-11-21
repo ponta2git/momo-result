@@ -136,10 +136,23 @@ export function OutlookAverageControl({
         <h3 id={headingId} className={cn(contentText.heading, "flex items-center")}>
           <MemberSequenceLabel memberId={memberIds[role]}>{name}</MemberSequenceLabel>
         </h3>
-        <p id={statusId} className={cn(contentText.supporting, "tabular-nums")}>
+        <p
+          id={statusId}
+          className={cn(contentText.supporting, "flex items-baseline gap-2 tabular-nums")}
+        >
           {pending
             ? `未反映・結果は ${outlookAverage(currentMean)}位 のまま`
             : differenceText(recent, editor.distribution)}
+          {minimal && !editor.unchanged && !pending ? (
+            <button
+              type="button"
+              className="rounded-xs text-action underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
+              aria-label={`${name}を直近の成績に戻す`}
+              onClick={player.resetRecent}
+            >
+              戻す
+            </button>
+          ) : null}
         </p>
       </div>
       <div className="flex min-w-0 items-center gap-2" data-outlook-preserve-draft>
@@ -279,33 +292,31 @@ export function OutlookAverageControl({
           <span>{(limits.maximumHundredths / 100).toFixed(2)} 悪い</span>
         </div>
       </div>
-      <div className="-ml-2 flex flex-wrap items-center gap-x-1" data-outlook-preserve-draft>
-        {minimal ? null : (
-          <>
-            <OutlookCountsSheet
-              name={name}
-              opponentName={names[role === 0 ? 1 : 0]}
-              appliedMean={outlookAverage(currentMean)}
-              dialog={dialog}
-            />
-            <OutlookExampleToggle
-              response={response}
-              memberId={memberIds[role]}
-              role={role}
-              controlsId={examplesId}
-            />
-          </>
-        )}
-        <Button
-          size="sm"
-          variant="quiet"
-          disabled={editor.unchanged}
-          aria-label={`${name}を直近の成績に戻す`}
-          onClick={player.resetRecent}
-        >
-          直近に戻す
-        </Button>
-      </div>
+      {minimal ? null : (
+        <div className="-ml-2 flex flex-wrap items-center gap-x-1" data-outlook-preserve-draft>
+          <OutlookCountsSheet
+            name={name}
+            opponentName={names[role === 0 ? 1 : 0]}
+            appliedMean={outlookAverage(currentMean)}
+            dialog={dialog}
+          />
+          <OutlookExampleToggle
+            response={response}
+            memberId={memberIds[role]}
+            role={role}
+            controlsId={examplesId}
+          />
+          <Button
+            size="sm"
+            variant="quiet"
+            disabled={editor.unchanged}
+            aria-label={`${name}を直近の成績に戻す`}
+            onClick={player.resetRecent}
+          >
+            直近に戻す
+          </Button>
+        </div>
+      )}
       {minimal ? null : (
         <OutlookExampleList
           id={examplesId}

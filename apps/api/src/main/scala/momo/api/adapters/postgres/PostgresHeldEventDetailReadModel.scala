@@ -154,6 +154,22 @@ object PostgresHeldEventDetail:
       }
     yield detail
 
+  /** The left join distinguishes a missing event from an existing event with no active drafts. */
+  def draftStatuses(id: HeldEventId)(using
+      ids: PostgresIdentities): ConnectionIO[Option[List[HeldEventDetail.DraftStatus]]] =
+    PostgresReadBudget.rows[Option[HeldEventDetail.DraftStatus]](
+      fr"""
+        SELECT ${ids.wireId("d")}, d.status
+        FROM held_events he
+        LEFT JOIN match_drafts d ON d.held_event_id = he.id
+          AND d.status <> ${MatchDraftStatus.Cancelled} AND d.status <> ${MatchDraftStatus.Confirmed}
+        WHERE he.id = ${ids.lookup(Entity.HeldEvents, id.value)}
+        ORDER BY ${ids.wireId("d")} COLLATE "C"
+      """,
+      PostgresReadBudget.HeldEventRecords,
+      "Held-event draft statuses",
+    ).map(rows => Option.when(rows.nonEmpty)(rows.flatten))
+
   private def validateReadBudget(id: HeldEventId)(using
       ids: PostgresIdentities): ConnectionIO[Unit] =
     val limit = PostgresReadBudget.HeldEventRecords
@@ -288,6 +304,9 @@ final class PostgresHeldEventDetailReadModel[F[_]: MonadCancelThrow](
 
   override def findByPublicId(publicId: PublicId): F[Option[HeldEventDetail]] =
     PostgresHeldEventDetail.findByPublicId(publicId, publicIds).transact(transactor)
+
+  override def draftStatuses(id: HeldEventId): F[Option[List[HeldEventDetail.DraftStatus]]] =
+    PostgresHeldEventDetail.draftStatuses(id).transact(transactor)
 
   override def summary(id: HeldEventId): F[Option[HeldEventSummary]] =
     PostgresHeldEventDetail.summary(id, publicIds).transact(transactor)

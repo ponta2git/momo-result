@@ -57,6 +57,13 @@ object HeldEventMatchResponse:
     publicId = record.publicId.map(_.decimalString),
   )
 
+final case class HeldEventDraftStatusResponse(matchDraftId: String, status: String)
+    derives Codec.AsObject
+
+object HeldEventDraftStatusResponse:
+  def from(item: HeldEventDetail.DraftStatus): HeldEventDraftStatusResponse =
+    HeldEventDraftStatusResponse(item.id.value, item.status.wire)
+
 final case class HeldEventDraftResponse(
     matchDraftId: String,
     status: String,

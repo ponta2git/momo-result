@@ -20,6 +20,8 @@ export const heldEventKeys = {
   resource: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
   detail: (heldEventId: string | undefined) =>
     ["held-events", "detail", heldEventId, "read-result"] as const,
+  ocrCompletion: (detailKey: readonly unknown[], resolvedId: string | undefined, attempt: number) =>
+    [...detailKey, "ocr-completion", resolvedId, attempt] as const,
   publicDetail: (publicId: string) =>
     ["held-events", "detail", { publicId }, "read-result"] as const,
 };

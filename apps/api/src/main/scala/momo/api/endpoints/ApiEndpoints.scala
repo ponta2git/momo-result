@@ -24,6 +24,7 @@ object ApiEndpoints:
     HeldEventsEndpoints.recordContext,
     HeldEventsEndpoints.list,
     HeldEventsEndpoints.get,
+    HeldEventsEndpoints.draftStatuses,
     HeldEventsEndpoints.getByPublicId,
     HeldEventsEndpoints.summary,
     HeldEventsEndpoints.create,

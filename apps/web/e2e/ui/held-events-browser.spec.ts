@@ -1,4 +1,5 @@
 import { createDeferred } from "../../src/test/deferred";
+import { makeHeldEventDetailResponse } from "../../src/test/factories";
 import { confirmedContext } from "./fixtures/records";
 import { expect, installUiAuth, selectControlOption, test } from "./support";
 
@@ -84,4 +85,59 @@ test("keeps keyboard filtering usable while stale held events are protected and 
   expect(new URL(page.url()).searchParams.get("mapMasterId")).toBe(mapMasterId);
   await list.getByRole("link", { name: /の開催詳細$/u }).click();
   await expect(page).toHaveURL(`/held-events/${heldEventId}`);
+});
+
+test("a public event checks OCR using its resolved ID and leaves an adjacent event alone after navigation", async ({
+  page,
+}) => {
+  await installUiAuth(page);
+  const checkStarted = createDeferred<void>();
+  const releaseCheck = createDeferred<void>();
+  const checkFinished = createDeferred<void>();
+  let fullReads = 0;
+  await page.route("**/api/public/held-events/42", async (route) => {
+    fullReads += 1;
+    await route.fulfill({
+      json: makeHeldEventDetailResponse({
+        id: "event-with-ocr",
+        publicId: "42",
+        draftCount: 1,
+        drafts: [
+          { matchDraftId: "waiting", status: "ocr_running", updatedAt: "2026-01-01T01:00:00Z" },
+        ],
+        navigation: { next: { id: "next-event", publicId: "43", heldAt: "2026-02-01T00:00:00Z" } },
+      }),
+    });
+  });
+  await page.route("**/api/held-events/event-with-ocr/draft-statuses", async (route) => {
+    checkStarted.resolve();
+    await releaseCheck.promise;
+    try {
+      await route.fulfill({ json: [{ matchDraftId: "waiting", status: "draft_ready" }] });
+    } finally {
+      checkFinished.resolve();
+    }
+  });
+  await page.route("**/api/public/held-events/43", (route) =>
+    route.fulfill({
+      json: makeHeldEventDetailResponse({
+        id: "next-event",
+        publicId: "43",
+        heldAt: "2026-02-01T00:00:00Z",
+      }),
+    }),
+  );
+  try {
+    await page.goto("/e/42");
+    await expect(page.getByRole("button", { name: "読み取り中" })).toBeDisabled();
+    await checkStarted.promise;
+    await page.getByRole("link", { name: /次の開催/u }).click();
+    await expect(page).toHaveURL("/e/43");
+    await expect(page.getByRole("heading", { name: "2026/02/01 09:00" })).toBeVisible();
+  } finally {
+    releaseCheck.resolve();
+  }
+  await checkFinished.promise;
+  expect(fullReads).toBe(1);
+  await expect(page.getByRole("link", { name: "内容を確認" })).toHaveCount(0);
 });

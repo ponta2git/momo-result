@@ -91,11 +91,21 @@ export function changeSeriesAnalysisSelection(
 
 const viewIds = new Set(["review", "overview", "flow", "drivers", "context", "outlook"]);
 
-export function normalizeOutlookPair(focus?: string, rival?: string) {
+/**
+ * Completes the outlook pair. An unspecified focus is the signed-in player, when the account is
+ * linked to one and that player is not the requested rival, and otherwise the first fixed member;
+ * an unspecified rival is the first other fixed member. A requested person is kept when valid.
+ */
+export function normalizeOutlookPair(focus?: string, rival?: string, viewerMemberId?: string) {
   const validFocus = focus && isFixedMemberId(focus) ? focus : undefined;
   const validRival = rival && isFixedMemberId(rival) ? rival : undefined;
+  const viewer =
+    viewerMemberId && isFixedMemberId(viewerMemberId) && viewerMemberId !== validRival
+      ? viewerMemberId
+      : undefined;
   const focusMemberId =
     validFocus ??
+    viewer ??
     (canonicalResultMemberIds[0] === validRival
       ? canonicalResultMemberIds[1]
       : canonicalResultMemberIds[0]);
@@ -135,6 +145,8 @@ export function findSeriesAnalysisTitle(
 export function normalizeSeriesAnalysisSelection(
   options: SeriesAnalysisOptionsResponse | undefined,
   selection: SeriesAnalysisSelection,
+  /** The signed-in account's player, which becomes the default outlook focus. */
+  viewerMemberId?: string,
 ): SeriesAnalysisSelection {
   const titles = options?.titles ?? [];
   const selectedTitle =
@@ -166,7 +178,7 @@ export function normalizeSeriesAnalysisSelection(
       ? { focusMatchId: selection.focusMatchId }
       : {}),
     ...(view === "outlook" || selection.focusMemberId || selection.rivalMemberId
-      ? normalizeOutlookPair(selection.focusMemberId, selection.rivalMemberId)
+      ? normalizeOutlookPair(selection.focusMemberId, selection.rivalMemberId, viewerMemberId)
       : {}),
     ownerMetric,
     ...(expectedRankGapMemberId ? { expectedRankGapMemberId } : {}),

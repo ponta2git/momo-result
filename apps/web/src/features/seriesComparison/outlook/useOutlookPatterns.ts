@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 import { numberTicks } from "@/features/seriesComparison/charts/dataViz/scales";
 import {
@@ -78,6 +78,8 @@ export type OutlookPatternModel = {
   /** The endpoint difference that ordered each example, in the same order as its pattern. */
   endpointGaps: string[];
   hasTiedExamples: boolean;
+  /** Each example's difference after `h` games, in the same order as its pattern. */
+  exampleGapsAt: (h: number) => string[];
   ticks: number[];
   current: OutlookChartSelection;
   averageMarker: { h: number; label: string; averages: readonly [number, number] } | null;
@@ -177,6 +179,11 @@ export function useOutlookPatterns({
         .toSorted((a, b) => b.difference - a.difference) ?? [],
     [examples, range, cumulative],
   );
+  const exampleGapsAt = useCallback(
+    (h: number) =>
+      exampleSeries.map(({ example }) => exampleSelection(cumulative, example, h).gapText),
+    [exampleSeries, cumulative],
+  );
   const hasTiedExamples = exampleSeries.some(
     (series, index) => index > 0 && series.difference === exampleSeries[index - 1]?.difference,
   );
@@ -258,6 +265,7 @@ export function useOutlookPatterns({
     examples,
     patterns,
     endpointGaps: exampleSeries.map((series) => series.endpointGap),
+    exampleGapsAt,
     hasTiedExamples,
     ticks,
     current,

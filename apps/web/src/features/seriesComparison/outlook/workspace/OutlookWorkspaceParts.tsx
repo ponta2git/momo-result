@@ -1,16 +1,25 @@
 import { ArrowLeftRight } from "lucide-react";
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
 
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
-import { formatRational, rational } from "@/features/seriesComparison/outlook/calculation";
-import type { RankDistribution } from "@/features/seriesComparison/outlook/calculation";
+import {
+  formatRational,
+  projectOutlook,
+  rational,
+  requiredMean,
+} from "@/features/seriesComparison/outlook/calculation";
+import type {
+  CumulativePair,
+  RankDistribution,
+} from "@/features/seriesComparison/outlook/calculation";
 import {
   exactAverageFraction,
   outlookAverage,
 } from "@/features/seriesComparison/outlook/outlookPresentation";
 import type { buildOutlookOutcomeView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { OutlookRole } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
+import { signedOutlookGap } from "@/features/seriesComparison/outlook/useOutlookPatterns";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { orderFixedMembers } from "@/shared/domain/members";
 import { formatDateOnly } from "@/shared/lib/dateTime";
@@ -109,20 +118,46 @@ export function OutlookComparisonRow({
   );
 }
 
-/** Exact values and premises, folded away from the answers. */
+/**
+ * Exact values and premises, folded away from the answers. The table carries every value the two
+ * charts draw at the usual horizons and at the goal, so it also stands in for them.
+ */
 export function OutlookDetails({
   summary,
   names,
   displayRoles,
   recent,
-  projectionRows,
+  cumulative,
+  focus,
+  rival,
+  goalHorizon,
+  exampleLabels,
+  exampleGapsAt,
 }: {
   summary: SeriesAnalysisOutlookSummary;
   names: readonly [string, string];
   displayRoles: DisplayRoles;
   recent: readonly [RankDistribution, RankDistribution];
-  projectionRows: readonly ProjectionRow[];
+  cumulative: CumulativePair;
+  focus: RankDistribution;
+  rival: RankDistribution;
+  goalHorizon: number;
+  exampleLabels: readonly string[];
+  exampleGapsAt: (h: number) => string[];
 }) {
+  const rows = useMemo(
+    () =>
+      [...new Set([0, 10, 20, 50, 100, goalHorizon])]
+        .toSorted((a, b) => a - b)
+        .map((h) => ({
+          h,
+          ...projectOutlook(cumulative, focus, rival, h),
+          exampleGaps: exampleGapsAt(h),
+          required: h === 0 ? null : requiredMean(cumulative, rival, h),
+        })),
+    [cumulative, focus, rival, goalHorizon, exampleGapsAt],
+  );
+  type Row = (typeof rows)[number];
   const period = summary.recent.period
     ? `（${formatDateOnly(summary.recent.period.startedAt)}〜${formatDateOnly(summary.recent.period.endedAt)}）`
     : "";
@@ -133,35 +168,63 @@ export function OutlookDetails({
       panelSpacing="sm"
     >
       <div className="grid min-w-0 grid-cols-1 gap-4">
+        <p className={cn(contentText.supporting, readableTextWidthClass)}>
+          差は{names[0]}から見た総合平均の差で、＋なら{names[0]}が上です。必要な平均は、
+          {names[1]}がこれからの平均を続けるとき、{names[0]}がその時点で上回るための平均です。
+        </p>
         <DataTable
-          caption={{ content: "今後の総合平均順位の詳しい数値", visibility: "screen-reader" }}
-          rows={projectionRows}
+          caption={{
+            content: "この先の総合平均、差、上回るのに必要な平均",
+            visibility: "screen-reader",
+          }}
+          rows={rows}
           getRowKey={(row) => String(row.h)}
           density="compact"
-          minWidth="28rem"
+          minWidth="46rem"
           stickyRowHeader
           columns={[
             {
               key: "h",
               header: "この先",
               rowHeader: true,
-              renderCell: (row) => (row.h === 0 ? "今" : `${row.h}戦後`),
+              renderCell: (row: Row) =>
+                row.h === 0 ? "今" : `${row.h}戦後${row.h === goalHorizon ? "・目標" : ""}`,
             },
             ...displayRoles.map(({ memberId, role }) => ({
               key: memberId,
               header: <MemberSequenceLabel memberId={memberId}>{names[role]}</MemberSequenceLabel>,
               align: "right" as const,
               tabular: true,
-              renderCell: (row: ProjectionRow) =>
+              renderCell: (row: Row) =>
                 `${outlookAverage(role === 0 ? row.focusAverage : row.rivalAverage)}位`,
             })),
             {
               key: "gap",
-              header: `${names[0]}から見た差`,
-              align: "right",
+              header: "差（平均どおり）",
+              align: "right" as const,
               tabular: true,
-              renderCell: (row) =>
-                `${formatRational(row.gap, 4)}・${row.relation === "tied" ? "同率" : `${row.relation === "ahead" ? names[0] : names[1]}が上`}`,
+              renderCell: (row: Row) => signedOutlookGap(row.gap),
+            },
+            ...exampleLabels.map((label, index) => ({
+              key: `example-${index}`,
+              header: label,
+              align: "right" as const,
+              tabular: true,
+              renderCell: (row: Row) => (row.h === 0 ? "—" : (row.exampleGaps[index] ?? "—")),
+            })),
+            {
+              key: "required",
+              header: `${names[0]}に必要な平均`,
+              align: "right" as const,
+              tabular: true,
+              renderCell: (row: Row) =>
+                row.required === null
+                  ? "—"
+                  : row.required.maximumHundredths !== null
+                    ? `${(row.required.maximumHundredths / 100).toFixed(2)}位以下`
+                    : row.required.kind === "precision-impossible"
+                      ? "指定できない"
+                      : "届かない",
             },
           ]}
         />

@@ -1,6 +1,6 @@
 import type { SeriesAnalysisViewId } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import { defaultSeriesAnalysisView } from "@/features/seriesComparison/model/seriesAnalysisSelection";
-import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
+import { OutlookWorkspaceLoading } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspaceLoading";
 import {
   analysisViewLabels,
   analysisViewSections,
@@ -45,7 +45,7 @@ export function PageSkeleton({ view }: { view?: SeriesAnalysisViewId | undefined
 /** Keeps the URL-fixed rows of the requested purpose: its sub-tabs, contents, and four players. */
 export function ComparisonSkeleton({ view }: { view?: SeriesAnalysisViewId | undefined }) {
   const requestedView = view ?? defaultSeriesAnalysisView;
-  if (requestedView === "outlook") return <OutlookLoading />;
+  if (requestedView === "outlook") return <OutlookWorkspaceLoading />;
   if (requestedView === "review") {
     return (
       <div aria-label="戦績比較を読み込み中" className="min-w-0" role="status">

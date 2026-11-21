@@ -43,9 +43,13 @@ import { InputControl } from "@/shared/ui/forms/Control";
 import { contentText, fieldText } from "@/shared/ui/typography";
 
 const columnsClass = "lg:grid-cols-[minmax(18rem,21rem)_minmax(0,1fr)]";
-/** Both answers use the same block shape: question, answer, chart, notes. */
-const questionClass =
-  "grid min-w-0 content-start gap-3 xl:row-span-3 xl:grid-rows-subgrid xl:gap-y-4";
+/**
+ * Both answers use the same block shape: question, answer, support, chart, notes. Side by side,
+ * the shared rows put the two questions, the two answers and the two charts on one line each.
+ */
+const questionClass = "grid min-w-0 content-start gap-y-1 xl:row-span-5 xl:grid-rows-subgrid";
+const chartRowClass = "mt-3";
+const notesRowClass = "mt-1";
 
 function monthRange(startedAt: string, endedAt: string) {
   const start = startedAt.slice(0, 7).replace("-", "/");
@@ -77,6 +81,7 @@ export function OutlookWorkspace({
     projectionRows,
     nextOutcomes,
     reviewHref,
+    matchHref,
   } = workspace;
   const goal = useOutlookGoal({ response: summary, cumulative, memberIds, recent });
   const range = outlookChartRange(Math.min(goal.goalHorizon, 200));
@@ -104,6 +109,7 @@ export function OutlookWorkspace({
     h: 0,
     ...projectOutlook(cumulative, view.focus, view.rival, 0),
   };
+  const recentGames = summary.recent.matchCount;
   const focusMean = rationalToNumber(distributionMean(view.focus));
   const rivalMean = rationalToNumber(distributionMean(view.rival));
   const crossingH = needLineCrossing(cumulative, focusMean, rivalMean);
@@ -119,7 +125,7 @@ export function OutlookWorkspace({
     outcome.detail,
     sameAsRecent
       ? null
-      : `直近20戦のままなら：${outlookOutcome(cumulative, recent, names).headline}`,
+      : `直近${recentGames}戦のままなら：${outlookOutcome(cumulative, recent, names).headline}`,
   ].filter(Boolean);
   const beyond =
     outcome.eventHorizon !== null && outcome.eventHorizon > BigInt(range)
@@ -198,41 +204,44 @@ export function OutlookWorkspace({
         </section>
         <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-10 xl:grid-cols-2">
           <section className={questionClass} aria-labelledby="outlook-question-trend">
-            <div className="grid content-start gap-1">
-              <h2 id="outlook-question-trend" className={cn(contentText.body, "text-text-primary")}>
-                この平均が続くと
-              </h2>
-              <div className="grid gap-1 max-lg:sr-only">
-                <p className={cn(contentText.primary, "text-pretty")} aria-live="polite">
-                  {outcome.headline}
-                </p>
-                <p className={cn(contentText.supporting, "min-h-4")}>
-                  {conclusionNotes.join(" ・ ")}
-                </p>
-                {nextOutcomes.length > 0 ? (
-                  <p className={contentText.supporting}>
-                    次戦で動く組み合わせ：
-                    {nextOutcomes
-                      .map(
-                        (next) =>
-                          `${names[0]}${next.focusRank}位・${names[1]}${next.rivalRank}位なら${next.relation === "tied" ? "同率" : `${next.relation === "ahead" ? names[0] : names[1]}が上`}`,
-                      )
-                      .join("、")}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <OutlookGapChart
-              names={names}
-              memberIds={memberIds}
-              patterns={patterns.patterns}
-              range={range}
-              crossing={
-                crossingH !== null && crossingLabel ? { h: crossingH, label: crossingLabel } : null
-              }
-              ariaLabel={`${names[0]}から見た総合平均の差の推移。${outcome.headline}。`}
-            />
+            <h2
+              id="outlook-question-trend"
+              className={cn(contentText.heading, "flex items-center")}
+            >
+              この平均が続くと
+            </h2>
+            <p className={cn(contentText.primary, "text-pretty")} aria-live="polite">
+              {outcome.headline}
+            </p>
             <div className={cn(contentText.supporting, "grid content-start gap-1")}>
+              <p className="min-h-4">{conclusionNotes.join(" ・ ")}</p>
+              {nextOutcomes.length > 0 ? (
+                <p>
+                  次戦で動く組み合わせ：
+                  {nextOutcomes
+                    .map(
+                      (next) =>
+                        `${names[0]}${next.focusRank}位・${names[1]}${next.rivalRank}位なら${next.relation === "tied" ? "同率" : `${next.relation === "ahead" ? names[0] : names[1]}が上`}`,
+                    )
+                    .join("、")}
+                </p>
+              ) : null}
+            </div>
+            <div className={chartRowClass}>
+              <OutlookGapChart
+                names={names}
+                memberIds={memberIds}
+                patterns={patterns.patterns}
+                range={range}
+                crossing={
+                  crossingH !== null && crossingLabel
+                    ? { h: crossingH, label: crossingLabel }
+                    : null
+                }
+                ariaLabel={`${names[0]}から見た総合平均の差の推移。${outcome.headline}。`}
+              />
+            </div>
+            <div className={cn(contentText.supporting, notesRowClass, "grid content-start gap-1")}>
               <p role={view.gesturing ? "status" : undefined}>{exampleNote}</p>
               {beyond !== null ? (
                 <p>順番が入れ替わるのは{String(beyond)}戦後で、図の範囲より先です。</p>
@@ -247,6 +256,11 @@ export function OutlookWorkspace({
             recent={recent}
             goal={goal}
             reviewHref={reviewHref}
+            matchHref={matchHref}
+            matchLabel={
+              selection.seasonMasterId ? "このシーズンの確定戦績を見る" : "この作品の確定戦績を見る"
+            }
+            recentGames={recentGames}
             range={range}
             rivalMean={outlookAverage(distributionMean(view.rival))}
             chart={
@@ -269,7 +283,12 @@ export function OutlookWorkspace({
               names={names}
               displayRoles={displayRoles}
               recent={recent}
-              projectionRows={projectionRows}
+              cumulative={cumulative}
+              focus={view.focus}
+              rival={view.rival}
+              goalHorizon={goal.goalHorizon}
+              exampleLabels={patterns.patterns.slice(1).map((pattern) => pattern.label)}
+              exampleGapsAt={patterns.exampleGapsAt}
             />
           </div>
         </div>
@@ -286,6 +305,9 @@ function GoalQuestion({
   recent,
   goal,
   reviewHref,
+  matchHref,
+  matchLabel,
+  recentGames,
   range,
   rivalMean,
   chart,
@@ -297,6 +319,9 @@ function GoalQuestion({
   recent: ReturnType<typeof useOutlookWorkspace>["recent"];
   goal: ReturnType<typeof useOutlookGoal>;
   reviewHref: string;
+  matchHref: string;
+  matchLabel: string;
+  recentGames: number;
   range: number;
   rivalMean: string;
   chart: ReactNode;
@@ -323,7 +348,7 @@ function GoalQuestion({
       : goal.recentWithinMean && !areDistributionsCompatible(recent[0], goal.rival)
         ? "平均は届くが内訳の見直しが必要"
         : goal.improvement !== null && goal.improvement.numerator > 0n
-          ? `直近20戦から${formatRational(goal.improvement, 2)}の改善`
+          ? `直近${recentGames}戦から${formatRational(goal.improvement, 2)}の改善`
           : null;
   const best = goal.historical?.window
     ? `連続${goal.goalHorizon}戦の自己ベスト ${goal.historical.window.averageRank.toFixed(2)}位（${monthRange(goal.historical.window.period.startedAt, goal.historical.window.period.endedAt)}）`
@@ -344,12 +369,7 @@ function GoalQuestion({
         <h2 id={`${inputId}-question`} className="sr-only">
           目標の戦数で{names[0]}が上にいるには
         </h2>
-        <div
-          className={cn(
-            contentText.body,
-            "flex flex-wrap items-center gap-x-2 gap-y-1 text-text-primary",
-          )}
-        >
+        <div className={cn(contentText.heading, "flex flex-wrap items-center gap-x-2 gap-y-1")}>
           <label htmlFor={inputId} className="sr-only">
             目標の戦数
           </label>
@@ -393,20 +413,22 @@ function GoalQuestion({
             1〜1000の整数で入力してください（{horizon.view.horizon}戦後で表示中）。
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <p className={cn(contentText.primary, "tabular-nums")}>{answer}</p>
-          {!reaches && maximum !== null ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!valid || opponentPending}
-              onClick={() => goal.apply()}
-            >
-              {names[0]}を {(maximum / 100).toFixed(2)}位で試す
-            </Button>
-          ) : null}
-        </div>
-        <p className={cn(contentText.supporting, "tabular-nums")}>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <p className={cn(contentText.primary, "tabular-nums")}>{answer}</p>
+        {!reaches && maximum !== null ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!valid || opponentPending}
+            onClick={() => goal.apply()}
+          >
+            {names[0]}を {(maximum / 100).toFixed(2)}位で試す
+          </Button>
+        ) : null}
+      </div>
+      <div className={cn(contentText.supporting, "grid content-start gap-1 tabular-nums")}>
+        <p>
           {opponentPending
             ? `${names[1]}の入力を反映すると、この平均を試せます。`
             : [`${names[1]}が${rivalMean}位を続ける前提`, margin, best]
@@ -414,7 +436,7 @@ function GoalQuestion({
                 .join(" ・ ")}
         </p>
         {goal.window.hasError ? (
-          <p className={cn(contentText.supporting, "flex flex-wrap items-center gap-2")}>
+          <p className="flex flex-wrap items-center gap-2">
             自己ベストを取得できません。
             <Button
               size="sm"
@@ -427,13 +449,14 @@ function GoalQuestion({
           </p>
         ) : null}
       </div>
-      {chart}
-      <div className="grid content-start gap-2">
-        <p className={contentText.supporting}>
-          黒線は上回るのに必要な平均で、上ほど良い成績です。
-          {goal.goalHorizon > range ? `目標の${goal.goalHorizon}戦後は図の範囲より先です。` : ""}
-        </p>
-        <div className="-ml-2 flex flex-wrap items-center gap-x-1">
+      <div className={chartRowClass}>{chart}</div>
+      <div className={cn(notesRowClass, "grid content-start gap-2")}>
+        {goal.goalHorizon > range ? (
+          <p className={contentText.supporting}>
+            目標の{goal.goalHorizon}戦後は図の範囲より先です。数値は詳細で確認できます。
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <OutlookExampleToggle
             response={summary}
             memberId={memberIds[0]}
@@ -445,6 +468,9 @@ function GoalQuestion({
           />
           <LinkButton size="sm" variant="quiet" to={reviewHref}>
             {goal.reviewHeading}（{names[0]}の行動仮説）
+          </LinkButton>
+          <LinkButton size="sm" variant="quiet" to={matchHref}>
+            {matchLabel}
           </LinkButton>
         </div>
         <OutlookExampleList

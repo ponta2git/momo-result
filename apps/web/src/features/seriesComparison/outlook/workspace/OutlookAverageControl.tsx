@@ -39,14 +39,14 @@ const rangeKeys = new Set([
 /** Native range thumbs travel inside the track by their radius; ticks follow the same path. */
 const THUMB_RADIUS_PX = 8;
 
-function differenceText(recent: RankDistribution, current: RankDistribution) {
+function differenceText(recent: RankDistribution, current: RankDistribution, games: number) {
   const difference = subtractRationals(distributionMean(recent), distributionMean(current));
-  if (difference.numerator === 0n) return "直近20戦と同じ";
+  if (difference.numerator === 0n) return `直近${games}戦と同じ`;
   const absolute = rational(
     difference.numerator < 0n ? -difference.numerator : difference.numerator,
     difference.denominator,
   );
-  return `直近20戦より ${outlookAverage(absolute)} ${difference.numerator > 0n ? "良い" : "悪い"}`;
+  return `直近${games}戦より ${outlookAverage(absolute)} ${difference.numerator > 0n ? "良い" : "悪い"}`;
 }
 
 type Props = {
@@ -58,7 +58,11 @@ type Props = {
   recent: RankDistribution;
 };
 
-/** One person's future mean: the value, a slider with the recent mark, and a way back to it. */
+/**
+ * One person's future mean: the value, a slider with the recent mark, and a way back to it. The
+ * slot right of the input holds either the pending commit/cancel pair or the way back, so neither
+ * moves the input or the slider when it appears.
+ */
 export function OutlookAverageControl({
   response,
   cumulative,
@@ -105,23 +109,10 @@ export function OutlookAverageControl({
         <h3 id={headingId} className={cn(contentText.heading, "flex items-center")}>
           <MemberSequenceLabel memberId={memberIds[role]}>{name}</MemberSequenceLabel>
         </h3>
-        <p
-          id={statusId}
-          className={cn(contentText.supporting, "flex items-baseline gap-2 tabular-nums")}
-        >
+        <p id={statusId} className={cn(contentText.supporting, "tabular-nums")}>
           {pending
             ? `未反映・結果は ${outlookAverage(currentMean)}位 のまま`
-            : differenceText(recent, editor.distribution)}
-          {!editor.unchanged && !pending ? (
-            <button
-              type="button"
-              className="rounded-xs text-action underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
-              aria-label={`${name}を直近の成績に戻す`}
-              onClick={player.resetRecent}
-            >
-              戻す
-            </button>
-          ) : null}
+            : differenceText(recent, editor.distribution, response.recent.matchCount)}
         </p>
       </div>
       <div className="flex min-w-0 items-center gap-2" data-outlook-preserve-draft>
@@ -154,25 +145,41 @@ export function OutlookAverageControl({
           />
         </div>
         <span className={contentText.body}>位</span>
-        <span className={cn("ml-auto flex items-center gap-1", pending ? undefined : "invisible")}>
-          <IconButton
-            variant="quiet"
-            size="sm"
-            icon={<X />}
-            aria-label={`${name}の入力を取り消す`}
-            disabled={!pending}
-            onClick={cancel}
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={editor.meanDraft === undefined}
-            aria-label={`${name}の平均順位を反映`}
-            onClick={commit}
-          >
-            反映
-          </Button>
-        </span>
+        {pending ? (
+          <span className="ml-auto flex items-center gap-1">
+            <IconButton
+              variant="quiet"
+              size="sm"
+              icon={<X />}
+              aria-label={`${name}の入力を取り消す`}
+              onClick={cancel}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={editor.meanDraft === undefined}
+              aria-label={`${name}の平均順位を反映`}
+              onClick={commit}
+            >
+              反映
+            </Button>
+          </span>
+        ) : editor.unchanged ? null : (
+          <span className="ml-auto">
+            <Button
+              size="sm"
+              variant="quiet"
+              aria-label={`${name}を直近の成績に戻す`}
+              onClick={() => {
+                player.resetRecent();
+                // The action disappears once the value is back; keep focus on this person's input.
+                inputRef.current?.focus({ preventScroll: true });
+              }}
+            >
+              直近に戻す
+            </Button>
+          </span>
+        )}
       </div>
       {editor.error ? (
         <p id={`${inputId}-error`} className={fieldText.error} role="alert">

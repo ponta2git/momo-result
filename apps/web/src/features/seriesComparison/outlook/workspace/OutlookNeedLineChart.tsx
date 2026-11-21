@@ -35,8 +35,9 @@ const mean = (distribution: RankDistribution) => rationalToNumber(distributionMe
 
 /**
  * Both questions on one plot: where a kept-up mean meets the need line, and how high the line is
- * at the goal. Lines are named in the right margin, as in the difference chart beside it, and the
- * two regions are named inside the plot (the right corners are always on the correct side).
+ * at the goal. The two means are named in the right margin, as in the difference chart beside it;
+ * the need line and the two regions are named inside the plot (the right corners are always on the
+ * correct side).
  */
 export function OutlookNeedLineChart({
   names,
@@ -121,6 +122,38 @@ export function OutlookNeedLineChart({
     lowerEnd.y = middle + 7;
   }
 
+  // Name the need line where its label clears the plot edges, the two mean lines, the region
+  // names and the vertical markers; the line itself is monotone, so its ends bound the span.
+  const lineLabel = (() => {
+    const labelWidth = 64;
+    const avoidX = [goalShown?.horizon, crossingShown ?? undefined]
+      .filter((h): h is number => h !== undefined)
+      .map(x);
+    const blocked = (labelTop: number, labelBottom: number, from: number) =>
+      labelTop < top + 16 ||
+      labelBottom > bottom - 16 ||
+      from + labelWidth > right - 4 ||
+      lineValues.some(
+        (value) =>
+          Math.abs(y(value) - (labelTop + labelBottom) / 2) < (labelBottom - labelTop) / 2 + 3,
+      ) ||
+      avoidX.some((markerX) => markerX > from - 4 && markerX < from + labelWidth + 4);
+    for (const fraction of [0.3, 0.42, 0.55, 0.2, 0.68]) {
+      const h = Math.max(1, Math.round(range * fraction));
+      const from = x(h) + 4;
+      const endH = Math.min(range, h + ((labelWidth + 4) / (right - left)) * range);
+      const ys = [
+        y(clamp(needLineThreshold(cumulative, rivalMean, h))),
+        y(clamp(needLineThreshold(cumulative, rivalMean, endH))),
+      ];
+      const above = Math.min(...ys) - 6;
+      if (!blocked(above - 12, above + 3, from)) return { x: from, y: above };
+      const below = Math.max(...ys) + 16;
+      if (!blocked(below - 12, below + 3, from)) return { x: from, y: below };
+    }
+    return null;
+  })();
+
   const topLabels: Array<{ key: string; h: number; text: string }> = [];
   if (goalShown) topLabels.push({ key: "goal", h: goalShown.horizon, text: goalShown.label });
   if (crossingShown !== null && crossingLabel) {
@@ -194,6 +227,19 @@ export function OutlookNeedLineChart({
             />
           ))}
         </g>
+        {lineLabel ? (
+          <text
+            x={lineLabel.x}
+            y={lineLabel.y}
+            fontSize="12"
+            fill="var(--color-text-primary)"
+            paintOrder="stroke"
+            stroke="var(--color-surface)"
+            strokeWidth="3"
+          >
+            必要な平均
+          </text>
+        ) : null}
         <g fontSize="12" fill="var(--color-text-secondary)">
           {y(edge) - top >= 24 ? (
             <text x={right - 6} y={top + 15} textAnchor="end">

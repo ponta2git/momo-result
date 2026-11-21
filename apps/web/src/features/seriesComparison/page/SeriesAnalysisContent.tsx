@@ -16,6 +16,7 @@ import type {
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
 import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
+import { OutlookWorkspaceLoading } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspaceLoading";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import { MetricDefinitions } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
@@ -160,6 +161,9 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   const { matchContext } = bundle;
   const artifactId = resource.artifact.artifactId;
   const displayedSelection = seriesAnalysisDisplayedSelection(bundle, outlookSelection);
+  // Prototype: the released layout stays reachable for trials, with its own skeleton.
+  const outlookLoading =
+    outlookSelection.outlookLayout === "current" ? <OutlookLoading /> : <OutlookWorkspaceLoading />;
   const scopeIdentity = seriesAnalysisScopeSignature(displayedSelection);
   const contentIdentity = `${artifactId}:${scopeIdentity}:${bundle.view}`;
   const root = useRef<HTMLDivElement>(null);
@@ -190,7 +194,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               statusPlacement="external"
               strategy="preserve-inert"
             >
-              <Suspense fallback={<OutlookLoading />}>
+              <Suspense fallback={outlookLoading}>
                 <OutlookView
                   summary={bundle.outlook}
                   selection={displayedSelection}
@@ -201,7 +205,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               </Suspense>
             </StaleShield>
           ) : (
-            <OutlookLoading />
+            outlookLoading
           )}
         </div>
       ) : activeView === "review" ? (

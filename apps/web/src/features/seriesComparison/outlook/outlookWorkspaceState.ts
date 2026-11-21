@@ -196,7 +196,9 @@ export function applyOutlookDistribution(
     return updateOutlookEntry(state, role, {
       error: `${incompatibleRanks(distribution, state.entries[otherRole(role)].distribution)
         .map((rank) => `${rank}位`)
-        .join("・")}は、相手と合わせて20回を超えます。相手の回数と両立するように調整してください。`,
+        .join(
+          "・",
+        )}は、相手と合わせると20戦あたり20回を超えます。相手の平均を変えてから試してください。`,
     });
   }
   const prior = state.entries[role];

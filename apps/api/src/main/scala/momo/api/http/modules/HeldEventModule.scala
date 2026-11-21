@@ -8,6 +8,7 @@ import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec, HeldEventListCodec}
 import momo.api.endpoints.{
   DeleteHeldEventResponse,
   HeldEventDetailResponse,
+  HeldEventDraftStatusResponse,
   HeldEventListItemResponse,
   HeldEventListResponse,
   HeldEventResponse,
@@ -84,6 +85,11 @@ object HeldEventModule:
         )(id => getHeldEventDetail.summary(id))(
           HeldEventSummaryResponse.from
         )
+      },
+      SecuredEndpoint.readLogic(security, HeldEventsEndpoints.draftStatuses) { _ => heldEventId =>
+        execution.execute(
+          BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString)
+        )(getHeldEventDetail.draftStatuses)(_.map(HeldEventDraftStatusResponse.from))
       },
       SecuredEndpoint.readLogic(security, HeldEventsEndpoints.getByPublicId) { _ => publicId =>
         execution.execute(

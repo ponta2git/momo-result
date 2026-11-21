@@ -83,6 +83,17 @@ object HeldEventsEndpoints:
     .out(jsonBody[HeldEventDetailResponse])
     .tag("held-events")
 
+  val draftStatuses: CommonEndpoint.SecuredRead[GetInput, List[HeldEventDraftStatusResponse]] =
+    endpoint
+      .get
+      .in("api" / "held-events" / path[String]("heldEventId") / "draft-statuses")
+      .securityIn(CommonEndpoint.accountHeader)
+      .errorOut(CommonEndpoint.errorOut)
+      .out(jsonBody[List[HeldEventDraftStatusResponse]].description(
+        "Active draft IDs and statuses for checking OCR completion, ordered by draft ID."
+      ))
+      .tag("held-events")
+
   val getByPublicId: CommonEndpoint.SecuredRead[String, HeldEventDetailResponse] = endpoint
     .get
     .in("api" / "public" / "held-events" / path[String]("publicId").description(

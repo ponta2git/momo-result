@@ -307,6 +307,7 @@ function SeriesComparisonPageContent() {
                       showPurposeTabs={false}
                       outlookSelection={filters.selection}
                       onOutlookMemberChange={filters.updateOutlookMember}
+                      onOutlookPairChange={filters.updateOutlookPair}
                       ownerMetric={filters.selection.ownerMetric}
                       onOwnerMetricChange={filters.updateOwnerMetric}
                       expectedRankGapMemberId={filters.selection.expectedRankGapMemberId}

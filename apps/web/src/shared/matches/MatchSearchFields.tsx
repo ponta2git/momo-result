@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { KeyboardEvent } from "react";
 
+import { isImeComposing } from "@/shared/lib/ime";
 import {
   heldOrderSortOptions,
   matchNoteQueryMaxLength,
@@ -16,7 +17,7 @@ import { TextField } from "@/shared/ui/forms/TextField";
 
 export function commitOnEnter(commit: () => void) {
   return (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+    if (event.key === "Enter" && !isImeComposing(event)) {
       event.preventDefault();
       commit();
     }

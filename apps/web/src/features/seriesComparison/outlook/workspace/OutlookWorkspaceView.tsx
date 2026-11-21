@@ -1,7 +1,4 @@
-import { useLocation } from "react-router-dom";
-
 import type { SeriesAnalysisSelection } from "@/features/seriesComparison/model/seriesAnalysisSelection";
-import { OutlookView } from "@/features/seriesComparison/outlook/OutlookView";
 import { OutlookSummaryBoundary } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import { OutlookWorkspace } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspace";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
@@ -16,15 +13,9 @@ export type OutlookWorkspaceProps = {
   onPairChange?: ((focusMemberId: string, rivalMemberId: string) => void) | undefined;
 };
 
-/**
- * Prototype of the rebuilt outlook: one workspace without sub-tabs. `outlookLayout=current`
- * keeps the released layout reachable for side-by-side trials.
- */
+/** The outlook view: one workspace that answers both questions without sub-tabs. */
 export function OutlookWorkspaceView(props: OutlookWorkspaceProps) {
-  const { summary, selection, onMemberChange } = props;
-  const location = useLocation();
-  if (new URLSearchParams(location.search).get("outlookLayout") === "current")
-    return <OutlookView summary={summary} selection={selection} onMemberChange={onMemberChange} />;
+  const { summary, selection } = props;
   return (
     <OutlookSummaryBoundary
       response={summary}

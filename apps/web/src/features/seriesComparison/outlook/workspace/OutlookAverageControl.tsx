@@ -115,7 +115,7 @@ export function OutlookAverageControl({
             : differenceText(recent, editor.distribution, response.recent.matchCount)}
         </p>
       </div>
-      <div className="flex min-w-0 items-center gap-2" data-outlook-preserve-draft>
+      <div className="flex min-w-0 items-center gap-2">
         <label htmlFor={inputId} className="sr-only">
           {name}のこれからの平均順位
         </label>

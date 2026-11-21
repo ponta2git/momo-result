@@ -62,10 +62,7 @@ export function OutlookComparisonRow({
     now.gap.denominator,
   );
   return (
-    <div
-      className={cn("grid min-w-0 grid-cols-1 items-end gap-x-10 gap-y-4", columnsClass)}
-      data-outlook-preserve-draft
-    >
+    <div className={cn("grid min-w-0 grid-cols-1 items-end gap-x-10 gap-y-4", columnsClass)}>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
         {([0, 1] as const).map((role) => (
           <SelectField

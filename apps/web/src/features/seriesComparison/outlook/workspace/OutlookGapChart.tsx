@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
 import { numberTicks } from "@/features/seriesComparison/charts/dataViz/scales";
-import type { OutlookChartPattern } from "@/features/seriesComparison/outlook/OutlookChart";
+import type { OutlookChartPattern } from "@/features/seriesComparison/outlook/useOutlookPatterns";
 import { memberSequencePresentation } from "@/shared/matches/MemberSequenceLabel";
 import { cn } from "@/shared/ui/cn";
 import { contentText } from "@/shared/ui/typography";

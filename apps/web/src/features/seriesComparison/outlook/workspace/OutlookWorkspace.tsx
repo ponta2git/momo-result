@@ -360,11 +360,7 @@ function GoalQuestion({
   const condition = { kind: "goal" as const, cumulative, required };
 
   return (
-    <section
-      className={questionClass}
-      aria-labelledby={`${inputId}-question`}
-      data-outlook-preserve-draft
-    >
+    <section className={questionClass} aria-labelledby={`${inputId}-question`}>
       <div className="grid content-start gap-1">
         <h2 id={`${inputId}-question`} className="sr-only">
           目標の戦数で{names[0]}が上にいるには

@@ -13,17 +13,27 @@ import {
 import type {
   CumulativePair,
   OutlookExample,
+  OutlookRelation,
   RankDistribution,
   Rational,
 } from "@/features/seriesComparison/outlook/calculation";
-import type {
-  OutlookChartPattern,
-  OutlookChartPoint,
-  OutlookChartSelection,
-} from "@/features/seriesComparison/outlook/OutlookChart";
 import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookProjections";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
+
+export type OutlookChartPoint = { h: number; averages: readonly [number, number] };
+export type OutlookChartSelection = {
+  averages: readonly [number, number];
+  formatted: readonly [string, string];
+  relation: OutlookRelation;
+  gapText: string;
+};
+export type OutlookChartPattern = {
+  id: string;
+  label: string;
+  points: readonly OutlookChartPoint[];
+  selected: OutlookChartSelection;
+};
 
 export function signedOutlookGap(gap: Rational) {
   const absolute = rational(gap.numerator < 0n ? -gap.numerator : gap.numerator, gap.denominator);

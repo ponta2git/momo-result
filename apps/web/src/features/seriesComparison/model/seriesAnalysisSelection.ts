@@ -25,7 +25,6 @@ export type SeriesAnalysisSelection = {
   seasonMasterId?: string | undefined;
   view?: SeriesAnalysisViewId | undefined;
   /** Prototype only: show the released outlook layout for side-by-side trials. */
-  outlookLayout?: "current" | undefined;
 };
 
 export type SeriesAnalysisSelectionChange =
@@ -174,9 +173,6 @@ export function normalizeSeriesAnalysisSelection(
     gameTitleId: selectedTitle.gameTitleId,
     ...(mapMasterId ? { mapMasterId } : {}),
     ...(seasonMasterId ? { seasonMasterId } : {}),
-    ...(view === "outlook" && selection.outlookLayout
-      ? { outlookLayout: selection.outlookLayout }
-      : {}),
     view,
   };
 }

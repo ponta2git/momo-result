@@ -22,6 +22,7 @@ object ApiEndpoints:
     ExportEndpoints.matches,
     HeldEventsEndpoints.list,
     HeldEventsEndpoints.get,
+    HeldEventsEndpoints.draftStatuses,
     HeldEventsEndpoints.getByPublicId,
     HeldEventsEndpoints.summary,
     HeldEventsEndpoints.create,

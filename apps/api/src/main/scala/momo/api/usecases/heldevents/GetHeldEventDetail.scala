@@ -17,6 +17,11 @@ final class GetHeldEventDetail[F[_]: Functor](details: HeldEventDetailReadModel[
     details.findByPublicId(publicId)
       .map(_.toRight(AppError.NotFound("held event", publicId.decimalString)))
 
+  def draftStatuses(heldEventId: HeldEventId)
+      : F[Either[AppError, List[HeldEventDetail.DraftStatus]]] =
+    details.draftStatuses(heldEventId)
+      .map(_.toRight(AppError.NotFound("held event", heldEventId.value)))
+
   def summary(heldEventId: HeldEventId): F[Either[AppError, HeldEventSummary]] =
     details.summary(heldEventId)
       .map(_.toRight(AppError.NotFound("held event", heldEventId.value)))

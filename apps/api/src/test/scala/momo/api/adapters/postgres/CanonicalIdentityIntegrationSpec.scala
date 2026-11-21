@@ -928,6 +928,17 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           ).toString)
         )
         draftId = jsonField[String](draft, "matchDraftId")
+        statuses <- get(app, s"/api/held-events/$held/draft-statuses")
+        byUuid <- get(app, s"/api/held-events/${canonical(Entity.HeldEvents, held)}/draft-statuses")
+        _ =
+          assertEquals(
+            statuses,
+            Json.arr(Json.obj(
+              "matchDraftId" -> Json.fromString(draftId),
+              "status" -> Json.fromString(jsonField[String](draft, "status")),
+            ))
+          )
+          assertEquals(byUuid, statuses)
         upload <- uploadPngRequestWithIdempotency(uploadKey)
         image <- json(app, upload)
         imageId = jsonField[String](image, "imageId")
@@ -987,6 +998,8 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         ))
         _ = assertEquals(cancelled.status, Status.Ok)
         _ <- cancelled.body.compile.drain
+        remaining <- get(app, s"/api/held-events/$held/draft-statuses")
+        _ = assertEquals(remaining, Json.arr())
         state <- sql"SELECT status FROM ocr_submissions WHERE legacy_id = $submissionId".query[
           String
         ].unique.transact(transactor)

@@ -90,7 +90,21 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
         scopes = jsonField[List[Json]](jsonField[List[Json]](listBody, "items").head, "scopes")
         matches = jsonField[List[Json]](body, "matches")
         drafts = jsonField[List[Json]](body, "drafts")
+        statusResponse <- httpApp.run(
+          readGet(Uri.unsafeFromString(s"/api/held-events/$heldEventId/draft-statuses"))
+        )
+        statuses <- statusResponse.as[Json]
       yield
+        assertEquals(statusResponse.status, Status.Ok)
+        assertEquals(
+          statuses,
+          Json.fromValues(drafts.map(d =>
+            Json.obj(
+              "matchDraftId" -> Json.fromString(jsonField[String](d, "matchDraftId")),
+              "status" -> Json.fromString(jsonField[String](d, "status")),
+            )
+          ))
+        )
         assertEquals(res.status, Status.Ok)
         assertEquals(scopes.map(jsonField[String](_, "gameTitleName")), List("桃太郎電鉄ワールド"))
         assertEquals(scopes.map(jsonField[String](_, "seasonName")), List("2024-spring"))
@@ -104,9 +118,23 @@ final class HeldEventsAndMatchesSpec extends MomoCatsEffectSuite with HttpAppTes
   }
 
   app.test("GET /api/held-events/:id returns 404 for a missing event") { httpApp =>
-    httpApp.run(readGet(uri"/api/held-events/missing-held-event")).flatMap { res =>
-      assertProblem(res, Status.NotFound, "NOT_FOUND", "held event was not found")
-    }
+    List(
+      uri"/api/held-events/missing-held-event",
+      uri"/api/held-events/missing-held-event/draft-statuses"
+    ).traverse_(path =>
+      httpApp.run(readGet(path)).flatMap(res =>
+        assertProblem(res, Status.NotFound, "NOT_FOUND", "held event was not found")
+      )
+    )
+  }
+
+  app.test("draft status checks require the same authenticated read access as the event") { httpApp =>
+    httpApp.run(Request[IO](
+      Method.GET,
+      uri"/api/held-events/missing-held-event/draft-statuses"
+    )).flatMap(res =>
+      assertProblem(res, Status.Unauthorized, "UNAUTHORIZED", "Authentication is required.")
+    )
   }
 
   app.test("detail navigation exposes live adjacent identities across held events") { httpApp =>

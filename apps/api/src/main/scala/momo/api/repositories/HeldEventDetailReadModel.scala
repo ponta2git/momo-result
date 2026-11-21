@@ -7,4 +7,5 @@ trait HeldEventDetailReadModel[F[_]]:
   /** The event, confirmed results and active drafts belong to one consistent read snapshot. */
   def find(id: HeldEventId): F[Option[HeldEventDetail]]
   def findByPublicId(publicId: PublicId): F[Option[HeldEventDetail]]
+  def draftStatuses(id: HeldEventId): F[Option[List[HeldEventDetail.DraftStatus]]]
   def summary(id: HeldEventId): F[Option[HeldEventSummary]]

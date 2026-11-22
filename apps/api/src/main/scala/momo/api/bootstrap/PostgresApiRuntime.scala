@@ -114,7 +114,10 @@ private[bootstrap] object PostgresApiRuntime:
     val wakeRuntime = (
       Resource.eval(WorkerWakeup.create[F]),
       Resource.eval(Deferred[F, Throwable]),
-      PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
+      PostgresSeriesAnalysisReaderCapability.resource[F](
+        transactor,
+        config.analysisReleaseAttestation
+      ),
     ).tupled
 
     imageStorageResource(config, sourceImages).flatMap { imageStorage =>
@@ -249,7 +252,10 @@ private[bootstrap] object PostgresApiRuntime:
             )
           yield runtime.copy(runtime =
             runtime.runtime.copy(
-              app = readerAdmission.guard(runtime.runtime.app),
+              app =
+                if config.requiresAnalysisReaderAdmission then
+                  readerAdmission.guard(runtime.runtime.app)
+                else runtime.runtime.app,
               backgroundFailure = backgroundFailure.get.flatMap(Async[F].raiseError[Nothing]),
               workerWakeApp = config.workerWake.map(WorkerWakeServer.routes(_, workerWakeup)),
             )

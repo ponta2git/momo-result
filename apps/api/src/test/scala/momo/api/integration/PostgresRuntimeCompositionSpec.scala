@@ -15,6 +15,36 @@ import momo.api.http.HttpAssertions.jsonField
 import momo.api.http.HttpRequestBodies
 
 final class PostgresRuntimeCompositionSpec extends PostgresHttpAppTestFixtures:
+  test("standalone development can edit a freshly migrated database before a Worker is deployed"):
+    def createTitle(wake: Option[WorkerWakeConfig]): IO[Status] =
+      val previousContract = sql"""
+        UPDATE series_analysis_release_state SET validation_contract_id = 'previous-reader-contract'
+        WHERE singleton_key = 'current'
+      """.update.run.transact(transactor)
+      previousContract *> tempDirectory("standalone-api-edit").flatMap { directory =>
+        runtimeResource(AppConfig(
+          appEnv = AppEnv.Dev,
+          httpHost = "127.0.0.1",
+          httpPort = 0,
+          imageTmpDir = directory,
+          devMemberIds = List("member_ponta"),
+          workerWake = wake,
+        ))
+      }.use { wired =>
+        wired.runtime.app.run(writePost(
+          uri"/api/game-titles",
+          HttpRequestBodies.Master.createGameTitle("title_local_edit", "Local edit", "momotetsu2"),
+          Some("standalone-title-create"),
+        )).map(_.status)
+      }
+    for
+      standalone <- createTitle(None)
+      wake <- WorkerWakeConfig.load[IO](Map("WORKER_WAKE_TOKEN" -> ("w" * 32)), AppEnv.Dev)
+      coupled <- createTitle(wake)
+    yield
+      assertEquals(standalone, Status.Ok)
+      assertEquals(coupled, Status.ServiceUnavailable)
+
   test("runtime shares master invalidation and wakes processing workers after durable admission"):
     val credential = "w" * 32
     Resource.eval(WorkerWakeConfig.load[IO](

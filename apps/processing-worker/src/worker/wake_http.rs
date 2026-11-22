@@ -205,6 +205,18 @@ impl Peers {
         Self::cursor_response(self.request(Method::GET, &url)).await
     }
 
+    async fn verify_snapshots(&self) -> Result<(), WakeHttpError> {
+        // A cursorless GET returns immediately. Bound the entire roster inside the
+        // resident release challenge's deadline, including DNS and response bodies.
+        time::timeout(
+            Duration::from_secs(4),
+            try_join_all(self.urls.iter().map(|url| self.poll(url, None))),
+        )
+        .await
+        .map_err(|_elapsed| WakeHttpError)??;
+        Ok(())
+    }
+
     async fn cursor_response(request: reqwest::RequestBuilder) -> Result<Cursor, WakeHttpError> {
         let mut response = request.send().await.map_err(|_error| WakeHttpError)?;
         if response.status() != reqwest::StatusCode::OK {
@@ -283,6 +295,15 @@ pub(crate) async fn run(
     }
 }
 
+/// Verify the current private routes and credentials from the resident worker before
+/// attesting an active deployment, including when the worker image was reused.
+pub(crate) async fn verify_writers() -> Result<(), WakeHttpError> {
+    if let Some(peers) = Peers::configured()? {
+        peers.verify_snapshots().await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(crate) async fn follow_test_writer(
     url: Url,
@@ -348,6 +369,72 @@ pub(crate) async fn notify_api() -> Result<(), WakeHttpError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::{
+        io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+        net::{TcpListener, TcpStream},
+    };
+
+    async fn accept_snapshot(listener: &TcpListener) -> std::io::Result<TcpStream> {
+        let (stream, _address) = listener.accept().await?;
+        let mut stream = BufReader::new(stream);
+        let mut line = String::new();
+        stream.read_line(&mut line).await?;
+        if line != "GET /internal/worker/wake HTTP/1.1\r\n" {
+            return Err(std::io::Error::other("expected a cursorless wake snapshot"));
+        }
+        let mut authenticated = false;
+        loop {
+            line.clear();
+            if stream.read_line(&mut line).await? == 0 || line == "\r\n" {
+                break;
+            }
+            if let Some((key, value)) = line.split_once(':') {
+                authenticated |= key.eq_ignore_ascii_case("authorization")
+                    && value.trim() == "Bearer fixture-credential";
+            }
+        }
+        if authenticated {
+            Ok(stream.into_inner())
+        } else {
+            Err(std::io::Error::other("missing resident worker credential"))
+        }
+    }
+
+    #[tokio::test]
+    async fn active_proof_requires_authenticated_snapshots_from_all_writers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let first = TcpListener::bind(("127.0.0.1", 0)).await?;
+        let second = TcpListener::bind(("127.0.0.1", 0)).await?;
+        let hosts = format!("{},{}", first.local_addr()?, second.local_addr()?);
+        let peers = Peers {
+            client: Client::builder().no_proxy().build()?,
+            token: HeaderValue::from_static("Bearer fixture-credential"),
+            urls: writer_urls(&hosts)?,
+        };
+        let body = r#"{"boot":"00000000-0000-0000-0000-000000000001","cursor":7}"#;
+        let success = format!(
+            "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        let denied = "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
+        for (reply, expected) in [(success.as_str(), true), (denied, false)] {
+            let serve = async {
+                let (mut a, mut b) =
+                    tokio::try_join!(accept_snapshot(&first), accept_snapshot(&second))?;
+                a.write_all(success.as_bytes()).await?;
+                b.write_all(reply.as_bytes()).await
+            };
+            let (proof, served) = tokio::join!(
+                peers.verify_snapshots(),
+                time::timeout(Duration::from_secs(5), serve)
+            );
+            served??;
+            if proof.is_ok() != expected {
+                return Err("active proof did not match the full writer roster".into());
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn covers_only_the_complete_current_writer_generation() {

@@ -10,7 +10,10 @@ import momo.api.adapters.postgres.PostgresSeriesAnalysisReaderCapability
 final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
   test("reader capability is active while the API resource is held and drains on release"):
     for
-      active <- PostgresSeriesAnalysisReaderCapability.resource[IO](transactor)
+      active <- PostgresSeriesAnalysisReaderCapability.resource[IO](
+        transactor,
+        listenForAttestation = false
+      )
         .use(_ => capabilityRow)
       draining <- capabilityRow
     yield
@@ -38,7 +41,10 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
       UPDATE series_analysis_release_state SET validation_contract_id = $target WHERE singleton_key = 'current'
     """.update.run.transact(transactor).void
     publish("previous-reader-contract") *>
-      PostgresSeriesAnalysisReaderCapability.resource[IO](transactor).use { reader =>
+      PostgresSeriesAnalysisReaderCapability.resource[IO](
+        transactor,
+        listenForAttestation = false
+      ).use { reader =>
         val app = reader.guard(Kleisli.pure[IO, Request[IO], Response[IO]](Response[IO](Status.Ok)))
         def status(path: String) =
           app.run(Request[IO](uri = Uri.unsafeFromString(path))).map(_.status)

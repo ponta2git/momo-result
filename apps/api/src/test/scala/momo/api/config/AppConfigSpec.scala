@@ -36,6 +36,24 @@ class AppConfigSpec extends CatsEffectSuite:
       .toJdbcUrl(raw)
       .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
 
+  test(
+    "standalone development and test skip request admission, production and attested readers require it"
+  ) {
+    for
+      dev <- AppConfig.loadFromEnv[IO](Map("APP_ENV" -> "dev"))
+      standaloneTest <- AppConfig.loadFromEnv[IO](Map("APP_ENV" -> "test"))
+      attested <- AppConfig.loadFromEnv[IO](Map(
+        "APP_ENV" -> "test",
+        "MOMO_ANALYSIS_RELEASE_ATTESTATION" -> "enabled"
+      ))
+      production <- AppConfig.loadFromEnv[IO](prodEnv)
+    yield
+      assert(!dev.requiresAnalysisReaderAdmission)
+      assert(!standaloneTest.requiresAnalysisReaderAdmission)
+      assert(attested.analysisReleaseAttestation && attested.requiresAnalysisReaderAdmission)
+      assert(production.requiresAnalysisReaderAdmission)
+  }
+
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")
     assertEquals(url, "jdbc:postgresql://localhost:5433/summit")

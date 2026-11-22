@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
     postgres,
-    worker::{PostCommitEffects, PostCommitSink},
+    worker::{PostCommitEffects, PostCommitSink, wake_http},
 };
 
 const PORT: u16 = 19372;
@@ -61,19 +61,34 @@ impl Admission {
                     let _completed = timeout(Duration::from_secs(12), async {
                         let mut request = [0; CHALLENGE.len()];
                         stream.read_exact(&mut request).await?;
-                        if request == CHALLENGE || request == ACTIVE_CHALLENGE {
-                            let mut db = postgres::connect(&url).await.map_err(io::Error::other)?;
-                            let current = admit_capability(&mut db, &worker)
-                                .await
-                                .map_err(io::Error::other)?;
+                        let require_active = request == ACTIVE_CHALLENGE;
+                        if request == CHALLENGE || require_active {
+                            let registration = async {
+                                let mut db =
+                                    postgres::connect(&url).await.map_err(io::Error::other)?;
+                                admit_capability(&mut db, &worker)
+                                    .await
+                                    .map_err(io::Error::other)
+                            };
+                            let transport = async {
+                                if require_active {
+                                    wake_http::verify_writers()
+                                        .await
+                                        .map_err(io::Error::other)?;
+                                }
+                                io::Result::Ok(())
+                            };
+                            let (current, transport) = tokio::join!(registration, transport);
+                            let current = current?;
                             let previous = state.swap(current, Ordering::AcqRel);
-                            if !current && request == ACTIVE_CHALLENGE {
+                            if !current && require_active {
                                 return Ok(());
                             }
                             if current && !previous {
                                 wake.submit(PostCommitEffects::WakeJobs)
                                     .map_err(io::Error::other)?;
                             }
+                            transport?;
                             stream
                                 .write_all(capability_row_id(&worker).as_bytes())
                                 .await?;

@@ -41,7 +41,10 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
         }
     }
 
-  def resource[F[_]: Async](transactor: Transactor[F]): Resource[F, ReaderAdmission[F]] =
+  def resource[F[_]: Async](
+      transactor: Transactor[F],
+      listenForAttestation: Boolean,
+  ): Resource[F, ReaderAdmission[F]] =
     for
       _ <- Resource.eval(Async[F].delay(SeriesAnalysisPayloadValidator.ensureReady()))
       readerId <- Resource.eval(Async[F].delay(UUID.randomUUID().toString))
@@ -50,9 +53,7 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
       _ <- Resource.make(admission.attest(requireActive = false))(_ =>
         markDraining(readerId, transactor)
       )
-      hosted <- Resource.eval(Async[F].delay(sys.env.contains("FLY_MACHINE_ID") ||
-        sys.env.get("MOMO_ANALYSIS_RELEASE_ATTESTATION").contains("enabled")))
-      _ <- if hosted then releaseProbe(admission.attest) else Resource.unit[F]
+      _ <- if listenForAttestation then releaseProbe(admission.attest) else Resource.unit[F]
     yield admission
 
   private def releaseProbe[F[_]: Async](attest: Boolean => F[String]): Resource[F, Unit] =

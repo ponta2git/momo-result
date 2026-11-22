@@ -10,10 +10,21 @@ mod selection;
 #[cfg(test)]
 pub(crate) use runtime::run_ocr_only;
 pub(crate) use runtime::{WorkerError, run};
-pub(crate) mod listener;
+pub(crate) mod wake_http;
 
 use thiserror::Error;
 use tokio::sync::mpsc;
+
+/// Shared supervisors align across restarts on UTC :00 and :30. Known job deadlines may wake earlier.
+pub(crate) fn until_supervisor(now: std::time::SystemTime) -> std::time::Duration {
+    use std::time::{Duration, UNIX_EPOCH};
+    let interval = Duration::from_mins(30);
+    let elapsed = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+    interval.saturating_sub(Duration::new(
+        elapsed.as_secs() % interval.as_secs(),
+        elapsed.subsec_nanos(),
+    ))
+}
 
 /// A local hint authorized by a successful business transaction. Durable job rows remain
 /// authoritative; a rejected operation, rollback or unknown commit cannot request a wake.
@@ -80,11 +91,28 @@ pub(crate) struct PostCommitSinkClosed;
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, time::Duration};
 
     use tokio::sync::mpsc::error::TryRecvError;
 
     use super::*;
+
+    #[test]
+    fn supervisor_deadline_follows_wall_clock_boundaries() {
+        use std::time::{Duration, UNIX_EPOCH};
+        for (elapsed, remaining) in [
+            (Duration::ZERO, Duration::from_mins(30)),
+            (Duration::from_mins(17), Duration::from_mins(13)),
+            (Duration::from_millis(1_799_999), Duration::from_millis(1)),
+            (Duration::from_mins(30), Duration::from_mins(30)),
+            (Duration::from_mins(61), Duration::from_mins(29)),
+        ] {
+            assert_eq!(
+                until_supervisor(UNIX_EPOCH + elapsed),
+                remaining,
+                "{elapsed:?}"
+            );
+        }
+    }
 
     #[test]
     fn mapped_control_outcome_preserves_the_post_commit_wake() {
@@ -116,43 +144,5 @@ mod tests {
             sink.submit(PostCommitEffects::WakeJobs),
             Err(PostCommitSinkClosed)
         );
-    }
-
-    #[tokio::test]
-    #[ignore = "requires explicitly isolated PROCESSING_SCHEDULER_SMOKE_DATABASE_URL"]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "the isolated PostgreSQL listener scenario keeps its cross-process boundary visible"
-    )]
-    async fn subscribed_postgres_listener_delivers_the_next_commit_hint()
-    -> Result<(), Box<dyn Error + Send + Sync>> {
-        let database_url = std::env::var("PROCESSING_SCHEDULER_SMOKE_DATABASE_URL")?;
-        let (sink, mut wake) = PostCommitSink::channel();
-        let mut listener = listener::subscribe(&database_url, sink).await?;
-        let publisher = crate::identity::fixtures::connect(&database_url).await?;
-        listener.verify_notification_round_trip(&publisher).await?;
-        let verified = tokio::time::timeout(Duration::from_secs(2), wake.recv()).await?;
-        assert_eq!(
-            verified,
-            Some(()),
-            "the startup route probe must reach the process-local sink"
-        );
-
-        let (shutdown_sender, shutdown) = tokio::sync::watch::channel(false);
-        let listener_task = tokio::spawn(listener.run(shutdown));
-
-        publisher
-            .execute("SELECT pg_notify($1, '')", &[&listener::CHANNEL])
-            .await?;
-        let received = tokio::time::timeout(Duration::from_secs(2), wake.recv()).await?;
-        assert_eq!(
-            received,
-            Some(()),
-            "the first commit after subscription must promptly reach the local sink"
-        );
-
-        assert_eq!(shutdown_sender.send(true), Ok(()));
-        assert!(matches!(listener_task.await, Ok(Ok(()))));
-        Ok(())
     }
 }

@@ -1539,6 +1539,7 @@ dependencies = [
  "momo-ocr",
  "openssl",
  "postgres-openssl",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",

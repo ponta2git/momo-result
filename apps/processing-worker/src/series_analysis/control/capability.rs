@@ -1,5 +1,3 @@
-use std::time::{Duration, Instant};
-
 use serde_json::json;
 use tokio_postgres::{Client, GenericClient};
 
@@ -8,36 +6,30 @@ use momo_analysis_core::contract::{ARTIFACT_SCHEMA_VERSION, ARTIFACT_VALIDATION_
 use super::{ALGORITHM_VERSION, ControlError};
 
 pub(crate) const CAPABILITY_FRESH_SECONDS: i64 = 180;
-const IDLE_REFRESH_INTERVAL: Duration = Duration::from_mins(1);
-
-/// Schedules idle capability refreshes from the last successful UPSERT.
-///
-/// Job heartbeats refresh the database independently. They deliberately do not advance this local
-/// schedule, so returning from a long-running job makes the next idle-loop check immediately due.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct IdleRefreshSchedule {
-    last_success_at: Instant,
-}
-
-impl IdleRefreshSchedule {
-    #[must_use]
-    pub(crate) const fn after_success(last_success_at: Instant) -> Self {
-        Self { last_success_at }
-    }
-
-    #[must_use]
-    pub(crate) fn is_due_at(&self, now: Instant) -> bool {
-        self.next_due_in(now).is_zero()
-    }
-
-    #[must_use]
-    pub(crate) fn next_due_in(&self, now: Instant) -> Duration {
-        IDLE_REFRESH_INTERVAL.saturating_sub(now.saturating_duration_since(self.last_success_at))
-    }
-
-    pub(crate) const fn record_success_at(&mut self, refreshed_at: Instant) {
-        self.last_success_at = refreshed_at;
-    }
+/// Register before reading the singleton, serializing boot/rejoin with promotion's
+/// registry -> singleton lock order. Candidates can attest while admission is closed.
+pub(crate) async fn admit_capability(
+    client: &mut Client,
+    worker_id: &str,
+) -> Result<bool, ControlError> {
+    let tx = client.transaction().await?;
+    register_capability(&tx, worker_id).await?;
+    let schema = i32::try_from(ARTIFACT_SCHEMA_VERSION)?;
+    let admitted = tx
+        .query_one(
+            "SELECT algorithm_version = $1 AND artifact_schema_version = $2 \
+        AND validation_contract_id IS NOT DISTINCT FROM $3 FROM series_analysis_release_state \
+        WHERE singleton_key='current' FOR SHARE",
+            &[
+                &ALGORITHM_VERSION,
+                &schema,
+                &ARTIFACT_VALIDATION_CONTRACT_ID,
+            ],
+        )
+        .await?
+        .try_get(0)?;
+    tx.commit().await?;
+    Ok(admitted)
 }
 
 /// Registers this worker generation's exact algorithm/schema/validation capability set.
@@ -45,8 +37,8 @@ impl IdleRefreshSchedule {
 /// # Errors
 ///
 /// Returns an error when `PostgreSQL` rejects the capability update.
-pub(crate) async fn register_capability(
-    client: &Client,
+async fn register_capability<C: GenericClient + Sync>(
+    client: &C,
     worker_id: &str,
 ) -> Result<(), ControlError> {
     let capability_id = capability_row_id(worker_id);
@@ -105,7 +97,7 @@ where
     Ok(())
 }
 
-fn capability_row_id(worker_id: &str) -> String {
+pub(crate) fn capability_row_id(worker_id: &str) -> String {
     format!(
         "{worker_id}@{ALGORITHM_VERSION}@{ARTIFACT_SCHEMA_VERSION}@{ARTIFACT_VALIDATION_CONTRACT_ID}"
     )
@@ -114,49 +106,6 @@ fn capability_row_id(worker_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn idle_refresh_schedule_uses_a_bounded_cadence() {
-        assert!(
-            i64::try_from(IDLE_REFRESH_INTERVAL.as_secs())
-                .is_ok_and(|seconds| seconds * 2 < CAPABILITY_FRESH_SECONDS),
-            "idle refresh cadence must leave room for a delayed or failed refresh"
-        );
-        let registered_at = Instant::now();
-        let cases = [
-            (Duration::ZERO, false),
-            (Duration::from_secs(59), false),
-            (Duration::from_mins(1), true),
-            (Duration::from_hours(1), true),
-        ];
-        let schedule = IdleRefreshSchedule::after_success(registered_at);
-
-        for (elapsed, expected) in cases {
-            assert_eq!(
-                schedule.is_due_at(registered_at + elapsed),
-                expected,
-                "unexpected refresh decision after {elapsed:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn successful_idle_refresh_restarts_the_cadence() {
-        let registered_at = Instant::now();
-        let refreshed_at = registered_at + Duration::from_mins(1);
-        let mut schedule = IdleRefreshSchedule::after_success(registered_at);
-
-        schedule.record_success_at(refreshed_at);
-
-        assert!(
-            !schedule.is_due_at(refreshed_at + Duration::from_secs(59)),
-            "a recent successful UPSERT must suppress an early refresh"
-        );
-        assert!(
-            schedule.is_due_at(refreshed_at + Duration::from_mins(1)),
-            "the next refresh must become due at the bounded cadence"
-        );
-    }
 
     #[test]
     fn capability_identity_is_scoped_to_the_complete_worker_generation() {
@@ -187,7 +136,7 @@ mod tests {
             )
             .await?;
 
-        register_capability(&client, WORKER_ID).await?;
+        register_capability(&*client, WORKER_ID).await?;
 
         let row = client
             .query_one(

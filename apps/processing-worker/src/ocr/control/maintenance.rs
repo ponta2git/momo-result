@@ -3,11 +3,13 @@ use super::{
     OcrControlError, OcrFailureCode, bounded_transaction, duration_milliseconds,
     lock_match_drafts_for_job, sync_match_draft_status,
 };
+use crate::worker::{PostCommitEffects, PostCommitSink};
 use std::time::Duration;
 use tokio_postgres::{Client, Row};
 
 pub(crate) async fn reap_stale(
     client: &mut Client,
+    sink: &PostCommitSink,
     stale_after: Duration,
     timeout: Duration,
 ) -> Result<(), OcrControlError> {
@@ -41,7 +43,7 @@ pub(crate) async fn reap_stale(
     }.await;
     // Each candidate commits independently. An error on a later candidate cannot undo a repair.
     if changed {
-        super::super::submissions::wake(client).await;
+        sink.submit(PostCommitEffects::WakeJobs)?;
     }
     result
 }

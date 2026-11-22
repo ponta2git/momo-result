@@ -46,6 +46,9 @@ impl Runner {
             fencing_token = claim.fencing_token,
         );
         async {
+            self.control_client
+                .resume(&self.config.database_url)
+                .await?;
             let result = execute_claimed_job(
                 &mut self.control_client,
                 &mut self.heartbeat_client,

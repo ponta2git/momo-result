@@ -14,13 +14,6 @@ use thiserror::Error;
 use tokio::{sync::watch, time};
 use tokio_postgres::{Client, types::Type};
 
-#[cfg(test)]
-pub(crate) struct Config {
-    pub(crate) database_url: String,
-    pub(crate) listener_database_url: String,
-    pub(crate) finalization_timeout: Duration,
-}
-
 #[derive(Debug, Error)]
 pub(crate) enum RuntimeError {
     #[error("OCR submission dependency failed ({0})")]
@@ -42,7 +35,7 @@ struct Schedule {
 impl Default for Schedule {
     fn default() -> Self {
         Self {
-            safety_interval: SAFETY_INTERVAL,
+            safety_interval: Duration::from_mins(30),
             #[cfg(test)]
             observed: None,
             #[cfg(test)]
@@ -100,13 +93,15 @@ pub(crate) struct Reconciler {
     schedule: Schedule,
     recovery: Recovery,
     scan_at: time::Instant,
+    pass_started: Option<time::Instant>,
+    completed_pass: Option<time::Instant>,
     requested: bool,
     reconnect_at: Option<time::Instant>,
     reconnect_delay: Duration,
 }
 
 impl Reconciler {
-    /// The shared listener must already be subscribed and verified before discovery begins.
+    /// Validate the database contract; actual discovery starts only after this generation is admitted.
     #[cfg_attr(
         all(not(target_os = "linux"), not(test)),
         expect(
@@ -120,21 +115,14 @@ impl Reconciler {
         sink: NotificationSink,
     ) -> Result<Self, RuntimeError> {
         let database = connect_database(&database_url, timeout).await?;
-        let mut state = Self::with_database(
+        Ok(Self::with_database(
             database_url,
             database,
             timeout,
             sink,
             Schedule::default(),
             Recovery::default(),
-        );
-        // Only one page is discovered; startup never waits for submission settlement.
-        let connected = state
-            .database
-            .as_ref()
-            .ok_or(RuntimeError::Protocol("database_missing"))?;
-        discover(connected, timeout, &mut state.recovery.cursor).await?;
-        Ok(state)
+        ))
     }
 
     #[cfg_attr(
@@ -160,10 +148,28 @@ impl Reconciler {
             schedule,
             recovery,
             scan_at: time::Instant::now(),
+            pass_started: None,
+            completed_pass: None,
             requested: false,
             reconnect_at: None,
             reconnect_delay: Duration::from_millis(100),
         }
+    }
+
+    pub(crate) fn disconnect(&mut self) {
+        self.database = None;
+    }
+
+    pub(crate) fn scanned_since(&self, started: time::Instant) -> bool {
+        self.completed_pass.is_some_and(|at| at >= started)
+            && self.reconnect_at.is_none()
+            && self.recovery.rechecks.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn observing(mut self, observed: watch::Sender<u64>) -> Self {
+        self.schedule.observed = Some(observed);
+        self
     }
 
     pub(crate) fn request_scan(&mut self) {
@@ -289,6 +295,7 @@ impl Reconciler {
             self.requested = false;
             self.recovery.busy.clear();
         }
+        self.pass_started.get_or_insert_with(time::Instant::now);
         let complete = sweep_page(
             database,
             self.timeout,
@@ -305,9 +312,17 @@ impl Reconciler {
         if stopping(shutdown) {
             return Ok(());
         }
-        let delay = next_delay(database, self.timeout)
+        let cold_scan = self
+            .schedule
+            .safety_interval
+            .min(crate::worker::until_supervisor(std::time::SystemTime::now()));
+        let mut delay = next_delay(database, self.timeout)
             .await?
-            .min(self.schedule.safety_interval);
+            .map_or(cold_scan, |due| due.min(cold_scan));
+        if !self.recovery.busy.is_empty() {
+            delay = delay.min(SAFETY_INTERVAL);
+        }
+        self.completed_pass = self.pass_started.take();
         self.scan_at = time::Instant::now() + delay;
         retain_busy(
             &mut self.recovery.rechecks,
@@ -435,11 +450,7 @@ async fn sweep(
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
-use super::listener::Listener;
-#[cfg(test)]
 use test_support::coordinate;
-#[cfg(test)]
-pub(crate) use test_support::run_observed;
 
 fn retain_busy(
     rechecks: &mut Vec<BusyRecheck>,
@@ -494,7 +505,11 @@ async fn settle_and_dispatch(
     }
 }
 
-async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, RuntimeError> {
+async fn next_delay(
+    database: &Client,
+    timeout: Duration,
+) -> Result<Option<Duration>, RuntimeError> {
+    let started = time::Instant::now();
     let row = time::timeout(timeout, database.query_typed_one("SELECT EXTRACT(EPOCH FROM (min(s.admission_deadline) - clock_timestamp()))::double precision \
         FROM ocr_submissions s WHERE s.status = 'open' AND s.admission_deadline > clock_timestamp() \
         AND EXISTS (SELECT 1 FROM ocr_submission_members m WHERE m.submission_id = s.id AND m.status = 'pending')", &[])).await
@@ -504,8 +519,10 @@ async fn next_delay(database: &Client, timeout: Duration) -> Result<Duration, Ru
         .map_err(|_error| RuntimeError::Protocol("deadline_decode"))?;
     Ok(seconds
         .and_then(|value| Duration::try_from_secs_f64(value).ok())
-        .map_or(SAFETY_INTERVAL, |value| {
-            value.max(Duration::from_millis(1)).min(SAFETY_INTERVAL)
+        .map(|value| {
+            value
+                .saturating_sub(started.elapsed())
+                .max(Duration::from_millis(1))
         }))
 }
 

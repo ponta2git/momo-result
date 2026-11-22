@@ -100,11 +100,11 @@ async fn stop_signals_siblings_without_dropping_the_in_flight_operation() {
 }
 
 #[tokio::test]
-async fn listener_error_is_observed_while_a_durable_operation_waits() {
+async fn transport_error_is_observed_while_a_durable_operation_waits() {
     let (_external, mut runtime) = runtime();
     let mut stopped = runtime.stopped.clone();
     let (fail, failure) = oneshot::channel();
-    runtime.listener = Some(ExecutionHandle::spawn(
+    runtime.transport = Some(ExecutionHandle::spawn(
         runtime.stop.clone(),
         runtime.cleanup_grace,
         async move {
@@ -137,7 +137,7 @@ async fn listener_error_is_observed_while_a_durable_operation_waits() {
     .expect("listener failure must stop siblings during a dependency wait");
 
     result.unwrap();
-    assert!(runtime.listener.is_none());
+    assert!(runtime.transport.is_none());
     assert!(matches!(
         finish(&mut runtime, &mut None).await,
         Err(WorkerError::UnexpectedExit)
@@ -208,7 +208,7 @@ async fn attempt_panic_stops_siblings_and_keeps_the_original_failure() {
 async fn operation_panic_is_finalized_through_the_common_stop_path() {
     let (_external, mut runtime) = runtime();
     let mut stopped = runtime.stopped.clone();
-    runtime.listener = Some(ExecutionHandle::spawn(
+    runtime.transport = Some(ExecutionHandle::spawn(
         runtime.stop.clone(),
         runtime.cleanup_grace,
         async move {
@@ -233,7 +233,7 @@ async fn operation_panic_is_finalized_through_the_common_stop_path() {
         finish(&mut runtime, &mut None).await,
         Err(WorkerError::Panicked)
     ));
-    assert!(runtime.listener.is_none());
+    assert!(runtime.transport.is_none());
     assert_eq!(runtime.deadline, deadline);
 }
 
@@ -267,7 +267,7 @@ async fn forced_listener_stop_is_joined_within_the_original_shutdown_budget() {
     let (started, start) = oneshot::channel();
     let dropped = Arc::new(AtomicBool::new(false));
     let listener_dropped = Arc::clone(&dropped);
-    runtime.listener = Some(ExecutionHandle::spawn(
+    runtime.transport = Some(ExecutionHandle::spawn(
         runtime.stop.clone(),
         runtime.cleanup_grace,
         async move {
@@ -296,7 +296,7 @@ async fn forced_listener_stop_is_joined_within_the_original_shutdown_budget() {
         dropped.load(Ordering::SeqCst),
         "finish must observe task destruction, not merely request an abort"
     );
-    assert!(runtime.listener.is_none());
+    assert!(runtime.transport.is_none());
     assert!(time::Instant::now() >= graceful_until);
     assert_eq!(runtime.deadline, Some(deadline));
 }

@@ -83,16 +83,11 @@ async fn verify(
     create(primary, preparation, -1).await?;
     member(primary, preparation, "total_assets", None).await?;
     verify_gate(primary, peer, preparation, sink).await?;
-    verify_listener(primary, url).await?;
     verify_recovery_boundaries(primary, peer, url, sink).await?;
-    verify_listener_reconnect(primary, url).await?;
     verify_deadline_reconnect(primary, peer, url).await?;
     busy_rechecks::verify(primary, peer, url).await?;
     let delay = next_delay(primary, TIMEOUT).await?;
-    ensure(
-        delay == SAFETY_INTERVAL,
-        "idle must retain a cold recovery scan",
-    )?;
+    ensure(delay.is_none(), "empty intake has no deadline of its own")?;
     Ok(())
 }
 
@@ -334,24 +329,6 @@ async fn verify_gate(
         "snapshot must be after the gate wait",
     )?;
     drop(notice);
-    Ok(())
-}
-
-async fn verify_listener(publisher: &Client, url: &str) -> TestResult {
-    let (wake, mut receiver) = watch::channel(());
-    let mut listener = Listener::subscribe(url, wake).await?;
-    listener.verify(publisher).await?;
-    receiver.borrow_and_update();
-    let (shutdown, stop) = watch::channel(false);
-    let (result, delivered) = tokio::join!(listener.run(stop), async {
-        super::super::wake(publisher).await;
-        let delivered = time::timeout(Duration::from_secs(1), receiver.changed()).await;
-        shutdown.send(true)?;
-        delivered??;
-        Ok::<(), Box<dyn Error + Send + Sync>>(())
-    });
-    result?;
-    delivered?;
     Ok(())
 }
 
@@ -700,78 +677,33 @@ fn named_database(url: &str, name: &str) -> TestResult<String> {
     Ok(parsed.to_string())
 }
 
-async fn verify_listener_reconnect(primary: &Client, url: &str) -> TestResult {
-    let [id, _, _] = RECOVERY_IDS;
-    create(primary, id, 600).await?;
-    member(primary, id, "total_assets", None).await?;
-    let (shutdown, stop) = watch::channel(false);
-    let (observed, mut progress) = watch::channel(0_u64);
-    let config = Config {
-        database_url: url.to_owned(),
-        listener_database_url: named_database(url, "mom24-listener-reconnect")?,
-        finalization_timeout: TIMEOUT,
-    };
-    let runtime = run_observed(config, NotificationSink::default(), stop, observed);
-    let check = async {
-        time::timeout(Duration::from_secs(2), progress.changed()).await??;
-        primary
-            .execute(
-                r"
-            UPDATE ocr_submissions
-            SET admission_deadline = clock_timestamp() - CAST('1 second' AS interval)
-            WHERE ocr_submissions.legacy_id = $1
-            ",
-                &[&id],
-            )
-            .await?;
-        let terminated = primary.query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'mom24-listener-reconnect'", &[]).await?;
-        ensure(
-            terminated.len() == 1,
-            "exactly the owned LISTEN connection is terminated",
-        )?;
-        time::timeout(Duration::from_secs(3), async {
-            loop {
-                progress.changed().await?;
-                let settled: bool = primary
-                    .query_one(
-                        r"
-                            SELECT status = 'settled'
-                            FROM ocr_submissions
-                            WHERE ocr_submissions.legacy_id = $1
-                            ",
-                        &[&id],
-                    )
-                    .await?
-                    .get(0);
-                if settled {
-                    return Ok::<(), Box<dyn Error + Send + Sync>>(());
-                }
-            }
-        })
-        .await??;
-        Ok::<(), Box<dyn Error + Send + Sync>>(())
-    };
-    let stopped = async {
-        let result = check.await;
-        shutdown.send(true)?;
-        result
-    };
-    let (result, assertion) = tokio::join!(runtime, stopped);
-    result?;
-    assertion?;
-    Ok(())
+async fn drive_receipts(
+    mut state: Reconciler,
+    mut wake: watch::Receiver<()>,
+    mut stop: watch::Receiver<bool>,
+) -> Result<(), RuntimeError> {
+    loop {
+        tokio::select! {
+            _stopped = stop.changed() => return Ok(()),
+            _wake = wake.changed() => state.request_scan(),
+            () = time::sleep_until(state.next_at()) => state.step(&stop).await?,
+        }
+    }
 }
 
 async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &str) -> TestResult {
     let [_, delayed, later] = RECOVERY_IDS;
     let (shutdown, stop) = watch::channel(false);
     let (observed, mut progress) = watch::channel(0_u64);
-    let config = Config {
-        database_url: named_database(url, "mom24-control-timeout")?,
-        listener_database_url: url.to_owned(),
-        finalization_timeout: Duration::from_millis(300),
-    };
-    let runtime = run_observed(config, NotificationSink::default(), stop, observed);
+    let (wake, requested) = watch::channel(());
+    let state = Reconciler::initialize(
+        named_database(url, "mom24-control-timeout")?,
+        Duration::from_millis(300),
+        NotificationSink::default(),
+    )
+    .await?
+    .observing(observed);
+    let runtime = drive_receipts(state, requested, stop);
     let check = async {
         time::timeout(Duration::from_secs(2), progress.changed()).await??;
         for id in [delayed, later] {
@@ -782,7 +714,7 @@ async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &st
         barrier
             .batch_execute("LOCK TABLE ocr_submission_members IN ACCESS EXCLUSIVE MODE")
             .await?;
-        super::super::wake(primary).await;
+        wake.send_replace(());
 
         let pid = time::timeout(Duration::from_secs(2), async {
             loop {

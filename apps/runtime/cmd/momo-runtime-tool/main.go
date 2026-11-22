@@ -17,6 +17,12 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 	}
 
 	switch args[0] {
+	case "analysis-attest":
+		if len(args) != 1 || attestReader(ctx, stdout) != nil {
+			writeResult(stderr, failureResult("analysis_attest", "Unavailable"))
+			return 1
+		}
+		return 0
 	case "preflight":
 		if len(args) != 1 {
 			writeResult(stderr, failureResult(preflightEvent, "InvalidArguments"))

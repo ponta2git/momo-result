@@ -47,11 +47,6 @@ async fn controlled_worker_process() -> TestResult {
     else {
         return Err("controlled OCR runtime is disabled".into());
     };
-    let submission_config = submissions::runtime::Config {
-        database_url: database.clone(),
-        listener_database_url: database,
-        finalization_timeout: config.shutdown_finalization_bound(),
-    };
     let (notifications, driver) = NotificationDriver::new(config_from_environment()?)?;
     let (sink, wake) = PostCommitSink::channel();
     let (shutdown, stop) = watch::channel(false);
@@ -59,14 +54,21 @@ async fn controlled_worker_process() -> TestResult {
         directory: control_dir.clone(),
         sequence: AtomicU64::new(0),
     };
-    let computation =
-        crate::worker::run_ocr_only(*config, Box::new(launcher), sink, wake, stop.clone());
     let (observed, mut checkpoints) = watch::channel(0_u64);
-    let coordination = submissions::runtime::run_observed(
-        submission_config,
+    let submissions = submissions::runtime::Reconciler::initialize(
+        database,
+        config.shutdown_finalization_bound(),
         notifications,
+    )
+    .await?
+    .observing(observed);
+    let computation = crate::worker::run_ocr_only(
+        *config,
+        Box::new(launcher),
+        sink,
+        wake,
+        submissions,
         stop.clone(),
-        observed,
     );
     let checkpoint_directory = control_dir.clone();
     let checkpoint_writer = async move {
@@ -98,11 +100,6 @@ async fn controlled_worker_process() -> TestResult {
         let result = tokio::try_join!(
             async {
                 Box::pin(computation)
-                    .await
-                    .map_err(|error| -> Box<dyn Error + Send + Sync> { Box::new(error) })
-            },
-            async {
-                coordination
                     .await
                     .map_err(|error| -> Box<dyn Error + Send + Sync> { Box::new(error) })
             },

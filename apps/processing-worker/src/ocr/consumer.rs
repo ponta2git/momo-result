@@ -281,6 +281,11 @@ impl Runner {
         })
     }
 
+    pub(crate) fn disconnect(&mut self) {
+        self.control_client.release();
+        self.heartbeat_client.release();
+    }
+
     pub(crate) async fn execute(
         &mut self,
         claim: ClaimedOcrJob,
@@ -295,6 +300,12 @@ impl Runner {
             attempt_no = claim.attempt_count,
             fencing_token = claim.fencing_token,
         );
+        for connection in [&mut self.control_client, &mut self.heartbeat_client] {
+            connection
+                .resume(&self.config.database_url)
+                .await
+                .map_err(|error| OcrConsumerError::Database(error.kind()))?;
+        }
         process_claimed(
             &mut self.control_client,
             &mut self.heartbeat_client,

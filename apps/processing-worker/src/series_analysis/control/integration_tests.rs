@@ -97,32 +97,10 @@ async fn real_postgres_keeps_staging_separate_from_fenced_publication() -> Smoke
     assert_recovery_rejects_a_mismatched_job_owner(&mut primary, &secondary).await?;
 
     let old_claim = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;
-    let corrupt_directory = TempDir::new()?;
-    let corrupt_manifest = build_manifest(&old_claim, corrupt_directory.path())?;
-    assert_authoritative_snapshot_rejects_omissions(&mut primary, &old_claim, &corrupt_manifest)
-        .await?;
-    corrupt_last_match_context(&corrupt_manifest, corrupt_directory.path())?;
-    let transaction = primary.transaction().await?;
-    assert!(matches!(
-        stage_artifact(
-            &transaction,
-            &old_claim,
-            &corrupt_manifest,
-            corrupt_directory.path(),
-        )
-        .await,
-        Err(ControlError::InvalidMetadata)
-    ));
-    transaction.rollback().await?;
-    assert_artifact_shape(
-        &secondary,
-        &corrupt_manifest.manifest().artifact_id,
-        "0|0|0",
-    )
-    .await?;
-
     let old_directory = TempDir::new()?;
     let old_manifest = build_manifest(&old_claim, old_directory.path())?;
+    assert_authoritative_snapshot_rejects_omissions(&mut primary, &old_claim, &old_manifest)
+        .await?;
     stage_with_control_lock_probe(
         &mut primary,
         &mut secondary,

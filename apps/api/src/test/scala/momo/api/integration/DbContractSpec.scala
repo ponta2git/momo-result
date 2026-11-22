@@ -10,7 +10,7 @@ import doobie.implicits.*
  * constraint compatibility for those statements. This suite is limited to migration-owned seed
  * meaning and behavior shared with consumers outside the API.
  */
-final class DbContractSpec extends IntegrationSuite:
+final class DbContractSpec extends PublishedArtifactInsertContract:
 
   test("members table is seeded with the four application players"):
     sql"SELECT id FROM members ORDER BY id".query[String].to[Set].transact(transactor).map { ids =>
@@ -271,27 +271,6 @@ final class DbContractSpec extends IntegrationSuite:
       DELETE FROM series_analysis_scope_aggregate_artifacts
       WHERE artifact_id = $artifactId AND scope_key = 'overall'
     """.update.run
-    val insertChild = sql"""
-      INSERT INTO series_analysis_scope_aggregate_artifacts (
-        artifact_id, scope_key, scope_kind, map_master_id, payload, encoded_bytes,
-        decoded_bytes, item_count, nesting_depth, checksum
-      ) VALUES (
-        $artifactId, 'map:map-contract', 'map', 'map-contract', decode('7b7d', 'hex'), 2,
-        2, 0, 1, $payloadChecksum
-      )
-    """.update.run
-    val installedChildGuards = sql"""
-      SELECT c.relname
-      FROM pg_trigger t
-      JOIN pg_class c ON c.oid = t.tgrelid
-      WHERE NOT t.tgisinternal
-        AND t.tgname IN (
-          'series_analysis_aggregate_published_guard',
-          'series_analysis_review_published_guard',
-          'series_analysis_drilldown_published_guard',
-          'series_analysis_context_published_guard'
-        )
-    """.query[String].to[Set]
 
     for
       setupResult <- setup.transact(transactor)
@@ -309,11 +288,10 @@ final class DbContractSpec extends IntegrationSuite:
       attestationResult <- mutateAttestation.transact(transactor).attempt
       childUpdateResult <- mutateChild.transact(transactor).attempt
       childDeleteResult <- deleteChild.transact(transactor).attempt
-      childInsertResult <- insertChild.transact(transactor).attempt
+      _ <- assertPublishedChunkInsertsRejected(artifactId)
       unattestedPointerResult <- pointUnattested.transact(transactor).attempt
       unattestedPreviousResult <- pointUnattestedPrevious.transact(transactor).attempt
       referencedDeleteResult <- deleteReferencedParent.transact(transactor).attempt
-      guards <- installedChildGuards.transact(transactor)
       cleared <- sql"""
         UPDATE series_analysis_title_states
         SET current_artifact_id = NULL
@@ -349,19 +327,9 @@ final class DbContractSpec extends IntegrationSuite:
       assertPublishedMutationRejected(attestationResult, "headers")
       assertPublishedMutationRejected(childUpdateResult, "payloads")
       assertPublishedMutationRejected(childDeleteResult, "payloads")
-      assertPublishedMutationRejected(childInsertResult, "payloads")
       assertAttestationPointerRejected(unattestedPointerResult)
       assertPreviousAttestationPointerRejected(unattestedPreviousResult)
       assertReferencedParentDeleteRejected(referencedDeleteResult)
-      assertEquals(
-        guards,
-        Set(
-          "series_analysis_scope_aggregate_artifacts",
-          "series_analysis_scope_review_artifacts",
-          "series_analysis_drilldown_artifacts",
-          "series_analysis_match_context_artifacts",
-        ),
-      )
       assertEquals(cleared, 1)
       assertEquals(deleted, 4)
       assertEquals(remainingChildren, 0L)

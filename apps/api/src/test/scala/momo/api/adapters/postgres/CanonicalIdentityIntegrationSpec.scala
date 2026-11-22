@@ -26,13 +26,14 @@ import momo.api.domain.ids.*
 import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.jsonField
 import momo.api.http.{HttpAppTestFixtures, HttpRequestBodies}
-import momo.api.integration.IntegrationSuite
+import momo.api.integration.PublishedArtifactInsertContract
 import momo.api.repositories.*
 import momo.api.testing.{JsonSchemaAssertions, TestImages, TestTags}
 import momo.api.usecases.seriesanalysis.RequestSeriesPlayerRadarOperation
 import momo.api.usecases.testing.MatchFixtures
 
-final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpAppTestFixtures
+final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertContract
+    with HttpAppTestFixtures
     with JsonSchemaAssertions:
   override protected def databaseTag: munit.Tag = TestTags.CanonicalDbIntegration
   override protected def identitySchema: PostgresIdentities = PostgresIdentities.Canonical
@@ -1263,6 +1264,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           VALUES ($artifactUuid, $artifactId, $titleId, $title)""".update.run *>
         sql"""UPDATE series_analysis_title_states SET current_artifact_id = $artifactUuid, pending_work = false
           WHERE game_title_id = $titleId""".update.run).transact(transactor)
+      _ <- assertPublishedChunkInsertsRejected(artifactId)
       analysis <- PostgresSeriesAnalysisRepository.create[IO](
         transactor,
         SeriesAnalysisReadConfig.defaults,

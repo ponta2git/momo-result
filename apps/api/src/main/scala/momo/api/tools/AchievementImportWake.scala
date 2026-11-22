@@ -29,7 +29,8 @@ private[tools] object AchievementImportWake:
     case None => write.transact(xa) // Isolated development without a configured wake service.
     case Some(wake) =>
       Resource.fromAutoCloseable(IO.blocking(
-        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
+        HttpClient.newBuilder().proxy(HttpClient.Builder.NO_PROXY)
+          .connectTimeout(Duration.ofSeconds(5)).build()
       )).use { client =>
         def notify[F[_]: Sync](uncertain: Boolean): F[Unit] = Sync[F].blocking {
           val host = wake.host.toString

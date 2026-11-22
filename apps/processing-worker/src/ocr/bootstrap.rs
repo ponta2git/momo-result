@@ -1,4 +1,4 @@
-//! OCR resource initialization after the worker has verified its shared notification routes.
+//! OCR resource initialization for the shared durable scheduler.
 
 use super::{consumer, orchestrator::ImageRunner, submissions::runtime::Reconciler};
 use crate::{notifications::NotificationSink, series_analysis::config::AnalysisConsumerConfig};

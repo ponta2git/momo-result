@@ -37,7 +37,7 @@ async fn verify_expiration(
         ", &[&TAKEOVER.job_id,&SUCCESS.job_id]).await?;
     let lock = peer.transaction().await?;
     lock_match_drafts_for_job(&lock, TAKEOVER.job_id).await?;
-    maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;
+    assert!(maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?);
     checkpoint(receiver, false, "contended");
     lock.rollback().await?;
     maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;

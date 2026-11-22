@@ -12,7 +12,7 @@ pub(crate) async fn reap_stale(
     sink: &PostCommitSink,
     stale_after: Duration,
     timeout: Duration,
-) -> Result<(), OcrControlError> {
+) -> Result<bool, OcrControlError> {
     let stale_ms = duration_milliseconds(stale_after)?;
     let mut changed = false;
     let result = async {
@@ -24,7 +24,7 @@ pub(crate) async fn reap_stale(
              ORDER BY created_at,legacy_id LIMIT 64",
             &[&stale_ms],
         ).await?;
-        repair_candidates(client, stale, Some(stale_ms), timeout, &mut changed).await?;
+        let more_stale = repair_candidates(client, stale, Some(stale_ms), timeout, &mut changed).await?;
 
         // A previous terminal commit may predate a draft projection update. Bound repairs separately.
         let repairs = client.query(
@@ -39,7 +39,8 @@ pub(crate) async fn reap_stale(
              ORDER BY j.legacy_id LIMIT 64",
             &[],
         ).await?;
-        repair_candidates(client, repairs, None, timeout, &mut changed).await
+        let more_repairs = repair_candidates(client, repairs, None, timeout, &mut changed).await?;
+        Ok(more_stale || more_repairs)
     }.await;
     // Each candidate commits independently. An error on a later candidate cannot undo a repair.
     if changed {
@@ -54,16 +55,17 @@ async fn repair_candidates(
     stale_ms: Option<i64>,
     timeout: Duration,
     changed: &mut bool,
-) -> Result<(), OcrControlError> {
+) -> Result<bool, OcrControlError> {
+    let mut pending = candidates.len() == 64;
     for row in candidates {
         let id: String = row.try_get(0)?;
         match repair_candidate(client, &id, stale_ms, timeout).await {
             Ok(committed) => *changed |= committed,
-            Err(error) if error.is_contention() => {}
+            Err(error) if error.is_contention() => pending = true,
             Err(error) => return Err(error),
         }
     }
-    Ok(())
+    Ok(pending)
 }
 
 async fn repair_candidate(

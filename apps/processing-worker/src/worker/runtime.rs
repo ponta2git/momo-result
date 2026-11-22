@@ -127,6 +127,7 @@ struct WorkState {
     recovery_cursor: Option<selection::RecoveryCursor>,
     sink: PostCommitSink,
     maintenance_at: time::Instant,
+    maintenance_pending: bool,
     discovery_complete: bool,
 }
 
@@ -153,6 +154,7 @@ impl WorkState {
             recovery_cursor: None,
             sink,
             maintenance_at: time::Instant::now(),
+            maintenance_pending: false,
             discovery_complete: false,
         }
     }
@@ -189,6 +191,27 @@ impl WorkState {
         Ok(())
     }
 
+    async fn maintain_ocr(&mut self) -> Result<(), WorkerError> {
+        if time::Instant::now() >= self.maintenance_at {
+            if self.ocr_config.is_some() {
+                let timeout = self.settings.operation_timeout;
+                let result = bounded(
+                    timeout,
+                    ocr::control::maintenance::reap_stale(
+                        &mut self.database,
+                        &self.sink,
+                        self.settings.ocr_stale_after,
+                        timeout,
+                    ),
+                )
+                .await;
+                self.maintenance_pending = defer_contention(result)?.unwrap_or(true);
+            }
+            self.maintenance_at = time::Instant::now() + ACTIVE_MAINTENANCE_INTERVAL;
+        }
+        Ok(())
+    }
+
     async fn step(&mut self, shutdown: &watch::Receiver<bool>) -> Result<Duration, WorkerError> {
         self.discovery_complete = false;
         if dispatch::stopping(shutdown) {
@@ -220,22 +243,7 @@ impl WorkState {
         if dispatch::stopping(shutdown) {
             return Ok(Duration::ZERO);
         }
-        if time::Instant::now() >= self.maintenance_at {
-            if self.ocr_config.is_some() {
-                let maintenance = bounded(
-                    timeout,
-                    ocr::control::maintenance::reap_stale(
-                        &mut self.database,
-                        &self.sink,
-                        self.settings.ocr_stale_after,
-                        timeout,
-                    ),
-                )
-                .await;
-                deferred |= defer_contention(maintenance)?.is_none();
-            }
-            self.maintenance_at = time::Instant::now() + ACTIVE_MAINTENANCE_INTERVAL;
-        }
+        self.maintain_ocr().await?;
         if dispatch::stopping(shutdown) {
             return Ok(Duration::ZERO);
         }
@@ -250,7 +258,7 @@ impl WorkState {
             return Ok(Duration::ZERO);
         }
         let mut delay = super::until_supervisor(std::time::SystemTime::now());
-        if self.resources.is_reserved() {
+        if self.resources.is_reserved() || self.maintenance_pending {
             delay = delay.min(
                 self.maintenance_at
                     .saturating_duration_since(time::Instant::now()),
@@ -270,6 +278,7 @@ impl WorkState {
         }
         self.discovery_complete = matches!(scan, dispatch::ScanResult::Idle(_))
             && !deferred
+            && !self.maintenance_pending
             && self.retry_after.is_none();
         let deadline = match scan {
             dispatch::ScanResult::More => return Ok(Duration::ZERO),
@@ -550,6 +559,18 @@ impl Runtime {
         }
     }
 
+    async fn wait_for_work(&mut self, delay: Duration) -> Result<(), WorkerError> {
+        self.observe(
+            async {
+                time::sleep(delay).await;
+                Ok(())
+            },
+            Observation::Idle,
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn operation<T: Send>(
         &mut self,
         operation: impl Future<Output = Result<T, WorkerError>> + Send,
@@ -557,6 +578,13 @@ impl Runtime {
         self.observe(operation, Observation::Operation)
             .await?
             .ok_or(WorkerError::ShutdownDrainTimeout)
+    }
+
+    fn park(&mut self, work: &mut WorkState) {
+        work.disconnect();
+        if let Some(submissions) = &mut self.submissions {
+            submissions.disconnect();
+        }
     }
 
     fn start_transport(&mut self, sink: PostCommitSink) {
@@ -842,7 +870,7 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
     let Some(work) = state else {
         return Ok(());
     };
-    let mut round = None;
+    let mut round: Option<(wake_http::ScanTicket, time::Instant)> = None;
     let mut recovery_at = time::Instant::now();
     let mut supervisor_at = time::Instant::now();
     let recovery_interval = work.settings.recovery_interval.min(Duration::from_secs(30));
@@ -858,29 +886,24 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
         if !runtime.admissions_open {
             // An incompatible candidate is allowed to advertise for promotion without claiming
             // or reconciling work. Activation sends a wake; the supervisor also rechecks locally.
-            work.disconnect();
-            if let Some(submissions) = &mut runtime.submissions {
-                submissions.disconnect();
-            }
-            runtime
-                .observe(
-                    async {
-                        time::sleep(recovery_interval).await;
-                        Ok(())
-                    },
-                    Observation::Idle,
-                )
-                .await?;
+            runtime.park(work);
+            runtime.wait_for_work(recovery_interval).await?;
             continue;
         }
         if now >= supervisor_at {
             runtime.submissions_dirty = true;
             supervisor_at = now + super::until_supervisor(std::time::SystemTime::now());
         }
-        if !runtime.monitor.healthy() && (now >= recovery_at || round.is_none()) {
-            runtime.submissions_dirty = true;
-            recovery_at = now + recovery_interval;
-            round = Some((runtime.monitor.scan_ticket(), time::Instant::now()));
+        if !runtime.monitor.healthy() {
+            let ticket = runtime.monitor.scan_ticket();
+            let obsolete = round.is_some_and(|(held, _)| !ticket.same_generation(held));
+            if now >= recovery_at || obsolete {
+                runtime.submissions_dirty = true;
+                recovery_at = now + recovery_interval;
+                if round.is_none() || obsolete {
+                    round = Some((ticket, time::Instant::now()));
+                }
+            }
         }
         runtime.start_reconciliation();
         let stopped = runtime.stopped.clone();
@@ -909,7 +932,10 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
             && !delay.is_zero()
             && !work.resources.is_reserved()
             && !runtime.rescan_requested
-            && (runtime.submissions.is_none() || !runtime.submissions_dirty)
+            && runtime
+                .submissions
+                .as_ref()
+                .is_none_or(|state| !runtime.submissions_dirty && state.can_park())
             && runtime.reconcile.is_none();
         if idle
             && let Some((ticket, started)) = round
@@ -921,24 +947,15 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
             runtime.monitor.scanned(ticket);
             round = None;
         }
-        if !runtime.monitor.healthy() {
+        if runtime.monitor.healthy() {
+            recovery_at = time::Instant::now();
+        } else {
             delay = delay.min(recovery_at.saturating_duration_since(time::Instant::now()));
         }
-        if idle && runtime.monitor.healthy() && delay >= ACTIVE_MAINTENANCE_INTERVAL {
-            work.disconnect();
-            if let Some(submissions) = &mut runtime.submissions {
-                submissions.disconnect();
-            }
+        if idle && runtime.monitor.healthy() {
+            runtime.park(work);
         }
-        runtime
-            .observe(
-                async {
-                    time::sleep(delay).await;
-                    Ok(())
-                },
-                Observation::Idle,
-            )
-            .await?;
+        runtime.wait_for_work(delay).await?;
     }
     Ok(())
 }
@@ -991,6 +1008,7 @@ pub(crate) async fn run_ocr_only(
         recovery_cursor: None,
         sink,
         maintenance_at: time::Instant::now(),
+        maintenance_pending: false,
         discovery_complete: false,
     });
     let result = AssertUnwindSafe(drive(&mut runtime, &mut state))
@@ -1006,6 +1024,8 @@ pub(crate) async fn run_ocr_only(
     shutdown_result
 }
 
+#[cfg(test)]
+mod parked_tests;
 #[cfg(test)]
 mod reconciliation_tests;
 #[cfg(test)]

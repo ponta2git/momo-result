@@ -691,19 +691,50 @@ async fn drive_receipts(
     }
 }
 
+async fn await_lock_timeout(primary: &Client) -> TestResult {
+    let pid = time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(row) = primary.query_opt("SELECT pid FROM pg_stat_activity WHERE application_name = 'mom24-control-timeout' AND wait_event_type = 'Lock'", &[]).await? {
+                    return Ok::<i32, tokio_postgres::Error>(row.get(0));
+                }
+                tokio::task::yield_now().await;
+            }
+        }).await??;
+    time::timeout(Duration::from_secs(2), async {
+        loop {
+            let alive: bool = primary
+                .query_one(
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1)",
+                    &[&pid],
+                )
+                .await?
+                .get(0);
+            if !alive {
+                return Ok::<(), tokio_postgres::Error>(());
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await??;
+    Ok(())
+}
+
 async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &str) -> TestResult {
     let [_, delayed, later] = RECOVERY_IDS;
     let (shutdown, stop) = watch::channel(false);
     let (observed, mut progress) = watch::channel(0_u64);
     let (wake, requested) = watch::channel(());
-    let state = Reconciler::initialize(
-        named_database(url, "mom24-control-timeout")?,
-        Duration::from_millis(300),
-        NotificationSink::default(),
-    )
-    .await?
-    .observing(observed);
-    let runtime = drive_receipts(state, requested, stop);
+    let runtime = drive_receipts(
+        Reconciler::initialize(
+            named_database(url, "mom24-control-timeout")?,
+            Duration::from_millis(300),
+            NotificationSink::default(),
+        )
+        .await?
+        .observing(observed),
+        requested,
+        stop,
+    );
     let check = async {
         time::timeout(Duration::from_secs(2), progress.changed()).await??;
         for id in [delayed, later] {
@@ -716,30 +747,7 @@ async fn verify_deadline_reconnect(primary: &Client, peer: &mut Client, url: &st
             .await?;
         wake.send_replace(());
 
-        let pid = time::timeout(Duration::from_secs(2), async {
-            loop {
-                if let Some(row) = primary.query_opt("SELECT pid FROM pg_stat_activity WHERE application_name = 'mom24-control-timeout' AND wait_event_type = 'Lock'", &[]).await? {
-                    return Ok::<i32, tokio_postgres::Error>(row.get(0));
-                }
-                tokio::task::yield_now().await;
-            }
-        }).await??;
-        time::timeout(Duration::from_secs(2), async {
-            loop {
-                let alive: bool = primary
-                    .query_one(
-                        "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1)",
-                        &[&pid],
-                    )
-                    .await?
-                    .get(0);
-                if !alive {
-                    return Ok::<(), tokio_postgres::Error>(());
-                }
-                tokio::task::yield_now().await;
-            }
-        })
-        .await??;
+        await_lock_timeout(primary).await?;
         barrier.commit().await?;
         time::timeout(Duration::from_secs(2), progress.changed()).await??;
         let later_settled: bool = primary

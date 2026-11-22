@@ -79,7 +79,7 @@ async fn verify(observer: &Client, url: &str, ids: &[String]) -> TestResult {
     Ok(())
 }
 
-async fn wait_for_settled(client: &Client, ids: &[String], count: i64) -> TestResult {
+pub(super) async fn wait_for_settled(client: &Client, ids: &[String], count: i64) -> TestResult {
     loop {
         let settled: i64 = client
             .query_one(
@@ -99,7 +99,7 @@ async fn wait_for_settled(client: &Client, ids: &[String], count: i64) -> TestRe
     }
 }
 
-async fn create(client: &Client, id: &str) -> TestResult {
+pub(super) async fn create(client: &Client, id: &str) -> TestResult {
     let digest = hex::encode(Sha256::digest(id.as_bytes()));
     client.execute(r"
         INSERT INTO match_drafts (id, legacy_id, created_by_account_id, created_by_member_id, status)
@@ -132,7 +132,7 @@ async fn create(client: &Client, id: &str) -> TestResult {
     Ok(())
 }
 
-async fn cleanup(client: &Client, ids: &[String]) -> TestResult {
+pub(super) async fn cleanup(client: &Client, ids: &[String]) -> TestResult {
     client
         .execute(
             r"

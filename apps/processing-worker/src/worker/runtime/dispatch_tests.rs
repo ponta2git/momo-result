@@ -167,6 +167,22 @@ async fn verify_rescheduled_ocr(
     };
     let due = deadline.saturating_duration_since(time::Instant::now());
     assert!(due > Duration::ZERO && due <= Duration::from_secs(30));
+    // An OCR retry can be scheduled after its stale cutoff. The earlier cutoff wins.
+    observer.execute("UPDATE ocr_jobs SET created_at = statement_timestamp() - interval '290 seconds' WHERE legacy_id=$1", &[&OCR]).await?;
+    let selection::FirstScan::Idle(Some(stale)) =
+        selection::first_scan(observer, true, false, Duration::from_mins(5)).await?
+    else {
+        return Err("stale OCR must retain its own deadline".into());
+    };
+    let remaining = stale.saturating_duration_since(time::Instant::now());
+    assert!(remaining > Duration::ZERO && remaining <= Duration::from_secs(10));
+    observer.execute("UPDATE ocr_jobs SET created_at = statement_timestamp() - interval '301 seconds', available_at = statement_timestamp() + interval '1 hour' WHERE legacy_id=$1", &[&OCR]).await?;
+    let Some(overdue) = selection::next_due(observer, true, false, Duration::from_mins(5)).await?
+    else {
+        return Err("overdue OCR must remain on the active repair cadence".into());
+    };
+    let remaining = overdue.saturating_duration_since(time::Instant::now());
+    assert!(remaining > Duration::ZERO && remaining <= Duration::from_secs(30));
     observer
         .execute(
             "UPDATE ocr_jobs SET available_at = statement_timestamp() WHERE legacy_id=$1",
@@ -306,6 +322,7 @@ async fn fixture(
             recovery_cursor: None,
             sink,
             maintenance_at: time::Instant::now(),
+            maintenance_pending: false,
             discovery_complete: false,
         },
         wake,

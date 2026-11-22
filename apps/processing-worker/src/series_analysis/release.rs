@@ -307,21 +307,44 @@ async fn notify_scheduler() {
     }
 }
 
+/// Only the isolated control-plane smoke harness may simulate resident registrations.
+pub(crate) fn isolated_release_fixture() -> bool {
+    env::var_os("FLY_MACHINE_ID").is_none()
+        && env::var("ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED").as_deref() == Ok("true")
+        && env::var("DATABASE_URL").is_ok_and(|database| {
+            !database.is_empty()
+                && env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL").as_deref()
+                    == Ok(database.as_str())
+        })
+}
+
 /// Fly production supports exactly one machine in each fleet. The orchestrator challenges both
 /// resident processes before every invocation. Bind transaction-local selection to those IDs so
 /// a still-fresh registration from an earlier machine cannot replace a missing current runtime.
 async fn bind_fleet_evidence(tx: &Transaction<'_>) -> Result<(), ReleaseError> {
-    let reader = env::var("MOMO_RELEASE_READER_ATTESTATION").ok();
-    let worker = env::var("MOMO_RELEASE_WORKER_ATTESTATION").ok();
+    if let Some((reader, worker)) = fleet_evidence(
+        env::var("MOMO_RELEASE_READER_ATTESTATION").ok(),
+        env::var("MOMO_RELEASE_WORKER_ATTESTATION").ok(),
+        isolated_release_fixture(),
+    )? {
+        tx.query_one("SELECT set_config('momo.release_reader', $1, true), set_config('momo.release_worker', $2, true)", &[&reader, &worker]).await?;
+    }
+    Ok(())
+}
+
+fn fleet_evidence(
+    reader: Option<String>,
+    worker: Option<String>,
+    isolated_fixture: bool,
+) -> Result<Option<(String, String)>, ReleaseError> {
     match (reader, worker) {
-        (None, None) if env::var_os("FLY_MACHINE_ID").is_none() => Ok(()),
+        (None, None) if isolated_fixture => Ok(None),
         (Some(reader), Some(worker))
             if uuid::Uuid::try_parse(&reader).is_ok()
                 && !worker.is_empty()
                 && worker.len() <= 255 =>
         {
-            tx.query_one("SELECT set_config('momo.release_reader', $1, true), set_config('momo.release_worker', $2, true)", &[&reader, &worker]).await?;
-            Ok(())
+            Ok(Some((reader, worker)))
         }
         _ => Err(ReleaseError::MissingFleetEvidence),
     }
@@ -1022,6 +1045,17 @@ const fn global_violation(code: &'static str) -> CompletenessViolation {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn standalone_release_requires_both_resident_proofs() {
+        let reader = Some(uuid::Uuid::new_v4().to_string());
+        let worker = Some("candidate@algorithm@1@contract".to_owned());
+        assert!(fleet_evidence(None, None, false).is_err());
+        assert!(fleet_evidence(None, worker.clone(), false).is_err());
+        assert!(fleet_evidence(reader.clone(), None, true).is_err());
+        assert!(fleet_evidence(reader, worker, false).is_ok_and(|proof| proof.is_some()));
+        assert!(fleet_evidence(None, None, true).is_ok_and(|proof| proof.is_none()));
+    }
 
     pub(super) fn valid_title_audit_row() -> TitleAuditRow {
         TitleAuditRow {

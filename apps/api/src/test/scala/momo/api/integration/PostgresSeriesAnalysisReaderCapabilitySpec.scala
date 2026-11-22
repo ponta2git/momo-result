@@ -2,7 +2,6 @@ package momo.api.integration
 
 import cats.data.Kleisli
 import cats.effect.IO
-import cats.syntax.all.*
 import doobie.implicits.*
 import org.http4s.{Request, Response, Status, Uri}
 
@@ -46,23 +45,26 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
         for
           pending <- status("/api/matches")
           live <- status("/healthz")
+          pendingProof <- reader.attest(requireActive = true).attempt
           _ <- publish(contract)
           before <- status("/api/matches")
-          _ <- reader.attest
+          _ <- reader.attest(requireActive = true)
           after <- status("/api/matches")
           _ <- publish("previous-reader-contract")
-          _ <- reader.attest
+          _ <- reader.attest(requireActive = false)
           retired <- status("/api/matches")
-        yield assertEquals(
-          List(pending, live, before, after, retired),
-          List(
-            Status.ServiceUnavailable,
-            Status.Ok,
-            Status.ServiceUnavailable,
-            Status.Ok,
-            Status.ServiceUnavailable
+        yield
+          assert(pendingProof.isLeft)
+          assertEquals(
+            List(pending, live, before, after, retired),
+            List(
+              Status.ServiceUnavailable,
+              Status.Ok,
+              Status.ServiceUnavailable,
+              Status.Ok,
+              Status.ServiceUnavailable
+            )
           )
-        )
       }
 
   private def capabilityRow: IO[(String, String, Boolean)] = sql"""

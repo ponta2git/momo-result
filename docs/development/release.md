@@ -28,6 +28,7 @@
 
 - image を差し替えただけでは DB の desired version は変わらないため、algorithm version の昇格は image 更新と別操作とし、各稼働 reader / worker へ照会して実プロセスの登録を取り直し、dry-run、apply の順で互換性を照合する。切替直後にも照合し、待機していた候補の稼働を許可する。DB の世代はこの操作を経由して変更する。
 - 分析昇格・初回 backfill は配備後の実世代と DB の状態から必要性を判定し、安全に適用できる場合は自動実行する。手動操作も同じ判定・適用・監査を使う。対象 snapshot と世代に結びついた operation を再利用し、実行中・失敗・不要・完了を区別する。自動復旧できない場合は workflow を未成功とし、理由と再開方法を記録する。
+- 手元からの保守には `pnpm analysis:maintain` を使う。隔離した DB での開発検証は release / control-plane smoke が fixture と実プロセスの照合を行う。
 - release controller の lock 順と singleton の扱いは [DB 規約](../implementation/database.md#consumer-contract) と [Worker 規約](../implementation/worker.md#analysis-publication-and-release-control) に従う。
 
 ## Credential Rotation

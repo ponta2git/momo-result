@@ -161,9 +161,14 @@ impl Reconciler {
     }
 
     pub(crate) fn scanned_since(&self, started: time::Instant) -> bool {
-        self.completed_pass.is_some_and(|at| at >= started)
-            && self.reconnect_at.is_none()
+        self.completed_pass.is_some_and(|at| at >= started) && self.can_park()
+    }
+
+    pub(crate) fn can_park(&self) -> bool {
+        self.reconnect_at.is_none()
+            && self.recovery.cursor.upper.is_none()
             && self.recovery.rechecks.is_empty()
+            && !self.requested
     }
 
     #[cfg(test)]

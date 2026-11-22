@@ -56,7 +56,11 @@ enum Command {
         require_quiescent: bool,
     },
     /// Obtain fresh evidence from the resident worker on this machine.
-    ReleaseAttest,
+    ReleaseAttest {
+        /// Require the resident process to be admitted to the active contract.
+        #[arg(long)]
+        active: bool,
+    },
     ReleasePromote {
         #[arg(long, value_enum)]
         trigger: PromotionTrigger,
@@ -379,7 +383,7 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
             );
         }
         Command::Worker
-        | Command::ReleaseAttest
+        | Command::ReleaseAttest { .. }
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ReleaseReconcile { .. }
@@ -420,8 +424,8 @@ fn bootstrap_command(arguments: &[OsString]) -> ExitCode {
     }
 }
 
-async fn release_attest() -> Result<(), String> {
-    let id = crate::series_analysis::attestation::challenge()
+async fn release_attest(active: bool) -> Result<(), String> {
+    let id = crate::series_analysis::attestation::challenge(active)
         .await
         .map_err(|error| format!("resident worker attestation failed: {}", error.kind()))?;
     write_stdout_line(id)
@@ -451,7 +455,7 @@ async fn run(
     shutdown_deadline: &mut Option<tokio::time::Instant>,
 ) -> Result<(), String> {
     match command {
-        Command::ReleaseAttest => release_attest().await,
+        Command::ReleaseAttest { active } => release_attest(active).await,
         Command::Worker => Box::pin(run_worker(shutdown_deadline)).await,
         Command::ReleaseAudit {
             require_current,

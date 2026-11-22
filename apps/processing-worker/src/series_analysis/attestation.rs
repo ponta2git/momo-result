@@ -29,6 +29,7 @@ use crate::{
 
 const PORT: u16 = 19372;
 const CHALLENGE: &[u8] = b"momo-release-attest-v1\n";
+const ACTIVE_CHALLENGE: &[u8] = b"momo-release-active-v1\n";
 
 pub(super) struct Admission {
     admitted: Arc<AtomicBool>,
@@ -42,26 +43,33 @@ impl Admission {
         worker_id: &str,
         wake: PostCommitSink,
     ) -> Result<Self, ConsumerError> {
-        let admitted = Arc::new(AtomicBool::new(admit_capability(client, worker_id).await?));
-        let listener = if std::env::var_os("FLY_MACHINE_ID").is_some()
+        let server = if std::env::var_os("FLY_MACHINE_ID").is_some()
             || std::env::var("MOMO_ANALYSIS_RELEASE_ATTESTATION").as_deref() == Ok("enabled")
         {
-            let server = TcpListener::bind((Ipv4Addr::LOCALHOST, PORT)).await?;
+            Some(TcpListener::bind((Ipv4Addr::LOCALHOST, PORT)).await?)
+        } else {
+            None
+        };
+        let admitted = Arc::new(AtomicBool::new(admit_capability(client, worker_id).await?));
+        let listener = server.map(|server| {
             let state = Arc::clone(&admitted);
             let url = database_url.to_owned();
             let worker = worker_id.to_owned();
-            Some(tokio::spawn(async move {
+            tokio::spawn(async move {
                 while let Ok((mut stream, _peer)) = server.accept().await {
                     // One short, bounded command at a time. A failed challenge emits no proof.
                     let _completed = timeout(Duration::from_secs(12), async {
                         let mut request = [0; CHALLENGE.len()];
                         stream.read_exact(&mut request).await?;
-                        if request == CHALLENGE {
+                        if request == CHALLENGE || request == ACTIVE_CHALLENGE {
                             let mut db = postgres::connect(&url).await.map_err(io::Error::other)?;
                             let current = admit_capability(&mut db, &worker)
                                 .await
                                 .map_err(io::Error::other)?;
                             let previous = state.swap(current, Ordering::AcqRel);
+                            if !current && request == ACTIVE_CHALLENGE {
+                                return Ok(());
+                            }
                             if current && !previous {
                                 wake.submit(PostCommitEffects::WakeJobs)
                                     .map_err(io::Error::other)?;
@@ -75,10 +83,8 @@ impl Admission {
                     })
                     .await;
                 }
-            }))
-        } else {
-            None
-        };
+            })
+        });
         Ok(Self { admitted, listener })
     }
 
@@ -103,10 +109,16 @@ impl Drop for Admission {
     }
 }
 
-pub(crate) async fn challenge() -> io::Result<String> {
+pub(crate) async fn challenge(require_active: bool) -> io::Result<String> {
     timeout(Duration::from_secs(15), async {
         let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, PORT)).await?;
-        stream.write_all(CHALLENGE).await?;
+        stream
+            .write_all(if require_active {
+                ACTIVE_CHALLENGE
+            } else {
+                CHALLENGE
+            })
+            .await?;
         let mut response = String::new();
         stream.take(256).read_to_string(&mut response).await?;
         let id = response

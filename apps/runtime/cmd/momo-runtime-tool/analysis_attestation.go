@@ -13,7 +13,7 @@ var readerAttestationID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 
 // Ask the running JVM to renew its own registration. Reading the image's build
 // contract would say nothing about the validator actually serving this machine.
-func attestReader(ctx context.Context, output io.Writer) error {
+func attestReader(ctx context.Context, output io.Writer, requireActive bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp4", "127.0.0.1:19371")
@@ -25,7 +25,11 @@ func attestReader(ctx context.Context, output io.Writer) error {
 	if err = conn.SetDeadline(deadline); err != nil {
 		return err
 	}
-	if _, err = io.WriteString(conn, "momo-release-attest-v1\n"); err != nil {
+	challenge := "momo-release-attest-v1\n"
+	if requireActive {
+		challenge = "momo-release-active-v1\n"
+	}
+	if _, err = io.WriteString(conn, challenge); err != nil {
 		return err
 	}
 	response, err := io.ReadAll(io.LimitReader(conn, 38))

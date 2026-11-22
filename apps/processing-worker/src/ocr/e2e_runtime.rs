@@ -55,19 +55,15 @@ async fn controlled_worker_process() -> TestResult {
         sequence: AtomicU64::new(0),
     };
     let (observed, mut checkpoints) = watch::channel(0_u64);
-    let submissions = submissions::runtime::Reconciler::initialize(
-        database,
-        config.shutdown_finalization_bound(),
-        notifications,
-    )
-    .await?
-    .observing(observed);
+    let bound = config.shutdown_finalization_bound();
     let computation = crate::worker::run_ocr_only(
         *config,
         Box::new(launcher),
         sink,
         wake,
-        submissions,
+        submissions::runtime::Reconciler::initialize(database, bound, notifications)
+            .await?
+            .observing(observed),
         stop.clone(),
     );
     let checkpoint_directory = control_dir.clone();

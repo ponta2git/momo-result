@@ -28,11 +28,12 @@ case "$1 $2" in
     printf '{"id":"%s","state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","env":{"MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${machine_id}" 1 1 | jq -s .
     ;;
   'ssh console')
-    if [[ "$*" == *'analysis-attest' ]]; then
+    if [[ "$*" == *'analysis-attest' || "$*" == *'analysis-attest --active' ]]; then
       [[ ! -f "${TEST_STATE}/no-reader-proof" ]] || exit 1
+      [[ "$*" != *'--active' || ! -f "${TEST_STATE}/inactive-reader" ]] || exit 1
       echo 11111111-1111-1111-1111-111111111111; exit 0
     fi
-    if [[ "$*" == *'release-attest' ]]; then echo worker-1@algorithm@1@contract; exit 0; fi
+    if [[ "$*" == *'release-attest' || "$*" == *'release-attest --active' ]]; then echo worker-1@algorithm@1@contract; exit 0; fi
     printf '%s\n' "$*" >> "${TEST_STATE}/calls"
     count="$(wc -l < "${TEST_STATE}/calls" | tr -d ' ')"
     cat "${TEST_STATE}/response-${count}"
@@ -47,7 +48,7 @@ report() {
       planDigest:("sha256:" + ("a" * 64)),targetCount:1,completedCount:0,failedCount:0,
       privateData:"must-not-appear"}' > "${task_tmp}/response-$1"
 }
-reset_case() { rm -f "${task_tmp}/calls" "${task_tmp}/changed" "${task_tmp}/newer" "${task_tmp}/extra-reader" "${task_tmp}/no-reader-proof"; }
+reset_case() { rm -f "${task_tmp}/calls" "${task_tmp}/changed" "${task_tmp}/newer" "${task_tmp}/extra-reader" "${task_tmp}/no-reader-proof" "${task_tmp}/inactive-reader"; }
 run_case() { "${task_tmp}/repo/scripts/ops/analysis-maintain.sh" "$@" > "${task_tmp}/output" 2>&1; }
 expect_calls() { test "$(wc -l < "${task_tmp}/calls" | tr -d ' ')" = "$1"; }
 report 1 not_needed
@@ -68,6 +69,10 @@ reset_case
 run_case auto
 expect_calls 1
 grep -qF 'MOMO_RELEASE_READER_ATTESTATION=11111111-1111-1111-1111-111111111111 MOMO_RELEASE_WORKER_ATTESTATION=worker-1@algorithm@1@contract' "${task_tmp}/calls"
+reset_case
+: > "${task_tmp}/inactive-reader"
+if run_case auto; then echo 'A non-serving candidate must prevent release completion.' >&2; exit 1; fi
+expect_calls 1
 ! grep -qF must-not-appear "${task_tmp}/output"
 reset_case
 report 1 planned

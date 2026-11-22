@@ -329,22 +329,10 @@ export async function withSystemEnvironment(
       },
     });
     resources.push({ label: "edge Worker", close: edge.close });
-    phase = "check candidate API through edge";
+    // A candidate may be healthy before promotion grants it permission to serve data.
     await until(
-      async () => {
-        const response = await fetch(`${webOrigin}/healthz/details`, {
-          signal: AbortSignal.timeout(2_000),
-        });
-        if (!response.ok) return false;
-        const details: unknown = await response.json();
-        return (
-          typeof details === "object" &&
-          details !== null &&
-          "database" in details &&
-          details.database === "ok"
-        );
-      },
-      "candidate Runtime",
+      async () => (await fetch(`${webOrigin}/healthz`, { signal: AbortSignal.timeout(2_000) })).ok,
+      "candidate Runtime liveness",
       signal,
       () => containerExited(runtimeContainer),
     );
@@ -432,14 +420,27 @@ export async function withSystemEnvironment(
       // Migrations intentionally preserve their historical algorithm baseline.
       // Exercise the candidate's release controller once live reader/worker
       // capabilities are registered, before any user fixture can be created.
-      const attest = async () => {
+      const attest = async (active = false) => {
+        const mode = active ? ["--active"] : [];
         const [reader, worker] = await Promise.all([
           docker(
-            ["exec", runtimeContainer, "/opt/momo-result/bin/momo-runtime-tool", "analysis-attest"],
+            [
+              "exec",
+              runtimeContainer,
+              "/opt/momo-result/bin/momo-runtime-tool",
+              "analysis-attest",
+              ...mode,
+            ],
             signal,
           ),
           docker(
-            ["exec", workerContainer, "/usr/local/bin/momo-processing-worker", "release-attest"],
+            [
+              "exec",
+              workerContainer,
+              "/usr/local/bin/momo-processing-worker",
+              "release-attest",
+              ...mode,
+            ],
             signal,
           ),
         ]);
@@ -486,8 +487,27 @@ export async function withSystemEnvironment(
         signal,
         () => containerExited(workerContainer),
       );
-      await attest();
+      await attest(true);
     }
+    phase = "check candidate API through edge";
+    await until(
+      async () => {
+        const response = await fetch(`${webOrigin}/healthz/details`, {
+          signal: AbortSignal.timeout(2_000),
+        });
+        if (!response.ok) return false;
+        const details: unknown = await response.json();
+        return (
+          typeof details === "object" &&
+          details !== null &&
+          "database" in details &&
+          details.database === "ok"
+        );
+      },
+      "candidate Runtime",
+      signal,
+      () => containerExited(runtimeContainer),
+    );
     const metadata: SystemMetadata = {
       runDir,
       controlDir,

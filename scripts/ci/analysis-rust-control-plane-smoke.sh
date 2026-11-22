@@ -53,6 +53,7 @@ tests=(
   "series_analysis::release::tests::real_postgres_zero_title_backfill_is_terminal_and_updates_the_release_generation"
   "series_analysis::release::tests::real_postgres_audit_reports_a_release_state_mismatch"
   "series_analysis::release::maintenance::tests::real_postgres_reconcile_preserves_preview_and_replays_an_applied_operation"
+  "worker::runtime::parked_tests::real_postgres_long_poll_timeouts_leave_idle_connections_parked"
   "worker::selection::selection_tests::real_postgres_selects_due_work_and_recovers_orphans"
   "worker::runtime::dispatch::tests::real_postgres_delayed_candidates_still_attempt_durable_claims"
   "series_analysis::materialization::tests::real_postgres_preserves_campaign_acceptance_and_assignment"

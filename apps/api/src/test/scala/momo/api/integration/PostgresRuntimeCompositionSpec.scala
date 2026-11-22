@@ -3,10 +3,10 @@ package momo.api.integration
 import cats.effect.{IO, Resource}
 import doobie.implicits.*
 import io.circe.Json
-import org.http4s.{Header, Method, Request, Status}
 import org.http4s.circe.*
 import org.http4s.circe.CirceEntityCodec.*
 import org.http4s.implicits.*
+import org.http4s.{Header, Method, Request, Status}
 import org.typelevel.ci.CIString
 
 import momo.api.config.{AppConfig, AppEnv, WorkerWakeConfig}

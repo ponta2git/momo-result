@@ -19,11 +19,19 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
   // The machine-local release command uses this socket to challenge the running JVM.
   private val AttestationPort = 19371
   private val Challenge = "momo-release-attest-v1\n".getBytes(StandardCharsets.US_ASCII)
+  private val ActiveChallenge = "momo-release-active-v1\n".getBytes(StandardCharsets.US_ASCII)
 
   final class ReaderAdmission[F[_]: Async] private[PostgresSeriesAnalysisReaderCapability] (
       admitted: Ref[F, Boolean],
-      val attest: F[String],
+      register: F[Boolean],
+      readerId: String,
   ):
+    def attest(requireActive: Boolean): F[String] =
+      register.flatTap(admitted.set).flatMap { active =>
+        if active || !requireActive then readerId.pure[F]
+        else Async[F].raiseError(IllegalStateException("analysis reader is not admitted"))
+      }
+
     def guard(app: HttpApp[F]): HttpApp[F] = Kleisli { request =>
       if request.uri.path.renderString == "/healthz" then app.run(request)
       else
@@ -38,15 +46,16 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
       _ <- Resource.eval(Async[F].delay(SeriesAnalysisPayloadValidator.ensureReady()))
       readerId <- Resource.eval(Async[F].delay(UUID.randomUUID().toString))
       admitted <- Resource.eval(Ref.of[F, Boolean](false))
-      attest = register(readerId, transactor).flatMap(admitted.set)
-      admission = ReaderAdmission(admitted, attest.as(readerId))
-      _ <- Resource.make(admission.attest)(_ => markDraining(readerId, transactor))
+      admission = ReaderAdmission(admitted, register(readerId, transactor), readerId)
+      _ <- Resource.make(admission.attest(requireActive = false))(_ =>
+        markDraining(readerId, transactor)
+      )
       hosted <- Resource.eval(Async[F].delay(sys.env.contains("FLY_MACHINE_ID") ||
         sys.env.get("MOMO_ANALYSIS_RELEASE_ATTESTATION").contains("enabled")))
       _ <- if hosted then releaseProbe(admission.attest) else Resource.unit[F]
     yield admission
 
-  private def releaseProbe[F[_]: Async](attest: F[String]): Resource[F, Unit] =
+  private def releaseProbe[F[_]: Async](attest: Boolean => F[String]): Resource[F, Unit] =
     Resource.fromAutoCloseable(
       Async[F].blocking(ServerSocketChannel.open(StandardProtocolFamily.INET))
     )
@@ -61,10 +70,11 @@ private[api] object PostgresSeriesAnalysisReaderCapability:
             val socket = channel.socket()
             Async[F].blocking {
               socket.setSoTimeout(1000)
-              java.util.Arrays.equals(socket.getInputStream.readNBytes(Challenge.length), Challenge)
-            }.flatMap { valid =>
-              if valid then
-                attest.flatMap { readerId =>
+              socket.getInputStream.readNBytes(Challenge.length)
+            }.flatMap { request =>
+              val requireActive = java.util.Arrays.equals(request, ActiveChallenge)
+              if requireActive || java.util.Arrays.equals(request, Challenge) then
+                attest(requireActive).flatMap { readerId =>
                   Async[F].blocking {
                     socket.getOutputStream.write(
                       (readerId + "\n").getBytes(StandardCharsets.US_ASCII)

@@ -18,7 +18,8 @@ func runCLI(ctx context.Context, args []string, stdout io.Writer, stderr io.Writ
 
 	switch args[0] {
 	case "analysis-attest":
-		if len(args) != 1 || attestReader(ctx, stdout) != nil {
+		active := len(args) == 2 && args[1] == "--active"
+		if (!active && len(args) != 1) || attestReader(ctx, stdout, active) != nil {
 			writeResult(stderr, failureResult("analysis_attest", "Unavailable"))
 			return 1
 		}

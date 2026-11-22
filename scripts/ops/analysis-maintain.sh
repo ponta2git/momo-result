@@ -47,14 +47,14 @@ scope="$(scripts/ci/classify-git-range.sh "${release_id}" "${master_sha}")"
 requested_operation="${operation}"
 [[ "${operation}" != check ]] || requested_operation=auto
 attest_fleet() {
-  local observed_worker observed_reader
+  local observed_worker observed_reader mode="${1:-}"
   observed_worker="$(read_machine)" || fail 'Worker identity could not be rechecked.'
   observed_reader="$(read_reader_machine)" || fail 'API reader identity could not be rechecked.'
   [[ "${observed_worker}" == "${identity}" && "${observed_reader}" == "${reader_identity}" ]] || fail 'The serving fleet changed during maintenance.'
   reader_proof="$(FLY_API_TOKEN="${RUNTIME_FLY_API_TOKEN}" flyctl ssh console --app "${RUNTIME_APP}" --machine "${reader_machine}" --pty=false --quiet \
-    --command '/opt/momo-result/bin/momo-runtime-tool analysis-attest' 2> "${task_tmp}/error")" || fail 'The resident API failed to attest.'
+    --command "/opt/momo-result/bin/momo-runtime-tool analysis-attest${mode:+ ${mode}}" 2> "${task_tmp}/error")" || fail 'The resident API failed to attest.'
   worker_proof="$(flyctl ssh console --app "${ANALYSIS_APP}" --machine "${machine_id}" --pty=false --quiet \
-    --command '/usr/local/bin/momo-analysis release-attest' 2> "${task_tmp}/error")" || fail 'The resident worker failed to attest.'
+    --command "/usr/local/bin/momo-analysis release-attest${mode:+ ${mode}}" 2> "${task_tmp}/error")" || fail 'The resident worker failed to attest.'
   [[ "${reader_proof}" =~ ^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$ && "${worker_proof}" =~ ^[a-zA-Z0-9@._-]{1,255}$ ]] || fail 'Invalid fleet attestation.'
 }
 invoke() {
@@ -78,11 +78,11 @@ if [[ "${operation}" == check ]]; then
 fi
 if [[ "${status}" == planned ]]; then
   invoke " --apply --expected-plan ${plan}"
-  # A successful cutover can have zero targets. Activate waiting candidates immediately.
-  attest_fleet
 elif [[ "${status}" == running ]]; then
   invoke ' --apply'
 fi
+# Wake newly admitted processing before waiting for campaign targets.
+if [[ "${status}" == running ]]; then attest_fleet --active; fi
 deadline=$((SECONDS + ANALYSIS_WAIT_SECONDS))
 while [[ "${status}" == running ]]; do
   if (( SECONDS >= deadline )); then
@@ -92,7 +92,7 @@ while [[ "${status}" == running ]]; do
   invoke ''
 done
 case "${status}" in
-  not_needed|complete) ;;
+  not_needed|complete) attest_fleet --active ;;
   attention_required) fail 'Analysis needs attention. Review operation-report.json and run Analysis production operation after resolving its reason.' ;;
   *) fail 'Analysis returned an unexpected state.' ;;
 esac

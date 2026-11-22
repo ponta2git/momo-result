@@ -30,10 +30,30 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   const validation_contract_id = smoke.contract.validationContractId;
   let worker: ReturnType<typeof startWorker> | undefined;
   let ownsFixtures = false;
+  const setFixtureAlgorithm = (algorithm: string, cleanup = false) =>
+    smoke.sql(
+      "UPDATE series_analysis_release_state SET algorithm_version = :'algorithm' WHERE singleton_key = 'current';",
+      { algorithm },
+      cleanup ? null : signal,
+    );
+  const attest = (active = false) =>
+    command(
+      "docker",
+      [
+        "exec",
+        worker_container,
+        "/usr/local/bin/momo-processing-worker",
+        "release-attest",
+        ...(active ? ["--active"] : []),
+      ],
+      { signal },
+    );
   const release = async (args: string[]) => {
-    const attested = requireSuccess(await command("docker", ["exec", worker_container,
-      "/usr/local/bin/momo-processing-worker", "release-attest"], { signal }), "Resident worker attestation");
-    check(attested === analysis_capability_id, "A different worker answered the release challenge.");
+    const attested = requireSuccess(await attest(), "Resident worker attestation");
+    check(
+      attested === analysis_capability_id,
+      "A different worker answered the release challenge.",
+    );
     // This suite has a fixture reader and a real running worker.
     await smoke.sql(`UPDATE series_analysis_reader_capabilities SET heartbeat_at = clock_timestamp()
       WHERE reader_id = 'reader-release-smoke';`);
@@ -66,6 +86,7 @@ WHERE series_analysis_jobs.legacy_id = '${job}';`,
       });
       ownsFixtures = true;
       await smoke.sqlFile("control-plane-retention");
+      await setFixtureAlgorithm("control-plane-previous-fixture");
       worker = startWorker(smoke, worker_container, worker_image, {
         ...analysisEnvironment(worker_database_url, analysis_worker_id),
         MOMO_ANALYSIS_CONFIG_VERSION: "ci-control-plane-v1",
@@ -83,6 +104,22 @@ WHERE series_analysis_jobs.legacy_id = '${job}';`,
     AND draining = false;
 `,
         "worker capability registration",
+      );
+      check(
+        requireSuccess(await attest(), "Candidate proof") === analysis_capability_id,
+        "Wrong candidate.",
+      );
+      check((await attest(true)).code !== 0, "A waiting candidate claimed active admission.");
+      check(
+        (await smoke.sql(
+          "SELECT count(*) FROM series_analysis_campaign_targets WHERE status = 'succeeded';",
+        )) === "0",
+        "A waiting candidate completed a target before admission.",
+      );
+      await setFixtureAlgorithm(algorithm_version);
+      check(
+        requireSuccess(await attest(true), "Post-cutover admission") === analysis_capability_id,
+        "Wrong active worker.",
       );
       await waitSQL(
         `0`,
@@ -526,6 +563,7 @@ WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id
         console.error(JSON.stringify(diagnostic));
       await cleanups([
         () => worker?.stop(),
+        () => (ownsFixtures ? setFixtureAlgorithm(algorithm_version, true) : undefined),
         () =>
           ownsFixtures
             ? smoke.sqlFile(

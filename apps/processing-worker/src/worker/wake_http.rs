@@ -11,7 +11,7 @@ use tokio::{
     sync::watch,
     time::{self, Instant},
 };
-use url::Url;
+use url::{Host, Url};
 
 use super::{PostCommitEffects, PostCommitSink, WorkerError};
 
@@ -28,6 +28,12 @@ pub(crate) struct WakeHttpError;
 pub(crate) struct ScanTicket {
     generation: u64,
     started: Instant,
+}
+
+impl ScanTicket {
+    pub(crate) const fn same_generation(self, other: Self) -> bool {
+        self.generation == other.generation
+    }
 }
 
 struct Coverage {
@@ -53,6 +59,12 @@ impl WakeMonitor {
             })
             .0,
         )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn settle_test_writer(&self) {
+        self.0
+            .send_modify(|state| state.settle_after = Instant::now());
     }
 
     pub(crate) fn scan_ticket(&self) -> ScanTicket {
@@ -116,6 +128,15 @@ fn writer_urls(hosts: &str) -> Result<Vec<Url>, WakeHttpError> {
             }
             let mut url = Url::parse(&format!("http://{host}/internal/worker/wake"))
                 .map_err(|_error| WakeHttpError)?;
+            let private = match url.host() {
+                Some(Host::Domain(name)) => name == "localhost" || name.ends_with(".internal"),
+                Some(Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private(),
+                Some(Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unique_local(),
+                None => false,
+            };
+            if !private {
+                return Err(WakeHttpError);
+            }
             if host
                 .rsplit_once(':')
                 .is_none_or(|(_, suffix)| suffix.parse::<u16>().is_err())
@@ -262,9 +283,33 @@ pub(crate) async fn run(
     }
 }
 
+#[cfg(test)]
+pub(crate) async fn follow_test_writer(
+    url: Url,
+    monitor: &WakeMonitor,
+    sink: &PostCommitSink,
+) -> Result<(), WorkerError> {
+    let peers = Peers {
+        client: Client::builder()
+            .no_proxy()
+            .redirect(Policy::none())
+            .build()
+            .map_err(|_error| WorkerError::WakeTransport)?,
+        token: HeaderValue::from_str(&format!("Bearer {}", "s".repeat(32)))
+            .map_err(|_error| WorkerError::WakeTransport)?,
+        urls: vec![url.clone()],
+    };
+    monitor.0.send_modify(|state| state.writers = 1);
+    peers.follow(&url, monitor, sink).await
+}
+
 async fn nudge(uncertain: bool) -> Result<(), WakeHttpError> {
     let Some(peers) = Peers::configured()? else {
-        return Ok(());
+        return if crate::series_analysis::release::isolated_release_fixture() {
+            Ok(())
+        } else {
+            Err(WakeHttpError)
+        };
     };
     // All peers are watched. One successfully acknowledged hint covers this external writer.
     let attempts = peers.urls.iter().map(|url| {
@@ -336,13 +381,15 @@ mod tests {
     #[test]
     fn writer_list_rejects_paths_credentials_and_duplicates() {
         assert!(
-            writer_urls("node1,node2:9092").is_ok(),
+            writer_urls("node1.internal,node2.internal:9092").is_ok(),
             "two independent writers are valid"
         );
         for hosts in [
             "",
             "a,",
-            "a,a:9091",
+            "localhost,localhost:9091",
+            "example.org",
+            "8.8.8.8:80",
             "user@host",
             "host/path",
             "a?secret",

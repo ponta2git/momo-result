@@ -218,10 +218,9 @@ async fn verify_expired_takeover(primary: &mut Client, stale: &mut Client) -> Sm
             &[&TAKEOVER.job_id],
         )
         .await?;
-    assert!(matches!(
-        claim_result(claim_job(primary, job_id, &config_a).await?)?,
-        OcrClaimResult::MissingOrTerminal
-    ));
+    let terminal = claim_job(primary, job_id, &config_a).await?;
+    assert_eq!(terminal.effects, PostCommitEffects::WakeJobs);
+    assert!(matches!(terminal.value, OcrClaimResult::MissingOrTerminal));
     let row = primary
         .query_one(
             r"
@@ -629,10 +628,9 @@ async fn verify_malformed_snapshot(primary: &mut Client) -> SmokeResult {
         )
         .await?;
     let config = control_config("ocr-c2-transient")?;
-    assert!(matches!(
-        claim_result(claim_job(primary, MALFORMED.job_id, &config).await?)?,
-        OcrClaimResult::InvalidInput
-    ));
+    let invalid = claim_job(primary, MALFORMED.job_id, &config).await?;
+    assert_eq!(invalid.effects, PostCommitEffects::WakeJobs);
+    assert!(matches!(invalid.value, OcrClaimResult::InvalidInput));
     let row = primary
         .query_one(
             r"
@@ -814,7 +812,7 @@ fn control_config(worker_id: &str) -> SmokeResult<OcrControlConfig> {
 
 fn claim_result(outcome: ControlOutcome<OcrClaimResult>) -> SmokeResult<OcrClaimResult> {
     if outcome.effects == PostCommitEffects::WakeJobs {
-        return Err(smoke_error("normal OCR claim unexpectedly emitted an scheduler wake").into());
+        return Err(smoke_error("normal OCR claim unexpectedly emitted a scheduler wake").into());
     }
     Ok(outcome.value)
 }

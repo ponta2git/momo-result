@@ -211,6 +211,7 @@ export function safeDiagnostics(text: string) {
 }
 
 export class Smoke {
+  private readonly verifiedDatabases = new Set<string>();
   readonly signal: AbortSignal;
   readonly root: string;
   readonly log: string;
@@ -261,6 +262,7 @@ export class Smoke {
       ),
       "Isolated database verification",
     );
+    for (const database of Object.values(postgres)) this.verifiedDatabases.add(database);
   }
   sqlArgs(variables: Record<string, string | number> = {}) {
     return [
@@ -304,6 +306,11 @@ ${input}`,
     return this.sql(input, variables, cleanup ? null : this.signal);
   }
   async release(image: string, database: string, args: string[], binary = "") {
+    check(this.verifiedDatabases.has(database), "Release requires a verified isolated database.");
+    const fixture = {
+      ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED: "true",
+      ANALYSIS_CONTROL_SMOKE_DATABASE_URL: database,
+    };
     return image
       ? containerCommand(
           [
@@ -315,6 +322,7 @@ ${input}`,
             "host.docker.internal:host-gateway",
             "-e",
             `DATABASE_URL=${database}`,
+            ...Object.entries(fixture).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
             image,
             "/usr/local/bin/momo-processing-worker",
             "bootstrap",
@@ -324,7 +332,7 @@ ${input}`,
           { signal: this.signal, timeoutMs: 120_000 },
         )
       : command(binary, args, {
-          env: { ...process.env, DATABASE_URL: database },
+          env: { ...process.env, ...fixture, DATABASE_URL: database },
           signal: this.signal,
           timeoutMs: 120_000,
         });

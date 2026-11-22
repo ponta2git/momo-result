@@ -120,7 +120,7 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
         .await?;
     stage_artifact(&transaction, &claim, &artifact, directory.path()).await?;
     validate_staged_artifact(&transaction, &claim, &artifact).await?;
-    publish_staged_artifact(&transaction, &claim, &artifact).await?;
+    publish_matching_artifact(&transaction, &claim, &artifact).await?;
     let stored = transaction
         .query_one(
             "SELECT a.scope_keys,a.achievement_chunk_count,c.item_count,c.payload FROM series_analysis_artifacts a

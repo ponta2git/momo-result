@@ -18,6 +18,19 @@ use crate::{
 mod incidents;
 mod policy;
 
+async fn radar_snapshot(client: &Client) -> SmokeResult<Value> {
+    let row = client
+        .query_one(
+            "SELECT jsonb_build_array(r.xmin::text, r.monitor IS NULL, r.monitor,
+              (SELECT count(*) FROM series_radar_revisions WHERE game_title_id=$1))
+         FROM series_radar_title_states r
+         WHERE r.game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+            &[&TITLE_ID],
+        )
+        .await?;
+    Ok(row.try_get(0)?)
+}
+
 #[tokio::test]
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_analysis_notifications_follow_committed_publications() -> SmokeResult {
@@ -131,10 +144,20 @@ async fn real_postgres_analysis_notifications_follow_committed_publications() ->
         )
         .await?;
     let reused = next_job(&primary, &first, "reuse").await?;
+    // Existing publications can predate a stored monitor. Reuse must leave their SQL NULL intact.
+    primary
+        .execute(
+            "UPDATE series_radar_title_states SET monitor=NULL
+         WHERE game_title_id=(SELECT id FROM game_titles WHERE legacy_id=$1)",
+            &[&TITLE_ID],
+        )
+        .await?;
+    let radar_before_reuse = radar_snapshot(&primary).await?;
     assert_eq!(
         publish(&mut primary, &config, &reused).await?,
         super::super::PublicationResult::Reused
     );
+    assert_eq!(radar_snapshot(&primary).await?, radar_before_reuse);
     // Reuse after manual recalculation is not a user data change, even after job cleanup.
     policy::assert_baseline(&primary, &artifact_id_for_attempt(OLD_ATTEMPT_ID)).await?;
 

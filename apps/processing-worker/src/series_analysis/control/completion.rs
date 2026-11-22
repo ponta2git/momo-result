@@ -107,17 +107,22 @@ pub(crate) async fn publish(
         )
         .await?;
         let desired = desired_artifact(&transaction, claim).await?;
-        if !desired.matches(claim) || !super::radar::desired_matches(&transaction, claim).await? {
+        let radar_state = if desired.matches(claim) {
+            super::radar::lock_matching_state(&transaction, claim).await?
+        } else {
+            None
+        };
+        let Some(radar_state) = radar_state else {
             drop(notification);
             transaction.rollback().await?;
             finish_publication_metrics(metrics, publication_started);
             return supersede(&mut publication_client, claim, config, metrics)
                 .await
                 .map(|outcome| outcome.map(|()| PublicationResult::Superseded));
-        }
+        };
         let radar_source_valid = measure(
             "publication_validation",
-            validate_candidate(&transaction, claim, &artifact, staged),
+            validate_candidate(&transaction, claim, &artifact, staged, &radar_state),
         )
         .await?;
         if !radar_source_valid {
@@ -165,7 +170,7 @@ pub(crate) async fn publish(
             ExistingArtifact::DifferentVersion => {
                 measure(
                     "publication_pointer",
-                    publish_staged_artifact(&transaction, claim, &artifact),
+                    publish_staged_artifact(&transaction, claim, &artifact, radar_state),
                 )
                 .await?;
                 ResultDisposition::Published
@@ -224,13 +229,14 @@ async fn validate_candidate(
     claim: &ClaimedJob,
     artifact: &ValidatedArtifact,
     staged: bool,
+    radar_state: &super::radar::PublicationState,
 ) -> Result<bool, ControlError> {
     authoritative_input::validate_manifest(transaction, &claim.game_title_id, artifact.manifest())
         .await?;
     if staged {
         validate_staged_artifact(transaction, claim, artifact).await?;
     }
-    radar_source::validate(transaction, claim).await
+    radar_source::validate(transaction, claim, radar_state).await
 }
 
 async fn commit_successful_publication(

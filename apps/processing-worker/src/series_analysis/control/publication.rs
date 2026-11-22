@@ -294,6 +294,7 @@ pub(super) async fn publish_staged_artifact(
     transaction: &Transaction<'_>,
     claim: &ClaimedJob,
     artifact: &ValidatedArtifact,
+    radar_state: super::radar::PublicationState,
 ) -> Result<(), ControlError> {
     let manifest = artifact.manifest();
     let published = transaction
@@ -340,7 +341,7 @@ pub(super) async fn publish_staged_artifact(
         )
         .await?;
     require_publication_row(pointed)?;
-    super::radar::record_publication(transaction, claim, &manifest.artifact_id).await
+    super::radar::record_publication(transaction, claim, artifact, radar_state).await
 }
 
 pub(super) async fn finish_success(
@@ -668,7 +669,7 @@ async fn validate_staged_artifact_shape(
     }
 }
 
-const fn require_publication_row(actual: u64) -> Result<(), ControlError> {
+pub(super) const fn require_publication_row(actual: u64) -> Result<(), ControlError> {
     if actual == 1 {
         Ok(())
     } else {

@@ -935,7 +935,7 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
             && runtime
                 .submissions
                 .as_ref()
-                .is_none_or(|state| !runtime.submissions_dirty && state.can_park())
+                .is_none_or(|receipts| !runtime.submissions_dirty && receipts.can_park())
             && runtime.reconcile.is_none();
         if idle
             && let Some((ticket, started)) = round

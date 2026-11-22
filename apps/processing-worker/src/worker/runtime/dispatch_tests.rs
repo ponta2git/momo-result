@@ -181,8 +181,8 @@ async fn verify_rescheduled_ocr(
     else {
         return Err("overdue OCR must remain on the active repair cadence".into());
     };
-    let remaining = overdue.saturating_duration_since(time::Instant::now());
-    assert!(remaining > Duration::ZERO && remaining <= Duration::from_secs(30));
+    let repair_delay = overdue.saturating_duration_since(time::Instant::now());
+    assert!(repair_delay > Duration::ZERO && repair_delay <= Duration::from_secs(30));
     observer
         .execute(
             "UPDATE ocr_jobs SET available_at = statement_timestamp() WHERE legacy_id=$1",

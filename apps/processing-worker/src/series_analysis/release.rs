@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn standalone_release_requires_both_resident_proofs() {
-        let reader = Some(uuid::Uuid::new_v4().to_string());
+        let reader = Some("11111111-1111-4111-8111-111111111111".to_owned());
         let worker = Some("candidate@algorithm@1@contract".to_owned());
         assert!(fleet_evidence(None, None, false).is_err());
         assert!(fleet_evidence(None, worker.clone(), false).is_err());

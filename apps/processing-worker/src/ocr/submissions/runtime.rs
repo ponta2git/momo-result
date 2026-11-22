@@ -164,7 +164,7 @@ impl Reconciler {
         self.completed_pass.is_some_and(|at| at >= started) && self.can_park()
     }
 
-    pub(crate) fn can_park(&self) -> bool {
+    pub(crate) const fn can_park(&self) -> bool {
         self.reconnect_at.is_none()
             && self.recovery.cursor.upper.is_none()
             && self.recovery.rechecks.is_empty()

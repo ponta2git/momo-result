@@ -22,6 +22,7 @@ import type {
   ScoreGridKeyboardHandler,
   ScoreGridProps,
 } from "@/features/matches/workspace/scoreGrid/ScoreGridTypes";
+import { isImeComposing } from "@/shared/lib/ime";
 import { useMediaQuery } from "@/shared/lib/useMediaQuery";
 import { cn } from "@/shared/ui/cn";
 import { TableScrollArea } from "@/shared/ui/data/TableScrollArea";
@@ -152,7 +153,7 @@ const ScoreGridContent = memo(function ScoreGridContent({
 
   const handleKeyboard = useCallback<ScoreGridKeyboardHandler>(
     (args) => {
-      if (args.event.nativeEvent.isComposing) return;
+      if (isImeComposing(args.event)) return;
       const target = args.event.currentTarget;
 
       if (args.event.key === "ArrowLeft" || args.event.key === "ArrowRight") {

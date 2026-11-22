@@ -15,7 +15,7 @@ import type {
 } from "@/features/seriesComparison/model/seriesAnalysisSelection";
 import type { SeriesAnalysisDrilldownSelection } from "@/features/seriesComparison/model/seriesAnalysisViewTypes";
 import { SeriesAnalysisArrival } from "@/features/seriesComparison/navigation/SeriesAnalysisNavigation";
-import { OutlookLoading } from "@/features/seriesComparison/outlook/OutlookLoading";
+import { OutlookWorkspaceLoading } from "@/features/seriesComparison/outlook/workspace/OutlookWorkspaceLoading";
 import { ReviewView } from "@/features/seriesComparison/page/SeriesAnalysisReviewView";
 import { SeriesAnalysisSelectedMatch } from "@/features/seriesComparison/page/SeriesAnalysisSelectedMatch";
 import { MetricDefinitions } from "@/features/seriesComparison/page/SeriesAnalysisViewPrimitives";
@@ -66,8 +66,8 @@ const FlowView = lazy(loadFlowView);
 const ContextView = lazy(loadContextView);
 const loadOutlookView = () =>
   loadLazyModule(() =>
-    import("@/features/seriesComparison/outlook/OutlookView").then((module) => ({
-      default: module.OutlookView,
+    import("@/features/seriesComparison/outlook/workspace/OutlookWorkspaceView").then((module) => ({
+      default: module.OutlookWorkspaceView,
     })),
   );
 const OutlookView = lazy(loadOutlookView);
@@ -114,6 +114,7 @@ type SeriesAnalysisContentProps = {
   showPurposeTabs?: boolean;
   outlookSelection?: SeriesAnalysisSelection;
   onOutlookMemberChange?: (role: "focus" | "rival", memberId: string) => void;
+  onOutlookPairChange?: (focusMemberId: string, rivalMemberId: string) => void;
   ownerMetric?: OwnerMetricId | undefined;
   onOwnerMetricChange?: ((metric: OwnerMetricId) => void) | undefined;
   activeView?: SeriesAnalysisViewId;
@@ -153,6 +154,7 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
   showPurposeTabs = true,
   outlookSelection = emptyOutlookSelection,
   onOutlookMemberChange,
+  onOutlookPairChange,
 }: SeriesAnalysisContentProps) {
   const resource = seriesAnalysisBundleResource(bundle);
   const { matchContext } = bundle;
@@ -188,17 +190,18 @@ export const SeriesAnalysisContent = memo(function SeriesAnalysisContent({
               statusPlacement="external"
               strategy="preserve-inert"
             >
-              <Suspense fallback={<OutlookLoading />}>
+              <Suspense fallback={<OutlookWorkspaceLoading />}>
                 <OutlookView
                   summary={bundle.outlook}
                   selection={displayedSelection}
                   onMemberChange={onOutlookMemberChange}
+                  onPairChange={onOutlookPairChange}
                 />
                 <SeriesAnalysisArrival ready={navigationReady} root={root} />
               </Suspense>
             </StaleShield>
           ) : (
-            <OutlookLoading />
+            <OutlookWorkspaceLoading />
           )}
         </div>
       ) : activeView === "review" ? (

@@ -31,6 +31,10 @@ jobs:
           java-version: "25"
           check-latest: true
           cache: sbt
+          # The fork uses its own sbt version and dependencies.
+          cache-dependency-path: |
+            .http4s-ref
+            scripts/ci/build-http4s-patch.sh
       - name: Update Java certificate blocklist
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
 
@@ -99,6 +103,10 @@ jobs:
           java-version: "25"
           check-latest: true
           cache: sbt
+          cache-dependency-path: &api-sbt-dependencies |
+            .http4s-ref
+            apps/api/build.sbt
+            apps/api/project/**
       - name: Update Java certificate blocklist
         working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
@@ -143,6 +151,7 @@ jobs:
           java-version: "25"
           check-latest: true
           cache: sbt
+          cache-dependency-path: *api-sbt-dependencies
       - name: Update Java certificate blocklist
         working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs
@@ -240,6 +249,7 @@ jobs:
           java-version: "25"
           check-latest: true
           cache: sbt
+          cache-dependency-path: *api-sbt-dependencies
       - name: Update Java certificate blocklist
         working-directory: ${{ github.workspace }}
         run: bash scripts/ci/update-java-trust.sh deploy/java-blocked.certs

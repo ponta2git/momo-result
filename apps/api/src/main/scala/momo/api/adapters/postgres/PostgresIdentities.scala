@@ -85,10 +85,13 @@ enum PostgresIdentities derives CanEqual:
       fr"(SELECT identity.legacy_id FROM $table identity WHERE identity.id = $column)"
 
   /** Resolve aliases after the HTTP request hash, preserving unknown input for normal validation. */
+  private[postgres] def normalizedValue(entity: Entity, raw: String): Fragment = this match
+    case Legacy => fr"$raw"
+    case Canonical => fr"COALESCE(${wireReference(entity, lookup(entity, raw))}, $raw)"
+
   private[postgres] def normalize(entity: Entity, raw: String): ConnectionIO[String] = this match
     case Legacy => raw.pure[ConnectionIO]
-    case Canonical => sql"SELECT COALESCE(${wireReference(entity, lookup(entity, raw))}, $raw)"
-        .query[String].unique
+    case Canonical => sql"SELECT ${normalizedValue(entity, raw)}".query[String].unique
 
   private[postgres] def normalize(
       entity: Entity,

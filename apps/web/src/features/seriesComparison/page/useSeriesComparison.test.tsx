@@ -3,6 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { useEffect, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { Link, MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -17,7 +18,9 @@ import {
 import type { OutlookWorkspaceState } from "@/features/seriesComparison/outlook/outlookWorkspaceState";
 import { useSeriesComparison } from "@/features/seriesComparison/page/useSeriesComparison";
 import { decodeSeriesAnalysisArtifact } from "@/shared/api/seriesAnalysisArtifactDecoder";
+import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { canonicalResultMemberIds } from "@/shared/domain/members";
+import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
 import { setupMsw } from "@/test/msw/lifecycle";
 import {
@@ -69,6 +72,11 @@ function ComparisonHarness({
       </button>
     </>
   );
+}
+
+/** Pages render only after the signed-in account is known, as AuthenticatedRoute does. */
+function AfterSignIn({ children }: { children: ReactNode }) {
+  return useAuthStatus().isAuthenticated ? children : null;
 }
 
 function RetainedOutlookHarness({ initial }: { initial: OutlookWorkspaceState }) {
@@ -321,5 +329,27 @@ describe("useSeriesComparison", () => {
       expect(screen.getByLabelText("analysis location")).not.toHaveTextContent("focusMatchId"),
     );
     expect(screen.getByLabelText("analysis focus")).toBeEmptyDOMElement();
+  });
+
+  it("starts an unspecified outlook from the signed-in player and writes the pair to the URL", async () => {
+    setDevUser();
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <MemoryRouter
+          initialEntries={["/analytics/series?gameTitleId=gt_momotetsu_2&view=outlook"]}
+        >
+          <OutlookWorkspaceProvider>
+            <AfterSignIn>
+              <ComparisonHarness onFocusChange={() => undefined} />
+            </AfterSignIn>
+          </OutlookWorkspaceProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText("analysis location")).toHaveTextContent(
+        "focusMemberId=member_ponta&rivalMemberId=member_eu",
+      ),
+    );
   });
 });

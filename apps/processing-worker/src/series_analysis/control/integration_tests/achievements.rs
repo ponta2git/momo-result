@@ -52,7 +52,38 @@ async fn real_postgres_authoritative_manifest_consumes_large_match_snapshots() -
         validate_authoritative_manifest(&transaction, TITLE_ID, &artifact.manifest),
     )
     .await??;
+
+    // The final corrupt file is read after earlier match-context COPY statements have finished.
+    let validated = validate_artifact_directory(
+        directory.path(),
+        4_000,
+        16 * 1024 * 1024,
+        128 * 1024 * 1024,
+        4_001,
+    )?;
+    corrupt_last_match_context(&validated, directory.path())?;
+    assert!(matches!(
+        stage_artifact(&transaction, &claim, &validated, directory.path()).await,
+        Err(ControlError::InvalidMetadata)
+    ));
+    let artifact_id = &artifact.manifest.artifact_id;
+    let count_contexts =
+        "SELECT COUNT(*) FROM series_analysis_match_context_artifacts WHERE artifact_id = $1";
+    let written: i64 = transaction
+        .query_one(count_contexts, &[artifact_id])
+        .await?
+        .try_get(0)?;
+    assert!(
+        written > 0,
+        "an earlier context COPY must have finished before failure"
+    );
     transaction.rollback().await?;
+    assert_artifact_shape(&client, artifact_id, "0|0|0").await?;
+    let remaining: i64 = client
+        .query_one(count_contexts, &[artifact_id])
+        .await?
+        .try_get(0)?;
+    assert_eq!(remaining, 0);
     cleanup_database(&client).await
 }
 
@@ -120,7 +151,7 @@ async fn real_postgres_achievement_input_and_publication_cover_zero_matches_and_
         .await?;
     stage_artifact(&transaction, &claim, &artifact, directory.path()).await?;
     validate_staged_artifact(&transaction, &claim, &artifact).await?;
-    publish_staged_artifact(&transaction, &claim, &artifact).await?;
+    publish_matching_artifact(&transaction, &claim, &artifact).await?;
     let stored = transaction
         .query_one(
             "SELECT a.scope_keys,a.achievement_chunk_count,c.item_count,c.payload FROM series_analysis_artifacts a

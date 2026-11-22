@@ -4,6 +4,7 @@ import type { HeldEventListItemResponse } from "@/shared/api/heldEvents";
 import {
   makeHeldEventDetailResponse,
   makeHeldEventListItem,
+  makeHeldEventRecordContext,
   makeHeldEventResponse,
 } from "@/test/factories/heldEvents";
 import { now } from "@/test/msw/fixtures";
@@ -42,6 +43,14 @@ function matchesListConditions(item: HeldEventListItemResponse, params: URLSearc
 }
 
 export const heldEventHandlers = [
+  http.get("/api/held-events/lookup/latest", () =>
+    HttpResponse.json({ latestHeldEventId: "held-1" }),
+  ),
+  http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
+    HttpResponse.json(
+      makeHeldEventRecordContext({ heldAt: now, id: String(params["heldEventId"]) }),
+    ),
+  ),
   http.get("/api/held-events", ({ request }) => {
     const url = new URL(request.url);
     const page = Number(url.searchParams.get("page") ?? "1");

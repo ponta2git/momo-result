@@ -11,6 +11,10 @@ export function heldEventDetailCacheFilter(heldEventId: string) {
   return detailCacheFilter(heldEventKeys.detailRoot(), heldEventId, "id");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function detailCacheFilter(
   rootKey: readonly string[],
   legacyId: string,
@@ -21,14 +25,10 @@ function detailCacheFilter(
     predicate: ({ queryKey, state }) => {
       if (queryKey[2] === legacyId) return true;
       const data = state.data;
-      if (typeof data !== "object" || data === null || !("detail" in data)) return false;
-      const detail = data.detail;
-      return (
-        typeof detail === "object" &&
-        detail !== null &&
-        identityField in detail &&
-        Reflect.get(detail, identityField) === legacyId
-      );
+      if (!isRecord(data)) return false;
+      const value = data["value"];
+      const detail = data["detail"] ?? (isRecord(value) ? (value["event"] ?? value) : undefined);
+      return isRecord(detail) && detail[identityField] === legacyId;
     },
   } satisfies QueryFilters;
 }

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -15,7 +15,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HeldEventDetailPage } from "@/features/heldEvents/detail/HeldEventDetailPage";
-import { completionCheckIntervalMs } from "@/shared/api/completionCheck";
+import { completionCheckIntervalMs, completionCheckLimitMs } from "@/shared/api/completionCheck";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 import { setDevUser } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -49,6 +49,19 @@ function ocrDraft(status: string) {
     status,
     updatedAt: "2026-01-01T01:00:00.000Z",
   };
+}
+
+function missingEvent() {
+  return HttpResponse.json(
+    {
+      code: "NOT_FOUND",
+      detail: "held event not found",
+      status: 404,
+      title: "Not Found",
+      type: "about:blank",
+    },
+    { status: 404 },
+  );
 }
 
 function LocationProbe() {
@@ -548,42 +561,147 @@ describe("HeldEventDetailPage", () => {
     expect(attempts).toBe(3);
   });
 
-  it("follows a running OCR read until it can be reviewed, without reading as a user refresh", async () => {
-    let attempts = 0;
-    const recheck = createDeferred<void>();
+  it("checks only draft states until they change and follows each running draft independently", async () => {
+    let detailReads = 0;
+    let statusReads = 0;
+    let drafts = [ocrDraft("ocr_running"), { ...ocrDraft("ocr_running"), matchDraftId: "draft-2" }];
+    const firstCheck = createDeferred<void>();
     server.use(
-      http.get("/api/held-events/:heldEventId", async () => {
-        attempts += 1;
-        if (attempts === 2) await recheck.promise;
+      http.get("/api/held-events/held-1", () => {
+        detailReads += 1;
         return HttpResponse.json(
-          makeHeldEventDetailResponse({
-            draftCount: 1,
-            drafts: [ocrDraft(attempts < 3 ? "ocr_running" : "draft_ready")],
-          }),
+          makeHeldEventDetailResponse({ draftCount: drafts.length, drafts }),
+        );
+      }),
+      http.get("/api/held-events/held-1/draft-statuses", async () => {
+        statusReads += 1;
+        if (statusReads === 1) await firstCheck.promise;
+        return HttpResponse.json(
+          drafts.toReversed().map(({ matchDraftId, status }) => ({ matchDraftId, status })),
         );
       }),
     );
-    // Fake only the clock the completion check schedules on, and let real time drive the rest.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       renderPage();
-
-      expect(await screen.findByRole("button", { name: "読み取り中" })).toBeDisabled();
+      expect(await screen.findAllByRole("button", { name: "読み取り中" })).toHaveLength(2);
       await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
-      await waitFor(() => expect(attempts).toBe(2));
-      // A recheck in flight leaves the update control and the neighbors as they were.
+      await waitFor(() => expect(statusReads).toBe(1));
       expect(screen.getByRole("button", { name: "開催詳細を更新" })).toBeEnabled();
       expect(screen.queryByText("前後の開催を確認しています。")).not.toBeInTheDocument();
-      recheck.resolve();
+      firstCheck.resolve();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(statusReads).toBe(2));
+      expect(detailReads).toBe(1);
 
+      drafts = [ocrDraft("draft_ready"), { ...ocrDraft("ocr_running"), matchDraftId: "draft-2" }];
       await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
       expect(await screen.findByRole("link", { name: "内容を確認" })).toHaveAttribute(
         "href",
         "/review/draft-ocr-1",
       );
-      expect(attempts).toBe(3);
+      expect(detailReads).toBe(2);
+      expect(screen.getByRole("button", { name: "読み取り中" })).toBeDisabled();
+
+      // One running draft is cancelled as another is added. The status counts stay the same.
+      drafts = [ocrDraft("draft_ready"), { ...ocrDraft("ocr_running"), matchDraftId: "draft-3" }];
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(detailReads).toBe(3));
+
+      drafts = [ocrDraft("draft_ready")];
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "読み取り中" })).not.toBeInTheDocument(),
+      );
+      expect(detailReads).toBe(4);
+      const lastStatusRead = statusReads;
       await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 5));
-      expect(attempts).toBe(3);
+      expect(statusReads).toBe(lastStatusRead);
+      expect(detailReads).toBe(4);
+    } finally {
+      firstCheck.resolve();
+      vi.useRealTimers();
+    }
+  });
+
+  it("pauses hidden checks and can restart the same timed-out wait with the screen update", async () => {
+    const draft = ocrDraft("ocr_running");
+    let statusReads = 0;
+    server.use(
+      http.get("/api/held-events/held-1", () =>
+        HttpResponse.json(makeHeldEventDetailResponse({ draftCount: 1, drafts: [draft] })),
+      ),
+      http.get("/api/held-events/held-1/draft-statuses", () => {
+        statusReads += 1;
+        return HttpResponse.json([{ matchDraftId: draft.matchDraftId, status: draft.status }]);
+      }),
+    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      expect(await screen.findByRole("button", { name: "読み取り中" })).toBeDisabled();
+      focusManager.setFocused(false);
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 3));
+      expect(statusReads).toBe(0);
+
+      focusManager.setFocused(true);
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(statusReads).toBe(1));
+      vi.setSystemTime(Date.now() + completionCheckLimitMs);
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      const atLimit = statusReads;
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 3));
+      expect(statusReads).toBe(atLimit);
+
+      await user.click(screen.getByRole("button", { name: "開催詳細を更新" }));
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      await waitFor(() => expect(statusReads).toBe(atLimit + 1));
+    } finally {
+      focusManager.setFocused(undefined);
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops on a failed status check and resumes from an explicit refresh", async () => {
+    let detailReads = 0;
+    let statusReads = 0;
+    let deleted = false;
+    server.use(
+      http.get("/api/held-events/held-1", () => {
+        detailReads += 1;
+        return deleted
+          ? missingEvent()
+          : HttpResponse.json(
+              makeHeldEventDetailResponse({
+                draftCount: 1,
+                drafts: [ocrDraft("ocr_running")],
+              }),
+            );
+      }),
+      http.get("/api/held-events/held-1/draft-statuses", () => {
+        statusReads += 1;
+        return deleted ? missingEvent() : HttpResponse.json({ code: "FORBIDDEN" }, { status: 403 });
+      }),
+    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      expect(await screen.findByRole("button", { name: "読み取り中" })).toBeDisabled();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByText("開催詳細を更新できませんでした")).toBeInTheDocument();
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs * 3));
+      expect(statusReads).toBe(1);
+      expect(detailReads).toBe(1);
+
+      await user.click(screen.getByRole("button", { name: "開催詳細を再取得" }));
+      await waitFor(() =>
+        expect(screen.queryByText("開催詳細を更新できませんでした")).not.toBeInTheDocument(),
+      );
+      deleted = true;
+      await act(() => vi.advanceTimersByTimeAsync(completionCheckIntervalMs));
+      expect(await screen.findByText("開催が見つかりません")).toBeInTheDocument();
+      expect(statusReads).toBe(2);
+      expect(detailReads).toBe(3);
     } finally {
       vi.useRealTimers();
     }
@@ -594,18 +712,7 @@ describe("HeldEventDetailPage", () => {
     server.use(
       http.get("/api/held-events/:heldEventId", () => {
         attempts += 1;
-        return attempts === 1
-          ? HttpResponse.json(makeHeldEventDetailResponse())
-          : HttpResponse.json(
-              {
-                code: "NOT_FOUND",
-                detail: "held event not found",
-                status: 404,
-                title: "Not Found",
-                type: "about:blank",
-              },
-              { status: 404 },
-            );
+        return attempts === 1 ? HttpResponse.json(makeHeldEventDetailResponse()) : missingEvent();
       }),
     );
 

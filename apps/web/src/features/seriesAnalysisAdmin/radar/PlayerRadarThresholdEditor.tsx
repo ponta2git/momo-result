@@ -5,6 +5,7 @@ import type { PlayerRadarAdministrationView } from "@/features/seriesAnalysisAdm
 import { PlayerRadarPreview } from "@/features/seriesAnalysisAdmin/radar/PlayerRadarPreview";
 import type { RadarThresholdEditor } from "@/features/seriesAnalysisAdmin/radar/radarThresholdEditorModel";
 import type { RadarThresholdError } from "@/features/seriesAnalysisAdmin/radar/radarThresholdInput";
+import { isImeComposing } from "@/shared/lib/ime";
 import {
   playerRadarSettingAxes,
   playerRadarSettingThresholds,
@@ -292,7 +293,7 @@ export function PlayerRadarThresholdEditor({
                             onCompositionStart={() => editor.setComposing(true)}
                             onCompositionEnd={() => editor.setComposing(false)}
                             onKeyDown={(event) => {
-                              if (event.nativeEvent.isComposing || editor.composing) return;
+                              if (isImeComposing(event) || editor.composing) return;
                               if (event.key === "Escape") {
                                 event.preventDefault();
                                 editor.change(axis.id, index, editStart.current.get(key) ?? text);

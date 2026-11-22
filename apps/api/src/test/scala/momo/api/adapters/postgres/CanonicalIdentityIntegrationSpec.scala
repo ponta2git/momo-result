@@ -6,10 +6,12 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
-import cats.effect.{IO, Resource}
+import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
+import doobie.Transactor
 import doobie.implicits.*
 import doobie.postgres.implicits.*
+import doobie.util.log.{LogEvent, LogHandler}
 import io.circe.{parser, Json, Printer}
 import org.http4s.circe.*
 import org.http4s.{Header, Method, Request, Status, Uri}
@@ -21,14 +23,17 @@ import momo.api.bootstrap.ApiApp
 import momo.api.config.{AppConfig, AppEnv, AuthConfig, SeriesAnalysisReadConfig}
 import momo.api.domain.*
 import momo.api.domain.ids.*
+import momo.api.errors.AppError
 import momo.api.http.HttpAssertions.jsonField
 import momo.api.http.{HttpAppTestFixtures, HttpRequestBodies}
-import momo.api.integration.IntegrationSuite
+import momo.api.integration.PublishedArtifactInsertContract
 import momo.api.repositories.*
 import momo.api.testing.{JsonSchemaAssertions, TestImages, TestTags}
 import momo.api.usecases.seriesanalysis.RequestSeriesPlayerRadarOperation
+import momo.api.usecases.testing.MatchFixtures
 
-final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpAppTestFixtures
+final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertContract
+    with HttpAppTestFixtures
     with JsonSchemaAssertions:
   override protected def databaseTag: munit.Tag = TestTags.CanonicalDbIntegration
   override protected def identitySchema: PostgresIdentities = PostgresIdentities.Canonical
@@ -378,6 +383,142 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
       yield assertEquals(notification, "CANCELLED")
     }
 
+  private def headerRecord(number: Int): MatchRecord = MatchFixtures.matchRecord(
+    MatchId.unsafeFromString(fresh),
+    HeldEventId.unsafeFromString(held),
+    number,
+    GameTitleId.unsafeFromString(title),
+    SeasonMasterId.unsafeFromString(season),
+    MapMasterId.unsafeFromString(map),
+    now,
+    now,
+    MatchFixtures.DbMemberValues,
+    None,
+    None,
+    None,
+  ).copy(createdByAccountId = account, createdByMemberId = None)
+
+  test(
+    "one header read resolves exact legacy and native aliases, retaining absent and opaque OCR references"
+  ):
+    val alias = canonical(Entity.HeldEvents, held).toString
+    val aliasTarget = UUID.randomUUID()
+    val knownDraft = UUID.randomUUID()
+    val job = UUID.randomUUID()
+    val unknownUuid = fresh.toUpperCase(java.util.Locale.ROOT)
+    val minimum = headerRecord(1)
+    val full = headerRecord(2).copy(
+      heldEventId = HeldEventId.unsafeFromString(alias),
+      ownerMemberId = MemberId.unsafeFromString(canonical(Entity.Members, "member_eu").toString),
+      totalAssetsDraftId = Some(OcrDraftId.unsafeFromString(knownDraft.toString)),
+      revenueDraftId = Some(OcrDraftId.unsafeFromString("retired-ocr-draft")),
+      incidentLogDraftId = Some(OcrDraftId.unsafeFromString(unknownUuid)),
+      createdByMemberId = Some(MemberId.unsafeFromString("member_otaka")),
+      note = MatchNote(
+        MatchNoteBody.fromRequiredString("header note").toOption,
+        MatchNoteVersion.fromLong(1).toOption.get,
+        Some(AccountId.unsafeFromString(canonical(Entity.Accounts, account.value).toString)),
+        Some(now)
+      ),
+    )
+
+    // Count the real JDBC statements before the header INSERT, without recording their parameters.
+    def insert(record: MatchRecord): IO[List[String]] =
+      Resource.fromAutoCloseable(IO.blocking(dataSource.getConnection)).use { connection =>
+        for
+          statements <- Ref.of[IO, List[String]](Nil)
+          logger = new LogHandler[IO]:
+            def run(event: LogEvent): IO[Unit] =
+              statements.update(event.sql.stripLeading.takeWhile(_.isLetter) :: _)
+          xa = Transactor.fromConnection[IO](connection, Some(logger))
+          _ <- PostgresMatchInsertOps.insertMatchCascade(record, now).transact(xa)
+          verbs <- statements.get.map(_.reverse)
+        yield verbs.take(verbs.indexOf("INSERT") + 1)
+      }
+    for
+      _ <- seedMasters
+      _ <- sql"""INSERT INTO held_events(id, legacy_id, held_date_iso, start_at)
+        VALUES ($aliasTarget, $alias, '2026-10-18', $now)""".update.run.transact(transactor)
+      _ <- sql"""INSERT INTO ocr_drafts(id, legacy_id, job_id, legacy_job_id, requested_screen_type)
+        VALUES ($knownDraft, 'existing-ocr-draft', $job, ${job.toString}, 'total_assets')""".update.run.transact(
+        transactor
+      )
+      minimumReads <- insert(minimum)
+      fullReads <- insert(full)
+      stored <-
+        sql"""SELECT held_event_id, legacy_held_event_id, owner_member_id, total_assets_draft_id,
+        revenue_draft_id, incident_log_draft_id, created_by_member_id, note_updated_by_account_id
+        FROM matches WHERE legacy_id = ${full.id.value}""".query[(
+            UUID,
+            String,
+            UUID,
+            String,
+            String,
+            String,
+            UUID,
+            UUID
+        )].unique.transact(transactor)
+      absent <-
+        sql"""SELECT total_assets_draft_id, revenue_draft_id, incident_log_draft_id, created_by_member_id, note_updated_by_account_id
+        FROM matches WHERE legacy_id = ${minimum.id.value}""".query[(
+            Option[String],
+            Option[String],
+            Option[String],
+            Option[UUID],
+            Option[UUID]
+        )].unique.transact(transactor)
+    yield
+      assertEquals(minimumReads, List("SELECT", "INSERT"))
+      assertEquals(fullReads, List("SELECT", "INSERT"))
+      assertEquals(
+        stored,
+        (
+          aliasTarget,
+          alias,
+          canonical(Entity.Members, "member_eu"),
+          "existing-ocr-draft",
+          "retired-ocr-draft",
+          unknownUuid,
+          canonical(Entity.Members, "member_otaka"),
+          canonical(Entity.Accounts, account.value)
+        )
+      )
+      assertEquals(absent, (None, None, None, None, None))
+
+  test("missing supplied header references keep their error order and never create a match"):
+    val record = headerRecord(1)
+    val raw = "missing-header-reference"
+    val author = record.copy(note =
+      record.note.copy(updatedByAccountId = Some(AccountId.unsafeFromString(raw)))
+    )
+    val creatorMember = author.copy(createdByMemberId = Some(MemberId.unsafeFromString(raw)))
+    val creator = creatorMember.copy(createdByAccountId = AccountId.unsafeFromString(raw))
+    val gameMap = creator.copy(mapMasterId = MapMasterId.unsafeFromString(raw))
+    val owner = gameMap.copy(ownerMemberId = MemberId.unsafeFromString(raw))
+    val gameSeason = owner.copy(seasonMasterId = SeasonMasterId.unsafeFromString(raw))
+    val game = gameSeason.copy(gameTitleId = GameTitleId.unsafeFromString(raw))
+    val event = game.copy(heldEventId = HeldEventId.unsafeFromString(raw))
+    for
+      _ <- seedMasters
+      _ <- List(
+        event -> Entity.HeldEvents,
+        game -> Entity.GameTitles,
+        gameSeason -> Entity.SeasonMasters,
+        owner -> Entity.Members,
+        gameMap -> Entity.MapMasters,
+        creator -> Entity.Accounts,
+        creatorMember -> Entity.Members,
+        author -> Entity.Accounts
+      ).traverse_ { case (invalid, entity) =>
+        RepositoryResult.capture(PostgresMatchInsertOps.insertMatchCascade(
+          invalid,
+          now
+        ).transact(transactor))
+          .map(result => assertEquals(result, Left(AppError.NotFound(entity.table, raw))))
+      }
+      count <- sql"SELECT COUNT(*)::int FROM matches".query[Int].unique.transact(transactor)
+    yield assertEquals(count, 0)
+
   test("old record URLs, evidence notes, cursor ties and export numbering retain legacy identity"):
     val firstEvent = "legacy-a"
     val secondEvent = "legacy-x"
@@ -430,6 +571,9 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           byUuid <- get(app, s"/api/matches/$firstUuid")
           public <- get(app, s"/api/public/matches/${jsonField[String](old, "publicId")}")
           event <- get(app, s"/api/held-events/${canonical(Entity.HeldEvents, firstEvent)}")
+          context <-
+            get(app, s"/api/held-events/${canonical(Entity.HeldEvents, firstEvent)}/record-context")
+          latest <- get(app, "/api/held-events/lookup/latest")
           firstPage <- get(app, "/api/matches?sort=held_asc&pageSize=1")
           cursor = jsonField[String](jsonField[Json](firstPage, "pagination"), "nextCursor")
           nextPage <- json(
@@ -502,6 +646,16 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
             val heldItems = jsonField[List[Json]](heldSearch, "items")
             assertEquals(heldItems.map(jsonField[String](_, "id")), List(firstEvent, secondEvent))
             assertEquals(jsonField[String](heldSearch, "latestHeldEventId"), secondEvent)
+            assertEquals(jsonField[String](latest, "latestHeldEventId"), secondEvent)
+            assertEquals(
+              jsonField[String](latest, "publicId"),
+              jsonField[String](heldItems.last, "publicId")
+            )
+            assertEquals(jsonField[String](jsonField[Json](context, "event"), "id"), firstEvent)
+            val previousSetup = jsonField[Json](context, "previousMatch")
+            assertEquals(jsonField[String](previousSetup, "gameTitleId"), title)
+            assertEquals(jsonField[String](previousSetup, "seasonMasterId"), season)
+            assertEquals(jsonField[String](previousSetup, "mapMasterId"), map)
             assertEquals(
               jsonField[List[Json]](heldItems.head, "playerResults")
                 .map(result =>
@@ -928,6 +1082,17 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           ).toString)
         )
         draftId = jsonField[String](draft, "matchDraftId")
+        statuses <- get(app, s"/api/held-events/$held/draft-statuses")
+        byUuid <- get(app, s"/api/held-events/${canonical(Entity.HeldEvents, held)}/draft-statuses")
+        _ =
+          assertEquals(
+            statuses,
+            Json.arr(Json.obj(
+              "matchDraftId" -> Json.fromString(draftId),
+              "status" -> Json.fromString(jsonField[String](draft, "status")),
+            ))
+          )
+          assertEquals(byUuid, statuses)
         upload <- uploadPngRequestWithIdempotency(uploadKey)
         image <- json(app, upload)
         imageId = jsonField[String](image, "imageId")
@@ -987,6 +1152,8 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
         ))
         _ = assertEquals(cancelled.status, Status.Ok)
         _ <- cancelled.body.compile.drain
+        remaining <- get(app, s"/api/held-events/$held/draft-statuses")
+        _ = assertEquals(remaining, Json.arr())
         state <- sql"SELECT status FROM ocr_submissions WHERE legacy_id = $submissionId".query[
           String
         ].unique.transact(transactor)
@@ -1097,6 +1264,7 @@ final class CanonicalIdentityIntegrationSpec extends IntegrationSuite with HttpA
           VALUES ($artifactUuid, $artifactId, $titleId, $title)""".update.run *>
         sql"""UPDATE series_analysis_title_states SET current_artifact_id = $artifactUuid, pending_work = false
           WHERE game_title_id = $titleId""".update.run).transact(transactor)
+      _ <- assertPublishedChunkInsertsRejected(artifactId)
       analysis <- PostgresSeriesAnalysisRepository.create[IO](
         transactor,
         SeriesAnalysisReadConfig.defaults,

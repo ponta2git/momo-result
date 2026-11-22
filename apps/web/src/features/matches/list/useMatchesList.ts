@@ -1,3 +1,6 @@
+import { useState } from "react";
+
+import { isCompleteMatchListRecord } from "@/features/matches/list/matchListConditions";
 import type {
   MatchListFilterActions,
   MatchListFilterCandidates,
@@ -20,11 +23,13 @@ export type MatchesListView = {
   filters: {
     actions: MatchListFilterActions;
     candidates: MatchListFilterCandidates;
+    detailsOpen: boolean;
     hasConditions: boolean;
     loadFailed: boolean;
     pending: boolean;
     refresh: { pending: boolean; run: () => void };
     search: MatchListSearch;
+    setDetailsOpen: (open: boolean) => void;
   };
   list: {
     items: MatchListItemView[];
@@ -52,10 +57,16 @@ export type MatchesListView = {
 };
 
 /** Composes URL selection and list reads for the page. */
-export function useMatchesList(): MatchesListView {
+export function useMatchesList(desktop: boolean, sheetOpen: boolean): MatchesListView {
   const selection = useMatchListSelection();
+  const [detailsOpen, setDetailsOpen] = useState(() => {
+    const { heldEventId, from, to, q, record } = selection.current;
+    return Boolean(heldEventId || from || to || q || isCompleteMatchListRecord(record));
+  });
   const refresh = useMatchListRefresh(selection.current, selection.applyRefresh);
   const resource = useMatchListResource({
+    showMasterOptions: desktop || sheetOpen,
+    showHeldEventOptions: (desktop && detailsOpen) || sheetOpen,
     currentSearch: selection.current,
     deferredSearch: selection.deferred,
     locationSettling: selection.settling,
@@ -78,11 +89,13 @@ export function useMatchesList(): MatchesListView {
     filters: {
       actions: { onChange: selection.change, onClear: selection.clear },
       candidates: resource.filters.candidates,
+      detailsOpen,
       hasConditions: selection.hasConditions,
       loadFailed: resource.filters.loadFailed,
       pending: resource.list.scopeChanging,
       refresh: resource.filters.refresh,
       search: selection.current,
+      setDetailsOpen,
     },
     list: {
       items: resource.list.items,

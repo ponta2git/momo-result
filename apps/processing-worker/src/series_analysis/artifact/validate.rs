@@ -10,6 +10,7 @@ use momo_analysis_core::{
     contract::{ARTIFACT_VALIDATION_CONTRACT_ID, ArtifactManifest},
     payload,
 };
+use serde_json::Value;
 
 use super::{
     ArtifactError,
@@ -18,12 +19,12 @@ use super::{
 
 /// An artifact accepted by the complete Rust-owned publication validator.
 ///
-/// The constructor is private to this module: publication code can only obtain this type by
-/// reopening the artifact directory and passing every bounded file, canonical, schema, semantic,
-/// and cross-resource check in [`validate_artifact_directory`].
+/// Publication code can only obtain this type by reopening the artifact directory and passing
+/// every file, canonical, schema, semantic, and cross-resource check in [`validate_artifact_directory`].
 pub(crate) struct ValidatedArtifact {
     manifest: ArtifactManifest,
     radar_basis: Option<(String, String)>,
+    radar_monitoring: Option<Value>,
     validation_contract_id: &'static str,
 }
 
@@ -45,12 +46,9 @@ impl ValidatedArtifact {
             .map(|(id, checksum)| (id.as_str(), checksum.as_str()))
     }
 
-    const fn new(manifest: ArtifactManifest, radar_basis: Option<(String, String)>) -> Self {
-        Self {
-            manifest,
-            radar_basis,
-            validation_contract_id: ARTIFACT_VALIDATION_CONTRACT_ID,
-        }
+    #[must_use]
+    pub(crate) const fn radar_monitoring(&self) -> Option<&Value> {
+        self.radar_monitoring.as_ref()
     }
 }
 
@@ -102,6 +100,7 @@ pub(crate) fn validate_artifact_directory(
     drop(manifest_bytes);
     let mut payloads = payload::PayloadSetValidator::for_title(&manifest.game_title_id);
     let mut radar_basis = None;
+    let mut radar_monitoring = None;
     for resource in &manifest.resources {
         let common = resource_common(resource);
         let path = directory.join(&common.path);
@@ -123,7 +122,7 @@ pub(crate) fn validate_artifact_directory(
         {
             return Err(ArtifactError::ResourceBound);
         }
-        let value = parse_canonical_json(&bytes)?;
+        let mut value = parse_canonical_json(&bytes)?;
         drop(bytes);
         if nesting_depth(&value) != common.nesting_depth || common.decoded_bytes != length {
             return Err(ArtifactError::ResourceBound);
@@ -133,23 +132,30 @@ pub(crate) fn validate_artifact_directory(
             resource,
             momo_analysis_core::contract::ResourceManifest::Aggregate { .. }
         ) && common.scope == momo_analysis_core::contract::ScopeRef::Overall
-            && let Some(basis) = value
-                .pointer("/playerRadar/basis")
-                .filter(|value| !value.is_null())
         {
-            let id = basis
-                .get("basisId")
-                .and_then(serde_json::Value::as_str)
-                .ok_or(payload::PayloadError::ReferenceMismatch)?;
-            let checksum = basis
-                .get("checksum")
-                .and_then(serde_json::Value::as_str)
-                .ok_or(payload::PayloadError::ReferenceMismatch)?;
-            radar_basis = Some((id.to_owned(), checksum.to_owned()));
+            if let Some(basis) = value.pointer("/playerRadar/basis").filter(|v| !v.is_null()) {
+                let id = basis
+                    .get("basisId")
+                    .and_then(Value::as_str)
+                    .ok_or(payload::PayloadError::ReferenceMismatch)?;
+                let checksum = basis
+                    .get("checksum")
+                    .and_then(Value::as_str)
+                    .ok_or(payload::PayloadError::ReferenceMismatch)?;
+                radar_basis = Some((id.to_owned(), checksum.to_owned()));
+            }
+            radar_monitoring = value
+                .pointer_mut("/playerRadar/monitoring")
+                .map(Value::take);
         }
     }
     payloads.finish()?;
-    Ok(ValidatedArtifact::new(manifest, radar_basis))
+    Ok(ValidatedArtifact {
+        manifest,
+        radar_basis,
+        radar_monitoring,
+        validation_contract_id: ARTIFACT_VALIDATION_CONTRACT_ID,
+    })
 }
 
 fn read_bounded_regular_file(path: &Path, maximum_bytes: u64) -> Result<Vec<u8>, ArtifactError> {

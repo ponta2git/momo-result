@@ -60,6 +60,8 @@ UI 規約は原則として役割で規則を書き、本表は役割から現�
 | ブラウザー title と主ナビの現在地（route の意味） | `app/router.tsx` の各 route の `handle`（`app/routeHandle.ts` の `RouteHandle` の `title` / `navArea`） |
 | global navigation の下で止める sticky の位置 | `styles/theme.css` の `--sticky-below-nav`（GlobalNav が実高を `--global-nav-height` として公開） |
 | 一行 Select primitive | `shared/ui/forms/SelectControl.tsx` の `SelectControl`、field 接続は `SelectField`。内部で Base UI Select を使う |
+| 単一値の slider（刻みの間の値を保ち、次の値と操作の開始・確定・取消を利用側へ渡す） | `shared/ui/forms/Slider.tsx` の `Slider`。内部で Base UI Slider を使う |
+| 日本語変換中のキー入力の判定 | `shared/lib/ime.ts` の `isImeComposing` |
 | disclosure primitive と展開 panel | `shared/ui/data/Collapsible.tsx` の `Disclosure`。内部で Base UI Collapsible を使う |
 | 確認 dialog | `AlertDialog` |
 | label / value 表示 pattern | `FactList` |

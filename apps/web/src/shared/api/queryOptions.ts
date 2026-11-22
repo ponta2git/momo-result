@@ -7,7 +7,12 @@ import {
   loadMatchByPublicId,
   loadMatchDetail,
 } from "@/shared/api/detailReadResult";
-import { getHeldEventSummary, listHeldEvents } from "@/shared/api/heldEvents";
+import {
+  getHeldEventRecordContext,
+  getHeldEventSummary,
+  getLatestHeldEvent,
+  listHeldEvents,
+} from "@/shared/api/heldEvents";
 import type { ListHeldEventsQuery } from "@/shared/api/heldEvents";
 import {
   listGameTitles,
@@ -75,8 +80,26 @@ function normalizeHeldEventsQuery(query: ListHeldEventsQuery): ListHeldEventsQue
   };
 }
 
-export function heldEventDetailQueryOptions(heldEventId: string | undefined, enabled = true) {
-  return heldEventRouteDetailQueryOptions(heldEventId, undefined, enabled);
+export function latestHeldEventQueryOptions() {
+  return queryOptions({
+    queryKey: heldEventKeys.latest(),
+    queryFn: ({ signal }) => getLatestHeldEvent({ signal }),
+    staleTime: 0,
+  });
+}
+
+export function heldEventRecordContextQueryOptions(
+  heldEventId: string | undefined,
+  enabled = true,
+) {
+  return queryOptions({
+    queryKey: heldEventKeys.recordContext(heldEventId),
+    queryFn: ({ signal }) => {
+      if (!heldEventId) throw new Error("held event record context query is not ready");
+      return loadResourceReadResult(() => getHeldEventRecordContext(heldEventId, { signal }));
+    },
+    enabled: enabled && Boolean(heldEventId),
+  });
 }
 
 export function heldEventRouteDetailQueryOptions(

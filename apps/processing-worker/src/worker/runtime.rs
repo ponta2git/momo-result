@@ -218,7 +218,7 @@ impl WorkState {
         if *shutdown.borrow() || shutdown.has_changed().is_err() {
             return Ok(Duration::ZERO);
         }
-        let scan_pending = Box::pin(dispatch::claim_next(self, shutdown)).await?;
+        let scan = Box::pin(dispatch::claim_next(self, shutdown)).await?;
         if self.pending.is_some() {
             return Ok(Duration::ZERO);
         }
@@ -234,15 +234,27 @@ impl WorkState {
         if let Some(retry) = self.retry_after {
             delay = delay.min(retry.saturating_duration_since(time::Instant::now()));
         }
-        if scan_pending || materialization_pending || recovery_pending {
-            delay = Duration::ZERO;
+        if materialization_pending || recovery_pending || delay.is_zero() {
+            return Ok(Duration::ZERO);
         }
-        delay = bounded(
-            timeout,
-            selection::next_due(&self.database, self.ocr_config.is_some(), delay),
-        )
-        .await?;
-        Ok(delay)
+        let deadline = match scan {
+            dispatch::ScanResult::More => return Ok(Duration::ZERO),
+            dispatch::ScanResult::Idle(deadline) => deadline,
+            dispatch::ScanResult::Exhausted => {
+                bounded(
+                    timeout,
+                    selection::next_due(
+                        &self.database,
+                        self.ocr_config.is_some(),
+                        self.config.is_some(),
+                    ),
+                )
+                .await?
+            }
+        };
+        Ok(deadline.map_or(delay, |at| {
+            delay.min(at.saturating_duration_since(time::Instant::now()))
+        }))
     }
     async fn materialize(
         &mut self,
@@ -405,6 +417,7 @@ struct Runtime {
     returned: Option<FinishedRunner>,
     submissions: Option<ocr::submissions::runtime::Reconciler>,
     submissions_dirty: bool,
+    rescan_requested: bool,
     notifications: Option<NotificationHandle>,
     wake: Option<WakeReceiver>,
 }
@@ -426,6 +439,7 @@ impl Runtime {
             returned: None,
             submissions: None,
             submissions_dirty: false,
+            rescan_requested: false,
             notifications: None,
             wake: None,
         }
@@ -471,7 +485,9 @@ impl Runtime {
             {
                 self.request_stop();
             }
-            if observation == Observation::Idle && self.stopping() {
+            if observation == Observation::Idle
+                && (self.stopping() || std::mem::take(&mut self.rescan_requested))
+            {
                 return Ok(None);
             }
             self.start_reconciliation();
@@ -526,6 +542,7 @@ impl Runtime {
                     if hint.is_none() {self.wake=None;self.fail(PostCommitSinkClosed.into());}
                     self.submissions_dirty=true;
                     if observation==Observation::Idle {return Ok(None);}
+                    self.rescan_requested = true;
                 }
                 ()=async {match &self.submissions {Some(state)=>time::sleep_until(state.next_at()).await,None=>std::future::pending().await}}, if !self.stopping() && self.reconcile.is_none()=>{}
 
@@ -846,6 +863,8 @@ async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(
             }
             runtime.start_reconciliation();
             let stopped = runtime.stopped.clone();
+            // A wake consumed while the database scan is in flight can be newer than its snapshot.
+            runtime.rescan_requested = false;
             let step = runtime.operation(Box::pin(work.step(&stopped))).await;
             // A claim that committed while stop arrived still needs typed durable finalization.
             if let Some(pending) = work.pending.take() {

@@ -209,6 +209,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/held-events/lookup/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsLookupLatest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/held-events/{heldEventId}/record-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsHeldeventidRecord-context"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/held-events": {
         parameters: {
             query?: never;
@@ -236,6 +268,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deleteApiHeld-eventsHeldeventid"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/held-events/{heldEventId}/draft-statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getApiHeld-eventsHeldeventidDraft-statuses"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1394,6 +1442,11 @@ export interface components {
             seasonName?: string;
             mapName?: string;
         };
+        /** HeldEventDraftStatusResponse */
+        HeldEventDraftStatusResponse: {
+            matchDraftId: string;
+            status: string;
+        };
         /** HeldEventListItemResponse */
         HeldEventListItemResponse: {
             id: string;
@@ -1441,6 +1494,12 @@ export interface components {
             mapName?: string;
             publicId?: string;
         };
+        /** HeldEventMatchSetupResponse */
+        HeldEventMatchSetupResponse: {
+            gameTitleId: string;
+            seasonMasterId: string;
+            mapMasterId: string;
+        };
         /** HeldEventNavigationResponse */
         HeldEventNavigationResponse: {
             previous?: components["schemas"]["AdjacentHeldEventResponse"];
@@ -1466,6 +1525,11 @@ export interface components {
             totalAssetsManYen: number;
             /** Format: int32 */
             revenueManYen: number;
+        };
+        /** HeldEventRecordContextResponse */
+        HeldEventRecordContextResponse: {
+            event: components["schemas"]["HeldEventSummaryResponse"];
+            previousMatch?: components["schemas"]["HeldEventMatchSetupResponse"];
         };
         /** HeldEventResponse */
         HeldEventResponse: {
@@ -1540,6 +1604,11 @@ export interface components {
             displayName: string;
             /** Format: int32 */
             displayOrder: number;
+        };
+        /** LatestHeldEventResponse */
+        LatestHeldEventResponse: {
+            latestHeldEventId?: string;
+            publicId?: string;
         };
         /** LoginAccountListResponse */
         LoginAccountListResponse: {
@@ -8351,6 +8420,68 @@ export interface operations {
             };
         };
     };
+    "getApiHeld-eventsLookupLatest": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestHeldEventResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiHeld-eventsHeldeventidRecord-context": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                heldEventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldEventRecordContextResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     "getApiHeld-events": {
         parameters: {
             query?: {
@@ -8519,6 +8650,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteHeldEventResponse"];
+                };
+            };
+            default: {
+                headers: {
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    "getApiHeld-eventsHeldeventidDraft-statuses": {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Momo-Account-Id"?: string;
+            };
+            path: {
+                heldEventId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active draft IDs and statuses for checking OCR completion, ordered by draft ID. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeldEventDraftStatusResponse"][];
                 };
             };
             default: {

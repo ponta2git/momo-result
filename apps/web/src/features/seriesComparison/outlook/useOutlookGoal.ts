@@ -1,70 +1,48 @@
-import { useMemo } from "react";
-
-import type {
-  CumulativePair,
-  RankDistribution,
-} from "@/features/seriesComparison/outlook/calculation";
+import type { CumulativePair } from "@/features/seriesComparison/outlook/calculation";
+import { outlookApplyView } from "@/features/seriesComparison/outlook/outlookProjections";
+import type { OutlookResultView } from "@/features/seriesComparison/outlook/outlookProjections";
+import type { OutlookGoalExpectation } from "@/features/seriesComparison/outlook/outlookProposals";
 import {
-  outlookGoalInput,
-  outlookGoalView,
-} from "@/features/seriesComparison/outlook/outlookProjections";
-import type { OutlookGoalView } from "@/features/seriesComparison/outlook/outlookProjections";
-import { applyOutlookGoal } from "@/features/seriesComparison/outlook/outlookProposals";
-import type {
-  OutlookHistoricalWindow,
-  OutlookReferenceResources,
-} from "@/features/seriesComparison/outlook/outlookReferenceTypes";
-import {
-  useOutlookWorkspaceStore,
+  useOutlookEdit,
   useOutlookProjection,
 } from "@/features/seriesComparison/outlook/OutlookWorkspaceProvider";
 import { useOutlookReferenceResources } from "@/features/seriesComparison/outlook/useOutlookReferenceResources";
 import type { SeriesAnalysisOutlookSummary } from "@/shared/api/seriesAnalysis";
 
-export type OutlookGoalModel = OutlookGoalView &
-  Readonly<{
-    historical: OutlookHistoricalWindow | undefined;
-    window: OutlookReferenceResources["window"];
-    apply: () => boolean;
-  }>;
-
+/** The goal's input, its same-length record, and the applications it offers. */
 export function useOutlookGoal({
   response,
+  focusMemberId,
+  view,
   cumulative,
-  memberIds,
-  recent,
 }: {
   response: SeriesAnalysisOutlookSummary;
+  focusMemberId: string;
+  view: OutlookResultView;
   cumulative: CumulativePair;
-  memberIds: readonly [string, string];
-  recent: readonly [RankDistribution, RankDistribution];
-}): OutlookGoalModel {
-  const store = useOutlookWorkspaceStore();
-  const input = useOutlookProjection(outlookGoalInput);
-  const view = useMemo(
-    () => outlookGoalView(input, cumulative, recent),
-    [input, cumulative, recent],
-  );
-  const { window } = useOutlookReferenceResources(response, memberIds[0], view.goalHorizon, false);
+}) {
+  const edit = useOutlookEdit();
+  const blocks = useOutlookProjection(outlookApplyView);
+  const { window } = useOutlookReferenceResources(response, focusMemberId, view.goalHorizon, false);
   const historical =
     view.goalHorizon === 50 || view.goalHorizon === 100
       ? response.bestWindows.find(
-          (item) => item.memberId === memberIds[0] && item.windowSize === view.goalHorizon,
+          (item) => item.memberId === focusMemberId && item.windowSize === view.goalHorizon,
         )
       : window.data;
-  const apply = () => {
-    const current = store.read();
-    if (!current) return false;
-    const result = applyOutlookGoal(current, {
-      key: input.key,
-      artifactId: response.artifact.artifactId,
-      horizon: view.goalHorizon,
-      rival: view.rival,
-      maximum: view.maximum,
-      cumulative,
-    });
-    store.commit(result.state);
-    return result.applied;
+  const expected: OutlookGoalExpectation = {
+    key: view.key,
+    artifactId: view.artifactId,
+    horizon: view.goalHorizon,
+    rival: view.rival,
+    cumulative,
   };
-  return { ...view, historical, window, apply };
+  return {
+    blocks,
+    historical,
+    window,
+    expected,
+    changeHorizon: (text: string) => edit({ kind: "goal-horizon", text }),
+    apply: (maximumHundredths: number) => edit({ kind: "apply-goal", expected, maximumHundredths }),
+  };
 }

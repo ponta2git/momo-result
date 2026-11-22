@@ -1,3 +1,5 @@
+import { isImeComposing } from "@/shared/lib/ime";
+
 export type GridPosition = {
   col: number;
   row: number;
@@ -71,13 +73,7 @@ function moveByEnter(args: ScoreGridKeyArgs, reverse: boolean) {
 }
 
 export function handleScoreGridKeydown(args: ScoreGridKeyArgs): void {
-  const isComposing =
-    args.event.nativeEvent !== null &&
-    typeof args.event.nativeEvent === "object" &&
-    "isComposing" in args.event.nativeEvent &&
-    Boolean(args.event.nativeEvent.isComposing);
-
-  if (isComposing) {
+  if (isImeComposing(args.event)) {
     return;
   }
 

@@ -4,6 +4,7 @@ import { useIsPresent } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentPropsWithRef } from "react";
 
+import { isImeComposing } from "@/shared/lib/ime";
 import { cn } from "@/shared/ui/cn";
 import { useDialogFloatingContainer } from "@/shared/ui/feedback/DialogFloatingContainer";
 import { controlClassName } from "@/shared/ui/forms/controlPresentation";
@@ -160,7 +161,7 @@ export function SelectControl({
           density === "compact" ? "pr-8" : "pr-10",
         )}
         onKeyDown={(event) => {
-          if (open || event.nativeEvent.isComposing) return;
+          if (open || isImeComposing(event)) return;
           if (
             event.key === "ArrowLeft" ||
             event.key === "ArrowRight" ||

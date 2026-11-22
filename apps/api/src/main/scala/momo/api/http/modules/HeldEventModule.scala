@@ -8,11 +8,14 @@ import momo.api.endpoints.codec.{BoundaryId, HeldEventCodec, HeldEventListCodec}
 import momo.api.endpoints.{
   DeleteHeldEventResponse,
   HeldEventDetailResponse,
+  HeldEventDraftStatusResponse,
   HeldEventListItemResponse,
   HeldEventListResponse,
+  HeldEventRecordContextResponse,
   HeldEventResponse,
   HeldEventSummaryResponse,
   HeldEventsEndpoints,
+  LatestHeldEventResponse,
   PaginationResponse
 }
 import momo.api.errors.AppError
@@ -40,6 +43,14 @@ object HeldEventModule:
     val security = context.security
     val execution = context.execution
     List(
+      SecuredEndpoint.readLogic(security, HeldEventsEndpoints.latest) { _ => _ =>
+        security.respond(getHeldEventDetail.latest)(LatestHeldEventResponse.from)
+      },
+      SecuredEndpoint.readLogic(security, HeldEventsEndpoints.recordContext) { _ => heldEventId =>
+        execution.execute(BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString))(
+          getHeldEventDetail.recordContext
+        )(HeldEventRecordContextResponse.from)
+      },
       SecuredEndpoint.readLogic(security, HeldEventsEndpoints.list) { _ => input =>
         execution.execute(HeldEventListCodec.toListCommand(
           limit = input.limit,
@@ -84,6 +95,11 @@ object HeldEventModule:
         )(id => getHeldEventDetail.summary(id))(
           HeldEventSummaryResponse.from
         )
+      },
+      SecuredEndpoint.readLogic(security, HeldEventsEndpoints.draftStatuses) { _ => heldEventId =>
+        execution.execute(
+          BoundaryId.required("heldEventId", heldEventId)(HeldEventId.fromString)
+        )(getHeldEventDetail.draftStatuses)(_.map(HeldEventDraftStatusResponse.from))
       },
       SecuredEndpoint.readLogic(security, HeldEventsEndpoints.getByPublicId) { _ => publicId =>
         execution.execute(

@@ -124,20 +124,33 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
     }
   }
 
-  test("whole-event detail rejects record overflow while the scalar summary remains available") {
+  test(
+    "whole-event detail rejects record overflow while the summary and record context remain available"
+  ) {
     val maximum = PostgresReadBudget.HeldEventRecords
     val detail = PostgresHeldEventDetailReadModel[IO](transactor)
     for
       _ <- PostgresHeldEventsRepository[IO](transactor).create(HeldEvent(eventId, now))
+      empty <- detail.draftStatuses(eventId)
+      missing <- detail.draftStatuses(HeldEventId.unsafeFromString("budget_missing"))
       _ <- insertDrafts(1, maximum)
       accepted <- detail.find(eventId)
+      statuses <- detail.draftStatuses(eventId)
       _ <- insertDrafts(maximum + 1, maximum + 1)
       rejected <- detail.find(eventId).attempt
+      statusOverflow <- detail.draftStatuses(eventId).attempt
       summary <- detail.summary(eventId)
+      context <- detail.recordContext(eventId)
     yield
+      assertEquals(empty, Some(Nil))
+      assertEquals(missing, None)
+      assertEquals(statuses.map(_.map(_.id.value)), accepted.map(_.drafts.map(_.id.value).sorted))
+      assertAppException(statusOverflow, "PAYLOAD_TOO_LARGE", "too many records")
       assertEquals(accepted.map(_.drafts.size), Some(maximum))
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "too many records")
       assertEquals(summary.map(_.draftCount), Some(maximum + 1))
+      assertEquals(context.map(_.summary), summary)
+      assert(context.exists(_.previousMatch.isEmpty))
   }
 
   test("whole-event detail validates active draft labels and ignores discarded drafts") {
@@ -158,7 +171,9 @@ final class PostgresReadBudgetSpec extends IntegrationSuite:
       _ <- sql"UPDATE match_drafts SET status = 'cancelled' WHERE held_event_id = $eventId"
         .update.run.transact(transactor)
       discarded <- detail.find(eventId)
+      remaining <- detail.draftStatuses(eventId)
     yield
+      assertEquals(remaining, Some(Nil))
       assertEquals(accepted.toList.flatMap(_.drafts).flatMap(_.labels.gameTitleName), List(name))
       assertAppException(rejected, "PAYLOAD_TOO_LARGE", "oversized stored text")
       assertEquals(discarded.map(_.drafts), Some(Nil))

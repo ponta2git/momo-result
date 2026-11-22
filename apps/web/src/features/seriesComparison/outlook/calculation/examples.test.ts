@@ -2,7 +2,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { generateOutlookExamples, jointFromCounts } from "./index";
+import {
+  drawOutlookExampleCandidates,
+  generateOutlookExamples,
+  jointFromCounts,
+  selectOutlookExamples,
+} from "./index";
 
 const input = {
   gameTitleId: "synthetic-title",
@@ -57,6 +62,14 @@ describe("three reproducible joint examples", () => {
       }
     },
   );
+
+  it("reselects from one draw when only the range changes", () => {
+    const drawn = drawOutlookExampleCandidates(input);
+    for (const selectionRange of [50, 100, 200] as const)
+      expect(selectOutlookExamples(drawn, { ...input, selectionRange })).toEqual(
+        generateOutlookExamples({ ...input, selectionRange }),
+      );
+  });
 
   it("reverses the same canonical examples when focus/rival roles reverse", () => {
     const original = generateOutlookExamples({ ...input, selectionRange: 200 });

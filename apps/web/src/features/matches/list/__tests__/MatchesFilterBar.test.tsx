@@ -42,17 +42,20 @@ const candidates: MatchListFilterCandidates = {
   ],
 };
 
-function renderFilterBar(search: MatchListSearch = defaultMatchListSearch) {
+function renderFilterBar(search: MatchListSearch = defaultMatchListSearch, initiallyOpen = false) {
   const onChange = vi.fn();
   function Harness() {
     const [current, setCurrent] = useState(search);
+    const [detailsOpen, setDetailsOpen] = useState(initiallyOpen);
     return (
       <>
         <MatchesFilterBar
           actions={{ onChange, onClear: vi.fn() }}
           candidates={candidates}
+          detailsOpen={detailsOpen}
           hasConditions={false}
           search={current}
+          onDetailsOpenChange={setDetailsOpen}
         />
         <button type="button" onClick={() => setCurrent(defaultMatchListSearch)}>
           external reset
@@ -111,7 +114,7 @@ describe("MatchesFilterBar", () => {
 
   it("replaces an uncommitted draft when the committed search changes elsewhere", async () => {
     const user = userEvent.setup();
-    renderFilterBar({ ...defaultMatchListSearch, q: "ボンビー" });
+    renderFilterBar({ ...defaultMatchListSearch, q: "ボンビー" }, true);
 
     const memo = screen.getByLabelText("メモに含む語句");
     expect(memo).toHaveValue("ボンビー");

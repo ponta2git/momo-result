@@ -1020,6 +1020,110 @@
         }
       }
     },
+    "/api/held-events/lookup/latest" : {
+      "get" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "getApiHeld-eventsLookupLatest",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LatestHeldEventResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/held-events/{heldEventId}/record-context" : {
+      "get" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "getApiHeld-eventsHeldeventidRecord-context",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "heldEventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HeldEventRecordContextResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/held-events" : {
       "get" : {
         "tags" : [
@@ -1400,6 +1504,65 @@
               "application/json" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/DeleteHeldEventResponse"
+                }
+              }
+            }
+          },
+          "default" : {
+            "description" : "",
+            "headers" : {
+              "Retry-After" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/held-events/{heldEventId}/draft-statuses" : {
+      "get" : {
+        "tags" : [
+          "held-events"
+        ],
+        "operationId" : "getApiHeld-eventsHeldeventidDraft-statuses",
+        "parameters" : [
+          {
+            "name" : "X-Momo-Account-Id",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "heldEventId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "Active draft IDs and statuses for checking OCR completion, ordered by draft ID.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HeldEventDraftStatusResponse"
+                  }
                 }
               }
             }
@@ -7862,6 +8025,22 @@
           }
         }
       },
+      "HeldEventDraftStatusResponse" : {
+        "title" : "HeldEventDraftStatusResponse",
+        "type" : "object",
+        "required" : [
+          "matchDraftId",
+          "status"
+        ],
+        "properties" : {
+          "matchDraftId" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "HeldEventListItemResponse" : {
         "title" : "HeldEventListItemResponse",
         "type" : "object",
@@ -8019,6 +8198,26 @@
           }
         }
       },
+      "HeldEventMatchSetupResponse" : {
+        "title" : "HeldEventMatchSetupResponse",
+        "type" : "object",
+        "required" : [
+          "gameTitleId",
+          "seasonMasterId",
+          "mapMasterId"
+        ],
+        "properties" : {
+          "gameTitleId" : {
+            "type" : "string"
+          },
+          "seasonMasterId" : {
+            "type" : "string"
+          },
+          "mapMasterId" : {
+            "type" : "string"
+          }
+        }
+      },
       "HeldEventNavigationResponse" : {
         "title" : "HeldEventNavigationResponse",
         "type" : "object",
@@ -8086,6 +8285,21 @@
           "revenueManYen" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "HeldEventRecordContextResponse" : {
+        "title" : "HeldEventRecordContextResponse",
+        "type" : "object",
+        "required" : [
+          "event"
+        ],
+        "properties" : {
+          "event" : {
+            "$ref" : "#/components/schemas/HeldEventSummaryResponse"
+          },
+          "previousMatch" : {
+            "$ref" : "#/components/schemas/HeldEventMatchSetupResponse"
           }
         }
       },
@@ -8291,6 +8505,18 @@
           "displayOrder" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "LatestHeldEventResponse" : {
+        "title" : "LatestHeldEventResponse",
+        "type" : "object",
+        "properties" : {
+          "latestHeldEventId" : {
+            "type" : "string"
+          },
+          "publicId" : {
+            "type" : "string"
           }
         }
       },

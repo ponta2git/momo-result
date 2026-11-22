@@ -18,6 +18,7 @@ import {
   useSeriesAnalysisLocationState,
 } from "@/features/seriesComparison/navigation/useSeriesAnalysisLocationState";
 import { useSeriesAnalysisSelectionReads } from "@/features/seriesComparison/page/useSeriesAnalysisReads";
+import { useAuthStatus } from "@/shared/auth/useAuthStatus";
 import { useRetryNotice } from "@/shared/lib/useRetryNotice";
 
 type SeriesComparisonSelectionResolution =
@@ -44,17 +45,25 @@ export function useSeriesComparisonSelection() {
       locationRequest.selection,
     ],
   );
+  // The signed-in player is only a default: a person in the URL always wins.
+  const viewerMemberId = useAuthStatus().auth?.memberId;
   const normalizedSelection = useMemo(
-    () => normalizeSeriesAnalysisSelection(scopeIdentity.options, locationRequest.selection),
-    [locationRequest.selection, scopeIdentity.options],
+    () =>
+      normalizeSeriesAnalysisSelection(
+        scopeIdentity.options,
+        locationRequest.selection,
+        viewerMemberId,
+      ),
+    [locationRequest.selection, scopeIdentity.options, viewerMemberId],
   );
   const changeSelection = useCallback(
     (current: SeriesAnalysisSelection, change: SeriesAnalysisSelectionChange) =>
       normalizeSeriesAnalysisSelection(
         scopeIdentity.options,
         changeSeriesAnalysisSelection(current, change),
+        viewerMemberId,
       ),
-    [scopeIdentity.options],
+    [scopeIdentity.options, viewerMemberId],
   );
   const selectionLocation = useSeriesAnalysisLocationState({
     request: locationRequest,
@@ -98,6 +107,7 @@ export function useSeriesComparisonSelection() {
       updateOwnerMetric: selectionLocation.actions.updateOwnerMetric,
       updateExpectedRankGapMember: selectionLocation.actions.updateExpectedRankGapMember,
       updateOutlookMember: selectionLocation.actions.updateOutlookMember,
+      updateOutlookPair: selectionLocation.actions.updateOutlookPair,
     },
     options: {
       hasError: optionsFailed,

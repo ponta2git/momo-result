@@ -29,8 +29,10 @@ import { createTestQueryClient } from "@/test/queryClient";
 import { selectOption } from "@/test/selectOption";
 
 setupMsw();
+// Load the real history panel before timing the editor's navigation and HTTP response.
 beforeAll(() =>
   Promise.all([
+    import("@/features/seriesAnalysisAdmin/radar/PlayerRadarHistory"),
     import("@/shared/api/generatedContracts/series-analysis-radar-validators.generated"),
     decodeSeriesAnalysisAdminOverview(makeSeriesAnalysisAdminOverview()),
   ]),

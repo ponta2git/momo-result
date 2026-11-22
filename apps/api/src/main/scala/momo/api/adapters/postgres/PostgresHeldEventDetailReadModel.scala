@@ -15,6 +15,8 @@ import momo.api.domain.{
   FourPlayers,
   HeldEvent,
   HeldEventDetail,
+  HeldEventIdentity,
+  HeldEventRecordContext,
   HeldEventSummary,
   MatchDraftStatus,
   MatchLabels,
@@ -152,6 +154,22 @@ object PostgresHeldEventDetail:
       }
     yield detail
 
+  /** The left join distinguishes a missing event from an existing event with no active drafts. */
+  def draftStatuses(id: HeldEventId)(using
+      ids: PostgresIdentities): ConnectionIO[Option[List[HeldEventDetail.DraftStatus]]] =
+    PostgresReadBudget.rows[Option[HeldEventDetail.DraftStatus]](
+      fr"""
+        SELECT ${ids.wireId("d")}, d.status
+        FROM held_events he
+        LEFT JOIN match_drafts d ON d.held_event_id = he.id
+          AND d.status <> ${MatchDraftStatus.Cancelled} AND d.status <> ${MatchDraftStatus.Confirmed}
+        WHERE he.id = ${ids.lookup(Entity.HeldEvents, id.value)}
+        ORDER BY ${ids.wireId("d")} COLLATE "C"
+      """,
+      PostgresReadBudget.HeldEventRecords,
+      "Held-event draft statuses",
+    ).map(rows => Option.when(rows.nonEmpty)(rows.flatten))
+
   private def validateReadBudget(id: HeldEventId)(using
       ids: PostgresIdentities): ConnectionIO[Unit] =
     val limit = PostgresReadBudget.HeldEventRecords
@@ -226,14 +244,23 @@ object PostgresHeldEventDetail:
     WHERE current.id = ${ids.lookup(Entity.HeldEvents, id.value)}
   """).query[(HeldEvent, Option[HeldEvent], Option[HeldEvent])].option
 
-  def summary(
-      id: HeldEventId,
-      publicIds: PostgresPublicIds
-  )(using ids: PostgresIdentities): ConnectionIO[Option[HeldEventSummary]] =
-    (fr"""
+  def latest(publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): ConnectionIO[Option[HeldEventIdentity]] =
+    (fr"SELECT ${ids.wireId("he")}," ++ publicIds.column(fr"he.public_id") ++
+      fr"""FROM held_events he ORDER BY he.start_at DESC, ${ids.wireId(
+          "he"
+        )} COLLATE "C" DESC LIMIT 1""")
+      .query[HeldEventIdentity].option
+
+  private def summaryColumns(publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): Fragment =
+    fr"""
     SELECT ${ids.wireId("he")}, he.start_at,
   """ ++ publicIds.column(fr"he.public_id") ++ fr""", confirmed.count, draft.count,
            GREATEST(confirmed.max_no, draft.max_no) + 1
+  """
+
+  private val summaryFrom = fr"""
     FROM held_events he
     CROSS JOIN LATERAL (
       SELECT COUNT(*)::int AS count, COALESCE(MAX(match_no_in_event), 0)::int AS max_no
@@ -244,8 +271,27 @@ object PostgresHeldEventDetail:
       FROM match_drafts WHERE held_event_id = he.id
         AND status <> ${MatchDraftStatus.Cancelled} AND status <> ${MatchDraftStatus.Confirmed}
     ) draft
-    WHERE he.id = ${ids.lookup(Entity.HeldEvents, id.value)}
-  """).query[HeldEventSummary].option
+  """
+
+  private def eventIdCondition(id: HeldEventId)(using ids: PostgresIdentities): Fragment =
+    fr"WHERE he.id = ${ids.lookup(Entity.HeldEvents, id.value)}"
+
+  def summary(id: HeldEventId, publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): ConnectionIO[Option[HeldEventSummary]] =
+    (summaryColumns(publicIds) ++ summaryFrom ++ eventIdCondition(id)).query[
+      HeldEventSummary
+    ].option
+
+  def recordContext(id: HeldEventId, publicIds: PostgresPublicIds)(using
+      ids: PostgresIdentities): ConnectionIO[Option[HeldEventRecordContext]] =
+    (summaryColumns(publicIds) ++ fr""",
+      ${ids.wireReference(Entity.GameTitles, fr"previous.game_title_id")},
+      ${ids.wireReference(Entity.SeasonMasters, fr"previous.season_master_id")},
+      ${ids.wireReference(Entity.MapMasters, fr"previous.map_master_id")}
+    """ ++ summaryFrom ++
+      fr"""
+      LEFT JOIN matches previous ON previous.held_event_id = he.id AND previous.match_no_in_event = confirmed.max_no
+    """ ++ eventIdCondition(id)).query[HeldEventRecordContext].option
 
 final class PostgresHeldEventDetailReadModel[F[_]: MonadCancelThrow](
     transactor: Transactor[F],
@@ -259,5 +305,14 @@ final class PostgresHeldEventDetailReadModel[F[_]: MonadCancelThrow](
   override def findByPublicId(publicId: PublicId): F[Option[HeldEventDetail]] =
     PostgresHeldEventDetail.findByPublicId(publicId, publicIds).transact(transactor)
 
+  override def draftStatuses(id: HeldEventId): F[Option[List[HeldEventDetail.DraftStatus]]] =
+    PostgresHeldEventDetail.draftStatuses(id).transact(transactor)
+
   override def summary(id: HeldEventId): F[Option[HeldEventSummary]] =
     PostgresHeldEventDetail.summary(id, publicIds).transact(transactor)
+
+  override def latest: F[Option[HeldEventIdentity]] =
+    PostgresHeldEventDetail.latest(publicIds).transact(transactor)
+
+  override def recordContext(id: HeldEventId): F[Option[HeldEventRecordContext]] =
+    PostgresHeldEventDetail.recordContext(id, publicIds).transact(transactor)

@@ -9,6 +9,9 @@ export const heldEventKeys = {
   all: () => ["held-events"] as const,
   list: (params: unknown) => ["held-events", "list-response", params] as const,
   listRoot: () => ["held-events", "list-response"] as const,
+  latest: () => ["held-events", "latest"] as const,
+  recordContext: (heldEventId: string | undefined) =>
+    ["held-events", "detail", heldEventId, "record-context", "read-result"] as const,
   detailRoot: () => ["held-events", "detail"] as const,
   summary: (heldEventId: string | undefined) =>
     ["held-events", "detail", heldEventId, "summary"] as const,
@@ -17,6 +20,8 @@ export const heldEventKeys = {
   resource: (heldEventId: string | undefined) => ["held-events", "detail", heldEventId] as const,
   detail: (heldEventId: string | undefined) =>
     ["held-events", "detail", heldEventId, "read-result"] as const,
+  ocrCompletion: (detailKey: readonly unknown[], resolvedId: string | undefined, attempt: number) =>
+    [...detailKey, "ocr-completion", resolvedId, attempt] as const,
   publicDetail: (publicId: string) =>
     ["held-events", "detail", { publicId }, "read-result"] as const,
 };

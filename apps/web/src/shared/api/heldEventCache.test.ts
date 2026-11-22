@@ -40,6 +40,7 @@ describe("held event cache contract", () => {
     const pageList = { items: [olderEvent] };
     queryClient.setQueryData(heldEventKeys.summary(olderEvent.id), olderEvent);
     queryClient.setQueryData(pageListKey, pageList);
+    queryClient.setQueryData(heldEventKeys.latest(), { latestHeldEventId: olderEvent.id });
 
     await syncHeldEventCreatedCache(queryClient, newerEvent);
 
@@ -53,6 +54,7 @@ describe("held event cache contract", () => {
       false,
     );
     expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(heldEventKeys.latest())?.isInvalidated).toBe(true);
   });
 
   it("evicts the deleted event's detail and summary and invalidates list pages", async () => {
@@ -73,6 +75,9 @@ describe("held event cache contract", () => {
     });
     queryClient.setQueryData(heldEventKeys.summary(olderEvent.id), olderEvent);
     queryClient.setQueryData(pageListKey, pageList);
+    queryClient.setQueryData(heldEventKeys.latest(), { latestHeldEventId: newerEvent.id });
+    const contextKey = heldEventKeys.recordContext("canonical-event-id");
+    queryClient.setQueryData(contextKey, { kind: "found", value: { event: newerEvent } });
 
     await syncHeldEventDeletedCache(queryClient, newerEvent.id);
 
@@ -81,11 +86,13 @@ describe("held event cache contract", () => {
     expect(queryClient.getQueryData(heldEventKeys.detail("1"))).toEqual({ id: "1", publicId: "2" });
     expect(queryClient.getQueryData(heldEventKeys.summary(newerEvent.id))).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summaryRead(newerEvent.id))).toBeUndefined();
+    expect(queryClient.getQueryData(contextKey)).toBeUndefined();
     expect(queryClient.getQueryData(heldEventKeys.summary(olderEvent.id))).toEqual(olderEvent);
     expect(queryClient.getQueryData(pageListKey)).toBe(pageList);
     expect(queryClient.getQueryState(heldEventKeys.summary(olderEvent.id))?.isInvalidated).toBe(
       false,
     );
     expect(queryClient.getQueryState(pageListKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(heldEventKeys.latest())?.isInvalidated).toBe(true);
   });
 });

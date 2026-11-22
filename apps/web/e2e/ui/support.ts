@@ -77,6 +77,15 @@ export const test = base.extend<{ mockedApi: void }>({
         "/api/season-masters": { items: mswState.seasonMasters },
         "/api/member-aliases": { items: mswState.memberAliases },
         "/api/incident-masters": { items: incidentMastersSeed },
+        "/api/held-events/lookup/latest": { latestHeldEventId: confirmedContext.heldEventId },
+        "/api/held-events/held-1/record-context": {
+          event: makeHeldEventResponse({ matchCount: 2, draftCount: 1, nextMatchNo: 5 }),
+          previousMatch: {
+            gameTitleId: confirmedContext.gameTitleId,
+            seasonMasterId: confirmedContext.seasonMasterId,
+            mapMasterId: confirmedContext.mapMasterId,
+          },
+        } satisfies components["schemas"]["HeldEventRecordContextResponse"],
         "/api/held-events/held-1": makeHeldEventDetailResponse({ matchCount: 2 }),
         "/api/held-events/held-1/summary": makeHeldEventResponse({ matchCount: 2 }),
         "/api/matches/summary": { incompleteCount: 0, needsReviewCount: 0 },

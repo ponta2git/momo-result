@@ -53,6 +53,10 @@ impl HeartbeatConnection {
         })
     }
 
+    pub(super) fn disconnect(&mut self) {
+        self.session = None;
+    }
+
     pub(super) fn finish_attempt(&mut self) {
         let summary = std::mem::take(&mut self.summary);
         tracing::info!(

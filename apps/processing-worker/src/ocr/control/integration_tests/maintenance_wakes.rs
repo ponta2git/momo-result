@@ -1,74 +1,27 @@
 use super::*;
-use crate::ocr::submissions::CHANNEL;
-use futures_util::future::poll_fn;
-use tokio_postgres::AsyncMessage;
+use crate::worker::{PostCommitSink, WakeReceiver};
 
 const STALE_AFTER: Duration = Duration::from_secs(300);
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-pub(super) async fn verify(url: &str, primary: &mut Client, peer: &mut Client) -> SmokeResult {
-    let (listener, mut connection) = crate::postgres::open(url).await?;
-    let passes = async {
-        listener
-            .batch_execute("LISTEN ocr_submissions; LISTEN maintenance_checkpoint")
-            .await?;
-        verify_expiration(primary, peer).await?;
-        verify_projection_repair(primary, peer).await?;
-        checkpoint(primary, "done").await?;
-        Ok::<_, Box<dyn Error + Send + Sync>>(())
-    };
-    // The publisher commits each checkpoint after the pass. Its place in the notification
-    // stream proves the quiet cases without a sleep or a race against delivery.
-    let observe = async {
-        let mut counts = Vec::new();
-        let mut wakes = 0;
-        loop {
-            let message = tokio::time::timeout(
-                Duration::from_secs(15),
-                poll_fn(|cx| connection.poll_message(cx)),
-            )
-            .await?
-            .ok_or_else(|| smoke_error("notification listener closed"))??;
-            if let AsyncMessage::Notification(notification) = message {
-                match (notification.channel(), notification.payload()) {
-                    (CHANNEL, "") => wakes += 1,
-                    ("maintenance_checkpoint", "done") => break,
-                    ("maintenance_checkpoint", pass) => {
-                        counts.push(format!("{pass}={wakes}"));
-                        wakes = 0;
-                    }
-                    _ => return Err(smoke_error("unexpected OCR maintenance notification").into()),
-                }
-            }
-        }
-        Ok::<_, Box<dyn Error + Send + Sync>>(counts)
-    };
-    let ((), counts) = tokio::try_join!(passes, observe)?;
-    assert_eq!(
-        counts,
-        [
-            "empty=0",
-            "contended=0",
-            "expired=1",
-            "rolled back=0",
-            "partially committed=1",
-            "projection repaired=1",
-            "unchanged=0"
-        ]
-    );
-    Ok(())
+pub(super) async fn verify(primary: &mut Client, peer: &mut Client) -> SmokeResult {
+    let (sink, mut receiver) = PostCommitSink::channel();
+    verify_expiration(primary, peer, &sink, &mut receiver).await?;
+    verify_projection_repair(primary, peer, &sink, &mut receiver).await
 }
 
-async fn checkpoint(publisher: &Client, pass: &str) -> SmokeResult {
-    publisher
-        .execute("SELECT pg_notify('maintenance_checkpoint', $1)", &[&pass])
-        .await?;
-    Ok(())
+fn checkpoint(receiver: &mut WakeReceiver, expected: bool, phase: &str) {
+    assert_eq!(receiver.try_recv().is_ok(), expected, "{phase}");
 }
 
-async fn verify_expiration(primary: &mut Client, peer: &mut Client) -> SmokeResult {
-    maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await?;
-    checkpoint(primary, "empty").await?;
+async fn verify_expiration(
+    primary: &mut Client,
+    peer: &mut Client,
+    sink: &PostCommitSink,
+    receiver: &mut WakeReceiver,
+) -> SmokeResult {
+    maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;
+    checkpoint(receiver, false, "empty");
     insert_fixture(primary, &TAKEOVER).await?;
     insert_fixture(primary, &SUCCESS).await?;
     let config = control_config("ocr-c2-worker-success")?;
@@ -84,11 +37,11 @@ async fn verify_expiration(primary: &mut Client, peer: &mut Client) -> SmokeResu
         ", &[&TAKEOVER.job_id,&SUCCESS.job_id]).await?;
     let lock = peer.transaction().await?;
     lock_match_drafts_for_job(&lock, TAKEOVER.job_id).await?;
-    maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await?;
-    checkpoint(primary, "contended").await?;
+    assert!(maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?);
+    checkpoint(receiver, false, "contended");
     lock.rollback().await?;
-    maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await?;
-    checkpoint(primary, "expired").await?;
+    maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;
+    checkpoint(receiver, true, "expired");
     let stale = primary
         .query_one(
             r"
@@ -118,7 +71,12 @@ async fn verify_expiration(primary: &mut Client, peer: &mut Client) -> SmokeResu
     Ok(())
 }
 
-async fn verify_projection_repair(primary: &mut Client, peer: &Client) -> SmokeResult {
+async fn verify_projection_repair(
+    primary: &mut Client,
+    peer: &Client,
+    sink: &PostCommitSink,
+    receiver: &mut WakeReceiver,
+) -> SmokeResult {
     // Simulate an older terminal job whose projection is still pending. A session-local
     // check rejects only that projection, independently of earlier candidate commits.
     primary
@@ -135,8 +93,8 @@ async fn verify_projection_repair(primary: &mut Client, peer: &Client) -> SmokeR
         WITH LOCAL CHECK OPTION",
         )
         .await?;
-    expect_repair_error(primary).await?;
-    checkpoint(primary, "rolled back").await?;
+    expect_repair_error(primary, sink).await?;
+    checkpoint(receiver, false, "rolled back");
 
     // Both jobs now expire without changing their drafts. Only one wake is needed.
     for fixture in [&PREEMPT, &MALFORMED] {
@@ -155,8 +113,8 @@ async fn verify_projection_repair(primary: &mut Client, peer: &Client) -> SmokeR
             &[&PREEMPT.job_id, &MALFORMED.job_id],
         )
         .await?;
-    expect_repair_error(primary).await?;
-    checkpoint(primary, "partially committed").await?;
+    expect_repair_error(primary, sink).await?;
+    checkpoint(receiver, true, "partially committed");
     let expired: i64 = peer
         .query_one(
             "SELECT count(*) FROM ocr_jobs WHERE legacy_id IN ($1, $2)
@@ -171,16 +129,16 @@ async fn verify_projection_repair(primary: &mut Client, peer: &Client) -> SmokeR
     primary
         .batch_execute("DROP VIEW pg_temp.match_drafts")
         .await?;
-    maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await?;
-    checkpoint(primary, "projection repaired").await?;
+    maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;
+    checkpoint(receiver, true, "projection repaired");
     assert_match_draft_status(peer, &TAKEOVER, "ocr_failed").await?;
-    maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await?;
-    checkpoint(primary, "unchanged").await?;
+    maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await?;
+    checkpoint(receiver, false, "unchanged");
     Ok(())
 }
 
-async fn expect_repair_error(primary: &mut Client) -> SmokeResult {
-    let result = maintenance::reap_stale(primary, STALE_AFTER, TIMEOUT).await;
+async fn expect_repair_error(primary: &mut Client, sink: &PostCommitSink) -> SmokeResult {
+    let result = maintenance::reap_stale(primary, sink, STALE_AFTER, TIMEOUT).await;
     if !matches!(result, Err(OcrControlError::Postgres(ref err)) if err.code() == Some(&tokio_postgres::error::SqlState::WITH_CHECK_OPTION_VIOLATION))
     {
         return Err(

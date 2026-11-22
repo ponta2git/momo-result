@@ -34,7 +34,7 @@ subsystem 内の実装契約は [API 規約](implementation/api.md)、[Web 実�
 - rate limit のカウンタは API process 内で保持し、scope ごとの key 数と有効期間を制限する。process 間では共有せず再起動で初期化されるため、永続する quota や同時 job 上限は DB の原子的な操作で別に守る。
 - 接続 pool は runtime で再利用し、取得待ちの実行枠も pool 上限へ合わせる。利用しない接続の常時補充や keepalive query を避け、idle な pool が検証用の traffic を出し続けないようにする一方、request ごとの接続開閉へ置き換えない。SQL 側の上限は transaction pooler 下でも保つため各 transaction で適用する（[API 規約の Usecase / Repository](implementation/api.md#usecase--repository)）。
 - 受付判定は、必要な外部状態を受付時に取得した結果から行い、quota と fail-closed の意味を保つ。直前の PING や cache した外部状態は成功保証に使わない。
-- 処理中の lease heartbeat、待機中の capability 更新、job の起床通知、実行可能時刻、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown 予算・利用者の待ち時間と合わせて調整し、コマンド数や query 負荷はその判断材料の一つとして扱う。
+- 処理中の lease heartbeat、昇格時の capability 照合、job の起床通知、実行可能時刻、履歴保持は別の目的を持つ。閾値は相互の期限・shutdown 予算・利用者の待ち時間と合わせて調整し、コマンド数や query 負荷はその判断材料の一つとして扱う。
 - query や index の測定には開発用 data store と分離した合成 fixture を使い、実験資源を破棄する。採否は整合性と resource 上限を守ったうえで単純さと保守負担も含めて決める。provider の稼働時間や請求額への効果を判断する場合は、それを示す証拠を使い、接続数・コマンド数の削減と区別する。
 
 ## Scripts / Tooling Boundaries

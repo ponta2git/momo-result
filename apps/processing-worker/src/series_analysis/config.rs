@@ -11,7 +11,6 @@ use crate::cgroup::{CgroupError, ChildCgroup};
 use crate::resource_budget::MemoryBudget;
 
 const PUBLICATION_MODE_ENV: &str = "MOMO_ANALYSIS_PUBLICATION_MODE";
-const LISTENER_DATABASE_URL_ENV: &str = "MOMO_PROCESSING_LISTENER_DATABASE_URL";
 pub(crate) const CHILD_MEMORY_LIMIT_ENV: &str = "MOMO_ANALYSIS_CHILD_MEMORY_LIMIT_BYTES";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,7 +39,6 @@ pub(crate) struct AnalysisActivationConfig {
 #[derive(Clone)]
 pub(crate) struct AnalysisConsumerConfig {
     pub(crate) database_url: String,
-    pub(crate) listener_database_url: String,
     pub(crate) read_database_url: String,
     pub(crate) worker_id: String,
     pub(crate) temporary_root: PathBuf,
@@ -220,7 +218,6 @@ impl AnalysisConsumerConfig {
             .map_err(|error| AnalysisConfigError::ChildCgroup { kind: error.kind() })?;
         Ok(Self {
             database_url: required_string(lookup, "DATABASE_URL")?,
-            listener_database_url: required_string(lookup, LISTENER_DATABASE_URL_ENV)?,
             read_database_url: required_string(lookup, "MOMO_ANALYSIS_READ_DATABASE_URL")?,
             worker_id,
             temporary_root,

@@ -39,13 +39,12 @@ row の業務意味と状態遷移は [ドメイン規約](../domain-rule.md)、
 - 試合と実績を変更する API は、影響する開催、試合、実績項目、根拠、title state の順に lock する。同じ種類の複数行は ID 順に取り、開催の全 membership を固定してから変更前後の影響作品を求める。実績廃止もこの順序に参加し、title state 取得後に元試合の lock へ戻らない。
 - `series_analysis_jobs.fencing_counter` は claim と同じ transaction でのみ増やす。heartbeat・再 queue・回収・終端・attempt 履歴削除の後も値を維持し、上限では新しい claim を拒否する。値を維持することで、lease を失った旧 owner の更新・公開を世代をまたいで拒否できる。
 - campaign 集計は target 更新と同じ READ COMMITTED transaction に置き、campaign 行を ID 順の `FOR NO KEY UPDATE` で取得してから別 statement で再集計する。lock 待ちを含む集計 UPDATE 単独では待機前の snapshot を使うため、別作品の commit を取りこぼす。FK 挿入の KEY SHARE とは競合させない。
-- 分析 release promotion は release advisory lock、reader capability registry、worker capability registry、release singleton、作品 ID 順の title state の順で lock する。capability registry は判定後の登録・heartbeat 割込みを commit まで遮断し、singleton 更新と既存 title 更新を同じ transaction で確定する。
+- 分析 release promotion は release advisory lock、reader capability registry、worker capability registry、release singleton、作品 ID 順の title state の順で lock する。capability registry は判定後の能力登録の割込みを commit まで遮断し、singleton 更新と既存 title 更新を同じ transaction で確定する。
 - queued な通常分析 job の radar basis / generation は、title state lock を保持した transaction 内で API / Worker 共通の job transition（Scala と Rust の `bindQueuedRadar` 相当）が明示代入する。API の試合 mutation・手動要求・radar apply / withdraw / 入力無効化、Worker の campaign・follow-up・release promotion・supersede・retry・中断・lease 回収が対象。running と radar preparation の snapshot は維持する。同じ組への代入は UPDATE を省き、再実行でも世代・attempt 数を保つ。
 - running から queued または terminal への全遷移は、owner・attempt・fencing token・期限と `lease_validation_contract_id` を一緒に明示 clear する。成功、radar preparation 完了、通常失敗、retry 上限、lease 回収上限にも同じ契約を適用する。
 - artifact の current contract、outlook scope / count、payload 間の意味整合性は Rust の full validator（`ValidatedArtifact` を生成する）に集約する。staging 保存後は manifest との全 metadata / count 一致を確認してから seal し、公開時に再確認する。previous pointer は同じ作品・schema・validation contract の published artifact だけを保持する。DB には参照整合性、desired tuple の一致、sealed / published 内容の不変性を残す。
 - 複数 statement で一つの読み取り結果を組み立てる repository は、read-only / repeatable-read の snapshot を所有する。読み取り専用の設定はその repository の境界で適用し、write transaction からも呼ばれる共通 SQL 部品（API では write に合成する `ConnectionIO`）から分離する。
-- `LISTEN` など session state を持つ consumer は、session-capable 接続を通常 query 接続から分離する。
-- transaction pooler を通る query は、timeout などの設定と排他を必要な transaction 内で完結させ、transaction scope の設定と lock だけを使う。pool 接続の再利用、session-capable 接続、通知の機能 round trip を別の契約として検証する。
+- transaction pooler を通る query は、timeout などの設定と排他を必要な transaction 内で完結させ、transaction scope の設定と lock だけを使う。
 
 ### Identifiers and Decoding
 

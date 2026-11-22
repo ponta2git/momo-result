@@ -83,7 +83,7 @@ pub(crate) async fn reconcile(
     let report =
         reconcile_transaction(transaction, operation, release_id, apply, expected_plan).await?;
     if apply && report.status == "running" {
-        notify_scheduler(&client).await;
+        notify_scheduler().await;
     }
     Ok(report)
 }

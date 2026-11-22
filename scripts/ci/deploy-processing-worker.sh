@@ -7,6 +7,7 @@ set -euo pipefail
 : "${GITHUB_RUN_ID:?required}"
 : "${GITHUB_RUN_ATTEMPT:?required}"
 : "${RUNNER_TEMP:?required}"
+: "${WORKER_WAKE_HOSTS:?required}"
 [[ "${ANALYSIS_RELEASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 2
 ANALYSIS_WORKER_ID="worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
 OCR_WORKER_ID="ocr-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -25,6 +26,7 @@ docker manifest inspect "${ANALYSIS_IMAGE_REF}" > analysis-production-artifact/r
 current_state="$(flyctl machine list --app "${ANALYSIS_APP}" --json)"
 previous_sha="$(scripts/ci/ci-tool.sh analysis-reusable-release "${ANALYSIS_IMAGE_REF}" <<< "${current_state}")"
 if [[ -n "${previous_sha}" ]] &&
+  jq -e --arg hosts "${WORKER_WAKE_HOSTS}" '.[0].config.env.WORKER_WAKE_HOSTS == $hosts' <<< "${current_state}" > /dev/null &&
   git merge-base --is-ancestor "${previous_sha}" "${ANALYSIS_RELEASE_SHA}" &&
   scripts/ci/ci-tool.sh analysis-secrets unstaged <<< "${secret_state}"; then
   scope="$(scripts/ci/classify-git-range.sh "${previous_sha}" "${ANALYSIS_RELEASE_SHA}")"
@@ -36,6 +38,7 @@ if [[ -n "${previous_sha}" ]] &&
   fi
 fi
 flyctl deploy --app "${ANALYSIS_APP}" --config fly.analysis.toml --image "${ANALYSIS_IMAGE_REF}" \
+  --env WORKER_WAKE_HOSTS="${WORKER_WAKE_HOSTS}" \
   --env MOMO_ANALYSIS_PUBLICATION_MODE=enabled \
   --env MOMO_ANALYSIS_CONFIG_VERSION="series-analysis-v1-${ANALYSIS_RELEASE_SHA}" \
   --env MOMO_ANALYSIS_WORKER_ID="${ANALYSIS_WORKER_ID}" \

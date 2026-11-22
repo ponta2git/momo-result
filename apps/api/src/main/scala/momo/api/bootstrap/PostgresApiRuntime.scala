@@ -26,6 +26,7 @@ import momo.api.auth.DiscordOAuthClient
 import momo.api.config.{AppConfig, DatabaseConfig, SourceImageStorageConfig}
 import momo.api.db.Database
 import momo.api.domain.ids.ImageId
+import momo.api.http.WorkerWakeServer
 import momo.api.ports.storage.{
   ImageDiskUsage,
   ImageOrphanCleaner,
@@ -35,7 +36,7 @@ import momo.api.ports.storage.{
 import momo.api.repositories.*
 import momo.api.usecases.images.ImageStorageAdmission
 import momo.api.usecases.ocr.*
-import momo.api.usecases.queue.{WorkerWakeKind, WorkerWakeRelay, WorkerWakeup}
+import momo.api.usecases.queue.WorkerWakeup
 
 private[bootstrap] object PostgresApiRuntime:
   def resource[F[_]: Async: SecureRandom](
@@ -59,10 +60,6 @@ private[bootstrap] object PostgresApiRuntime:
       PostgresOcrDraftsRepository[F](transactor, identities = identities)
     val ocrJobCreationStoreBase: OcrJobCreationStore[F] =
       PostgresOcrJobCreationStore[F](transactor, identities = identities)
-    val jobNotifier =
-      PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.ProcessingJobs)
-    val submissionNotifier =
-      PostgresWorkerNotifier[F](transactor, PostgresWorkerNotifier.Channel.OcrSubmissions)
     val heldEvents: HeldEventsRepository[F] =
       PostgresHeldEventsRepository[F](transactor, publicIds, identities)
     val heldEventDeletion: HeldEventDeletionRepository[F] =
@@ -114,29 +111,17 @@ private[bootstrap] object PostgresApiRuntime:
       Some(ocrAdmissionGuard.healthStatus),
     )
 
-    val wakeRuntime = WorkerWakeup.resource[F].flatMap { wakeup =>
-      Resource.eval(Deferred[F, Throwable]).flatMap { backgroundFailure =>
-        val reportCoordinatorFailure = (error: Throwable) => backgroundFailure.complete(error).void
-        (
-          WorkerWakeRelay.resource[F](
-            WorkerWakeKind.ProcessingJobs,
-            wakeup,
-            jobNotifier.notifyWorker,
-            reportCoordinatorFailure,
-          ),
-          WorkerWakeRelay.resource[F](
-            WorkerWakeKind.OcrSubmissions,
-            wakeup,
-            submissionNotifier.notifyWorker,
-            reportCoordinatorFailure,
-          ),
-          PostgresSeriesAnalysisReaderCapability.resource[F](transactor),
-        ).tupled.as((wakeup, backgroundFailure))
-      }
-    }
+    val wakeRuntime = (
+      Resource.eval(WorkerWakeup.create[F]),
+      Resource.eval(Deferred[F, Throwable]),
+      PostgresSeriesAnalysisReaderCapability.resource[F](
+        transactor,
+        config.analysisReleaseAttestation
+      ),
+    ).tupled
 
     imageStorageResource(config, sourceImages).flatMap { imageStorage =>
-      wakeRuntime.flatMap { (workerWakeup, backgroundFailure) =>
+      wakeRuntime.flatMap { (workerWakeup, backgroundFailure, readerAdmission) =>
         val signalBackgroundFailure = backgroundFailure
           .complete(new WorkerWakeRuntimeFailure).void
         val jobs = WorkerWakingRepositories.ocrJobs(
@@ -226,7 +211,11 @@ private[bootstrap] object PostgresApiRuntime:
                 matchDrafts = matchDrafts,
                 matchDraftReviews =
                   PostgresMatchDraftReviewReadModel[F](transactor, identities = identities),
-                matchDraftCancellation = matchDraftCancellation,
+                matchDraftCancellation = WorkerWakingRepositories.matchDraftCancellation(
+                  matchDraftCancellation,
+                  workerWakeup,
+                  signalBackgroundFailure
+                ),
                 matchList = matchList,
                 seriesAnalysis = wakingSeriesAnalysis,
                 achievements = WorkerWakingRepositories.achievements(
@@ -263,7 +252,12 @@ private[bootstrap] object PostgresApiRuntime:
             )
           yield runtime.copy(runtime =
             runtime.runtime.copy(
-              backgroundFailure = backgroundFailure.get.flatMap(Async[F].raiseError[Nothing])
+              app =
+                if config.requiresAnalysisReaderAdmission then
+                  readerAdmission.guard(runtime.runtime.app)
+                else runtime.runtime.app,
+              backgroundFailure = backgroundFailure.get.flatMap(Async[F].raiseError[Nothing]),
+              workerWakeApp = config.workerWake.map(WorkerWakeServer.routes(_, workerWakeup)),
             )
           )
         }
@@ -278,7 +272,7 @@ private[bootstrap] object PostgresApiRuntime:
   )
 
   private final class WorkerWakeRuntimeFailure
-      extends RuntimeException("worker wake relay stopped")
+      extends RuntimeException("worker wake state unavailable")
 
   private def imageStorageResource[F[_]: Async: SecureRandom: LoggerFactory](
       config: AppConfig,

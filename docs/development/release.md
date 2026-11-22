@@ -22,12 +22,13 @@
 - runtime release は `release/*` から `master` への PR merge を境界とする。`master` push の runtime / worker deploy、post-deploy verification、必要な分析処理の完了確認がすべて成功した後、release PR の `## Release notes` を基に exact `master` commit の GitHub Release を発行する。公開 release 履歴は GitHub Releases に一元化する。
 - 通常 release は Web edge、API runtime、Processing Worker の検証済み候補を揃え、同じ承認・排他の中で適用する。worker の候補もこの通常 release の workflow で扱う。Worker の image・設定・稼働状態が一致し、未適用の設定がない場合は再配備を省く。
 - DB migration と consumer の配備順序、段階移行、全 writer 停止を伴う非互換切替は [DB 規約の Migration / Deployment](../implementation/database.md#migration--deployment) に従う。
-- 分析成果物の非互換変更では、公開を止めて単一世代へ切り替え、再計算と監査を終えてから再開する。条件は [分析 batch 要求の Compatibility / Release / Rollback](../requirements/series-analysis-batch.md#8-compatibility--release--rollback) を正本とする。
+- 分析成果物の非互換変更では、公開を止めて単一世代へ切り替え、再計算と監査を終えてから再開する。停止していた旧世代や復元した DB を再参加させる場合も、対応する immutable release と DB を組にして再起動し、今回の稼働対象全体から互換性を再確認する。条件は [分析 batch 要求の Compatibility / Release / Rollback](../requirements/series-analysis-batch.md#8-compatibility--release--rollback) を正本とする。
 
 ## Analysis Promotion and Backfill
 
-- image を差し替えただけでは DB の desired version は変わらないため、algorithm version の昇格は image 更新と別操作とし、reader / worker compatibility を確認してから dry-run、apply の順で行う。DB の変更はこの操作を経由して行う。
+- image を差し替えただけでは DB の desired version は変わらないため、algorithm version の昇格は image 更新と別操作とし、各稼働 reader / worker へ照会して実プロセスの登録を取り直し、dry-run、apply の順で互換性を照合する。切替直後にも照合し、待機していた候補の稼働を許可する。DB の世代はこの操作を経由して変更する。
 - 分析昇格・初回 backfill は配備後の実世代と DB の状態から必要性を判定し、安全に適用できる場合は自動実行する。手動操作も同じ判定・適用・監査を使う。対象 snapshot と世代に結びついた operation を再利用し、実行中・失敗・不要・完了を区別する。自動復旧できない場合は workflow を未成功とし、理由と再開方法を記録する。
+- 手元からの保守には `pnpm analysis:maintain` を使う。隔離した DB での開発検証は release / control-plane smoke が fixture と実プロセスの照合を行う。
 - release controller の lock 順と singleton の扱いは [DB 規約](../implementation/database.md#consumer-contract) と [Worker 規約](../implementation/worker.md#analysis-publication-and-release-control) に従う。
 
 ## Credential Rotation

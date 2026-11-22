@@ -47,7 +47,8 @@ object InitialAchievementImport extends IOApp:
                 PostgresAchievementInitialization.initialize(prepared.command, context, identities)
               else PostgresAchievementInitialization.validate(prepared.command, context, identities)
             yield ()
-          action.transact(xa)
+          if options.applyChanges then AchievementImportWake.transact(config.workerWake, action, xa)
+          else action.transact(xa)
         }
       }
       mode = if options.applyChanges then "applied (existing definitions and claims preserved)"
@@ -61,11 +62,11 @@ object InitialAchievementImport extends IOApp:
       case InputFailure(message) => IO.println(message).as(ExitCode.Error)
       case error: SQLException =>
         IO.println(
-          s"Achievement initialization failed (SQLSTATE ${Option(error.getSQLState).getOrElse("unknown")}). No partial import was committed."
+          s"Achievement initialization failed (SQLSTATE ${Option(error.getSQLState).getOrElse("unknown")}). The import can be retried idempotently."
         )
           .as(ExitCode.Error)
       case error => IO.println(
-          s"Achievement initialization failed (${error.getClass.getSimpleName}). No partial import was committed."
+          s"Achievement initialization failed (${error.getClass.getSimpleName}). The import can be retried idempotently."
         )
           .as(ExitCode.Error)
     }

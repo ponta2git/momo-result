@@ -33,10 +33,6 @@ fn runtime_environment() -> Environment {
         [
             ("DATABASE_URL", "postgresql://control.invalid/momo"),
             (
-                LISTENER_DATABASE_URL_ENV,
-                "postgresql://listener.invalid/momo",
-            ),
-            (
                 "MOMO_ANALYSIS_READ_DATABASE_URL",
                 "postgresql://reader.invalid/momo",
             ),
@@ -91,27 +87,11 @@ fn runtime(
 }
 
 #[test]
-fn runtime_requires_and_preserves_the_dedicated_listener_url() {
-    let mut environment = runtime_environment();
+fn runtime_requires_only_query_and_read_database_credentials() {
+    let environment = runtime_environment();
     let cgroup = cgroup_fixture();
-    environment.remove(LISTENER_DATABASE_URL_ENV);
-    assert_eq!(
-        runtime(&environment, cgroup.path()).err(),
-        Some(AnalysisConfigError::MissingRuntime {
-            name: LISTENER_DATABASE_URL_ENV,
-        })
-    );
-
-    environment.insert(
-        LISTENER_DATABASE_URL_ENV,
-        String::from("postgresql://listener.invalid/momo"),
-    );
     let config = runtime(&environment, cgroup.path()).expect("complete runtime configuration");
     assert_eq!(config.database_url, "postgresql://control.invalid/momo");
-    assert_eq!(
-        config.listener_database_url,
-        "postgresql://listener.invalid/momo"
-    );
     assert_eq!(config.read_database_url, "postgresql://reader.invalid/momo");
 }
 

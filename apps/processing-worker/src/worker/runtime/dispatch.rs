@@ -58,7 +58,12 @@ pub(super) async fn claim_next(
     if scheduler.ocr_cursor.is_none() && scheduler.analysis_cursor.is_none() {
         let first = bounded(
             scheduler.settings.operation_timeout,
-            selection::first_scan(&scheduler.database, scan_ocr, scheduler.config.is_some()),
+            selection::first_scan(
+                &scheduler.database,
+                scan_ocr,
+                scheduler.config.is_some(),
+                scheduler.settings.ocr_stale_after,
+            ),
         )
         .await?;
         match first {

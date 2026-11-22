@@ -17,6 +17,7 @@ pub(crate) mod release;
 
 mod attempt;
 mod attempt_directory;
+pub(crate) mod attestation;
 mod campaign;
 mod heartbeat;
 mod input_repository;
@@ -31,7 +32,7 @@ pub(crate) use runner::Runner;
 use self::{
     attempt_directory::cleanup_stale_attempt_directories,
     config::AnalysisConsumerConfig,
-    control::{ControlError, IdleRefreshSchedule, mark_draining, register_capability},
+    control::{ControlError, mark_draining},
 };
 use crate::{postgres::PostgresError, process::ProcessError, worker::PostCommitSinkClosed};
 
@@ -94,23 +95,11 @@ enum AttemptInterruption {
 }
 
 struct MaintenanceSchedules {
-    capability_refresh: IdleRefreshSchedule,
     stale_attempt_cleanup_due: Option<Instant>,
     history_cleanup_due: Instant,
 }
 
 impl MaintenanceSchedules {
-    fn next_due_in(&self, now: Instant) -> Duration {
-        let cleanup_due = self
-            .stale_attempt_cleanup_due
-            .map_or(self.history_cleanup_due, |due_at| {
-                due_at.min(self.history_cleanup_due)
-            });
-        self.capability_refresh
-            .next_due_in(now)
-            .min(cleanup_due.saturating_duration_since(now))
-    }
-
     async fn run_due(
         &mut self,
         control_client: &mut tokio_postgres::Client,
@@ -141,10 +130,6 @@ impl MaintenanceSchedules {
             self.stale_attempt_cleanup_due =
                 cleanup_stale_attempt_directories(config, control_client).await?;
         }
-        if self.capability_refresh.is_due_at(Instant::now()) {
-            register_capability(control_client, &config.worker_id).await?;
-            self.capability_refresh.record_success_at(Instant::now());
-        }
         Ok(())
     }
 }
@@ -165,12 +150,17 @@ impl AttemptInterruption {
 /// Campaign/radar preparation uses the worker's control connection and remains runnable
 /// while the attempt resources are temporarily owned by that task.
 pub(crate) struct Module {
+    admission: attestation::Admission,
     config: AnalysisConsumerConfig,
     maintenance: MaintenanceSchedules,
     runner: Option<Runner>,
 }
 
 impl Module {
+    pub(crate) fn admitted(&self) -> bool {
+        self.admission.admitted()
+    }
+
     pub(crate) const fn take_runner(&mut self) -> Option<Runner> {
         self.runner.take()
     }
@@ -179,33 +169,39 @@ impl Module {
         self.runner = Some(runner);
     }
 
-    /// Active attempts renew capability through their heartbeat. Idle maintenance resumes
-    /// when their resources return, including any deadline that elapsed during calculation.
+    /// Retention shares an already awake pass. Only a pending local directory recovery
+    /// contributes an independent maintenance deadline.
     pub(crate) fn maintenance_due_in(&self) -> Option<Duration> {
         self.runner
             .as_ref()
-            .map(|_| self.maintenance.next_due_in(Instant::now()))
+            .and(self.maintenance.stale_attempt_cleanup_due)
+            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
     }
 
-    pub(crate) async fn maintain(&mut self) -> Result<(), ConsumerError> {
+    pub(crate) fn disconnect(&mut self) {
         if let Some(runner) = &mut self.runner {
-            self.maintenance
-                .run_due(&mut runner.control_client, &self.config)
-                .await?;
+            runner.control_client.release();
+            runner.heartbeat_client.disconnect();
+        }
+    }
+
+    pub(crate) async fn maintain(
+        &mut self,
+        database: &mut tokio_postgres::Client,
+    ) -> Result<(), ConsumerError> {
+        if self.runner.is_some() {
+            self.maintenance.run_due(database, &self.config).await?;
         }
         Ok(())
     }
 
     /// Uses the lifecycle owner's connection, so an unwound attempt need not return its
     /// resources before this worker generation can be marked draining.
-    #[expect(
-        clippy::needless_pass_by_ref_mut,
-        reason = "an exclusive module borrow keeps the drain future Send while runner resources are not Sync"
-    )]
     pub(crate) async fn drain(
         &mut self,
         control_client: &tokio_postgres::Client,
     ) -> Result<(), ConsumerError> {
+        self.admission.stop().await;
         control_operation(
             &self.config,
             mark_draining(control_client, &self.config.worker_id),

@@ -558,7 +558,6 @@ pub(super) fn config(
     let bound = |value| NonZeroU64::new(value).ok_or("positive fixture bound");
     Ok(AnalysisConsumerConfig {
         database_url: database_url.to_owned(),
-        listener_database_url: database_url.to_owned(),
         read_database_url: database_url.to_owned(),
         worker_id: OLD_WORKER_ID.to_owned(),
         temporary_root: directory.to_path_buf(),

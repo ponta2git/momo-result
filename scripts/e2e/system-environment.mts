@@ -195,6 +195,7 @@ export async function withSystemEnvironment(
     const apiOrigin = `http://127.0.0.1:${storage.minio.getMappedPort(8080)}`;
     const edgePort = await findFreePort();
     const webOrigin = `http://127.0.0.1:${edgePort}`;
+    const workerWakeToken = randomBytes(32).toString("hex");
     const originLockToken = randomBytes(32).toString("hex");
     const databaseUrl = `postgres://postgres:postgres@127.0.0.1:${postgres.getMappedPort(5432)}/${databaseName}`;
     phase = "migrate disposable database";
@@ -293,6 +294,9 @@ export async function withSystemEnvironment(
       MOMO_CANONICAL_HOST: "localhost",
       MOMO_EXTRA_ALLOWED_HOSTS: "127.0.0.1",
       MOMO_ORIGIN_LOCK_TOKEN: originLockToken,
+      WORKER_WAKE_TOKEN: workerWakeToken,
+      MOMO_ANALYSIS_RELEASE_ATTESTATION: "enabled",
+      WORKER_WAKE_BIND_HOST: "0.0.0.0",
       SOURCE_IMAGE_R2_ENDPOINT: "http://127.0.0.1:9000",
       MUTATION_RATE_LIMIT_PER_MINUTE: "240",
       MUTATION_ATTEMPT_RATE_LIMIT_PER_MINUTE: "720",
@@ -325,22 +329,10 @@ export async function withSystemEnvironment(
       },
     });
     resources.push({ label: "edge Worker", close: edge.close });
-    phase = "check candidate API through edge";
+    // A candidate may be healthy before promotion grants it permission to serve data.
     await until(
-      async () => {
-        const response = await fetch(`${webOrigin}/healthz/details`, {
-          signal: AbortSignal.timeout(2_000),
-        });
-        if (!response.ok) return false;
-        const details: unknown = await response.json();
-        return (
-          typeof details === "object" &&
-          details !== null &&
-          "database" in details &&
-          details.database === "ok"
-        );
-      },
-      "candidate Runtime",
+      async () => (await fetch(`${webOrigin}/healthz`, { signal: AbortSignal.timeout(2_000) })).ok,
+      "candidate Runtime liveness",
       signal,
       () => containerExited(runtimeContainer),
     );
@@ -352,6 +344,13 @@ export async function withSystemEnvironment(
     await writeEnvironment(workerEnv, {
       ...analysisEnvironment(containerURL(databaseUrl, workerHost), `system-${basename(runDir)}`),
       ...workerTiming(),
+      WORKER_WAKE_TOKEN: workerWakeToken,
+      MOMO_ANALYSIS_RELEASE_ATTESTATION: "enabled",
+      WORKER_WAKE_HOSTS:
+        process.platform === "linux"
+          ? `127.0.0.1:${storage.minio.getMappedPort(9091)}`
+          : "127.0.0.1:9091",
+      MOMO_PROCESSING_RECOVERY_INTERVAL_MS: "30000",
       ...storage.r2,
       SOURCE_IMAGE_R2_ENDPOINT:
         process.platform === "linux"
@@ -405,12 +404,13 @@ export async function withSystemEnvironment(
           ]),
     ]);
     await until(
-      async () =>
-        controlled
-          ? Boolean(await readFile(join(controlDir, "process.started")))
-          : (await docker(["logs", workerContainer])).stdout.includes(
-              '"event":"ocr_rust_v2_worker_ready"',
-            ),
+      async () => {
+        if (controlled) return Boolean(await readFile(join(controlDir, "process.started")));
+        const { stdout: logs } = await docker(["logs", workerContainer]);
+        return ["ocr_rust_v2_worker_ready", "processing_worker_wake_connected"].every((event) =>
+          logs.includes(`"event":"${event}"`),
+        );
+      },
       "candidate Worker",
       signal,
       () => containerExited(workerContainer),
@@ -420,11 +420,42 @@ export async function withSystemEnvironment(
       // Migrations intentionally preserve their historical algorithm baseline.
       // Exercise the candidate's release controller once live reader/worker
       // capabilities are registered, before any user fixture can be created.
+      const attest = async (active = false) => {
+        const mode = active ? ["--active"] : [];
+        const [reader, worker] = await Promise.all([
+          docker(
+            [
+              "exec",
+              runtimeContainer,
+              "/opt/momo-result/bin/momo-runtime-tool",
+              "analysis-attest",
+              ...mode,
+            ],
+            signal,
+          ),
+          docker(
+            [
+              "exec",
+              workerContainer,
+              "/usr/local/bin/momo-processing-worker",
+              "release-attest",
+              ...mode,
+            ],
+            signal,
+          ),
+        ]);
+        return [reader.stdout.trim(), worker.stdout.trim()];
+      };
       await until(
         async () => {
+          const [reader, worker] = await attest();
           const report = await docker(
             [
               "exec",
+              "--env",
+              `MOMO_RELEASE_READER_ATTESTATION=${reader}`,
+              "--env",
+              `MOMO_RELEASE_WORKER_ATTESTATION=${worker}`,
               workerContainer,
               "/usr/local/bin/momo-processing-worker",
               "release-promote",
@@ -456,7 +487,27 @@ export async function withSystemEnvironment(
         signal,
         () => containerExited(workerContainer),
       );
+      await attest(true);
     }
+    phase = "check candidate API through edge";
+    await until(
+      async () => {
+        const response = await fetch(`${webOrigin}/healthz/details`, {
+          signal: AbortSignal.timeout(2_000),
+        });
+        if (!response.ok) return false;
+        const details: unknown = await response.json();
+        return (
+          typeof details === "object" &&
+          details !== null &&
+          "database" in details &&
+          details.database === "ok"
+        );
+      },
+      "candidate Runtime",
+      signal,
+      () => containerExited(runtimeContainer),
+    );
     const metadata: SystemMetadata = {
       runDir,
       controlDir,
@@ -541,7 +592,7 @@ export async function withSystemEnvironment(
           MINIO_SITE_REGION: "auto",
         })
         .withCommand(["server", "/data", "--address", ":9000"])
-        .withExposedPorts(9000, 8080)
+        .withExposedPorts(9000, 8080, 9091)
         .withExtraHosts(
           process.platform === "linux"
             ? [{ host: "host.docker.internal", ipAddress: "host-gateway" }]

@@ -7,7 +7,7 @@ use tokio_postgres::{Client, Transaction};
 
 use crate::job_lease::ExpiredJobLease;
 use crate::series_analysis::control::TransactionEffects;
-use crate::worker::ControlOutcome;
+use crate::worker::{ControlOutcome, PostCommitEffects, PostCommitSinkClosed};
 
 use super::contract::{OcrHints, RequestedScreenType, SourceImageClaims};
 
@@ -185,6 +185,8 @@ pub(crate) struct OcrDraftCompletion {
 pub(crate) enum OcrControlError {
     #[error("OCR PostgreSQL state transition failed")]
     Postgres(#[from] tokio_postgres::Error),
+    #[error("OCR coordination wake sink closed")]
+    WakeClosed(#[from] PostCommitSinkClosed),
     #[error("OCR worker lost its fenced ownership")]
     OwnerLost,
     #[error("OCR control-plane numeric value exceeds its supported bound")]
@@ -203,7 +205,8 @@ impl OcrControlError {
     pub(crate) fn is_contention(&self) -> bool {
         match self {
             Self::Postgres(error) => crate::postgres::is_lock_contention(error),
-            Self::OwnerLost
+            Self::WakeClosed(_)
+            | Self::OwnerLost
             | Self::NumericBound
             | Self::InvalidState
             | Self::InvalidConfiguration
@@ -215,6 +218,7 @@ impl OcrControlError {
     pub(crate) const fn kind(&self) -> &'static str {
         match self {
             Self::Postgres(_) => "ocr_postgres_transition",
+            Self::WakeClosed(_) => "ocr_wake_closed",
             Self::OwnerLost => "ocr_fencing_owner_lost",
             Self::NumericBound => "ocr_numeric_bound",
             Self::InvalidState => "ocr_persisted_state",
@@ -259,8 +263,7 @@ pub(crate) async fn claim_job(
         CandidateResult::Rejected(result) => {
             if recovered {
                 transaction.commit().await?;
-                super::submissions::wake(client).await;
-                return Ok(recovery_effects.committed(result));
+                return Ok(ControlOutcome::new(result, PostCommitEffects::WakeJobs));
             }
             transaction.rollback().await?;
             return Ok(ControlOutcome::without_effects(result));
@@ -268,8 +271,10 @@ pub(crate) async fn claim_job(
         CandidateResult::InvalidPersistedContract => {
             fail_locked_queued_job(&transaction, job_id, OcrFailureCode::QueueFailure, 0).await?;
             transaction.commit().await?;
-            super::submissions::wake(client).await;
-            return Ok(recovery_effects.committed(OcrClaimResult::InvalidInput));
+            return Ok(ControlOutcome::new(
+                OcrClaimResult::InvalidInput,
+                PostCommitEffects::WakeJobs,
+            ));
         }
     };
     acquire_candidate(transaction, job_id, candidate, config, recovery_effects).await
@@ -384,9 +389,7 @@ pub(crate) async fn finish_success(
         config,
         finish_success_transaction(client, claim, config, hints, completion),
     )
-    .await?;
-    super::submissions::wake(client).await;
-    Ok(())
+    .await
 }
 
 async fn finalize(
@@ -479,9 +482,7 @@ pub(crate) async fn finish_failure(
         config,
         finish_failure_transaction(client, claim, config, failure, duration_milliseconds),
     )
-    .await?;
-    super::submissions::wake(client).await;
-    Ok(())
+    .await
 }
 
 async fn finish_failure_transaction(
@@ -525,9 +526,7 @@ async fn requeue(
     config: &OcrControlConfig,
     failed: bool,
 ) -> Result<(), OcrControlError> {
-    finalize(config, requeue_transaction(client, claim, config, failed)).await?;
-    super::submissions::wake(client).await;
-    Ok(())
+    finalize(config, requeue_transaction(client, claim, config, failed)).await
 }
 
 async fn requeue_transaction(

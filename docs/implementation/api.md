@@ -55,7 +55,7 @@
 - 下書き・試合の変更に伴う Discord 通知取消も同じ source command へ含める。transaction の集約単位と lock 順はアプリに明示し、通知 trigger で暗黙に補完しない。lock 順・gate の取得順・SAVEPOINT の規則は [DB 規約](database.md#consumer-contract) を正本とする。
 - 管理者の Discord 通知設定は API の application command として扱う。domain が世代競合と変更・取消対象を決め、PostgreSQL adapter が gate 取得、最新状態の読取り、設定と取消の一括保存を行う。DB は永続化と排他を担い、設定保存は Summit の稼働状態にかかわらず行える。
 - wake は commit 後に実行し、post-commit effect は commit が成功した場合だけ返す。wake は業務 payload を持たない coalescing signal であり、仕事の正本は永続 job / request とする。
-- API の commit 後 handoff は process-local wake までとし、外部通知の I/O は Resource が所有する coordinator で実行する。確定済み更新の応答は通知の遅延・失敗と独立して返し、再試行と停止は coordinator、通知喪失後の回収は Worker runtime が所有する（[Worker 規約](worker.md#runtime--listener--shutdown)）。
+- API は確定後にメモリ上の通知番号を進め、待機中の Worker に同じ世代・番号を返す。平常時の long poll は資格情報の確認から応答まで DB へのアクセスを伴わない。commit 結果が不明なら世代を更新し、Worker に補完走査を要求する。[Worker 規約](worker.md#runtime--listener--shutdown)
 - 手動再計算の idempotency は永続した operation を正本とし、同じ key の並行受付を直列化して対象を照合する。key は HTTP 予約の期限切れ後も最初の対象にだけ有効とする。
 - 分析では API と release controller が durable request を保存する。API は手動要求・試合 mutation 起点の job 作成を、Worker は campaign 展開・後続実行用の job 作成と実行を所有する。業務内容は通知ではなく DB の要求に置き、展開途中の要求も DB に残す。
 

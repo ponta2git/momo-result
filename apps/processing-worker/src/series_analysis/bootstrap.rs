@@ -6,8 +6,8 @@ use tracing::{error, info};
 use super::{
     ConsumerError, MaintenanceSchedules, Module, Runner,
     attempt_directory::{cleanup_stale_attempt_directories, validate_temporary_root},
+    attestation::Admission,
     config::AnalysisConsumerConfig,
-    control::{IdleRefreshSchedule, register_capability},
     heartbeat::HeartbeatConnection,
 };
 use crate::{postgres, worker::PostCommitSink};
@@ -22,7 +22,7 @@ pub(crate) async fn initialize(
         validate_temporary_root(&config).await,
         "temporary_storage_validation",
     )?;
-    let control_client = startup_result(
+    let mut control_client = startup_result(
         postgres::connect(&config.database_url).await,
         "control_database_connect",
     )?;
@@ -42,10 +42,17 @@ pub(crate) async fn initialize(
         "temporary_storage_recovery",
     )?;
 
-    let mut module = Module {
+    let admission = Admission::start(
+        &mut control_client,
+        &config.database_url,
+        &config.worker_id,
+        post_commit_sink.clone(),
+    )
+    .await?;
+    let module = Module {
+        admission,
         config: config.clone(),
         maintenance: MaintenanceSchedules {
-            capability_refresh: IdleRefreshSchedule::after_success(Instant::now()),
             stale_attempt_cleanup_due,
             history_cleanup_due: Instant::now(),
         },
@@ -56,19 +63,6 @@ pub(crate) async fn initialize(
             post_commit_sink,
         }),
     };
-    // Registration is the final fallible startup action. Until this point every acquired
-    // resource is local and closes on failure. There is no later initialization await that
-    // can leave an advertised capability behind before the caller owns the module.
-    if let Some(runner) = &module.runner {
-        startup_result(
-            register_capability(&runner.control_client, &module.config.worker_id).await,
-            "capability_registration",
-        )?;
-    }
-    module
-        .maintenance
-        .capability_refresh
-        .record_success_at(Instant::now());
     info!(event = "analysis_worker_ready", worker_id = %module.config.worker_id, "analysis worker is ready");
     Ok(module)
 }

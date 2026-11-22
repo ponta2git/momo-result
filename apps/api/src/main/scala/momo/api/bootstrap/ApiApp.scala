@@ -16,6 +16,7 @@ object ApiApp:
       app: Http4sApp[F],
       /** Fails when a supervised background runtime boundary can no longer make safe progress. */
       backgroundFailure: F[Nothing],
+      workerWakeApp: Option[Http4sApp[F]] = None,
   )
 
   /** Package-local handles for seeding and inspecting a fully wired runtime in contract tests. */

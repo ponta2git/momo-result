@@ -18,7 +18,13 @@ final case class AppConfig(
     seriesAnalysisRead: SeriesAnalysisReadConfig = SeriesAnalysisReadConfig.defaults,
     database: Option[DatabaseConfig] = None,
     ingress: Option[IngressConfig] = None,
+    workerWake: Option[WorkerWakeConfig] = None,
+    analysisReleaseAttestation: Boolean = false,
 ):
+  def requiresAnalysisReaderAdmission: Boolean = appEnv match
+    case AppEnv.Prod => true
+    case AppEnv.Dev | AppEnv.Test => workerWake.nonEmpty || analysisReleaseAttestation
+
   override def toString: String =
     val sourceImageStorageMode = sourceImageStorage match
       case SourceImageStorageConfig.Local => "local"
@@ -52,8 +58,17 @@ object AppConfig:
             SourceImageStorageConfigLoader.load[F](env, appEnv),
             SeriesAnalysisReadConfigLoader.load[F](env),
             IngressConfig.load[F](env, appEnv),
+            WorkerWakeConfig.load[F](env, appEnv),
           ).mapN {
-            (database, auth, resourceLimits, sourceImageStorage, seriesAnalysisRead, ingress) =>
+            (
+                database,
+                auth,
+                resourceLimits,
+                sourceImageStorage,
+                seriesAnalysisRead,
+                ingress,
+                workerWake
+            ) =>
               AppConfig(
                 appEnv = appEnv,
                 httpHost = base.httpHost,
@@ -68,6 +83,9 @@ object AppConfig:
                 seriesAnalysisRead = seriesAnalysisRead,
                 database = database,
                 ingress = ingress,
+                workerWake = workerWake,
+                analysisReleaseAttestation = env.contains("FLY_MACHINE_ID") ||
+                  env.get("MOMO_ANALYSIS_RELEASE_ATTESTATION").contains("enabled"),
               )
           }
         }

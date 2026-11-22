@@ -10,6 +10,7 @@ import momo.api.adapters.discord.JavaDiscordOAuthClient
 class AppConfigSpec extends CatsEffectSuite:
   private val prodEnv: Map[String, String] = Map(
     "APP_ENV" -> "prod",
+    "WORKER_WAKE_TOKEN" -> ("w" * 32),
     "MOMO_CANONICAL_HOST" -> "example.com",
     "MOMO_ORIGIN_LOCK_TOKEN" -> "test-only-origin-credential-32-bytes",
     "DATABASE_URL" -> "postgres://u:p@db.example.com/momo?sslmode=verify-full",
@@ -34,6 +35,24 @@ class AppConfigSpec extends CatsEffectSuite:
     DatabaseUrlConfig
       .toJdbcUrl(raw)
       .fold(error => fail(s"expected valid DATABASE_URL: ${error.getMessage}"), identity)
+
+  test(
+    "standalone development and test skip request admission, production and attested readers require it"
+  ) {
+    for
+      dev <- AppConfig.loadFromEnv[IO](Map("APP_ENV" -> "dev"))
+      standaloneTest <- AppConfig.loadFromEnv[IO](Map("APP_ENV" -> "test"))
+      attested <- AppConfig.loadFromEnv[IO](Map(
+        "APP_ENV" -> "test",
+        "MOMO_ANALYSIS_RELEASE_ATTESTATION" -> "enabled"
+      ))
+      production <- AppConfig.loadFromEnv[IO](prodEnv)
+    yield
+      assert(!dev.requiresAnalysisReaderAdmission)
+      assert(!standaloneTest.requiresAnalysisReaderAdmission)
+      assert(attested.analysisReleaseAttestation && attested.requiresAnalysisReaderAdmission)
+      assert(production.requiresAnalysisReaderAdmission)
+  }
 
   test("toJdbcUrl: converts postgres:// URL and extracts credentials") {
     val (url, user, pass) = parsedDatabaseUrl("postgres://summit:summit@localhost:5433/summit")

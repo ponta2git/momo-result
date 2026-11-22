@@ -20,6 +20,7 @@
 - 通常の API + Web は root の `pnpm dev` を使う。Node の version は `mise.toml`、利用可能な command は各 `package.json` を正とする。
 - 依存 DB の起動と migration は対象 `momo-db` checkout の scripts を使う。checkout の特定は [DB 規約](../implementation/database.md#ownership) に従う。
 - `pnpm dev` が起動するのは API + Web であり、Processing Worker は別に起動する。worker の process isolation は Linux runtime が前提なので、macOS でも `apps/processing-worker/Dockerfile` から build した専用 container で実行する。worker の env は専用 env file だけとし、明示的な memory / cgroup 設定を渡す。
+- ローカルで即時通知を使う場合は、API と Worker に同じ開発用の `WORKER_WAKE_TOKEN`（32 文字以上）を設定し、Worker の `WORKER_WAKE_HOSTS` にコンテナから到達できる API の内部 listener を指定する。API の bind 先は `WORKER_WAKE_BIND_HOST`、ポートは `WORKER_WAKE_PORT` で設定できる。
 - runtime image は `scripts/ci/`、DB control plane と待機優先・実行継続は `scripts/e2e/` の対応 smoke と同じ境界で検証する。
 - local volume のデータが消えたように見えたら、書込みや volume 削除を止めて mount と PostgreSQL major version を確認する。data directory は同じ major version の PostgreSQL にだけ mount する。
 - システム E2E は毎回新しい隔離環境を作り、終了・失敗・中断時に所有資源を回収する。対象は runner が作成した DB と runtime に限る。

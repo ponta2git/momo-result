@@ -23,7 +23,15 @@ await runSmoke("Release control-plane smoke", async (signal) => {
   const releaseCapability = smoke.capability("worker-release-smoke");
   const operation = ["--operation-key", "ci-release-control-plane"];
   const promote = ["release-promote", "--trigger", "algorithm-update", ...operation];
-  const release = (args: string[]) => smoke.release(workerImage, database, args, binary);
+  const release = async (args: string[]) => {
+    // This suite owns both simulated processes; preserve their advertised contracts while
+    // renewing exactly their evidence for each isolated release invocation.
+    await smoke.sql(`UPDATE series_analysis_reader_capabilities SET heartbeat_at = clock_timestamp()
+      WHERE reader_id = 'reader-release-smoke';
+      UPDATE series_analysis_worker_capabilities SET heartbeat_at = clock_timestamp()
+      WHERE worker_id = :'worker';`, { worker: releaseCapability });
+    return smoke.release(workerImage, database, args, binary);
+  };
   const cleanup = () =>
     smoke.sqlFile(
       "release-cleanup",

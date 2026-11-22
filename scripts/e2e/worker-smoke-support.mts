@@ -404,7 +404,6 @@ export async function runSmoke(name: string, action: (signal: AbortSignal) => Pr
 export function analysisEnvironment(database: string, worker: string): Record<string, string> {
   return {
     DATABASE_URL: database,
-    MOMO_PROCESSING_LISTENER_DATABASE_URL: database,
     MOMO_ANALYSIS_READ_DATABASE_URL: database,
     MOMO_PROCESSING_RECOVERY_INTERVAL_MS: "1000",
     MOMO_ANALYSIS_PUBLICATION_MODE: "enabled",

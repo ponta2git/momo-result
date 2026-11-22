@@ -127,7 +127,7 @@ test、suite、lint / checker、manual review は、守る価値に対して必�
 - retry / followup を durable に保存し、rollback では wake しないこと。commit 応答不明や重複 wake が二重実行権・二重公開にならないこと。
 - 起動・再接続、wake coalescing、deadline、bounded drain、backoff を確認し、通知欠落は低頻度の補完走査で回復すること。
 - campaign 展開と直接 claim を実 DB で通すこと。queued がなく期限切れ running だけが残る場合、先頭が非対応・lock 中の場合、将来の retry、複数親の競合を含める。
-- PostgreSQL 通知を wake に使う場合、production と同じ pooling mode で session-bound listener への別接続 commit を通す。startup の `LISTEN` 成功や直接 DB だけの test を、通知 route の readiness evidence にしない。
+- 内部 HTTP の通知は DB を閉じた状態でも待機・再送でき、世代交替や切断時には確定済みの仕事を回収することを確認する。
 - worker runtime の起動途中・稼働中の異常からの共通停止、単一期限内の子 process・補助 task 回収。listener の一時切断と構造異常、通知 sender 単独の異常は、それぞれの回復境界で確認する。
 - DB / Linux process / native engine は通常 unit test から分離し、検証済み runtime image と隔離 service で通すこと。
 

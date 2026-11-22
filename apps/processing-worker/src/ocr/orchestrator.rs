@@ -27,6 +27,10 @@ impl ImageRunner {
         })
     }
 
+    pub(crate) fn disconnect(&mut self) {
+        self.runner.disconnect();
+    }
+
     pub(crate) async fn execute(
         &mut self,
         claim: ClaimedOcrJob,

@@ -39,7 +39,7 @@ const FIRST_SCAN: &str = concat!(
         SELECT legacy_id, available_at, created_at AS requested_at
         FROM ocr_jobs
         WHERE $4 AND status = 'queued' AND available_at <= statement_timestamp()
-        ORDER BY available_at, created_at, legacy_id LIMIT $6
+        ORDER BY available_at, created_at, legacy_id LIMIT $7
     ), candidates AS MATERIALIZED (
         SELECT legacy_id, available_at, requested_at, true AS ocr FROM ocr_page
         UNION ALL
@@ -47,7 +47,7 @@ const FIRST_SCAN: &str = concat!(
          WHERE $5 AND NOT EXISTS (SELECT FROM ocr_page)
            AND status = 'queued' AND available_at <= statement_timestamp()
            AND algorithm_version = $1 AND artifact_schema_version = $2::bigint::integer AND validation_contract_id = $3
-         ORDER BY available_at, requested_at, legacy_id LIMIT $6)
+         ORDER BY available_at, requested_at, legacy_id LIMIT $7)
     )
     SELECT legacy_id, available_at, requested_at, ocr, NULL::double precision FROM candidates
     UNION ALL
@@ -61,6 +61,7 @@ pub(super) async fn first_scan(
     client: &Client,
     ocr: bool,
     analysis: bool,
+    ocr_stale_after: Duration,
 ) -> Result<FirstScan, tokio_postgres::Error> {
     let started = Instant::now();
     let schema = i64::from(ARTIFACT_SCHEMA_VERSION);
@@ -73,6 +74,7 @@ pub(super) async fn first_scan(
                 (&ARTIFACT_VALIDATION_CONTRACT_ID, Type::TEXT),
                 (&ocr, Type::BOOL),
                 (&analysis, Type::BOOL),
+                (&ocr_stale_after.as_secs_f64(), Type::FLOAT8),
                 (&i64::from(PAGE), Type::INT8),
             ],
         )
@@ -117,6 +119,7 @@ pub(super) async fn next_due(
     client: &Client,
     ocr: bool,
     analysis: bool,
+    ocr_stale_after: Duration,
 ) -> Result<Option<Instant>, tokio_postgres::Error> {
     let started = Instant::now();
     let schema = i64::from(ARTIFACT_SCHEMA_VERSION);
@@ -129,6 +132,7 @@ pub(super) async fn next_due(
                 (&ARTIFACT_VALIDATION_CONTRACT_ID, Type::TEXT),
                 (&ocr, Type::BOOL),
                 (&analysis, Type::BOOL),
+                (&ocr_stale_after.as_secs_f64(), Type::FLOAT8),
             ],
         )
         .await?;
@@ -210,7 +214,12 @@ async fn recover_orphan(
             .await?
     };
     tx.commit().await?;
-    sink.submit(effects.committed(()).effects)?;
+    let wake = if kind == "ocr" {
+        super::PostCommitEffects::WakeJobs
+    } else {
+        effects.committed(()).effects
+    };
+    sink.submit(wake)?;
     Ok(())
 }
 

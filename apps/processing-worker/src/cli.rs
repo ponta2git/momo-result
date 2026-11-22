@@ -55,6 +55,12 @@ enum Command {
         #[arg(long)]
         require_quiescent: bool,
     },
+    /// Obtain fresh evidence from the resident worker on this machine.
+    ReleaseAttest {
+        /// Require the resident process to be admitted to the active contract.
+        #[arg(long)]
+        active: bool,
+    },
     ReleasePromote {
         #[arg(long, value_enum)]
         trigger: PromotionTrigger,
@@ -377,6 +383,7 @@ async fn execute_cli(shutdown_deadline: &mut Option<tokio::time::Instant>) -> Ex
             );
         }
         Command::Worker
+        | Command::ReleaseAttest { .. }
         | Command::ReleaseAudit { .. }
         | Command::ReleasePromote { .. }
         | Command::ReleaseReconcile { .. }
@@ -417,11 +424,38 @@ fn bootstrap_command(arguments: &[OsString]) -> ExitCode {
     }
 }
 
+async fn release_attest(active: bool) -> Result<(), String> {
+    let id = crate::series_analysis::attestation::challenge(active)
+        .await
+        .map_err(|error| format!("resident worker attestation failed: {}", error.kind()))?;
+    write_stdout_line(id)
+}
+
+async fn release_reconcile(
+    operation: MaintenanceOperation,
+    release_id: &str,
+    apply: bool,
+    expected_plan: Option<&str>,
+) -> Result<(), String> {
+    let report =
+        crate::series_analysis::release::reconcile(operation, release_id, apply, expected_plan)
+            .await
+            .map_err(|error| error.to_string())?;
+    write_json_line(&report)?;
+    if report.status == "attention_required" {
+        return Err(String::from(
+            "analysis maintenance requires attention; inspect the operation report",
+        ));
+    }
+    Ok(())
+}
+
 async fn run(
     command: Command,
     shutdown_deadline: &mut Option<tokio::time::Instant>,
 ) -> Result<(), String> {
     match command {
+        Command::ReleaseAttest { active } => release_attest(active).await,
         Command::Worker => Box::pin(run_worker(shutdown_deadline)).await,
         Command::ReleaseAudit {
             require_current,
@@ -437,24 +471,7 @@ async fn run(
             release_id,
             apply,
             expected_plan,
-        } => {
-            let report = crate::series_analysis::release::reconcile(
-                operation,
-                &release_id,
-                apply,
-                expected_plan.as_deref(),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-            write_json_line(&report)?;
-            if report.status == "attention_required" {
-                Err(String::from(
-                    "analysis maintenance requires attention; inspect the operation report",
-                ))
-            } else {
-                Ok(())
-            }
-        }
+        } => release_reconcile(operation, &release_id, apply, expected_plan.as_deref()).await,
         Command::ShadowEndurance {
             game_title_id,
             runs,

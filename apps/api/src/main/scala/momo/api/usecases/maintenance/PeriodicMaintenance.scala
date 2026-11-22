@@ -1,6 +1,6 @@
 package momo.api.usecases.maintenance
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationLong, FiniteDuration}
 
 import cats.effect.{Concurrent, Resource, Temporal}
 import cats.syntax.all.*
@@ -17,5 +17,9 @@ object PeriodicMaintenance:
       val classes = SafeLog.throwableClasses(error)
       logger.error(s"$name failed errorClasses=$classes")
     }
-    def loop: F[Unit] = logged >> Temporal[F].sleep(interval) >> loop
+    // Use wall-clock boundaries so hourly/daily pruning shares the scheduler's recovery wake.
+    def loop: F[Unit] = logged >> Temporal[F].realTime.flatMap { now =>
+      val delay = interval.toMillis - Math.floorMod(now.toMillis, interval.toMillis)
+      Temporal[F].sleep(delay.millis) >> loop
+    }
     Resource.make(Concurrent[F].start(loop))(_.cancel).void

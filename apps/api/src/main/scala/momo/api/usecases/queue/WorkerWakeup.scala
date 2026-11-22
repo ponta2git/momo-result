@@ -1,87 +1,47 @@
 package momo.api.usecases.queue
 
-import cats.effect.std.Queue
-import cats.effect.{Concurrent, Ref, Resource}
+import java.util.UUID
+
+import scala.concurrent.duration.*
+
+import cats.effect.Async
 import cats.syntax.all.*
+import fs2.concurrent.SignallingRef
 
-enum WorkerWakeKind derives CanEqual:
-  case ProcessingJobs
-  case OcrSubmissions
-
-final case class PostCommitEffects private (
-    private[queue] val wakeKinds: Set[WorkerWakeKind]
-) derives CanEqual:
-  def ++(other: PostCommitEffects): PostCommitEffects = PostCommitEffects(
-    wakeKinds ++ other.wakeKinds
-  )
-
-  def isEmpty: Boolean = wakeKinds.isEmpty
-
-  def contains(kind: WorkerWakeKind): Boolean = wakeKinds.contains(kind)
-
-object PostCommitEffects:
-  val empty: PostCommitEffects = PostCommitEffects(Set.empty)
-
-  def wake(kind: WorkerWakeKind): PostCommitEffects = PostCommitEffects(Set(kind))
-
-  def wakeAll(first: WorkerWakeKind, rest: WorkerWakeKind*): PostCommitEffects = PostCommitEffects(
-    rest.toSet + first
-  )
-
-enum WorkerWakeSubmitResult derives CanEqual:
-  /** The signal was accepted or coalesced with an already pending signal. */
-  case Accepted
-
-  /** The runtime is shutting down. The committed operation must remain successful. */
-  case Closed
-
-/**
- * Accepts bounded process-local hints after a durable commit. Submission must not wait for
- * external I/O: callers mask cancellation only while handing off an already committed result.
- * A Resource-owned relay sends accepted hints to the Worker.
- */
+/** Process-local hints. A changed boot requires recovery of a possibly unresolved transaction. */
 trait WorkerWakeSink[F[_]]:
-  def submit(effects: PostCommitEffects): F[WorkerWakeSubmitResult]
+  def signal: F[Unit]
+  def uncertain: F[Unit]
 
-/**
- * Process-local, non-durable hints that a Worker task may have work.
- *
- * Each kind has capacity one: duplicate submissions coalesce and carry no row ID or payload. Only
- * submit after the transaction that wrote the durable DB state has committed. Losing or closing
- * this signal cannot lose the durable intent, and a closed sink is reported as data rather than
- * failing an already committed producer operation.
- */
-final class WorkerWakeup[F[_]] private (
-    queues: Map[WorkerWakeKind, Queue[F, Unit]],
-    closed: Ref[F, Boolean],
-)(using concurrent: Concurrent[F])
-    extends WorkerWakeSink[F]:
+final case class WorkerWakeCursor(boot: UUID, counter: Long) derives CanEqual:
+  def unsignedCounter: String = java.lang.Long.toUnsignedString(counter)
 
-  override def submit(effects: PostCommitEffects): F[WorkerWakeSubmitResult] = concurrent
-    .uncancelable(_ =>
-      closed.get.flatMap {
-        case true => WorkerWakeSubmitResult.Closed.pure[F]
-        case false => effects.wakeKinds.toList
-            .traverse_(kind => queueFor(kind).tryOffer(()).void)
-            .as(WorkerWakeSubmitResult.Accepted)
-      }
+final class WorkerWakeup[F[_]: Async] private (
+    state: SignallingRef[F, WorkerWakeCursor]
+) extends WorkerWakeSink[F]:
+  def advance: F[WorkerWakeCursor] = state.updateAndGet(s => s.copy(counter = s.counter + 1L))
+
+  def invalidate: F[WorkerWakeCursor] =
+    Async[F].delay(UUID.randomUUID()).flatMap(boot =>
+      state.updateAndGet(_ => WorkerWakeCursor(boot, 0L))
     )
 
-  private[queue] def await(kind: WorkerWakeKind): F[Unit] = queueFor(kind).take
+  def signal: F[Unit] = advance.void
+  def uncertain: F[Unit] = invalidate.void
 
-  private[queue] def tryAwait(kind: WorkerWakeKind): F[Option[Unit]] = queueFor(kind).tryTake
-
-  private[queue] def close: F[Unit] = closed.set(true)
-
-  private def queueFor(kind: WorkerWakeKind): Queue[F, Unit] = queues(kind)
+  def await(previous: Option[WorkerWakeCursor]): F[WorkerWakeCursor] = previous match
+    case None => state.get
+    case Some(cursor) =>
+      // discrete emits its initial value and then updates, including a wake racing registration.
+      Async[F].timeoutTo(
+        state.discrete.find(_ != cursor).compile.lastOrError,
+        30.seconds,
+        state.get,
+      )
 
 object WorkerWakeup:
-  def create[F[_]: Concurrent]: F[WorkerWakeup[F]] =
+  def create[F[_]: Async]: F[WorkerWakeup[F]] =
     for
-      queues <-
-        WorkerWakeKind.values.toList.traverse(kind => Queue.bounded[F, Unit](1).tupleLeft(kind))
-      closed <- Ref.of[F, Boolean](false)
-    yield new WorkerWakeup(queues.toMap, closed)
-
-  def resource[F[_]: Concurrent]: Resource[F, WorkerWakeup[F]] = Resource
-    .make(create[F])(_.close)
+      boot <- Async[F].delay(UUID.randomUUID())
+      state <- SignallingRef[F, WorkerWakeCursor](WorkerWakeCursor(boot, 0L))
+    yield new WorkerWakeup(state)

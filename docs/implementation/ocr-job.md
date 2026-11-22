@@ -36,7 +36,7 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 
 - job / snapshot / 下書き / submission member を同じ transaction で保存する。active job 上限は transaction lock 取得後の statement で最新件数を検査する。lock 待機前の snapshot を同じ CTE 内で使わない。
 - 受付判定は queued / running 件数と、実行可能になった queued job の待ち時間を使う。将来の再試行と現在の滞留を区別し、過去の failed 履歴を backlog に含めない。
-- process-local wake は commit 後に限って送る。外部の payloadless PostgreSQL 通知は API が所有する非同期 relay で HTTP 応答と独立に処理する。
+- API は commit 後に通知番号を進める。その API へ long poll 中の Worker は応答を受け取り、空き枠があれば直ちに永続 job の claim を試みる。
 - 通知は低遅延化の hint とする。通知が失敗・欠落しても受付は有効のまま保ち、Worker の起動時・再接続時・期限到来時・低頻度走査で回収する。listener の接続と起動確認は [Worker 規約](worker.md#runtime--listener--shutdown) に従う。
 
 ## Claim and Execution
@@ -76,7 +76,7 @@ HTTP success が保証するのは入力と業務状態の DB commit までと�
 | layoutFamily の正規値・旧表記の解決 | `layout-families-v1.json` を Scala、TypeScript、Rust の各 resolver に通す。Web の新規 hint の正規化を含む |
 | 受付 transaction、backlog 判定 | 実 PostgreSQL で受付の原子性、上限判定、rollback 時の wake 抑止 |
 | claim、fence、lease、再試行予算 | 実 PostgreSQL で claim 競合、古い fence の拒否、retry と lease 回復の別予算、期限切れ実行だけが残る場合の回復 |
-| listener、wake | 実 PostgreSQL と production と同じ pooling mode で通知欠落・再接続からの回収 |
+| long poll、wake | 内部 HTTP の通知・世代交替と、実 PostgreSQL での通知欠落後の回収 |
 | 優先順、child の停止・回収 | Linux の実 process で待機 OCR の優先、実行中の分析の継続、child の停止・回収 |
 | 画面への反映、再操作 | 主要 E2E（[開発作業規約の E2E Suites](../development/workflow.md#e2e-suites)） |
 

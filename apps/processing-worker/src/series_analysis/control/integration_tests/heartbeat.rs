@@ -12,7 +12,7 @@ use crate::{
 #[ignore = "requires explicitly isolated ANALYSIS_CONTROL_SMOKE_DATABASE_URL"]
 async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
     let database_url = std::env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL")?;
-    let primary = crate::identity::fixtures::connect(&database_url).await?;
+    let mut primary = crate::identity::fixtures::connect(&database_url).await?;
     cleanup_database(&primary).await?;
     prepare_owned_attempt(&primary).await?;
     let directory = TempDir::new()?;
@@ -20,7 +20,7 @@ async fn real_postgres_heartbeat_owns_deadline_and_connection() -> SmokeResult {
         notifications::config(&database_url, NotificationSink::default(), directory.path())?;
     config.lease_duration = Duration::from_secs(70);
     let claim = claim(OLD_ATTEMPT_ID, 1, OLD_FENCE)?;
-    super::super::register_capability(&primary, &config.worker_id).await?;
+    let _admitted = super::super::admit_capability(&mut primary, &config.worker_id).await?;
 
     // Real response latency crosses the former one-second deadline without lock contention.
     {

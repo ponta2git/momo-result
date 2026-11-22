@@ -1,60 +1,45 @@
 package momo.api.usecases.queue
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
+import cats.effect.testkit.TestControl
 
 import momo.api.MomoCatsEffectSuite
 
 final class WorkerWakeupSpec extends MomoCatsEffectSuite:
-  test("coalesces duplicate capacity-one signals independently for each kind"):
-    WorkerWakeup.resource[IO].use { wakeup =>
-      for
-        first <- wakeup.submit(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs))
-        duplicate <- wakeup.submit(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs))
-        both <- wakeup.submit(PostCommitEffects.wakeAll(
-          WorkerWakeKind.ProcessingJobs,
-          WorkerWakeKind.OcrSubmissions,
-        ))
-        ocr <- wakeup.tryAwait(WorkerWakeKind.ProcessingJobs)
-        duplicateOcr <- wakeup.tryAwait(WorkerWakeKind.ProcessingJobs)
-        submission <- wakeup.tryAwait(WorkerWakeKind.OcrSubmissions)
-      yield
-        assertEquals(first, WorkerWakeSubmitResult.Accepted)
-        assertEquals(duplicate, WorkerWakeSubmitResult.Accepted)
-        assertEquals(both, WorkerWakeSubmitResult.Accepted)
-        assertEquals(ocr, Some(()))
-        assertEquals(duplicateOcr, None)
-        assertEquals(submission, Some(()))
-    }
-
-  test("canceling a waiter does not consume a later signal"):
-    WorkerWakeup.resource[IO].use { wakeup =>
-      for
-        waiter <- wakeup.await(WorkerWakeKind.ProcessingJobs).start
-        _ <- IO.cede
-        _ <- waiter.cancel
-        _ <- wakeup.submit(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs))
-        signal <- wakeup.tryAwait(WorkerWakeKind.ProcessingJobs)
-      yield assertEquals(signal, Some(()))
-    }
-
-  test("closed sink reports closure without failing or accepting new demand"):
+  test("both waiters observe a wake, including one registering just after it"):
     for
-      wakeup <- WorkerWakeup.create[IO]
-      _ <- wakeup.close
-      result <- wakeup.submit(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs))
-      signal <- wakeup.tryAwait(WorkerWakeKind.ProcessingJobs)
+      state <- WorkerWakeup.create[IO]
+      before <- state.await(None)
+      waiter <- state.await(Some(before)).start
+      accepted <- state.advance
+      late <- state.await(Some(before))
+      early <- waiter.joinWithNever
     yield
-      assertEquals(result, WorkerWakeSubmitResult.Closed)
-      assertEquals(signal, None)
+      assertEquals(accepted.boot, before.boot)
+      assertEquals(accepted.counter, before.counter + 1L)
+      assertEquals(late, accepted)
+      assertEquals(early, accepted)
 
-  test("post-commit effects combine as a kind set without duplicate demand"):
-    val effects = PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs) ++
-      PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs) ++
-      PostCommitEffects.wake(WorkerWakeKind.OcrSubmissions)
+  test("unchanged long poll returns the same cursor at 30 seconds"):
+    TestControl.executeEmbed {
+      for
+        state <- WorkerWakeup.create[IO]
+        before <- state.await(None)
+        result <- state.await(Some(before)).timed
+      yield assertEquals(result, (30.seconds, before))
+    }
 
-    assertEquals(
-      effects,
-      PostCommitEffects.wakeAll(WorkerWakeKind.ProcessingJobs, WorkerWakeKind.OcrSubmissions),
-    )
-    assert(PostCommitEffects.empty.isEmpty)
-    assert(!effects.isEmpty)
+  test("an uncertain outcome or restart forces recovery even at the same counter"):
+    for
+      state <- WorkerWakeup.create[IO]
+      before <- state.await(None)
+      changed <- state.invalidate
+      after <- state.await(Some(before))
+      restart <- WorkerWakeup.create[IO]
+      restarted <- restart.await(Some(after))
+    yield
+      assertNotEquals(changed.boot, before.boot)
+      assertEquals(after, changed)
+      assertNotEquals(restarted.boot, changed.boot)

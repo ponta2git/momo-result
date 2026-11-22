@@ -30,11 +30,38 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
   const validation_contract_id = smoke.contract.validationContractId;
   let worker: ReturnType<typeof startWorker> | undefined;
   let ownsFixtures = false;
-  const release = async (args: string[]) =>
-    requireSuccess(
+  const setFixtureAlgorithm = (algorithm: string, cleanup = false) =>
+    smoke.sql(
+      "UPDATE series_analysis_release_state SET algorithm_version = :'algorithm' WHERE singleton_key = 'current';",
+      { algorithm },
+      cleanup ? null : signal,
+    );
+  const attest = (active = false) =>
+    command(
+      "docker",
+      [
+        "exec",
+        worker_container,
+        "/usr/local/bin/momo-processing-worker",
+        "release-attest",
+        ...(active ? ["--active"] : []),
+      ],
+      { signal },
+    );
+  const release = async (args: string[]) => {
+    const attested = requireSuccess(await attest(), "Resident worker attestation");
+    check(
+      attested === analysis_capability_id,
+      "A different worker answered the release challenge.",
+    );
+    // This suite has a fixture reader and a real running worker.
+    await smoke.sql(`UPDATE series_analysis_reader_capabilities SET heartbeat_at = clock_timestamp()
+      WHERE reader_id = 'reader-release-smoke';`);
+    return requireSuccess(
       await smoke.release(worker_image, release_database_url, args),
       "Release command",
     );
+  };
   const waitSQL = (expected: string, query: string, description: string) =>
     smoke.waitSQL(expected, query, description, {
       container: worker_container,
@@ -44,8 +71,7 @@ await runSmoke("Series-analysis control-plane smoke", async (signal) => {
     await smoke.sql(
       `UPDATE series_analysis_jobs
 SET available_at = clock_timestamp()
-WHERE series_analysis_jobs.legacy_id = '${job}';
-SELECT pg_notify('processing_jobs', '');`,
+WHERE series_analysis_jobs.legacy_id = '${job}';`,
     );
   };
   const pair = async (prefix: string) => {
@@ -60,9 +86,11 @@ SELECT pg_notify('processing_jobs', '');`,
       });
       ownsFixtures = true;
       await smoke.sqlFile("control-plane-retention");
+      await setFixtureAlgorithm("control-plane-previous-fixture");
       worker = startWorker(smoke, worker_container, worker_image, {
         ...analysisEnvironment(worker_database_url, analysis_worker_id),
         MOMO_ANALYSIS_CONFIG_VERSION: "ci-control-plane-v1",
+        MOMO_ANALYSIS_RELEASE_ATTESTATION: "enabled",
       });
       await worker.ready();
       await waitSQL(
@@ -76,6 +104,22 @@ SELECT pg_notify('processing_jobs', '');`,
     AND draining = false;
 `,
         "worker capability registration",
+      );
+      check(
+        requireSuccess(await attest(), "Candidate proof") === analysis_capability_id,
+        "Wrong candidate.",
+      );
+      check((await attest(true)).code !== 0, "A waiting candidate claimed active admission.");
+      check(
+        (await smoke.sql(
+          "SELECT count(*) FROM series_analysis_campaign_targets WHERE status = 'succeeded';",
+        )) === "0",
+        "A waiting candidate completed a target before admission.",
+      );
+      await setFixtureAlgorithm(algorithm_version);
+      check(
+        requireSuccess(await attest(true), "Post-cutover admission") === analysis_capability_id,
+        "Wrong active worker.",
       );
       await waitSQL(
         `0`,
@@ -200,7 +244,7 @@ WHERE series_analysis_jobs.legacy_id = '${first_job}';`,
 FROM series_analysis_jobs
 WHERE series_analysis_jobs.legacy_id = '${first_job}';`,
         )) === attempts_before,
-        "A wake for a terminal job changed its attempt count.",
+        "Rescanning a terminal job changed its attempt count.",
       );
       await pair("ci-analysis-lease-recovery");
       const lease_job = await smoke.sql(`SELECT series_analysis_jobs.legacy_id AS id
@@ -266,7 +310,6 @@ COMMIT;`);
           [validation_contract_id, validation_contract_id, validation_contract_id].join("|"),
         "Expired lease fixture lost validation contract provenance.",
       );
-      await smoke.sql("SELECT pg_notify('processing_jobs', '');");
       await waitSQL(
         "succeeded",
         `SELECT status
@@ -473,7 +516,6 @@ WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id
           'ci-analysis-compatible-later', game_title_id, input_revision, algorithm_version,
           artifact_schema_version, validation_contract_id, 'queued', 'manual', clock_timestamp(), clock_timestamp()
         FROM series_analysis_title_states WHERE game_title_id = pg_temp.fixture_uuid('game_titles', 'title-release-smoke-b');
-        SELECT pg_notify('processing_jobs', '');
       `);
       await waitSQL(
         "succeeded",
@@ -521,6 +563,7 @@ WHERE attempt.validation_contract_id IS DISTINCT FROM job.validation_contract_id
         console.error(JSON.stringify(diagnostic));
       await cleanups([
         () => worker?.stop(),
+        () => (ownsFixtures ? setFixtureAlgorithm(algorithm_version, true) : undefined),
         () =>
           ownsFixtures
             ? smoke.sqlFile(

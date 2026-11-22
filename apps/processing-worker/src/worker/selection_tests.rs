@@ -27,7 +27,7 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
     assert_eq!(baseline.try_get::<_, i64>(0)?, 0);
     assert_eq!(baseline.try_get::<_, i64>(1)?, 0);
     assert!(matches!(
-        first_scan(&client, true, true).await?,
+        first_scan(&client, true, true, Duration::from_mins(5)).await?,
         FirstScan::Idle(None)
     ));
     client.execute(r"
@@ -43,13 +43,14 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
           ON CONFLICT (game_title_id) DO NOTHING
         ", &[&TITLE]).await?;
     insert_jobs(&client).await?;
-    let FirstScan::Idle(Some(at)) = first_scan(&client, true, true).await? else {
+    let FirstScan::Idle(Some(at)) = first_scan(&client, true, true, Duration::from_mins(5)).await?
+    else {
         return Err("future compatible analysis must set the wake deadline".into());
     };
     let due = at.saturating_duration_since(tokio::time::Instant::now());
     assert!(due > Duration::ZERO && due <= Duration::from_secs(20));
     assert!(matches!(
-        first_scan(&client, true, false).await?,
+        first_scan(&client, true, false, Duration::from_mins(5)).await?,
         FirstScan::Idle(None)
     ));
     client.execute(r"
@@ -57,7 +58,9 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
         SET available_at = CAST('2020-01-01' AS timestamptz), requested_at = CAST('2020-01-01' AS timestamptz)
         WHERE series_analysis_jobs.legacy_id LIKE $1
         ", &[&format!("{PREFIX}%")]).await?;
-    let FirstScan::Analysis(first) = first_scan(&client, false, true).await? else {
+    let FirstScan::Analysis(first) =
+        first_scan(&client, false, true, Duration::from_mins(5)).await?
+    else {
         return Err("expected the first compatible analysis page".into());
     };
     assert_eq!(first.len(), 64);
@@ -79,7 +82,7 @@ async fn real_postgres_selects_due_work_and_recovers_orphans() -> TestResult {
     assert_eq!(pages, 5);
     assert!(!ids.contains("scheduler-selection-smoke-unsupported"));
     assert_eq!(
-        next_due(&client, true, true).await?,
+        next_due(&client, true, true, Duration::from_mins(5)).await?,
         None,
         "already due blocked jobs must not create a zero-delay retry loop"
     );

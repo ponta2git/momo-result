@@ -23,8 +23,8 @@ API と Worker の非同期 job 契約は [OCR job 契約](ocr-job.md)、job / a
 
 - `worker` の単一 runtime が構成、共通 preflight、module の bootstrap、job 選択、所有 task の監視と停止を管理する。supervisor と scheduler の制御も共通の run loop にまとめる。停止・業務側の回復不能な異常を検知した時点で新規 claim と調停 step の開始を止め、一つの絶対期限で終了する。通常の確定処理の予算に強制停止・回収確認の猶予を加え、同じ期限内に予約する。DB 処理中も停止・task 異常を監視し、進行中の transaction は通常の wake があっても継続する。
 - 停止 signal・回収 handle・最初の異常原因は、起動・通常運転の Future が捕捉可能な panic で失われても保持する。panic の捕捉は終了処理へ移るためだけに使う（失われた業務状態を再利用して通常運転へ戻らない）。業務異常は後始末が成功しても異常として扱い、最初の原因と停止期限は二次的な失敗があっても保つ。commit 成否不明の仕事は推測で確定せず、DB の lease・fence と次回起動時の復旧に委ねる。
-- 共通 listener task は job と有効な OCR 受付の payload-free route を同じ接続で購読し、各 route の初回 round trip を確認してから発見処理へ進む。初回の購読・疎通確認の失敗は起動失敗とし、両 route は一つの再確認 signal へまとめる。稼働後の一時切断は停止可能な局所再接続と疎通確認後の補完走査で回復し、protocol 違反・panic・内部経路の予期しない破損は worker 全体の停止へ進める。再接続中も listener は一世代だけとし、通常停止による channel 終了は正常終了として扱う。業務や scheduler の知識は汎用 PostgreSQL 接続層の外に置く。
-- PostgreSQL の session state へ依存する listener は、通常 query 用の transaction-pooled 接続と設定を分離した session-capable 接続を所有する。機能成立は `LISTEN` 文の成功ではなく、startup readiness 前に確認した別接続からの通知 round trip で判断する。
+- Worker は許可された各書込 API へ認証付き HTTP long poll を張る。初回接続・世代交替・切断では全種類の仕事を再走査する。安定した世代では番号の変更で起床し、走査中の更新も次回へ引き継ぐ。
+- 全 writer を観測し、旧 transaction の確定期限を過ぎて開始した走査が完了するまで短い間隔で補完する。同期後は既知の実行・受付・lease 期限または毎時 00 分・30 分に DB を調べる。空の long poll 応答では SQL を発行しない。
 - Worker runtime は起動・再接続時の走査、bounded drain、実行可能時刻、lease 回復、backoff を扱い、低頻度走査で通知欠落を補う。候補選択と実行権取得を分け、claim / fence で複数親の競合と古い owner の更新を制御する。
 - 親の非同期実行は current-thread runtime を使い、bootstrap と資源を保持する module state は親の runtime 内で保持する（独立 task にしない）。
 - 計算 attempt は種類ごとの型付き Runner で実行し、停止・終了・子と補助 task の回収は共通の実行管理 handle で監視する。通常の Err でも Runner 資源を返して task の panic と区別し、完了待ちが中断されても回収の所有権を保つ。実行の正常終了と成果物公開の成功は別々に判定する。業務固有の claim や成果物は共通 handle の外に置き、次の attempt へ渡すのは回収を確認した資源と実行枠だけとする。
@@ -56,7 +56,7 @@ API と Worker の非同期 job 契約は [OCR job 契約](ocr-job.md)、job / a
 - OCR の不確かな読取値は、必要な警告を保持して要確認結果として保存する。件数の妥当性しきい値は警告条件として使い（保存拒否の上限ではない）、parser と保存前検証で警告条件を一致させる。構造・型・対応関係が壊れた候補や警告の欠落は拒否する。
 - API は送出の受付で、所有者・固定画像集合（member 集合）・受付期限を原子的に保存する。その後の各画像の job 登録は、対応する member の registered 化と一つの transaction にする。送出受付と job 登録は別の transaction であり、pending member のまま upload・job 登録が続く経路や、画像 job 0 件のまま受付期限を迎える経路も成立させる（[ドメイン規約の OCR送出](../domain-rule.md#ocr送出)）。同一操作の PUT と登録済み member の再送は同じ識別子へ収束する。Web は全画像の内容識別と upload key を送出受付前に固定する。保存形は [DB 規約](database.md#durable-state-rules) に従う。
 - OCR の受付調停は現在の下書き slot ではなく固定 member と対応 job の終端を読み、全員終了後だけ送出を確定する。下書き → 送出の順に lock し、業務更新後の最後に result gate と設定を読む。ON なら文脈と失敗だけを固定し、OFF でも送出は終端にし、通知を省略した確定状態を保つ。確定後に通知を再構築しない。画像 0 件の期限終了も回収し、後の送出・slot 状態はそのまま保つ。
-- 受付調停は共通 listener 確立後の初回・再接続・期限・低頻度の安全走査で open を巡回する。worker が最大一つの有限 step を駆動し、cursor・上限付きの発見済み ID・Busy 再確認予算を wake と接続交換の間も保持する。soft な走査予算を使い切っても先頭の一件は試み、途中の進捗を次の step へ渡す。Busy だった送出だけを早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。
+- 受付調停は Worker の起動・再接続・期限・低頻度の安全走査で open を巡回する。worker が最大一つの有限 step を駆動し、cursor・上限付きの発見済み ID・Busy 再確認予算を wake と接続交換の間も保持する。soft な走査予算を使い切っても先頭の一件は試み、途中の進捗を次の step へ渡す。Busy だった送出だけを早期再確認し、通常の安全走査・受付期限を後ろへ延ばさない。
 - 受付調停と画像 Runner は可変資源を別々に所有し、OCR 画像・分析の実行資源予約と独立して調停を進める。task・接続は受付数から独立した構成とし、発見済み ID を上限付きで保持する。全受付の待機一覧は持たない。画像 Runner の生成と呼出しは OCR orchestrator に閉じ、各画像は Worker が process の資源を予約して job lease を claim した後だけ実行する。未到着 member の受付期限と登録済み画像 job の実行期限は別々に扱う。
 - commit 後の wake hint は損失可能で、正本は保存状態。各送出を有限の transaction で扱い、settled commit を確認した経路だけが通知を dispatch する。共有 wire・宣言的な保存構造と排他契約は対象 `momo-db` checkout の `docs/discord-notifications.md` を正本とし、DB へ終了 policy や trigger を置かない。
 - OCR の実行枠は通知の HTTP 完了と独立に解放する。

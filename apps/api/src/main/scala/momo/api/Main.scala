@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
 
 import momo.api.bootstrap.ApiApp
 import momo.api.config.AppConfig
-import momo.api.http.{RuntimeHttp2ProbeMiddleware, RuntimeIngressMiddleware}
+import momo.api.http.{RuntimeHttp2ProbeMiddleware, RuntimeIngressMiddleware, WorkerWakeServer}
 import momo.api.logging.SafeLog
 
 object Main extends IOApp:
@@ -16,13 +16,16 @@ object Main extends IOApp:
 
   override def run(_args: List[String]): IO[ExitCode] = AppConfig.load[IO].flatMap { config =>
     bindAddress(config).flatMap { case (host, port) =>
-      ApiApp.wired[IO](config).flatMap(runtime =>
-        EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
-          .withHttpApp(RuntimeIngressMiddleware[IO](config)(
-            RuntimeHttp2ProbeMiddleware[IO](runtime.app)
-          )).build
-          .as(runtime.backgroundFailure)
-      ).use { backgroundFailure =>
+      ApiApp.wired[IO](config).flatMap { runtime =>
+        val privateListener =
+          (config.workerWake, runtime.workerWakeApp).mapN(WorkerWakeServer.resource[IO]).sequence_
+        privateListener *>
+          EmberServerBuilder.default[IO].withHost(host).withPort(port).withHttp2
+            .withHttpApp(RuntimeIngressMiddleware[IO](config)(
+              RuntimeHttp2ProbeMiddleware[IO](runtime.app)
+            )).build
+            .as(runtime.backgroundFailure)
+      }.use { backgroundFailure =>
         val startedMessage = "momo_result_api_started " + s"host=${config.httpHost} " +
           s"port=${config.httpPort} " + s"env=${config.appEnv} http2=true"
         IO.delay(logger.info(startedMessage)) *>

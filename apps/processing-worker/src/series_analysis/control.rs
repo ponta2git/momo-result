@@ -22,7 +22,7 @@ mod vocabulary;
 mod integration_tests;
 
 pub(crate) use capability::{
-    CAPABILITY_FRESH_SECONDS, IdleRefreshSchedule, mark_draining, register_capability,
+    CAPABILITY_FRESH_SECONDS, admit_capability, capability_row_id, mark_draining,
 };
 pub(crate) use claim::claim_job;
 pub(crate) use completion::publish;

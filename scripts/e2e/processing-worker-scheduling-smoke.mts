@@ -150,7 +150,6 @@ await runSmoke("Combined analysis/OCR scheduling smoke", async (signal) => {
 `,
         `the scoped analysis capability registration`,
       );
-      await smoke.sql("SELECT pg_notify('processing_jobs', '');");
       await waitSQL(
         `analysis|${analysis_worker_id}|true`,
         `SELECT 'analysis|' || job.lease_owner || '|' || CAST(job.validation_contract_id = '${validation_contract_id}'
@@ -200,8 +199,7 @@ SET available_at = clock_timestamp()
 WHERE ocr_jobs.legacy_id = '${ocr_job}';
 UPDATE series_analysis_jobs
 SET available_at = clock_timestamp()
-WHERE series_analysis_jobs.legacy_id = '${waiting_job}';
-SELECT pg_notify('processing_jobs', '');`,
+WHERE series_analysis_jobs.legacy_id = '${waiting_job}';`,
       );
       // Both kinds are now due. Observe real renewals without allowing the queued
       // OCR request to interrupt this child or claim the next analysis attempt.

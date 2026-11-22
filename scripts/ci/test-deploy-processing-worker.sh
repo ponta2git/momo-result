@@ -5,6 +5,7 @@ task_tmp="$(mktemp -d)"
 trap 'rm -rf "${task_tmp}"' EXIT
 mkdir -p "${task_tmp}/bin" "${task_tmp}/scripts/ci"
 cp "${repo_root}/scripts/ci/"{deploy-processing-worker,resolve-pushed-runtime-image,classify-git-range,classify-changes,ci-tool}.sh "${task_tmp}/scripts/ci/"
+export WORKER_WAKE_HOSTS=fixture.internal
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}" RUNNER_TEMP="${task_tmp}"
 export ANALYSIS_RELEASE_SHA=0123456789abcdef0123456789abcdef01234567
 export ANALYSIS_IMAGE_REF="registry.fly.io/momo-result-analysis:${ANALYSIS_RELEASE_SHA}-101-2"
@@ -31,14 +32,16 @@ case "$1" in
   secrets)
     status=Deployed
     [[ ! -f "${TEST_STATE}/staged" ]] || status=Staged
-    jq -n --arg status "${status}" '[{name:"MOMO_PROCESSING_LISTENER_DATABASE_URL",status:$status}]'
+    jq -n --arg status "${status}" '[{name:"WORKER_WAKE_TOKEN",status:$status}]'
     ;;
   machine)
     digest=1
     [[ ! -f "${TEST_STATE}/different" ]] || digest=2
-    printf '{"state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","guest":{"cpu_kind":"shared","cpus":1,"memory_mb":256},"env":{"MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${digest}" 1 | jq -s . > "${TEST_STATE}/machine.json"
+    printf '{"state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","guest":{"cpu_kind":"shared","cpus":1,"memory_mb":256},"env":{"WORKER_WAKE_HOSTS":"fixture.internal","MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${digest}" 1 | jq -s . > "${TEST_STATE}/machine.json"
     if [[ -f "${TEST_STATE}/missing-version" ]]; then
       jq 'del(.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION)' "${TEST_STATE}/machine.json"
+    elif [[ -f "${TEST_STATE}/changed-writer" ]]; then
+      jq '.[0].config.env.WORKER_WAKE_HOSTS = "old.internal"' "${TEST_STATE}/machine.json"
     elif [[ -f "${TEST_STATE}/invalid-version" ]]; then
       jq '.[0].config.env.MOMO_ANALYSIS_CONFIG_VERSION = 42' "${TEST_STATE}/machine.json"
     elif [[ -f "${TEST_STATE}/unprefixed-version" ]]; then
@@ -59,7 +62,7 @@ cd "${task_tmp}"
 scripts/ci/deploy-processing-worker.sh > output 2>&1
 test ! -f deploy
 jq -e '.status == "not_needed"' analysis-production-artifact/worker-deployment.json > /dev/null
-for condition in staged changed different missing-version invalid-version unprefixed-version; do
+for condition in staged changed changed-writer different missing-version invalid-version unprefixed-version; do
   : > "${condition}"
   status=0
   scripts/ci/deploy-processing-worker.sh > output 2>&1 || status=$?

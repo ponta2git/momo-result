@@ -127,7 +127,7 @@ func secrets(v any, mode string) error {
 			return invalid
 		}
 		staged = staged || status == "Staged"
-		ready = ready || name == "MOMO_PROCESSING_LISTENER_DATABASE_URL" && (status == "Deployed" || status == "Staged")
+		ready = ready || name == "WORKER_WAKE_TOKEN" && (status == "Deployed" || status == "Staged")
 	}
 	if (mode == "ready" && !ready) || (mode == "unstaged" && staged) {
 		return invalid

@@ -576,11 +576,24 @@ jobs:
             exit 1
           }
 
+      - name: Identify the writer admitted by both deployments
+        id: writer
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          WORKER_FLY_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
+        run: |
+          flyctl secrets list --app momo-result --json | scripts/ci/ci-tool.sh analysis-secrets ready
+          FLY_API_TOKEN="${WORKER_FLY_TOKEN}" flyctl secrets list --app momo-result-analysis --json |
+            scripts/ci/ci-tool.sh analysis-secrets ready
+          writer="$(flyctl machine list --app momo-result --json |
+            jq -er 'select(length == 1) | .[0] | select(.state == "started" or .state == "stopped") | .id | select(test("^[a-z0-9]+$"))')"
+          printf 'id=%s\n' "${writer}" >> "${GITHUB_OUTPUT}"
+
       - name: Deploy to Fly.io
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --yes
+          flyctl deploy --image "${{ steps.registry.outputs.registry_ref }}" --env WORKER_WAKE_WRITER_IDS="${{ steps.writer.outputs.id }}" --yes
           scripts/ci/start-deployed-machine.sh runtime momo-result "${{ steps.registry.outputs.registry_ref }}"
 
       - name: Verify deployed image identity
@@ -661,12 +674,14 @@ jobs:
         env:
           ANALYSIS_IMAGE_REF: ${{ steps.analysis-candidate.outputs.image_ref }}
           ANALYSIS_RELEASE_SHA: ${{ github.sha }}
+          WORKER_WAKE_HOSTS: ${{ steps.writer.outputs.id }}.vm.momo-result.internal
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: scripts/ci/deploy-processing-worker.sh
         timeout-minutes: 25
 
       - name: Reconcile analysis promotion and backfill
         env:
+          RUNTIME_FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_API_TOKEN: ${{ secrets.ANALYSIS_FLY_API_TOKEN }}
         run: scripts/ops/analysis-maintain.sh auto
         timeout-minutes: 35

@@ -19,6 +19,7 @@ object Database:
   // Individual repositories may then narrow these bounds with their existing SET LOCAL calls.
   private val transactionTimeouts: ConnectionIO[Unit] =
     sql"""
+      SET LOCAL transaction_timeout = '120s';
       SET LOCAL statement_timeout = '60s';
       SET LOCAL lock_timeout = '5s';
       SET LOCAL idle_in_transaction_session_timeout = '30s'

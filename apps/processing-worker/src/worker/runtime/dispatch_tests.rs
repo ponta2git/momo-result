@@ -56,7 +56,7 @@ async fn real_postgres_delayed_candidates_still_attempt_durable_claims() -> Test
     // Even when the first read exhausts the shared budget, its candidate must reach claim.
     let mut shared = budget();
     let selection::FirstScan::Analysis(page) =
-        selection::first_scan(&scheduler.database, true, true).await?
+        selection::first_scan(&scheduler.database, true, true, Duration::from_mins(5)).await?
     else {
         return Err("expected analysis when OCR is empty".into());
     };
@@ -161,12 +161,28 @@ async fn verify_rescheduled_ocr(
     assert!(!claim_ocr(scheduler, stopped, &mut scan).await?);
     assert!(!scheduler.resources.is_reserved());
     let selection::FirstScan::Idle(Some(deadline)) =
-        selection::first_scan(observer, true, false).await?
+        selection::first_scan(observer, true, false, Duration::from_mins(5)).await?
     else {
         return Err("future OCR must wake before the five-minute running lease".into());
     };
     let due = deadline.saturating_duration_since(time::Instant::now());
     assert!(due > Duration::ZERO && due <= Duration::from_secs(30));
+    // An OCR retry can be scheduled after its stale cutoff. The earlier cutoff wins.
+    observer.execute("UPDATE ocr_jobs SET created_at = statement_timestamp() - interval '290 seconds' WHERE legacy_id=$1", &[&OCR]).await?;
+    let selection::FirstScan::Idle(Some(stale)) =
+        selection::first_scan(observer, true, false, Duration::from_mins(5)).await?
+    else {
+        return Err("stale OCR must retain its own deadline".into());
+    };
+    let remaining = stale.saturating_duration_since(time::Instant::now());
+    assert!(remaining > Duration::ZERO && remaining <= Duration::from_secs(10));
+    observer.execute("UPDATE ocr_jobs SET created_at = statement_timestamp() - interval '301 seconds', available_at = statement_timestamp() + interval '1 hour' WHERE legacy_id=$1", &[&OCR]).await?;
+    let Some(overdue) = selection::next_due(observer, true, false, Duration::from_mins(5)).await?
+    else {
+        return Err("overdue OCR must remain on the active repair cadence".into());
+    };
+    let repair_delay = overdue.saturating_duration_since(time::Instant::now());
+    assert!(repair_delay > Duration::ZERO && repair_delay <= Duration::from_secs(30));
     observer
         .execute(
             "UPDATE ocr_jobs SET available_at = statement_timestamp() WHERE legacy_id=$1",
@@ -177,17 +193,17 @@ async fn verify_rescheduled_ocr(
 }
 
 async fn verify_queue_priority(observer: &Client) -> TestResult<Vec<selection::Cursor>> {
-    let first_ocr = selection::first_scan(observer, true, true).await?;
+    let first_ocr = selection::first_scan(observer, true, true, Duration::from_mins(5)).await?;
     let selection::FirstScan::Ocr(page) = first_ocr else {
         return Err("waiting OCR must precede compatible queued analysis".into());
     };
     assert_eq!(page.first().map(|cursor| cursor.id.as_str()), Some(OCR));
     assert!(matches!(
-        selection::first_scan(observer, true, false).await?,
+        selection::first_scan(observer, true, false, Duration::from_mins(5)).await?,
         selection::FirstScan::Ocr(_)
     ));
     let selection::FirstScan::Analysis(analysis) =
-        selection::first_scan(observer, false, true).await?
+        selection::first_scan(observer, false, true, Duration::from_mins(5)).await?
     else {
         return Err("disabled OCR must not hide the waiting analysis".into());
     };
@@ -197,7 +213,7 @@ async fn verify_queue_priority(observer: &Client) -> TestResult<Vec<selection::C
     );
     assert!(
         matches!(
-            selection::first_scan(observer, false, false).await?,
+            selection::first_scan(observer, false, false, Duration::from_mins(5)).await?,
             selection::FirstScan::Idle(Some(_))
         ),
         "running lease recovery stays enabled when neither queue can claim"
@@ -234,7 +250,7 @@ async fn verify_cursor_yield(
     // The first candidate is attempted but contended. Yield before advancing over B.
     let mut scan = budget();
     let selection::FirstScan::Analysis(page) =
-        selection::first_scan(&scheduler.database, false, true).await?
+        selection::first_scan(&scheduler.database, false, true, Duration::from_mins(5)).await?
     else {
         return Err("expected queued analysis even while the claim lock is held".into());
     };
@@ -306,6 +322,8 @@ async fn fixture(
             recovery_cursor: None,
             sink,
             maintenance_at: time::Instant::now(),
+            maintenance_pending: false,
+            discovery_complete: false,
         },
         wake,
     ))
@@ -326,7 +344,6 @@ fn analysis_config(database_url: &str, directory: &Path) -> TestResult<AnalysisC
     let bound = |value| NonZeroU64::new(value).ok_or("positive fixture bound");
     Ok(AnalysisConsumerConfig {
         database_url: database_url.to_owned(),
-        listener_database_url: database_url.to_owned(),
         read_database_url: database_url.to_owned(),
         worker_id: WORKER.to_owned(),
         temporary_root: directory.to_path_buf(),

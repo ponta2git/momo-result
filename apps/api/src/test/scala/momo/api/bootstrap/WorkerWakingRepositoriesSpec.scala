@@ -2,7 +2,6 @@ package momo.api.bootstrap
 
 import java.time.Instant
 
-import cats.effect.testkit.TestControl
 import cats.effect.{Deferred, IO, Ref}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
@@ -13,14 +12,7 @@ import momo.api.domain.{OcrJobInput, *}
 import momo.api.errors.AppError
 import momo.api.repositories.*
 import momo.api.repositories.OcrJobCreationStore.OcrJobCreationRejection
-import momo.api.usecases.queue.{
-  PostCommitEffects,
-  WorkerWakeKind,
-  WorkerWakeRelay,
-  WorkerWakeSink,
-  WorkerWakeSubmitResult,
-  WorkerWakeup
-}
+import momo.api.usecases.queue.WorkerWakeSink
 import momo.api.usecases.testing.MatchFixtures
 
 final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
@@ -55,10 +47,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejected, Left(OcrJobCreationRejection.InvalidPlan))
       assertEquals(
         effects,
-        List(PostCommitEffects.wakeAll(
-          WorkerWakeKind.ProcessingJobs,
-          WorkerWakeKind.OcrSubmissions
-        ))
+        List("signal")
       )
 
   test("match update and actual deletion wake analysis while false deletion does not"):
@@ -85,7 +74,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejected, Left(AppError.Conflict("rejected")))
       assertEquals(
         effects,
-        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
+        List.fill(2)("signal"),
       )
 
   test("confirmation and recalculation wake only on accepted state transitions"):
@@ -121,27 +110,8 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(rejectedConfirmation, Left(AppError.Conflict("rejected")))
       assertEquals(
         effects,
-        List.fill(2)(PostCommitEffects.wake(WorkerWakeKind.ProcessingJobs)),
+        List.fill(2)("signal"),
       )
-
-  test("a closed sink escalates runtime failure without changing the committed result"):
-    for
-      result <- Ref.of[IO, OcrJobCreationStore.OcrJobCreationResult](Right(StoredOcrJob(
-        OcrJobAcceptance.fromJob(ocrPlan.job),
-        true
-      )))
-      sink <- RecordingSink.closed
-      closed <- Ref.of[IO, Int](0)
-      store = WorkerWakingRepositories.ocrJobCreation(
-        ocrCreationStore(result),
-        sink,
-        closed.update(_ + 1),
-      )
-      actual <- store.store(ocrPlan)
-      escalations <- closed.get
-    yield
-      assertEquals(actual.map(_.created), Right(true))
-      assertEquals(escalations, 1)
 
   test("a failed local analysis hint preserves the committed mutation result"):
     for
@@ -159,39 +129,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       assertEquals(actual, Right(matchRecord))
       assertEquals(escalationCount, 1)
 
-  test("analysis commits return during stalled notification I/O and shutdown cancels the relay"):
-    TestControl.executeEmbed {
-      WorkerWakeup.resource[IO].use { wakeup =>
-        for
-          updateResult <- Ref.of[IO, Either[AppError, MatchRecord]](Right(matchRecord))
-          deleteResult <- Ref.of[IO, Boolean](false)
-          notificationStarted <- Deferred[IO, Unit]
-          notificationCancelled <- Deferred[IO, Unit]
-          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
-            .onCancel(notificationCancelled.complete(()).void)
-          repository = WorkerWakingRepositories.matches(
-            matchesRepository(updateResult, deleteResult),
-            wakeup,
-            IO.raiseError(new IllegalStateException("unexpected sink closure")),
-          )
-          results <- WorkerWakeRelay.resource[IO](
-            WorkerWakeKind.ProcessingJobs,
-            wakeup,
-            notifier,
-            IO.raiseError[Unit],
-          ).use(_ =>
-            notificationStarted.get *> repository.update(
-              matchRecord.id,
-              MatchFixtures.update(matchRecord),
-              now
-            ).replicateA(32)
-          )
-          _ <- notificationCancelled.get
-        yield assertEquals(results, List.fill(32)(Right(matchRecord)))
-      }
-    }
-
-  test("a failed durable operation emits no wake"):
+  test("an ambiguous durable operation invalidates the cursor and returns the original failure"):
     for
       sink <- RecordingSink.create
       closed <- Ref.of[IO, Int](0)
@@ -204,32 +142,20 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
       effects <- sink.effects
     yield
       assert(result.isLeft)
-      assertEquals(effects, Nil)
+      assertEquals(effects, List("uncertain"))
 
-  test("OCR admission returns while the submission notifier stalls and shutdown cancels the relay"):
-    TestControl.executeEmbed {
-      WorkerWakeup.resource[IO].use { wakeup =>
-        for
-          notificationStarted <- Deferred[IO, Unit]
-          notificationCancelled <- Deferred[IO, Unit]
-          notifier = (notificationStarted.complete(()).void *> IO.never[Unit])
-            .onCancel(notificationCancelled.complete(()).void)
-          delegate = new OcrSubmissionsRepository[IO]:
-            def find(id: String, owner: AccountId) = IO.pure(None)
-            def put(submission: OcrSubmission) = IO.pure(Right(submission))
-            def failAdmission(owner: AccountId, keyHash: String, sha256: String, byteLength: Int) =
-              IO.unit
-          repository = WorkerWakingRepositories.ocrSubmissions(delegate, wakeup, IO.unit)
-          results <- WorkerWakeRelay.resource[IO](
-            WorkerWakeKind.OcrSubmissions,
-            wakeup,
-            notifier,
-            IO.raiseError[Unit],
-          ).use(_ => notificationStarted.get *> repository.put(ocrSubmission).replicateA(32))
-          _ <- notificationCancelled.get
-        yield assertEquals(results, List.fill(32)(Right(ocrSubmission)))
-      }
-    }
+  test("cancellation of an in-flight transaction requests recovery"):
+    for
+      sink <- RecordingSink.create
+      started <- Deferred[IO, Unit]
+      delegate = new StubMatchesRepository:
+        override def update(id: MatchId, change: MatchUpdate, updatedAt: Instant) =
+          started.complete(()).void *> IO.never[Either[AppError, MatchRecord]]
+      repository = WorkerWakingRepositories.matches(delegate, sink, IO.unit)
+      fiber <- repository.update(matchRecord.id, MatchFixtures.update(matchRecord), now).start
+      _ <- started.get *> fiber.cancel
+      effects <- sink.effects
+    yield assertEquals(effects, List("uncertain"))
 
   test("a rejected OCR submission emits no notification while a completed admission failure does"):
     for
@@ -247,7 +173,7 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
     yield
       assertEquals(rejected.left.map(_.code), Left("FORBIDDEN"))
       assertEquals(before, Nil)
-      assertEquals(after, List(PostCommitEffects.wake(WorkerWakeKind.OcrSubmissions)))
+      assertEquals(after, List("signal"))
 
   private def ocrCreationStore(
       result: Ref[IO, OcrJobCreationStore.OcrJobCreationResult]
@@ -420,28 +346,16 @@ final class WorkerWakingRepositoriesSpec extends MomoCatsEffectSuite:
     List(OcrSubmissionMember(ScreenType.TotalAssets, "b" * 64, "a" * 64, 1)),
   )
 
-  private final class RecordingSink private (
-      ref: Ref[IO, List[PostCommitEffects]],
-      result: WorkerWakeSubmitResult,
-  ) extends WorkerWakeSink[IO]:
-    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
-      ref.update(_ :+ effects).as(result)
-
-    def effects: IO[List[PostCommitEffects]] = ref.get
+  private final class RecordingSink private (ref: Ref[IO, List[String]]) extends WorkerWakeSink[IO]:
+    def signal: IO[Unit] = ref.update(_ :+ "signal")
+    def uncertain: IO[Unit] = ref.update(_ :+ "uncertain")
+    def effects: IO[List[String]] = ref.get
 
   private object RecordingSink:
-    def create: IO[RecordingSink] =
-      Ref.of[IO, List[PostCommitEffects]](Nil).map(
-        new RecordingSink(_, WorkerWakeSubmitResult.Accepted)
-      )
-
-    def closed: IO[RecordingSink] =
-      Ref.of[IO, List[PostCommitEffects]](Nil).map(
-        new RecordingSink(_, WorkerWakeSubmitResult.Closed)
-      )
+    def create: IO[RecordingSink] = Ref.of[IO, List[String]](Nil).map(new RecordingSink(_))
 
   private object FailingSink extends WorkerWakeSink[IO]:
-    override def submit(effects: PostCommitEffects): IO[WorkerWakeSubmitResult] =
-      IO.raiseError(new IllegalStateException("notification connection unavailable"))
+    def signal: IO[Unit] = IO.raiseError(new IllegalStateException("wake state unavailable"))
+    def uncertain: IO[Unit] = signal
 
 end WorkerWakingRepositoriesSpec

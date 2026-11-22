@@ -77,7 +77,10 @@ pub(crate) async fn connect_unchecked(
             );
         }
     });
-    Ok(ConnectedClient { client, driver })
+    Ok(ConnectedClient {
+        client,
+        driver: Some(driver),
+    })
 }
 
 /// Owns the connection driver as well as its request handle. A cancelled query does not cancel
@@ -85,7 +88,24 @@ pub(crate) async fn connect_unchecked(
 /// Scope exit must therefore stop the driver too, including on timeouts and reconnect paths.
 pub(crate) struct ConnectedClient {
     client: Client,
-    driver: tokio::task::JoinHandle<()>,
+    driver: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl ConnectedClient {
+    /// Disconnect only between completed operations. Never reconnect/replay an uncertain transaction.
+    pub(crate) fn release(&mut self) {
+        if let Some(driver) = self.driver.take() {
+            driver.abort();
+        }
+    }
+
+    pub(crate) async fn resume(&mut self, database_url: &str) -> Result<bool, PostgresError> {
+        if self.driver.is_some() && !self.client.is_closed() {
+            return Ok(false);
+        }
+        *self = connect(database_url).await?;
+        Ok(true)
+    }
 }
 
 impl Deref for ConnectedClient {
@@ -106,7 +126,7 @@ impl Drop for ConnectedClient {
     fn drop(&mut self) {
         // This closes local I/O; it deliberately makes no claim about a sent COMMIT's result.
         // Callers must still reconcile uncertain writes against durable state.
-        self.driver.abort();
+        self.release();
     }
 }
 

@@ -1,7 +1,7 @@
 use super::{
-    PostCommitSink, PostCommitSinkClosed, WakeReceiver, listener,
+    PostCommitSink, PostCommitSinkClosed, WakeReceiver,
     plan::{EnabledConsumers, WorkerRuntimePlan},
-    selection,
+    selection, wake_http,
 };
 use crate::{
     execution::ExecutionHandle,
@@ -24,8 +24,8 @@ pub(crate) enum WorkerError {
     Database(#[from] postgres::PostgresError),
     #[error("processing worker database transition failed")]
     Postgres(#[from] tokio_postgres::Error),
-    #[error("processing worker notification route failed")]
-    Listener(#[from] listener::ListenerError),
+    #[error("processing worker wake transport failed")]
+    WakeTransport,
     #[error("processing worker analysis failed")]
     Analysis(#[from] series_analysis::ConsumerError),
     #[error("processing worker analysis control failed")]
@@ -70,10 +70,12 @@ pub(crate) enum WorkerError {
     UnsupportedPlatform,
 }
 
+const ACTIVE_MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
+const SESSION_LIMITS: &str = "SET statement_timeout='10000ms'; SET lock_timeout='100ms'";
+
 struct Settings {
     resource_limits: ResourceLimits,
     database_url: String,
-    listener_database_url: String,
     worker_id: String,
     recovery_interval: Duration,
     ocr_stale_after: Duration,
@@ -88,7 +90,6 @@ impl From<&AnalysisConsumerConfig> for Settings {
                 memory: config.execution_limits.memory,
             },
             database_url: config.database_url.clone(),
-            listener_database_url: config.listener_database_url.clone(),
             worker_id: config.worker_id.clone(),
             recovery_interval: config.recovery_interval,
             ocr_stale_after: config.ocr_stale_after,
@@ -126,6 +127,8 @@ struct WorkState {
     recovery_cursor: Option<selection::RecoveryCursor>,
     sink: PostCommitSink,
     maintenance_at: time::Instant,
+    maintenance_pending: bool,
+    discovery_complete: bool,
 }
 
 impl WorkState {
@@ -151,6 +154,8 @@ impl WorkState {
             recovery_cursor: None,
             sink,
             maintenance_at: time::Instant::now(),
+            maintenance_pending: false,
+            discovery_complete: false,
         }
     }
     fn restore(&mut self, runner: FinishedRunner) {
@@ -165,11 +170,55 @@ impl WorkState {
             FinishedRunner::Ocr(runner) => self.ocr = Some(runner),
         }
     }
+    fn disconnect(&mut self) {
+        self.database.release();
+        if let Some(module) = &mut self.analysis {
+            module.disconnect();
+        }
+        if let Some(runner) = &mut self.ocr {
+            runner.disconnect();
+        }
+    }
+
+    async fn resume_database(&mut self) -> Result<(), WorkerError> {
+        if self.database.resume(&self.settings.database_url).await? {
+            bounded(
+                self.settings.operation_timeout,
+                self.database.batch_execute(SESSION_LIMITS),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn maintain_ocr(&mut self) -> Result<(), WorkerError> {
+        if time::Instant::now() >= self.maintenance_at {
+            if self.ocr_config.is_some() {
+                let timeout = self.settings.operation_timeout;
+                let result = bounded(
+                    timeout,
+                    ocr::control::maintenance::reap_stale(
+                        &mut self.database,
+                        &self.sink,
+                        self.settings.ocr_stale_after,
+                        timeout,
+                    ),
+                )
+                .await;
+                self.maintenance_pending = defer_contention(result)?.unwrap_or(true);
+            }
+            self.maintenance_at = time::Instant::now() + ACTIVE_MAINTENANCE_INTERVAL;
+        }
+        Ok(())
+    }
+
     async fn step(&mut self, shutdown: &watch::Receiver<bool>) -> Result<Duration, WorkerError> {
+        self.discovery_complete = false;
         if dispatch::stopping(shutdown) {
             return Ok(Duration::ZERO);
         }
         let timeout = self.settings.operation_timeout;
+        self.resume_database().await?;
         let recovered = bounded(
             timeout,
             selection::recover_page(
@@ -194,26 +243,12 @@ impl WorkState {
         if dispatch::stopping(shutdown) {
             return Ok(Duration::ZERO);
         }
-        if time::Instant::now() >= self.maintenance_at {
-            if self.ocr_config.is_some() {
-                let maintenance = bounded(
-                    timeout,
-                    ocr::control::maintenance::reap_stale(
-                        &mut self.database,
-                        self.settings.ocr_stale_after,
-                        timeout,
-                    ),
-                )
-                .await;
-                deferred |= defer_contention(maintenance)?.is_none();
-            }
-            self.maintenance_at = time::Instant::now() + self.settings.recovery_interval;
-        }
+        self.maintain_ocr().await?;
         if dispatch::stopping(shutdown) {
             return Ok(Duration::ZERO);
         }
         if let Some(runner) = &mut self.analysis {
-            bounded(timeout, runner.maintain()).await?;
+            bounded(timeout, runner.maintain(&mut self.database)).await?;
         }
         if *shutdown.borrow() || shutdown.has_changed().is_err() {
             return Ok(Duration::ZERO);
@@ -222,9 +257,13 @@ impl WorkState {
         if self.pending.is_some() {
             return Ok(Duration::ZERO);
         }
-        let mut delay = self
-            .maintenance_at
-            .saturating_duration_since(time::Instant::now());
+        let mut delay = super::until_supervisor(std::time::SystemTime::now());
+        if self.resources.is_reserved() || self.maintenance_pending {
+            delay = delay.min(
+                self.maintenance_at
+                    .saturating_duration_since(time::Instant::now()),
+            );
+        }
         if let Some(runner) = &self.analysis {
             delay = delay.min(runner.maintenance_due_in().unwrap_or(delay));
         }
@@ -237,6 +276,10 @@ impl WorkState {
         if materialization_pending || recovery_pending || delay.is_zero() {
             return Ok(Duration::ZERO);
         }
+        self.discovery_complete = matches!(scan, dispatch::ScanResult::Idle(_))
+            && !deferred
+            && !self.maintenance_pending
+            && self.retry_after.is_none();
         let deadline = match scan {
             dispatch::ScanResult::More => return Ok(Duration::ZERO),
             dispatch::ScanResult::Idle(deadline) => deadline,
@@ -247,11 +290,15 @@ impl WorkState {
                         &self.database,
                         self.ocr_config.is_some(),
                         self.config.is_some(),
+                        self.settings.ocr_stale_after,
                     ),
                 )
                 .await?
             }
         };
+        if let Some(at) = deadline {
+            self.maintenance_at = self.maintenance_at.min(at);
+        }
         Ok(deadline.map_or(delay, |at| {
             delay.min(at.saturating_duration_since(time::Instant::now()))
         }))
@@ -291,50 +338,6 @@ impl WorkState {
     }
 }
 
-async fn listen_reconnecting(
-    mut listener: listener::Listener,
-    listener_url: &str,
-    database_url: &str,
-    sink: PostCommitSink,
-    mut shutdown: watch::Receiver<bool>,
-    submissions_enabled: bool,
-) -> Result<(), WorkerError> {
-    loop {
-        match listener.run(shutdown.clone()).await {
-            Ok(()) => return Ok(()),
-            Err(
-                error @ (listener::ListenerError::InvalidNotification
-                | listener::ListenerError::SinkClosed(_)
-                | listener::ListenerError::ShutdownChannelClosed),
-            ) => return Err(error.into()),
-            Err(error) => tracing::warn!(
-                event = "processing_jobs_listener_reconnecting",
-                error_kind = error.kind(),
-                "notification connection will reconnect while durable deadline recovery continues"
-            ),
-        }
-        loop {
-            tokio::select! { changed=shutdown.changed() => { if changed.is_err() || *shutdown.borrow() { return Ok(()); } }, ()=time::sleep(Duration::from_secs(1))=>{} }
-            let reconnect = async {
-                let mut connected =
-                    listener::subscribe_routes(listener_url, sink.clone(), submissions_enabled)
-                        .await?;
-                let publisher = postgres::connect(database_url).await?;
-                connected.verify_notification_round_trip(&publisher).await?;
-                Ok::<_, WorkerError>(connected)
-            };
-            tokio::select! {
-                changed=shutdown.changed()=>{if changed.is_err() || *shutdown.borrow(){return Ok(());}}
-                result=reconnect=>match result {
-                    Ok(connected)=>{listener=connected;break;}
-                    Err(error @ WorkerError::Listener(listener::ListenerError::InvalidNotification | listener::ListenerError::SinkClosed(_) | listener::ListenerError::ShutdownChannelClosed))=>return Err(error),
-                    Err(_transient)=>{}
-                }
-            }
-        }
-    }
-}
-
 async fn bounded<T, E: Into<WorkerError>>(
     timeout: Duration,
     operation: impl Future<Output = Result<T, E>>,
@@ -364,7 +367,7 @@ impl WorkerError {
             Self::AnalysisControl(error) => error.is_contention(),
             Self::Resources(_)
             | Self::Database(_)
-            | Self::Listener(_)
+            | Self::WakeTransport
             | Self::Analysis(_)
             | Self::Ocr(_)
             | Self::Materialization(_)
@@ -411,7 +414,9 @@ struct Runtime {
     cleanup_grace: Duration,
     deadline: Option<time::Instant>,
     failure: Option<WorkerError>,
-    listener: Option<ExecutionHandle<Result<(), WorkerError>>>,
+    transport: Option<ExecutionHandle<Result<(), WorkerError>>>,
+    monitor: wake_http::WakeMonitor,
+    admissions_open: bool,
     active: Option<ExecutionHandle<Attempt>>,
     reconcile: Option<ExecutionHandle<Reconciliation>>,
     returned: Option<FinishedRunner>,
@@ -433,7 +438,9 @@ impl Runtime {
             cleanup_grace,
             deadline: None,
             failure: None,
-            listener: None,
+            transport: None,
+            monitor: wake_http::WakeMonitor::new(),
+            admissions_open: true,
             active: None,
             reconcile: None,
             returned: None,
@@ -505,8 +512,8 @@ impl Runtime {
                 changed = self.stopped.changed(), if !self.stopping() => {
                     if changed.is_err() || *self.stopped.borrow() { self.request_stop(); }
                 }
-                result = async { match &mut self.listener { Some(handle)=>handle.completed().await, None=>std::future::pending().await } } => {
-                    self.listener = None;
+                result = async { match &mut self.transport { Some(handle)=>handle.completed().await, None=>std::future::pending().await } } => {
+                    self.transport = None;
                     match result {
                         Ok(Ok(())) if self.stopping() => {}
                         Ok(Ok(())) => self.fail(WorkerError::UnexpectedExit),
@@ -518,6 +525,8 @@ impl Runtime {
                 result = async { match &mut self.active { Some(handle)=>handle.completed().await, None=>std::future::pending().await } } => {
                     let clean = self.active.as_ref().is_none_or(|handle| matches!(handle.cleanup_state(), crate::execution::CleanupState::Clean));
                     self.active = None;
+                    self.submissions_dirty = true;
+                    self.rescan_requested = true;
                     match result {
                         Ok((runner, result)) => {
                             if clean { self.returned=Some(runner); }
@@ -544,10 +553,22 @@ impl Runtime {
                     if observation==Observation::Idle {return Ok(None);}
                     self.rescan_requested = true;
                 }
-                ()=async {match &self.submissions {Some(state)=>time::sleep_until(state.next_at()).await,None=>std::future::pending().await}}, if !self.stopping() && self.reconcile.is_none()=>{}
+                ()=async {match &self.submissions {Some(state)=>time::sleep_until(state.next_at()).await,None=>std::future::pending().await}}, if !self.stopping() && self.admissions_open && self.reconcile.is_none()=>{}
 
             }
         }
+    }
+
+    async fn wait_for_work(&mut self, delay: Duration) -> Result<(), WorkerError> {
+        self.observe(
+            async {
+                time::sleep(delay).await;
+                Ok(())
+            },
+            Observation::Idle,
+        )
+        .await?;
+        Ok(())
     }
 
     async fn operation<T: Send>(
@@ -557,6 +578,23 @@ impl Runtime {
         self.observe(operation, Observation::Operation)
             .await?
             .ok_or(WorkerError::ShutdownDrainTimeout)
+    }
+
+    fn park(&mut self, work: &mut WorkState) {
+        work.disconnect();
+        if let Some(submissions) = &mut self.submissions {
+            submissions.disconnect();
+        }
+    }
+
+    fn start_transport(&mut self, sink: PostCommitSink) {
+        let monitor = self.monitor.clone();
+        let stopped = self.stopped.clone();
+        self.transport = Some(ExecutionHandle::spawn(
+            self.stop.clone(),
+            self.cleanup_grace,
+            wake_http::run(monitor, sink, stopped),
+        ));
     }
 
     fn start_attempt(&mut self, pending: PendingExecution) {
@@ -590,7 +628,7 @@ impl Runtime {
         });
     }
     fn start_reconciliation(&mut self) {
-        if self.stopping() || self.reconcile.is_some() {
+        if self.stopping() || !self.admissions_open || self.reconcile.is_some() {
             return;
         }
         if let Some(state) = &mut self.submissions {
@@ -620,7 +658,7 @@ impl Runtime {
     }
 
     async fn drain_tasks(&mut self) {
-        while self.active.is_some() || self.reconcile.is_some() || self.listener.is_some() {
+        while self.active.is_some() || self.reconcile.is_some() || self.transport.is_some() {
             if let Err(error) = self
                 .observe(
                     std::future::pending::<Result<(), WorkerError>>(),
@@ -643,7 +681,7 @@ impl Runtime {
             {
                 self.fail(error.into());
             }
-            if let Some(mut handle) = self.listener.take()
+            if let Some(mut handle) = self.transport.take()
                 && let Err(error) = handle.abort_and_cleanup(deadline).await
             {
                 self.fail(error.into());
@@ -713,6 +751,7 @@ async fn finish(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<
             if let Err(error) = runtime
                 .observe(
                     async {
+                        work.database.resume(&work.settings.database_url).await?;
                         analysis
                             .drain(&work.database)
                             .await
@@ -772,52 +811,18 @@ async fn bootstrap(
     runtime.notifications = Some(driver.spawn());
     let config = config.with_notifications(notification_sink.clone());
     let settings = Settings::from(&config);
-    let submissions_enabled = matches!(ocr, OcrConsumerRuntimeConfig::Enabled(_));
     let database = runtime
         .operation(async { Ok(postgres::connect(&settings.database_url).await?) })
         .await?;
     if runtime.stopping() {
         return Ok(());
     }
-    let mut listener = runtime
-        .operation(async {
-            Ok(listener::subscribe_routes(
-                &settings.listener_database_url,
-                sink.clone(),
-                submissions_enabled,
-            )
-            .await?)
-        })
-        .await?;
-    if runtime.stopping() {
-        return Ok(());
-    }
     runtime.operation(async {
-        bounded(settings.operation_timeout,database.batch_execute("SET statement_timeout='10000ms'; SET lock_timeout='100ms'")).await?;
-        bounded(settings.operation_timeout,database.query("SELECT input_snapshot,failure_retry_count,lease_recovery_count FROM ocr_jobs LIMIT 0",&[])).await?;
-        listener.verify_notification_round_trip(&database).await?;Ok(())
+        bounded(settings.operation_timeout, database.batch_execute(SESSION_LIMITS)).await?;
+        bounded(settings.operation_timeout, database.query("SELECT input_snapshot,failure_retry_count,lease_recovery_count FROM ocr_jobs LIMIT 0", &[])).await?;
+        Ok(())
     }).await?;
-    // Keep the deployment readiness event contract stable across module ownership changes.
-    tracing::info!(event="processing_jobs_notification_route_ready",worker_id=%settings.worker_id,"all enabled notification routes are ready");
-    let listener_url = settings.listener_database_url.clone();
-    let database_url = settings.database_url.clone();
-    let listener_sink = sink.clone();
-    let stopped = runtime.stopped.clone();
-    runtime.listener = Some(ExecutionHandle::spawn(
-        runtime.stop.clone(),
-        runtime.cleanup_grace,
-        async move {
-            listen_reconnecting(
-                listener,
-                &listener_url,
-                &database_url,
-                listener_sink,
-                stopped,
-                submissions_enabled,
-            )
-            .await
-        },
-    ));
+    runtime.start_transport(sink.clone());
     *state = Some(WorkState::new(
         settings,
         Some(config.clone()),
@@ -838,6 +843,10 @@ async fn bootstrap(
     if runtime.stopping() {
         return Ok(());
     }
+    runtime.admissions_open = work
+        .analysis
+        .as_ref()
+        .is_none_or(series_analysis::Module::admitted);
     if let OcrConsumerRuntimeConfig::Enabled(ocr) = ocr {
         work.ocr_config = Some(ocr.control.clone());
         let ocr::bootstrap::Bootstrapped {
@@ -855,53 +864,98 @@ async fn bootstrap(
     Ok(())
 }
 
+/// No business scan is acknowledged until both jobs and a complete submission pass have been
+/// examined after the transport snapshot. A concurrent signal causes another pass.
 async fn drive(runtime: &mut Runtime, state: &mut Option<WorkState>) -> Result<(), WorkerError> {
-    if let Some(work) = state {
-        while !runtime.stopping() {
-            if let Some(runner) = runtime.returned.take() {
-                work.restore(runner);
-            }
-            runtime.start_reconciliation();
-            let stopped = runtime.stopped.clone();
-            // A wake consumed while the database scan is in flight can be newer than its snapshot.
-            runtime.rescan_requested = false;
-            let step = runtime.operation(Box::pin(work.step(&stopped))).await;
-            // A claim that committed while stop arrived still needs typed durable finalization.
-            if let Some(pending) = work.pending.take() {
-                runtime.start_attempt(pending);
-            }
-            let delay = match step {
-                Ok(delay) => delay,
-                Err(error) => {
-                    runtime.fail(error);
-                    break;
+    let Some(work) = state else {
+        return Ok(());
+    };
+    let mut round: Option<(wake_http::ScanTicket, time::Instant)> = None;
+    let mut recovery_at = time::Instant::now();
+    let mut supervisor_at = time::Instant::now();
+    let recovery_interval = work.settings.recovery_interval.min(Duration::from_secs(30));
+    while !runtime.stopping() {
+        if let Some(runner) = runtime.returned.take() {
+            work.restore(runner);
+        }
+        runtime.admissions_open = work
+            .analysis
+            .as_ref()
+            .is_none_or(series_analysis::Module::admitted);
+        let now = time::Instant::now();
+        if !runtime.admissions_open {
+            // An incompatible candidate is allowed to advertise for promotion without claiming
+            // or reconciling work. Activation sends a wake; the supervisor also rechecks locally.
+            runtime.park(work);
+            runtime.wait_for_work(recovery_interval).await?;
+            continue;
+        }
+        if now >= supervisor_at {
+            runtime.submissions_dirty = true;
+            supervisor_at = now + super::until_supervisor(std::time::SystemTime::now());
+        }
+        if !runtime.monitor.healthy() {
+            let ticket = runtime.monitor.scan_ticket();
+            let obsolete = round.is_some_and(|(held, _)| !ticket.same_generation(held));
+            if now >= recovery_at || obsolete {
+                runtime.submissions_dirty = true;
+                recovery_at = now + recovery_interval;
+                if round.is_none() || obsolete {
+                    round = Some((ticket, time::Instant::now()));
                 }
-            };
-            let mut delay = if runtime.returned.is_some() {
-                Duration::ZERO
-            } else {
-                delay
-            };
-            if let Some(submissions) = &runtime.submissions {
-                delay = delay.min(
-                    submissions
-                        .next_at()
-                        .saturating_duration_since(time::Instant::now()),
-                );
-            }
-            if let Err(error) = runtime
-                .observe(
-                    async {
-                        time::sleep(delay).await;
-                        Ok(())
-                    },
-                    Observation::Idle,
-                )
-                .await
-            {
-                runtime.fail(error);
             }
         }
+        runtime.start_reconciliation();
+        let stopped = runtime.stopped.clone();
+        runtime.rescan_requested = false;
+        let step = runtime.operation(Box::pin(work.step(&stopped))).await;
+        // A claim that committed while stop arrived still needs typed durable finalization.
+        if let Some(pending) = work.pending.take() {
+            runtime.start_attempt(pending);
+        }
+        let mut delay = step?;
+        if runtime.stopping() {
+            break;
+        }
+        if runtime.returned.is_some() {
+            delay = Duration::ZERO;
+        }
+        if let Some(submissions) = &runtime.submissions {
+            delay = delay.min(
+                submissions
+                    .next_at()
+                    .saturating_duration_since(time::Instant::now()),
+            );
+        }
+        delay = delay.min(supervisor_at.saturating_duration_since(time::Instant::now()));
+        let idle = work.discovery_complete
+            && !delay.is_zero()
+            && !work.resources.is_reserved()
+            && !runtime.rescan_requested
+            && runtime
+                .submissions
+                .as_ref()
+                .is_none_or(|receipts| !runtime.submissions_dirty && receipts.can_park())
+            && runtime.reconcile.is_none();
+        if idle
+            && let Some((ticket, started)) = round
+            && runtime
+                .submissions
+                .as_ref()
+                .is_none_or(|receipts| receipts.scanned_since(started))
+        {
+            runtime.monitor.scanned(ticket);
+            round = None;
+        }
+        if runtime.monitor.healthy() {
+            recovery_at = time::Instant::now();
+        } else {
+            delay = delay.min(recovery_at.saturating_duration_since(time::Instant::now()));
+        }
+        if idle && runtime.monitor.healthy() {
+            runtime.park(work);
+        }
+        runtime.wait_for_work(delay).await?;
     }
     Ok(())
 }
@@ -912,13 +966,13 @@ pub(crate) async fn run_ocr_only(
     launcher: Box<dyn ocr::consumer::OcrChildLauncher>,
     sink: PostCommitSink,
     wake: WakeReceiver,
+    submissions: ocr::submissions::runtime::Reconciler,
     external: watch::Receiver<bool>,
 ) -> Result<(), WorkerError> {
     let bound = config.shutdown_finalization_bound();
     let settings = Settings {
         resource_limits: ResourceLimits::fixture(),
         database_url: config.database_url.clone(),
-        listener_database_url: config.database_url.clone(),
         worker_id: config.control.worker_id().to_owned(),
         recovery_interval: Duration::from_secs(1),
         ocr_stale_after: Duration::from_secs(300),
@@ -930,32 +984,12 @@ pub(crate) async fn run_ocr_only(
         Duration::from_secs(1),
     );
     runtime.wake = Some(wake);
+    runtime.submissions = Some(submissions);
     let database = postgres::connect(&settings.database_url).await?;
     database
         .batch_execute("SET statement_timeout='10000ms'; SET lock_timeout='100ms'")
         .await?;
-    let mut listener =
-        listener::subscribe_routes(&settings.listener_database_url, sink.clone(), false).await?;
-    listener.verify_notification_round_trip(&database).await?;
-    let listener_sink = sink.clone();
-    let listener_url = settings.listener_database_url.clone();
-    let database_url = settings.database_url.clone();
-    let stopped = runtime.stopped.clone();
-    runtime.listener = Some(ExecutionHandle::spawn(
-        runtime.stop.clone(),
-        runtime.cleanup_grace,
-        async move {
-            listen_reconnecting(
-                listener,
-                &listener_url,
-                &database_url,
-                listener_sink,
-                stopped,
-                false,
-            )
-            .await
-        },
-    ));
+    runtime.start_transport(sink.clone());
     let ocr_config = Some(config.control.clone());
     let ocr = Some(ocr::orchestrator::ImageRunner::new(config, launcher).await?);
     let resources = ResourceBudget::new(settings.resource_limits);
@@ -974,6 +1008,8 @@ pub(crate) async fn run_ocr_only(
         recovery_cursor: None,
         sink,
         maintenance_at: time::Instant::now(),
+        maintenance_pending: false,
+        discovery_complete: false,
     });
     let result = AssertUnwindSafe(drive(&mut runtime, &mut state))
         .catch_unwind()
@@ -988,6 +1024,8 @@ pub(crate) async fn run_ocr_only(
     shutdown_result
 }
 
+#[cfg(test)]
+mod parked_tests;
 #[cfg(test)]
 mod reconciliation_tests;
 #[cfg(test)]

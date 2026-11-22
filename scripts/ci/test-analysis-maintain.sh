@@ -7,7 +7,7 @@ mkdir -p "${task_tmp}/bin" "${task_tmp}/repo/scripts/ci" "${task_tmp}/repo/scrip
 cp "${repo_root}/scripts/ops/analysis-maintain.sh" "${task_tmp}/repo/scripts/ops/"
 cp "${repo_root}/scripts/ci/"{classify-git-range,classify-changes,ci-tool}.sh "${task_tmp}/repo/scripts/ci/"
 export TEST_STATE="${task_tmp}" PATH="${task_tmp}/bin:${PATH}"
-export ANALYSIS_WAIT_SECONDS=3 ANALYSIS_POLL_SECONDS=1
+export ANALYSIS_WAIT_SECONDS=3 ANALYSIS_POLL_SECONDS=1 RUNTIME_FLY_API_TOKEN=test-fixture
 cat > "${task_tmp}/bin/git" <<'MOCK'
 #!/usr/bin/env bash
 case "$1" in rev-parse) printf '%040d\n' 1 ;; diff) [[ ! -f "${TEST_STATE}/newer" ]] || printf 'apps/processing-worker/src/cli.rs\0' ;; esac
@@ -18,11 +18,22 @@ cat > "${task_tmp}/bin/flyctl" <<'MOCK'
 set -euo pipefail
 case "$1 $2" in
   'machine list')
+    if [[ "$*" == *'--app momo-result --json'* ]]; then
+      if [[ -f "${TEST_STATE}/extra-reader" ]]; then echo '[{},{}]'; exit 0; fi
+      printf '[{"id":"abc987","state":"started","config":{"image":"registry.fly.io/momo-result@sha256:%064d"}}]\n' 1
+      exit 0
+    fi
     machine_id=abc123
     [[ ! -f "${TEST_STATE}/changed" || ! -f "${TEST_STATE}/calls" ]] || machine_id=def456
     printf '{"id":"%s","state":"started","config":{"image":"registry.fly.io/momo-result-analysis@sha256:%064d","env":{"MOMO_ANALYSIS_CONFIG_VERSION":"series-analysis-v1-%040d","MOMO_ANALYSIS_PUBLICATION_MODE":"enabled","MOMO_OCR_V2_CONSUMER_MODE":"enabled"}}}\n' "${machine_id}" 1 1 | jq -s .
     ;;
   'ssh console')
+    if [[ "$*" == *'analysis-attest' || "$*" == *'analysis-attest --active' ]]; then
+      [[ ! -f "${TEST_STATE}/no-reader-proof" ]] || exit 1
+      [[ "$*" != *'--active' || ! -f "${TEST_STATE}/inactive-reader" ]] || exit 1
+      echo 11111111-1111-1111-1111-111111111111; exit 0
+    fi
+    if [[ "$*" == *'release-attest' || "$*" == *'release-attest --active' ]]; then echo worker-1@algorithm@1@contract; exit 0; fi
     printf '%s\n' "$*" >> "${TEST_STATE}/calls"
     count="$(wc -l < "${TEST_STATE}/calls" | tr -d ' ')"
     cat "${TEST_STATE}/response-${count}"
@@ -37,7 +48,7 @@ report() {
       planDigest:("sha256:" + ("a" * 64)),targetCount:1,completedCount:0,failedCount:0,
       privateData:"must-not-appear"}' > "${task_tmp}/response-$1"
 }
-reset_case() { rm -f "${task_tmp}/calls" "${task_tmp}/changed" "${task_tmp}/newer"; }
+reset_case() { rm -f "${task_tmp}/calls" "${task_tmp}/changed" "${task_tmp}/newer" "${task_tmp}/extra-reader" "${task_tmp}/no-reader-proof" "${task_tmp}/inactive-reader"; }
 run_case() { "${task_tmp}/repo/scripts/ops/analysis-maintain.sh" "$@" > "${task_tmp}/output" 2>&1; }
 expect_calls() { test "$(wc -l < "${task_tmp}/calls" | tr -d ' ')" = "$1"; }
 report 1 not_needed
@@ -48,7 +59,19 @@ for timeout in 08 010; do
   [[ "${exit_status}" == 2 ]] || { echo 'Noncanonical timeouts must fail validation.' >&2; exit 1; }
   test ! -f "${task_tmp}/calls"
 done
+for rejected in extra-reader no-reader-proof; do
+  reset_case
+  : > "${task_tmp}/${rejected}"
+  if run_case auto; then echo 'An unidentified or unreachable reader must prevent release.' >&2; exit 1; fi
+  test ! -f "${task_tmp}/calls"
+done
+reset_case
 run_case auto
+expect_calls 1
+grep -qF 'MOMO_RELEASE_READER_ATTESTATION=11111111-1111-1111-1111-111111111111 MOMO_RELEASE_WORKER_ATTESTATION=worker-1@algorithm@1@contract' "${task_tmp}/calls"
+reset_case
+: > "${task_tmp}/inactive-reader"
+if run_case auto; then echo 'A non-serving candidate must prevent release completion.' >&2; exit 1; fi
 expect_calls 1
 ! grep -qF must-not-appear "${task_tmp}/output"
 reset_case

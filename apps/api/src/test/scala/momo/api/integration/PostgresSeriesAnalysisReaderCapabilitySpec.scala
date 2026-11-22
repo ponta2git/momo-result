@@ -1,18 +1,19 @@
 package momo.api.integration
 
+import cats.data.Kleisli
 import cats.effect.IO
 import doobie.implicits.*
-import org.typelevel.log4cats.LoggerFactory
-import org.typelevel.log4cats.noop.NoOpFactory
+import org.http4s.{Request, Response, Status, Uri}
 
 import momo.api.adapters.postgres.PostgresSeriesAnalysisReaderCapability
 
 final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
-  private given LoggerFactory[IO] = NoOpFactory[IO]
-
   test("reader capability is active while the API resource is held and drains on release"):
     for
-      active <- PostgresSeriesAnalysisReaderCapability.resource[IO](transactor)
+      active <- PostgresSeriesAnalysisReaderCapability.resource[IO](
+        transactor,
+        listenForAttestation = false
+      )
         .use(_ => capabilityRow)
       draining <- capabilityRow
     yield
@@ -32,6 +33,45 @@ final class PostgresSeriesAnalysisReaderCapabilitySpec extends IntegrationSuite:
           true
         ),
       )
+
+  test("a waiting candidate is admitted only after its active contract is confirmed"):
+    val contract =
+      momo.api.contracts.seriesanalysis.SeriesAnalysisArtifactContract.ValidationContractId
+    def publish(target: String): IO[Unit] = sql"""
+      UPDATE series_analysis_release_state SET validation_contract_id = $target WHERE singleton_key = 'current'
+    """.update.run.transact(transactor).void
+    publish("previous-reader-contract") *>
+      PostgresSeriesAnalysisReaderCapability.resource[IO](
+        transactor,
+        listenForAttestation = false
+      ).use { reader =>
+        val app = reader.guard(Kleisli.pure[IO, Request[IO], Response[IO]](Response[IO](Status.Ok)))
+        def status(path: String) =
+          app.run(Request[IO](uri = Uri.unsafeFromString(path))).map(_.status)
+        for
+          pending <- status("/api/matches")
+          live <- status("/healthz")
+          pendingProof <- reader.attest(requireActive = true).attempt
+          _ <- publish(contract)
+          before <- status("/api/matches")
+          _ <- reader.attest(requireActive = true)
+          after <- status("/api/matches")
+          _ <- publish("previous-reader-contract")
+          _ <- reader.attest(requireActive = false)
+          retired <- status("/api/matches")
+        yield
+          assert(pendingProof.isLeft)
+          assertEquals(
+            List(pending, live, before, after, retired),
+            List(
+              Status.ServiceUnavailable,
+              Status.Ok,
+              Status.ServiceUnavailable,
+              Status.Ok,
+              Status.ServiceUnavailable
+            )
+          )
+      }
 
   private def capabilityRow: IO[(String, String, Boolean)] = sql"""
     SELECT artifact_schema_versions::text, validation_contract_ids::text, draining

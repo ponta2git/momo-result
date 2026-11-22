@@ -1,4 +1,6 @@
-use std::{env, time::Duration};
+use std::env;
+#[cfg(test)]
+use std::time::Duration;
 
 use clap::ValueEnum;
 use momo_analysis_core::{
@@ -12,7 +14,7 @@ use thiserror::Error;
 use tokio_postgres::{Client, Row, Transaction};
 
 use crate::postgres::{PostgresError, connect};
-use crate::worker::listener::CHANNEL;
+use crate::worker::wake_http;
 
 use super::control::{ALGORITHM_VERSION, CAPABILITY_FRESH_SECONDS};
 
@@ -21,7 +23,7 @@ mod maintenance;
 mod promotion_tests;
 pub(crate) use maintenance::{MaintenanceOperation, reconcile};
 
-const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
+const RELEASE_TRANSACTION_LIMITS: &str = "SET LOCAL transaction_timeout = '120s'; SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
      SET LOCAL idle_in_transaction_session_timeout = '30s'";
 const RELEASE_AUDIT_TRANSACTION: &str = "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY; \
      SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '30s'; \
@@ -93,6 +95,10 @@ pub(crate) struct CompletenessViolation {
 pub(crate) enum ReleaseError {
     #[error("DATABASE_URL must be set for release inspection")]
     MissingDatabaseUrl,
+    #[error("fresh attestations from the running reader and worker are required")]
+    MissingFleetEvidence,
+    #[error("cannot schedule recovery before promotion commit")]
+    RecoveryUnavailable,
     #[error("release operation key must be 8 to 128 visible characters")]
     InvalidOperationKey,
     #[error("analysis database connection failed")]
@@ -194,7 +200,7 @@ pub(crate) async fn promote(
 
     let report = promote_transaction(transaction, request).await?;
     if request.apply && report.target_count > 0 {
-        notify_scheduler(&client).await;
+        notify_scheduler().await;
     }
     Ok(report)
 }
@@ -266,6 +272,9 @@ async fn promote_transaction(
             key_hash: &key_hash,
         };
         apply_promotion(&transaction, request, &titles, &identity).await?;
+        wake_http::begin_external_write()
+            .await
+            .map_err(|_wake_error| ReleaseError::RecoveryUnavailable)?;
         transaction
             .commit()
             .await
@@ -289,21 +298,55 @@ async fn promote_transaction(
     })
 }
 
-async fn notify_scheduler(client: &Client) {
-    // Durable work has already committed. Losing this bounded hint cannot turn
-    // an accepted campaign into an error; the scheduler also scans on deadlines.
-    if !matches!(
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            client.query_one("SELECT pg_notify($1, '')", &[&CHANNEL]),
-        )
-        .await,
-        Ok(Ok(_))
-    ) {
+async fn notify_scheduler() {
+    if wake_http::notify_api().await.is_err() {
         tracing::warn!(
             event = "analysis_release_wake_failed",
-            "The committed analysis work awaits scheduler recovery"
+            "committed work awaits scheduler recovery"
         );
+    }
+}
+
+/// Only the isolated control-plane smoke harness may simulate resident registrations.
+pub(crate) fn isolated_release_fixture() -> bool {
+    env::var_os("FLY_MACHINE_ID").is_none()
+        && env::var("ANALYSIS_SMOKE_SERVICES_ARE_ISOLATED").as_deref() == Ok("true")
+        && env::var("DATABASE_URL").is_ok_and(|database| {
+            !database.is_empty()
+                && env::var("ANALYSIS_CONTROL_SMOKE_DATABASE_URL").as_deref()
+                    == Ok(database.as_str())
+        })
+}
+
+/// Fly production supports exactly one machine in each fleet. The orchestrator challenges both
+/// resident processes before every invocation. Bind transaction-local selection to those IDs so
+/// a still-fresh registration from an earlier machine cannot replace a missing current runtime.
+async fn bind_fleet_evidence(tx: &Transaction<'_>) -> Result<(), ReleaseError> {
+    if let Some((reader, worker)) = fleet_evidence(
+        env::var("MOMO_RELEASE_READER_ATTESTATION").ok(),
+        env::var("MOMO_RELEASE_WORKER_ATTESTATION").ok(),
+        isolated_release_fixture(),
+    )? {
+        tx.query_one("SELECT set_config('momo.release_reader', $1, true), set_config('momo.release_worker', $2, true)", &[&reader, &worker]).await?;
+    }
+    Ok(())
+}
+
+fn fleet_evidence(
+    reader: Option<String>,
+    worker: Option<String>,
+    isolated_fixture: bool,
+) -> Result<Option<(String, String)>, ReleaseError> {
+    match (reader, worker) {
+        (None, None) if isolated_fixture => Ok(None),
+        (Some(reader), Some(worker))
+            if uuid::Uuid::try_parse(&reader).is_ok()
+                && !worker.is_empty()
+                && worker.len() <= 255 =>
+        {
+            Ok(Some((reader, worker)))
+        }
+        _ => Err(ReleaseError::MissingFleetEvidence),
     }
 }
 
@@ -323,6 +366,7 @@ async fn begin_promotion_transaction(client: &mut Client) -> Result<Transaction<
         )
         .await
         .map_err(|source| postgres_phase("advisory_lock", source))?;
+    bind_fleet_evidence(&transaction).await?;
     lock_capability_registries(&transaction)
         .await
         .map_err(|source| postgres_phase("capability_registry_lock", source))?;
@@ -354,6 +398,7 @@ async fn audit_completeness_at(
     let mut client = connect(database_url).await?;
     let transaction = client.transaction().await?;
     transaction.batch_execute(RELEASE_AUDIT_TRANSACTION).await?;
+    bind_fleet_evidence(&transaction).await?;
     let report = inspect_completeness(&transaction, require_current, require_quiescent).await?;
     transaction.rollback().await?;
     Ok(report)
@@ -434,9 +479,11 @@ where
     let row = client
         .query_one(
             "SELECT \
-               COUNT(*) FILTER (WHERE artifact_schema_versions = $1::jsonb \
+               COUNT(*) FILTER (WHERE reader_id = COALESCE(NULLIF(current_setting('momo.release_reader', true), ''), reader_id) \
+                 AND artifact_schema_versions = $1::jsonb \
                  AND validation_contract_ids = $2::jsonb)::bigint, \
-               COUNT(*) FILTER (WHERE NOT (artifact_schema_versions = $1::jsonb \
+               COUNT(*) FILTER (WHERE reader_id <> COALESCE(NULLIF(current_setting('momo.release_reader', true), ''), reader_id) \
+                 OR NOT (artifact_schema_versions = $1::jsonb \
                  AND validation_contract_ids = $2::jsonb))::bigint \
              FROM series_analysis_reader_capabilities \
              WHERE draining = false \
@@ -481,10 +528,12 @@ where
     let row = client
         .query_one(
             "SELECT \
-               COUNT(*) FILTER (WHERE algorithm_versions = $1::jsonb \
+               COUNT(*) FILTER (WHERE worker_id = COALESCE(NULLIF(current_setting('momo.release_worker', true), ''), worker_id) \
+                 AND algorithm_versions = $1::jsonb \
                  AND artifact_schema_versions = $2::jsonb \
                  AND validation_contract_ids = $3::jsonb)::bigint, \
-               COUNT(*) FILTER (WHERE NOT (algorithm_versions = $1::jsonb \
+               COUNT(*) FILTER (WHERE worker_id <> COALESCE(NULLIF(current_setting('momo.release_worker', true), ''), worker_id) \
+                 OR NOT (algorithm_versions = $1::jsonb \
                  AND artifact_schema_versions = $2::jsonb \
                  AND validation_contract_ids = $3::jsonb))::bigint \
              FROM series_analysis_worker_capabilities \
@@ -997,6 +1046,17 @@ const fn global_violation(code: &'static str) -> CompletenessViolation {
 mod tests {
     use super::*;
 
+    #[test]
+    fn standalone_release_requires_both_resident_proofs() {
+        let reader = Some("11111111-1111-4111-8111-111111111111".to_owned());
+        let worker = Some("candidate@algorithm@1@contract".to_owned());
+        assert!(fleet_evidence(None, None, false).is_err());
+        assert!(fleet_evidence(None, worker.clone(), false).is_err());
+        assert!(fleet_evidence(reader.clone(), None, true).is_err());
+        assert!(fleet_evidence(reader, worker, false).is_ok_and(|proof| proof.is_some()));
+        assert!(fleet_evidence(None, None, true).is_ok_and(|proof| proof.is_none()));
+    }
+
     pub(super) fn valid_title_audit_row() -> TitleAuditRow {
         TitleAuditRow {
             game_title_id: String::from("title-release-audit"),
@@ -1312,6 +1372,10 @@ mod tests {
         assert_eq!(worker_counts.incompatible, 7);
         assert_eq!(reader_counts.compatible, 1);
         assert_eq!(reader_counts.incompatible, 5);
+        // A different live compatible process cannot stand in for the expected absent one.
+        transaction.batch_execute("SET LOCAL momo.release_reader = 'absent-reader'; SET LOCAL momo.release_worker = 'absent-worker'").await?;
+        assert_eq!(reader_capabilities(&transaction).await?.compatible, 0);
+        assert_eq!(worker_capabilities(&transaction).await?.compatible, 0);
         transaction.rollback().await?;
         Ok(())
     }

@@ -43,7 +43,7 @@ describe("MatchEditPage", () => {
     user = userEvent.setup();
   });
 
-  it("starts the match detail and independent directories before any directory resolves", async () => {
+  it("loads the match and titles in parallel without requesting OCR aliases or the event directory", async () => {
     setDevUser();
     const directoryGate = createDeferred();
     const requested = new Set<string>();
@@ -58,10 +58,9 @@ describe("MatchEditPage", () => {
         await directoryGate.promise;
         return HttpResponse.json({ items: [] });
       }),
-      http.get("/api/member-aliases", async () => {
+      http.get("/api/member-aliases", () => {
         requested.add("member-aliases");
-        await directoryGate.promise;
-        return HttpResponse.json({ items: [] });
+        return new HttpResponse(null, { status: 503 });
       }),
       http.get("/api/matches/:matchId", ({ params }) => {
         requested.add("match-detail");
@@ -79,12 +78,13 @@ describe("MatchEditPage", () => {
       </QueryClientProvider>,
     );
 
-    await waitFor(() =>
-      expect(requested).toEqual(new Set(["game-titles", "member-aliases", "match-detail"])),
-    );
-    directoryGate.resolve();
+    try {
+      await waitFor(() => expect(requested).toEqual(new Set(["game-titles", "match-detail"])));
+    } finally {
+      directoryGate.resolve();
+    }
     await waitForMatchEditReady();
-    expect(requested.has("held-events")).toBe(false);
+    expect(requested).toEqual(new Set(["game-titles", "match-detail"]));
   });
 
   it("keeps save unavailable until the saved match has loaded", async () => {

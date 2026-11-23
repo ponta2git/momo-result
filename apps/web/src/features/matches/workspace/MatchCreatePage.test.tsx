@@ -509,6 +509,7 @@ describe("MatchCreatePage", () => {
     setDevUser();
     const unrelatedRead = vi.fn(() => new HttpResponse(null, { status: 500 }));
     server.use(
+      http.get("/api/member-aliases", unrelatedRead),
       http.get("/api/held-events/held-requested/summary", unrelatedRead),
       http.get("/api/held-events/lookup/latest", unrelatedRead),
       http.get("/api/held-events", unrelatedRead),

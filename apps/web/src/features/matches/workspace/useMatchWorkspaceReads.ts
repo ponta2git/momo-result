@@ -130,8 +130,12 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
   );
   const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
   const matchDetail = readDetailQuery(matchDetailQuery);
-  const [gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
-    queries: [gameTitlesQueryOptions(), memberAliasesQueryOptions()],
+  // Only OCR review resolves players from raw names when initializing the form.
+  const titles = gameTitlesQueryOptions();
+  const directories =
+    mode === "review" ? ([titles, memberAliasesQueryOptions()] as const) : ([titles] as const);
+  const [gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries<[...typeof directories]>({
+    queries: directories,
   });
 
   // A saved match or draft owns its selection. Only resolve a default for an empty new form,
@@ -276,7 +280,7 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
       heldEventItems,
       mapItems: mapMastersQuery.data?.items,
       matchDetail: matchDetail.detail,
-      memberAliases: memberAliasesQuery.data.items ?? [],
+      memberAliases: memberAliasesQuery?.data.items ?? [],
       ocrDrafts,
       previousMatchSetup: recordContext.confirmed ? recordContext.previous : undefined,
       seasonItems: seasonMastersQuery.data?.items,

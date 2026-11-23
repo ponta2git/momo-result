@@ -1,3 +1,5 @@
+import { makeMatchDraftReviewResponse } from "../../src/test/factories/matchDraftReview";
+import { draftPayload } from "../../src/test/msw/fixtures";
 import { confirmedContext } from "./fixtures/records";
 import { expect, installUiAuth, test } from "./support";
 
@@ -67,4 +69,52 @@ test("keeps the mobile search draft through layout changes and applies it only o
   await expect(list).toContainText("2試合");
   expect(new URL(page.url()).searchParams.get("q")).toBeNull();
   expect(new URL(page.url()).searchParams.get("heldEventId")).toBe(heldEventId);
+});
+
+test("waits for the member aliases and assigns OCR results after a failed read is retried", async ({
+  page,
+}) => {
+  await installUiAuth(page);
+  const review = makeMatchDraftReviewResponse("alias-review");
+  const payload = {
+    ...draftPayload,
+    players: draftPayload.players.map((player, index) => ({
+      ...player,
+      member_id: null,
+      raw_player_name: { ...player.raw_player_name, value: index === 0 ? "青チーム社長" : null },
+    })),
+  };
+  await page.route("**/api/match-drafts/alias-review/review", (route) =>
+    route.fulfill({
+      json: {
+        ...review,
+        sourceImages: [],
+        ocrDrafts: review.ocrDrafts?.map((draft) => ({ ...draft, payloadJson: payload })),
+      },
+    }),
+  );
+  let recovered = false;
+  await page.route("**/api/member-aliases", (route) =>
+    recovered
+      ? route.fulfill({
+          json: {
+            items: [
+              {
+                id: "alias-blue",
+                memberId: "member_akane_mami",
+                alias: "青チーム",
+                createdAt: review.draft.createdAt,
+              },
+            ],
+          },
+        })
+      : route.fulfill({ status: 503, json: { detail: "一覧を一時的に取得できません" } }),
+  );
+  await page.goto("/review/alias-review");
+  const retry = page.getByRole("button", { name: "もう一度読み込む" });
+  await expect(retry).toBeVisible();
+  await expect(page.getByRole("button", { name: "確定前の確認へ進む" })).toHaveCount(0);
+  recovered = true;
+  await retry.click();
+  await expect(page.getByRole("textbox", { name: "あかねまみ 順位" })).toHaveValue("1");
 });

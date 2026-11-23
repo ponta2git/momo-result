@@ -128,9 +128,13 @@ private[postgres] trait PostgresMatchesReadSupport:
    */
   protected final def loadPlayersBatch(matchIds: List[MatchId])(using ids: PostgresIdentities)
       : ConnectionIO[Map[MatchId, FourPlayers]] =
+    loadPlayersBatch(matchIds, ids.lookupArray(Entity.Matches, matchIds.map(_.value)))
+
+  protected final def loadPlayersBatch(matchIds: List[MatchId], nativeIds: Fragment)(using
+      ids: PostgresIdentities)
+      : ConnectionIO[Map[MatchId, FourPlayers]] =
     if matchIds.isEmpty then Map.empty[MatchId, FourPlayers].pure[ConnectionIO]
     else
-      val nativeIds = ids.lookupArray(Entity.Matches, matchIds.map(_.value))
       val playersIO = sql"""
           SELECT ${ids.wireReference(
           Entity.Matches,

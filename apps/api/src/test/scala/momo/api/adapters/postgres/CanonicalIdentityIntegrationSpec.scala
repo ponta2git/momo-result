@@ -525,7 +525,7 @@ final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertCont
     val firstMatch = "legacy-a"
     val secondMatch = "legacy-b"
     val opaqueDraft = "historical-deleted-ocr-draft"
-    def seedRecord(event: String, record: String): IO[Unit] =
+    def seedRecord(event: String, record: String, destinations: Int): IO[Unit] =
       val eventId = canonical(Entity.HeldEvents, event)
       val matchId = canonical(Entity.Matches, record)
       (sql"""INSERT INTO held_events(id, legacy_id, held_date_iso, start_at)
@@ -548,11 +548,13 @@ final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertCont
         SELECT $matchId, member.id, player.position, player.position, 500 - player.position * 100, 0
         FROM unnest(ARRAY['member_ponta', 'member_akane_mami', 'member_otaka', 'member_eu'])
           WITH ORDINALITY player(legacy_id, position)
-        JOIN members member ON member.legacy_id = player.legacy_id""".update.run).transact(
-        transactor
-      ).void
+        JOIN members member ON member.legacy_id = player.legacy_id""".update.run *>
+        sql"""INSERT INTO match_incidents(match_id, member_id, incident_master_id, count)
+        SELECT $matchId, ${canonical(Entity.Members, "member_ponta")}, id, $destinations
+        FROM incident_masters WHERE key = 'destination'""".update.run).transact(transactor).void
     for
-      _ <- seedMasters *> seedRecord(firstEvent, firstMatch) *> seedRecord(secondEvent, secondMatch)
+      _ <- seedMasters *> seedRecord(firstEvent, firstMatch, 2) *>
+        seedRecord(secondEvent, secondMatch, 5)
       _ <- new PostgresMatchNotesRepository[IO](transactor, identities).replace(
         MatchId.unsafeFromString(firstMatch),
         MatchNoteVersion.Initial,
@@ -603,7 +605,9 @@ final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertCont
               .withQueryParam("metric", "rank1_count").withQueryParam("metricValue", "1")
               .withQueryParam("from", "2026-10-18").withQueryParam("to", "2026-10-18"))
           )
-          exported <- new PostgresMatchExportsRepository[IO](transactor, identities).project(
+          exports = new PostgresMatchExportsRepository[IO](transactor, identities)
+          exported <- exports.project(MatchExportsRepository.Selection(limit = 20))
+          single <- exports.project(
             MatchExportsRepository.Selection(
               matchId = Some(MatchId.unsafeFromString(secondUuid)),
               limit = 20
@@ -664,8 +668,11 @@ final class CanonicalIdentityIntegrationSpec extends PublishedArtifactInsertCont
                 ).toMap.get("member_ponta"),
               Some(List(1, 0, 0, 0)),
             )
-            assertEquals(exported.size, 4)
-            assert(exported.forall(row => row.seasonNo == 2 && row.gameTitleMatchNo == 2))
+            assertEquals(exported.map(_.seasonNo), List.fill(4)(1) ++ List.fill(4)(2))
+            assertEquals(exported.map(_.gameTitleMatchNo), List.fill(4)(1) ++ List.fill(4)(2))
+            assertEquals(exported.map(_.playOrder), List(1, 2, 3, 4, 1, 2, 3, 4))
+            assertEquals(exported.map(_.incidents.destination.value), List(2, 0, 0, 0, 5, 0, 0, 0))
+            assertEquals(single, exported.takeRight(4))
             assertEquals(csv._1, Status.Ok)
             assertEquals(csv._2.linesIterator.size, 5)
           update = HttpRequestBodies.Matches.confirmMatchWithNo(

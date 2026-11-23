@@ -1,5 +1,9 @@
 package momo.api.adapters.postgres
 
+import java.util.UUID
+
+import scala.reflect.ClassTag
+
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import doobie.*
@@ -87,6 +91,7 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
           WHERE game_title_id IN (SELECT game_title_id FROM selected_matches)
         )
         SELECT
+          r.id,
           r.wire_id,
           s.name,
           r.season_sequence,
@@ -110,8 +115,11 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
           // The ranked parent selection and batched children must describe the same match revision.
           _ <- sql"SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY".update.run
           _ <- PostgresReadBudget.ensureText(validNames, "Match export")
-          rows <- select.query[ExportMatchRow].to[List]
-          playersByMatch <- loadPlayersBatch(rows.map(_.id))
+          selected <- ids match
+            case PostgresIdentities.Legacy => readSelectedMatches[String](select)
+            case PostgresIdentities.Canonical => readSelectedMatches[UUID](select)
+          (rows, storedIds) = selected
+          playersByMatch <- loadPlayersBatch(rows.map(_.id), storedIds)
           memberIds =
             playersByMatch.valuesIterator.flatMap(_.toList.map(_.memberId.value)).toSet.toList
           names <- if memberIds.isEmpty then Map.empty[MemberId, String].pure[ConnectionIO]
@@ -122,6 +130,14 @@ private[api] object PostgresMatchExports extends PostgresMatchesReadSupport:
             toProjection(row, playersByMatch.get(row.id), names)
           ).liftTo[ConnectionIO]
         yield projected.flatten
+
+  private def readSelectedMatches[Id: Get: ClassTag](select: Fragment)(using Put[Array[Id]])
+      : ConnectionIO[(List[ExportMatchRow], Fragment)] =
+    select.query[(Id, ExportMatchRow)].to[List].map { selected =>
+      // Keep wire IDs for ordering and assembly; filter both child queries by the actual primary keys.
+      val (storedIds, matches) = selected.unzip
+      matches -> fr"${storedIds.toArray}"
+    }
 
   private def toProjection(
       row: ExportMatchRow,

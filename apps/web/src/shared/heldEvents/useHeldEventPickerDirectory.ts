@@ -41,7 +41,7 @@ export function useHeldEventPickerDirectory({
   const heldEvents = directoryQuery.data?.items ?? [];
   const selectedOnPage = heldEvents.find((event) => event.id === selectedId);
   const suppliedSelection = selectedEvent?.id === selectedId ? selectedEvent : undefined;
-  const resolvedWithoutSummary = selectedOnPage ?? suppliedSelection;
+  const resolvedWithoutSummary = suppliedSelection ?? selectedOnPage;
   const selectedSummaryQuery = useQuery(
     heldEventSummaryQueryOptions(
       selectedId,
@@ -71,8 +71,8 @@ export function useHeldEventPickerDirectory({
 
   return {
     error,
-    heldEvents,
-    pagination: directoryQuery.data?.pagination,
+    heldEvents: includeDirectory ? heldEvents : [],
+    pagination: includeDirectory ? directoryQuery.data?.pagination : undefined,
     pending: directoryPending || selectionPending,
     refresh: async () => {
       if (directoryQuery.isEnabled) await directoryQuery.refetch({ cancelRefetch: false });

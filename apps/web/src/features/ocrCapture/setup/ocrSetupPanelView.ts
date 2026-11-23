@@ -27,10 +27,8 @@ type SetupPanelOptions = {
     pagination: PaginationState | undefined;
     pending: boolean;
     scopeChanging: boolean;
-    selectedHeldEvent: HeldEventResponse | undefined;
   };
   heldEventsError: string | undefined;
-  heldEventsPlaceholder: string;
   mapMasters: readonly NamedOption[];
   mapMastersError: string | undefined;
   mapMastersPlaceholder: string;
@@ -51,7 +49,6 @@ export type OcrSetupPanelView = {
       pending: boolean;
       scopeChanging: boolean;
       selectedHeldEvent: HeldEventResponse | undefined;
-      unavailableLabel: string;
       value: string;
     };
     map: SetupSelectFieldView;
@@ -64,7 +61,9 @@ export type OcrSetupPanelView = {
   };
   intents: {
     changeGameTitle: (gameTitleId: string) => void;
-    changeHeldEvent: (heldEventId: string, selected: HeldEventResponse | undefined) => void;
+    changeHeldEvent: (heldEventId: string) => void;
+    changeHeldEventPickerOpen: (open: boolean) => void;
+    retryHeldEventPicker: (() => void) | undefined;
     changeHeldEventPage: (page: number) => void;
     changeMap: (mapMasterId: string) => void;
     changeMatchNo: (value: string) => void;
@@ -108,8 +107,7 @@ export function buildOcrSetupPanelFields({
       pagination: options.heldEventPicker.pagination,
       pending: options.heldEventPicker.pending,
       scopeChanging: options.heldEventPicker.scopeChanging,
-      selectedHeldEvent: options.heldEventPicker.selectedHeldEvent ?? options.selectedHeldEvent,
-      unavailableLabel: options.heldEventsPlaceholder,
+      selectedHeldEvent: options.selectedHeldEvent,
       value: value.heldEventId ?? "",
     },
     map: {

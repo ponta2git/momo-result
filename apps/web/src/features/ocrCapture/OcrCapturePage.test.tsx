@@ -551,33 +551,38 @@ describe("OcrCapturePage", () => {
   it("inherits held-event context and returns to that event after starting OCR", async () => {
     setDevUser();
     const createdDrafts: MatchDraftRequestBody[] = [];
-    const summary = vi.fn(() => new HttpResponse(null, { status: 500 }));
+    const unnecessaryRead = vi.fn(() => HttpResponse.error());
+    const directory = vi.fn(() =>
+      HttpResponse.json({
+        items: [
+          {
+            draftCount: 0,
+            heldAt: "2026-03-03T04:05:06.000Z",
+            id: "held-latest",
+            matchCount: 1,
+            nextMatchNo: 2,
+          },
+        ],
+      }),
+    );
+    const contexts: string[] = [];
     server.use(
-      http.get("/api/held-events/held-scoped/summary", summary),
-      http.get("/api/held-events", () =>
-        HttpResponse.json({
-          items: [
-            {
-              draftCount: 0,
-              heldAt: "2026-03-03T04:05:06.000Z",
-              id: "held-latest",
-              matchCount: 1,
-              nextMatchNo: 2,
-            },
-          ],
-        }),
-      ),
-      http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
-        HttpResponse.json(
+      http.get("/api/held-events/held-scoped/summary", unnecessaryRead),
+      http.get("/api/held-events/lookup/latest", unnecessaryRead),
+      http.get("/api/held-events", directory),
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) => {
+        const id = String(params["heldEventId"]);
+        contexts.push(id);
+        return HttpResponse.json(
           makeHeldEventRecordContext({
             draftCount: 1,
             heldAt: "2026-02-03T04:05:06.000Z",
-            id: String(params["heldEventId"]),
+            id,
             matchCount: 3,
             nextMatchNo: 7,
           }),
-        ),
-      ),
+        );
+      }),
       http.post("/api/match-drafts", async ({ request }) => {
         createdDrafts.push((await request.json()) as MatchDraftRequestBody);
         return HttpResponse.json({
@@ -595,7 +600,9 @@ describe("OcrCapturePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き1件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue(7);
     });
-    expect(summary).not.toHaveBeenCalled();
+    expect(contexts).toEqual(["held-scoped"]);
+    expect(directory).not.toHaveBeenCalled();
+    expect(unnecessaryRead).not.toHaveBeenCalled();
     // A capture started from a held event's hub returns there when abandoned.
     expect(screen.getByRole("link", { name: "取り込みをやめる" })).toHaveAttribute(
       "href",
@@ -604,6 +611,9 @@ describe("OcrCapturePage", () => {
     await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
     const selectedEvent = screen.getByRole("radio", { name: "2026/02/03 13:05" });
     expect(selectedEvent).toBeChecked();
+    await screen.findByRole("radio", { name: "2026/03/03 13:05" });
+    expect(directory).toHaveBeenCalledOnce();
+    expect(unnecessaryRead).not.toHaveBeenCalled();
     expect(selectedEvent).toHaveAccessibleDescription("確定済み3試合・未確定下書き1件");
     await user.click(screen.getByRole("button", { name: "ダイアログを閉じる" }));
     await user.upload(

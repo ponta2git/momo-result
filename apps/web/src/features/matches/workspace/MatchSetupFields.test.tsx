@@ -21,6 +21,7 @@ function createView(
         refresh: vi.fn(async () => undefined),
         scopeChanging: false,
         selectedHeldEvent: undefined,
+        onOpenChange: vi.fn(),
         onPageChange: vi.fn(),
       },
       heldEvents: [],

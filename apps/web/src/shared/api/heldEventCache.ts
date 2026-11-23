@@ -4,15 +4,6 @@ import { heldEventDetailCacheFilter } from "@/shared/api/detailCache";
 import type { HeldEventResponse, HeldEventSummaryResponse } from "@/shared/api/heldEvents";
 import { heldEventKeys } from "@/shared/api/queryKeys";
 
-export function mergeHeldEventItems(
-  heldEvents: HeldEventResponse[],
-  preferred: HeldEventResponse | undefined,
-): HeldEventResponse[] {
-  return preferred && !heldEvents.some((event) => event.id === preferred.id)
-    ? [preferred, ...heldEvents]
-    : heldEvents;
-}
-
 /** An event read on its own for a record's defaults replaces its possibly older list entry. */
 export function preferHeldEventItem(
   heldEvents: HeldEventResponse[],

@@ -20,7 +20,7 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
           data-validation-path="heldEventId"
           emptyChoiceDescription="試合結果を保存するには開催の選択が必要です。"
           emptyChoiceLabel="未選択"
-          error={fieldError("heldEventId") ?? options.heldEventPicker?.error}
+          error={options.heldEventPicker?.error ?? fieldError("heldEventId")}
           heldEvents={options.heldEventPicker?.heldEvents ?? options.heldEvents}
           label="開催（必須）"
           name="match-workspace-held-event"
@@ -31,6 +31,8 @@ export function MatchSetupFields({ view }: { view: MatchWorkspaceSetupFieldsView
           selectedHeldEvent={options.heldEventPicker?.selectedHeldEvent}
           unavailableLabel="未選択"
           value={values.heldEventId}
+          onOpenChange={options.heldEventPicker?.onOpenChange}
+          onRetry={options.heldEventPicker?.error ? options.heldEventPicker.refresh : undefined}
           onPageChange={options.heldEventPicker?.onPageChange}
           onValueChange={(heldEventId, pickerSelection) => {
             actions.onSelectHeldEvent(

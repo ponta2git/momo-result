@@ -1,14 +1,13 @@
 import { useQuery, useSuspenseQueries } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { latestHeldEvent } from "@/features/matches/workspace/heldEventDefaults";
 import type { WorkspaceMode } from "@/features/matches/workspace/matchFormTypes";
 import {
   dedupeWorkspaceErrors,
   draftIdsFromDetail,
 } from "@/features/matches/workspace/workspaceDerivations";
 import { readDetailQuery } from "@/shared/api/detailReadResult";
-import { mergeHeldEventItems, preferHeldEventItem } from "@/shared/api/heldEventCache";
+import { preferHeldEventItem } from "@/shared/api/heldEventCache";
 import type { HeldEventResponse } from "@/shared/api/heldEvents";
 import type {
   GameTitleResponse,
@@ -31,7 +30,7 @@ import {
 } from "@/shared/api/queryErrorState";
 import {
   gameTitlesQueryOptions,
-  heldEventsQueryOptions,
+  latestHeldEventQueryOptions,
   mapMastersQueryOptions,
   matchDetailQueryOptions,
   matchDraftReviewQueryOptions,
@@ -43,13 +42,11 @@ import { slotKinds } from "@/shared/domain/ocr";
 import type { SlotMap } from "@/shared/domain/slotMap";
 import type { HeldEventPickerDirectory } from "@/shared/heldEvents/heldEventPickerTypes";
 import type { RecordSetupChoice } from "@/shared/heldEvents/recordContext";
-import {
-  heldEventPickerPageSize,
-  useHeldEventPickerDirectory,
-} from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import { useHeldEventPickerDirectory } from "@/shared/heldEvents/useHeldEventPickerDirectory";
 import { useRecordContext } from "@/shared/heldEvents/useRecordContext";
 
 type MatchWorkspaceReadOptions = {
+  initialized: boolean;
   gameTitleId: string;
   heldEventId: string;
   matchDraftId: string | undefined;
@@ -61,7 +58,7 @@ type MatchWorkspaceReadOptions = {
 };
 
 type MatchWorkspaceReads = {
-  heldEventPicker: HeldEventPickerDirectory;
+  heldEventPicker: HeldEventPickerDirectory & { onOpenChange: (open: boolean) => void };
   load: {
     base: {
       errors: NormalizedApiError[];
@@ -81,6 +78,7 @@ type MatchWorkspaceReads = {
   };
   resources: {
     draftDetail: MatchDraftDetailResponse | undefined;
+    initialHeldEvent: HeldEventResponse | undefined;
     gameTitleItems: GameTitleResponse[] | undefined;
     heldEventItems: HeldEventResponse[];
     mapItems: MapMasterResponse[] | undefined;
@@ -108,6 +106,7 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
   const {
     gameTitleId,
     heldEventId,
+    initialized,
     matchDraftId,
     sourceImagesDraftId,
     matchId,
@@ -131,30 +130,43 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
   );
   const matchDetailQuery = useQuery(matchDetailQueryOptions(matchId, mode === "edit"));
   const matchDetail = readDetailQuery(matchDetailQuery);
-  const [heldEventsQuery, gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
-    queries: [
-      heldEventsQueryOptions({ page: 1, pageSize: heldEventPickerPageSize }),
-      gameTitlesQueryOptions(),
-      memberAliasesQueryOptions(),
-    ],
-  });
-  // Editing keeps the saved conditions. Review only needs defaults before an event is chosen.
-  const pickerItems = heldEventsQuery.data?.items ?? [];
-  const needsRecordContext = mode === "create" || (mode === "review" && !heldEventId);
-  const recordContext = useRecordContext(
-    heldEventId || preferredHeldEventId || latestHeldEvent(pickerItems)?.id,
-    needsRecordContext,
-  );
-  const initialHeldEventItems = preferHeldEventItem(pickerItems, recordContext.event);
-  const selectedEvent = initialHeldEventItems.find((event) => event.id === heldEventId);
-  const heldEventPicker = useHeldEventPickerDirectory({
-    selectedEvent,
-    selectedId: needsRecordContext ? (selectedEvent?.id ?? "") : heldEventId,
+  const [gameTitlesQuery, memberAliasesQuery] = useSuspenseQueries({
+    queries: [gameTitlesQueryOptions(), memberAliasesQueryOptions()],
   });
 
-  const heldEventItems = mergeHeldEventItems(
-    initialHeldEventItems,
-    heldEventPicker.selectedHeldEvent,
+  // A saved match or draft owns its selection. Only resolve a default for an empty new form,
+  // after its draft (if any) has loaded and before the user can edit it.
+  const savedId = initialized ? heldEventId : draftDetail?.heldEventId;
+  const needsDefault =
+    !initialized &&
+    mode !== "edit" &&
+    !savedId &&
+    (!matchDraftId || useSampleDrafts || Boolean(draftDetail));
+  const [missingPreferredId, setMissingPreferredId] = useState<string>();
+  const requestedId =
+    needsDefault && preferredHeldEventId !== missingPreferredId ? preferredHeldEventId : undefined;
+  const needsLatest = needsDefault && !requestedId;
+  const latest = useQuery({ ...latestHeldEventQueryOptions(), enabled: needsLatest });
+  const latestPending = needsLatest && latest.fetchStatus !== "idle";
+  const latestError = needsLatest && shouldShowQueryError(latest) ? latest.error : undefined;
+  const latestId =
+    needsLatest && !latestPending && !latestError ? latest.data?.latestHeldEventId : undefined;
+  const needsContext = mode === "create" || needsDefault;
+  const recordContext = useRecordContext(savedId || requestedId || latestId, needsContext);
+  const preferredMissing = requestedId && recordContext.notFound && recordContext.confirmed;
+  if (preferredMissing) {
+    setMissingPreferredId(requestedId);
+  }
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const heldEventPicker = useHeldEventPickerDirectory({
+    includeDirectory: pickerOpen,
+    selectedEvent: recordContext.event,
+    // When record-context owns the selection, its pending read already supplies the label.
+    selectedId: needsContext ? (recordContext.event?.id ?? "") : heldEventId,
+  });
+  const heldEventItems = preferHeldEventItem(
+    heldEventPicker.heldEvents,
+    recordContext.event ?? heldEventPicker.selectedHeldEvent,
   );
 
   const reviewDraftIds = useMemo(() => draftIdsFromDetail(draftDetail), [draftDetail]);
@@ -176,9 +188,8 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
       .filter(shouldShowQueryError)
       .map((query) => normalizeUnknownApiError(query.error))
       .concat(
-        recordContext.showError && !recordContext.notFound
-          ? [normalizeUnknownApiError(recordContext.error)]
-          : [],
+        latestError ? [normalizeUnknownApiError(latestError)] : [],
+        recordContext.showError ? [normalizeUnknownApiError(recordContext.error)] : [],
       ),
   );
   const mapMastersError = mapMastersQuery.error;
@@ -189,8 +200,10 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
   const refetchDraftReview = draftReviewQuery.refetch;
   const recordContextError = recordContext.showError ? recordContext.error : null;
   const refetchRecordContext = recordContext.retry;
+  const refetchLatest = latest.refetch;
   const retryBaseQueries = useCallback(async () => {
     const retries: Array<Promise<unknown>> = [];
+    if (latestError) retries.push(refetchLatest());
     if (mapMastersError) retries.push(refetchMapMasters());
     if (seasonMastersError) retries.push(refetchSeasonMasters());
     if (draftReviewError) retries.push(refetchDraftReview());
@@ -198,6 +211,8 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
     await Promise.all(retries);
   }, [
     draftReviewError,
+    latestError,
+    refetchLatest,
     mapMastersError,
     recordContextError,
     refetchDraftReview,
@@ -219,19 +234,22 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
         ? ("notFound" as const)
         : ("transient" as const)
       : null;
+  const initialEventFailed = needsDefault && Boolean(latestError || recordContext.showError);
   const initializationFailed =
-    mode !== "edit" &&
-    !useSampleDrafts &&
-    Boolean(matchDraftId) &&
-    draftReviewQuery.data === undefined &&
-    shouldShowQueryError(draftReviewQuery);
+    initialEventFailed ||
+    (mode !== "edit" &&
+      !useSampleDrafts &&
+      Boolean(matchDraftId) &&
+      draftReviewQuery.data === undefined &&
+      shouldShowQueryError(draftReviewQuery));
 
   return {
-    heldEventPicker,
+    heldEventPicker: { ...heldEventPicker, onOpenChange: setPickerOpen },
     load: {
       base: {
         errors: baseErrors,
         retrying:
+          latestPending ||
           mapMastersQuery.isFetching ||
           seasonMastersQuery.isFetching ||
           draftReviewQuery.isFetching ||
@@ -248,18 +266,19 @@ export function useMatchWorkspaceReads(params: MatchWorkspaceReadOptions): Match
       // A failed read is reported by the base errors, not left as a pending selection.
       mastersPending:
         Boolean(gameTitleId) && (mapMastersQuery.isPending || seasonMastersQuery.isPending),
-      recordContextPending: recordContext.pending,
+      recordContextPending: latestPending || Boolean(preferredMissing) || recordContext.pending,
       sourceImagesLoading: draftReviewQuery.isLoading,
     },
     resources: {
       draftDetail,
+      initialHeldEvent: needsDefault && recordContext.confirmed ? recordContext.event : undefined,
       gameTitleItems: gameTitlesQuery.data.items,
       heldEventItems,
       mapItems: mapMastersQuery.data?.items,
       matchDetail: matchDetail.detail,
       memberAliases: memberAliasesQuery.data.items ?? [],
       ocrDrafts,
-      previousMatchSetup: recordContext.previous,
+      previousMatchSetup: recordContext.confirmed ? recordContext.previous : undefined,
       seasonItems: seasonMastersQuery.data?.items,
       sourceImageItems: draftReviewQuery.data?.sourceImages,
     },

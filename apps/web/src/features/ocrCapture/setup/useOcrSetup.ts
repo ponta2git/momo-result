@@ -22,15 +22,15 @@ export function useOcrSetup({
 }) {
   const [value, setValue] = useState(initialValue);
   const options = useOcrSetupOptions({ enabled, value });
-  const { gameTitles, heldEvents, heldEventContext, mapMasters, seasonMasters } = options;
+  const { gameTitles, heldEventNotFound, selectedHeldEvent, mapMasters, seasonMasters } = options;
 
   const next = deriveValidSetupValue({
     gameTitles,
-    heldEventNotFound: heldEventContext === "notFound",
-    heldEvents,
+    heldEventNotFound,
+    selectedHeldEvent,
     mapMasters,
     previousMatchSetup: options.previousMatchSetup,
-    recordContextPending: options.recordContextPending,
+    canFillDefaults: options.canFillDefaults,
     seasonMasters,
     value,
   });
@@ -48,8 +48,11 @@ export function useOcrSetup({
     fields: buildOcrSetupPanelFields({ enabled, options, value }),
     intents: {
       changeGameTitle: (gameTitleId) => change({ kind: "gameTitle", id: gameTitleId }),
-      changeHeldEvent: (heldEventId, selected) =>
-        change({ kind: "heldEvent", id: heldEventId, nextMatchNo: selected?.nextMatchNo }),
+      changeHeldEvent: (id) => change({ kind: "heldEvent", id }),
+      changeHeldEventPickerOpen: options.setPickerOpen,
+      retryHeldEventPicker: options.heldEventPicker.error
+        ? options.heldEventPicker.refresh
+        : undefined,
       changeHeldEventPage: options.heldEventPicker.onPageChange,
       changeMap: (id) => change({ kind: "map", id }),
       changeMatchNo: (input) => change({ kind: "matchNo", value: input }),

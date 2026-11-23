@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useEffectEvent, useId, useState } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 import type { PaginationState } from "@/shared/lib/pagination";
@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/actions/Button";
 import { cn } from "@/shared/ui/cn";
 import { PaginationControls } from "@/shared/ui/data/PaginationControls";
 import { Dialog } from "@/shared/ui/feedback/Dialog";
+import { Notice } from "@/shared/ui/feedback/Notice";
 import { PendingStatus } from "@/shared/ui/feedback/PendingStatus";
 import { ChoiceList } from "@/shared/ui/forms/ChoiceList";
 import type { ChoiceListOption } from "@/shared/ui/forms/ChoiceList";
@@ -36,6 +37,8 @@ type ChoicePickerDialogFieldProps = Omit<
   scopeChanging?: boolean | undefined;
   selectedLabel: ReactNode;
   value?: string | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  onRetry?: (() => void) | undefined;
   onPageChange?: ((page: number) => void) | undefined;
   onValueChange: (value: string) => void;
 };
@@ -66,11 +69,19 @@ export function ChoicePickerDialogField({
   scopeChanging = false,
   selectedLabel,
   value,
+  onOpenChange,
+  onRetry,
   onPageChange,
   onValueChange,
   ...fieldProps
 }: ChoicePickerDialogFieldProps) {
   const [open, setOpen] = useState(false);
+  const reportOpen = useEffectEvent((isOpen: boolean) => onOpenChange?.(isOpen));
+  useEffect(() => {
+    if (!open) return;
+    reportOpen(true);
+    return () => reportOpen(false);
+  }, [open]);
   const fallbackId = useId();
   const triggerId = `${fallbackId}-trigger`;
   const titleId = `${fallbackId}-title`;
@@ -154,6 +165,18 @@ export function ChoicePickerDialogField({
                 strategy="preserve-inert"
               >
                 <div className="flex min-h-0 flex-col gap-3">
+                  {error && onRetry ? (
+                    <Notice
+                      action={
+                        <Button pending={pending} size="sm" variant="secondary" onClick={onRetry}>
+                          {subject}候補を再取得
+                        </Button>
+                      }
+                      tone="danger"
+                    >
+                      {error}
+                    </Notice>
+                  ) : null}
                   <div className="flex min-h-0 flex-1 flex-col">
                     <ChoiceList
                       aria-labelledby={titleId}

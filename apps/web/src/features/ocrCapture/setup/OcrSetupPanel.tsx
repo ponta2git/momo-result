@@ -25,9 +25,10 @@ export function OcrSetupPanel({ view }: OcrSetupPanelProps) {
           pending={fields.heldEvent.pending}
           scopeChanging={fields.heldEvent.scopeChanging}
           selectedHeldEvent={fields.heldEvent.selectedHeldEvent}
-          unavailableLabel={fields.heldEvent.unavailableLabel}
           value={fields.heldEvent.value}
+          onOpenChange={intents.changeHeldEventPickerOpen}
           onPageChange={intents.changeHeldEventPage}
+          onRetry={intents.retryHeldEventPicker}
           onValueChange={intents.changeHeldEvent}
         />
       </div>

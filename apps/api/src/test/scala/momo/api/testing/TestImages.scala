@@ -1,6 +1,17 @@
 package momo.api.testing
 
+import java.util.Base64
+
 object TestImages:
+  // Complete grayscale PNGs with the same length and dimensions but different pixel values.
+  def blackPixelPng: Array[Byte] = Base64.getDecoder.decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAADUlEQVR4AQECAP3/AAAAAgABfgUN0gAAAABJRU5ErkJggg=="
+  )
+
+  def whitePixelPng: Array[Byte] = Base64.getDecoder.decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAADUlEQVR4AQECAP3/AP8BAQEAYIcStQAAAABJRU5ErkJggg=="
+  )
+
   def png1x1: Array[Byte] = png(width = 1, height = 1)
 
   def png(width: Int, height: Int): Array[Byte] =

@@ -15,9 +15,9 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.Async
 import cats.syntax.all.*
 
-import momo.api.adapters.storage.ImageValidation
 import momo.api.ports.storage.{
   ImageDiskUsage,
+  ImageValidation,
   Sha256Hex,
   SourceImageObject,
   SourceImageObjectFailure,
@@ -197,8 +197,15 @@ object LocalSourceImageObjectStorage:
     else if Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) then
       Left(SourceImageObjectFailure.IntegrityViolation)
     else
-      val bytes = readBounded(path)
-      metadataFor(key, bytes).map(SourceImageObject(_, bytes))
+      val input = Files.newInputStream(path, StandardOpenOption.READ)
+      try SourceImageObject.read(key, input, None).flatMap { result =>
+          Either.cond(
+            key.value.endsWith(s".${result.format.imageType.extension}"),
+            result,
+            SourceImageObjectFailure.IntegrityViolation
+          )
+        }
+      finally input.close()
 
   private def metadataFor(
       key: SourceImageObjectKey,
@@ -219,11 +226,6 @@ object LocalSourceImageObjectStorage:
         SourceImageObjectFailure.IntegrityViolation,
       )
     }
-
-  private def readBounded(path: Path): Array[Byte] =
-    val input = Files.newInputStream(path, StandardOpenOption.READ)
-    try input.readNBytes(ImageValidation.MaxBytes + 1)
-    finally input.close()
 
   private def writeNew(path: Path, bytes: Array[Byte]): Unit =
     val temporary = Files.createTempFile(path.getParent, ".momo-source-image-", ".tmp")

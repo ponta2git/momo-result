@@ -1,5 +1,7 @@
 package momo.api.testing
 
+import java.io.ByteArrayInputStream
+
 import cats.effect.{IO, Ref}
 
 import momo.api.ports.storage.*
@@ -7,6 +9,8 @@ import momo.api.ports.storage.*
 final class RecordingSourceImageObjectStorage private (
     ref: Ref[IO, RecordingSourceImageObjectStorage.State]
 ) extends SourceImageObjectStorage[IO]:
+  import RecordingSourceImageObjectStorage.StoredObject
+
   override def put(
       key: SourceImageObjectKey,
       mediaType: String,
@@ -24,7 +28,7 @@ final class RecordingSourceImageObjectStorage private (
           sha256,
           Some("etag-recording"),
         )
-        next.copy(objects = next.objects.updated(key, SourceImageObject(metadata, bytes))) ->
+        next.copy(objects = next.objects.updated(key, StoredObject(metadata, bytes.clone()))) ->
           Right(metadata)
   }
 
@@ -40,7 +44,9 @@ final class RecordingSourceImageObjectStorage private (
     state.nextGetFailure match
       case Some(failure) => next -> Left(failure)
       case None => next -> state.objects.get(key).toRight(SourceImageObjectFailure.NotFound)
-  }
+  }.map(_.flatMap(stored =>
+    SourceImageObject.read(key, ByteArrayInputStream(stored.bytes), Some(stored.metadata))
+  ))
 
   override def delete(
       key: SourceImageObjectKey
@@ -72,13 +78,15 @@ final class RecordingSourceImageObjectStorage private (
       message => IO.raiseError(new IllegalArgumentException(message)),
       key =>
         ref.update(state =>
-          state.copy(objects = state.objects.updatedWith(key)(_.map(_.copy(bytes = bytes))))
+          state.copy(objects = state.objects.updatedWith(key)(_.map(_.copy(bytes = bytes.clone()))))
         ),
     )
 
 object RecordingSourceImageObjectStorage:
+  private final case class StoredObject(metadata: SourceImageObjectMetadata, bytes: Array[Byte])
+
   private final case class State(
-      objects: Map[SourceImageObjectKey, SourceImageObject],
+      objects: Map[SourceImageObjectKey, StoredObject],
       putCount: Int,
       nextPutFailure: Option[SourceImageObjectFailure],
       nextGetFailure: Option[SourceImageObjectFailure],

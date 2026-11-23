@@ -109,24 +109,30 @@ final class ObjectBackedImageStoreSpec extends IntegrationSuite:
       assertEquals(availableRow.map(_.status), Some(SourceImageStatus.Available))
       assertEquals(putCount, 2)
 
-  test("read recomputes the DB checksum and rejects a tampered object"):
+  test("read checks the stored body against the provider checksum and the DB reservation"):
+    val original = TestImages.blackPixelPng
+    val replacement = TestImages.whitePixelPng
+    val replacementHash = Sha256Hex.digest(replacement)
+    assertEquals(original.length, replacement.length)
+    assertNotEquals(Sha256Hex.digest(original), replacementHash)
+
     for
       objects <- RecordingSourceImageObjectStorage.create
       store = imageStore(objects)
-      saved <- store.saveIdempotent(
-        accountId,
-        None,
-        Some("image/png"),
-        TestImages.png1x1,
-        idempotencyHash,
-      )
+      saved <- store.saveIdempotent(accountId, None, Some("image/png"), original, idempotencyHash)
       stored <- saved.fold(error => fail(s"expected stored image, got $error"), IO.pure)
-      _ <- objects.tamper(stored.location.value, TestImages.png(width = 2, height = 1))
-      result <- store.readStream(stored).compile.to(Array).attempt
-    yield result match
-      case Left(error: AppException) =>
-        assertEquals(error.error.code, "DEPENDENCY_FAILED")
-      case other => fail(s"expected integrity failure, got $other")
+      key = SourceImageObjectKey.fromString(stored.location.value).fold(fail(_), identity)
+      _ <- objects.tamper(key.value, replacement)
+      providerMismatch <- store.readStream(stored).compile.drain.attempt
+      _ <- objects.put(key, "image/png", replacement, replacementHash)
+      verified <- objects.get(key)
+      dbMismatch <- store.readStream(stored).compile.drain.attempt
+    yield
+      assertEquals(verified.map(_.bytes.toList), Right(replacement.toList))
+      List(providerMismatch, dbMismatch).foreach {
+        case Left(error: AppException) => assertEquals(error.error.code, "DEPENDENCY_FAILED")
+        case other => fail(s"expected integrity failure, got $other")
+      }
 
   test("concurrent uploads cannot overrun the account reservation quota"):
     val ids = (1 to 8).toVector.map(index => ImageId.unsafeFromString(s"source-quota-$index"))

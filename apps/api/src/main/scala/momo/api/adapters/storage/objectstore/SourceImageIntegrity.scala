@@ -2,7 +2,6 @@ package momo.api.adapters.storage.objectstore
 
 import cats.syntax.all.*
 
-import momo.api.adapters.storage.ImageValidation
 import momo.api.ports.storage.{
   Sha256Hex,
   SourceImageObject,
@@ -41,10 +40,6 @@ private[objectstore] object SourceImageIntegrity:
   def matches(record: SourceImageRecord, sourceObject: SourceImageObject): Boolean =
     expected(record).exists { expected =>
       metadataMatches(expected, sourceObject.metadata) &&
-      sourceObject.bytes.length.toLong == expected.sizeBytes &&
-      Sha256Hex.digest(sourceObject.bytes) == expected.sha256 &&
-      ImageValidation.validate(sourceObject.bytes, Some(expected.mediaType)).exists(validated =>
-        validated.dimensions.width == expected.width.toLong &&
-          validated.dimensions.height == expected.height.toLong
-      )
+      sourceObject.format.dimensions.width == expected.width.toLong &&
+      sourceObject.format.dimensions.height == expected.height.toLong
     }

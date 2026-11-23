@@ -7,10 +7,10 @@ import java.time.Instant
 import cats.effect.IO
 
 import momo.api.MomoCatsEffectSuite
-import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.AppError
+import momo.api.ports.storage.ImageValidation
 import momo.api.testing.TestImages
 
 final class LocalFsImageStoreSpec extends MomoCatsEffectSuite:

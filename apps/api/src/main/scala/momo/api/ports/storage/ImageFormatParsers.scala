@@ -1,4 +1,4 @@
-package momo.api.adapters.storage
+package momo.api.ports.storage
 
 import scala.annotation.tailrec
 

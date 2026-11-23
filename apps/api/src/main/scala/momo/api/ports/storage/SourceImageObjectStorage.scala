@@ -1,6 +1,10 @@
 package momo.api.ports.storage
 
+import java.io.InputStream
+import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+
+import fs2.Chunk
 
 import momo.api.domain.ids.ImageId
 import momo.api.util.Sha256
@@ -83,7 +87,43 @@ final case class SourceImageObjectMetadata(
     etag: Option[String],
 ) derives CanEqual
 
-final case class SourceImageObject(metadata: SourceImageObjectMetadata, bytes: Array[Byte])
+/** The metadata and dimensions describe the owned bytes returned by this read. */
+final class SourceImageObject private (
+    val metadata: SourceImageObjectMetadata,
+    val bytes: Chunk[Byte],
+    private[api] val format: ImageValidation.ValidatedImage,
+)
+
+object SourceImageObject:
+  def read(
+      key: SourceImageObjectKey,
+      input: InputStream,
+      declared: Option[SourceImageObjectMetadata],
+  ): Either[SourceImageObjectFailure, SourceImageObject] =
+    val owned = input.readNBytes(ImageValidation.MaxBytes + 1)
+    if declared.exists(m => m.key != key || m.sizeBytes != owned.length.toLong) then
+      Left(SourceImageObjectFailure.IntegrityViolation)
+    else
+      ImageValidation.validate(owned, declared.map(_.mediaType))
+        .left.map(_ => SourceImageObjectFailure.IntegrityViolation).flatMap { format =>
+          val actual = SourceImageObjectMetadata(
+            key,
+            format.imageType.mediaType,
+            owned.length.toLong,
+            Sha256Hex.digest(owned),
+            declared.flatMap(_.etag),
+          )
+          Either.cond(
+            declared.forall(_ == actual),
+            // The read owns this buffer. A read-only view keeps consumers from changing verified bytes.
+            new SourceImageObject(
+              actual,
+              Chunk.byteBuffer(ByteBuffer.wrap(owned).asReadOnlyBuffer()),
+              format
+            ),
+            SourceImageObjectFailure.IntegrityViolation,
+          )
+        }
 
 enum SourceImageObjectFailure derives CanEqual:
   case NotFound

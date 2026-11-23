@@ -37,7 +37,7 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
   private val now = Instant.parse("2026-08-12T00:00:00Z")
   private val old = now.minusSeconds(7200)
   private val accountId = AccountId.unsafeFromString("account_ponta")
-  private val bytes = TestImages.png1x1
+  private val bytes = TestImages.blackPixelPng
   private val quota = SourceImageQuota(1000, Long.MaxValue)
   private val config = SourceImageObjectReconcilerConfig(
     staleStateAge = 1.minute,
@@ -59,6 +59,40 @@ final class SourceImageObjectReconcilerSpec extends IntegrationSuite:
     yield
       assertEquals(stats.recovered, 1)
       assertEquals(stored.map(_.status), Some(SourceImageStatus.Available))
+
+  List(
+    "provider" -> bytes,
+    "database" -> TestImages.whitePixelPng,
+  ).foreach { (mismatch, declaredBytes) =>
+    test(s"RESERVED and FAILED rows cannot recover when the $mismatch checksum differs"):
+      val replacement = TestImages.whitePixelPng
+      val declaredHash = Sha256Hex.digest(declaredBytes)
+      val reserved = reservation("source-reserved-integrity", old)
+      val failed = reservation("source-failed-integrity", old)
+      val repository = PostgresSourceImagesRepository[IO](transactor)
+      for
+        objects <- RecordingSourceImageObjectStorage.create
+        _ <- List(reserved, failed).traverse_ { candidate =>
+          repository.reserveWithinQuota(candidate, quota) *>
+            objects.put(candidate.objectKey, candidate.mediaType, declaredBytes, declaredHash) *>
+            objects.tamper(candidate.objectKey.value, replacement)
+        }
+        _ <-
+          repository.markUploadFailed(failed.id, SourceImageFailureCode.ObjectPutUnavailable, old)
+        stats <- reconciler(repository, objects).flatMap(_.runOnce)
+        stored <- repository.find(reserved.id)
+        purged <- repository.find(failed.id)
+      yield
+        assertEquals(stats.recovered, 0)
+        assertEquals(stats.markedFailed, 1)
+        assertEquals(stats.purgedFailed, 1)
+        assertEquals(stored.map(_.status), Some(SourceImageStatus.Failed))
+        assertEquals(
+          stored.flatMap(_.failureCode),
+          Some(SourceImageFailureCode.ObjectIntegrityViolation)
+        )
+        assertEquals(purged, None)
+  }
 
   test("a stale missing reservation is marked FAILED and a much older FAILED row is purged"):
     val missing = reservation("source-reconcile-missing", old)

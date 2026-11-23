@@ -42,7 +42,10 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
       assertEquals(put.map(_.sha256), Right(sha256))
       assertEquals(head.map(_.sizeBytes), Right(bytes.length.toLong))
       assertEquals(get.map(_.metadata.mediaType), Right("image/png"))
-      assertEquals(get.map(_.bytes.toList), Right(bytes.toList))
+      val stored = get.fold(error => fail(s"expected readable image, got $error"), identity)
+      val consumerArray = stored.bytes.toArraySlice[Byte]
+      consumerArray.values(consumerArray.offset) = 0
+      assertEquals(stored.bytes.toList, bytes.toList)
       assertEquals(deleted, Right(()))
       assertEquals(deletedAgain, Right(()))
       assertEquals(missing, Left(SourceImageObjectFailure.NotFound))
@@ -93,14 +96,15 @@ final class R2SourceImageObjectStorageSpec extends MomoCatsEffectSuite:
         writes.flatMap(_.toOption).headOption.map(_.sha256)
       )
 
-  test("get rejects content modified after upload"):
+  test("get rejects a different, same-size image under the uploaded checksum"):
+    val original = TestImages.blackPixelPng
     val client = StubS3Client()
     val storage = R2SourceImageObjectStorage.fromClient[IO](client, bucket)
 
     for
-      stored <- storage.put(key, "image/png", bytes, sha256)
+      stored <- storage.put(key, "image/png", original, Sha256Hex.digest(original))
       _ = assert(stored.isRight)
-      _ = client.tamperBody(Array[Byte](1, 2, 3))
+      _ = client.tamperBody(TestImages.whitePixelPng)
       result <- storage.get(key)
     yield assertEquals(result, Left(SourceImageObjectFailure.IntegrityViolation))
 

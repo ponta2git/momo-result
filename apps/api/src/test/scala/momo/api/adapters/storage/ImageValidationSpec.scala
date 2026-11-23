@@ -5,6 +5,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 
 import munit.FunSuite
 
+import momo.api.ports.storage.ImageValidation
 import momo.api.testing.TestImages
 
 final class ImageValidationSpec extends FunSuite:

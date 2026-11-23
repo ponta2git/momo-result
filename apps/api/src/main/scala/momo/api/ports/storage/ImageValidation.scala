@@ -1,9 +1,9 @@
-package momo.api.adapters.storage
+package momo.api.ports.storage
 
 import momo.api.errors.AppError
 
-private[storage] object ImageValidation:
-  val MaxBytes = momo.api.ports.storage.SourceImageObjectStorage.MaxUploadBytes
+private[api] object ImageValidation:
+  val MaxBytes = SourceImageObjectStorage.MaxUploadBytes
   val MaxWidth = 1920
   val MaxHeight = 1080
   val MaxDimensionsLabel = s"${MaxWidth.toString}x${MaxHeight.toString}"

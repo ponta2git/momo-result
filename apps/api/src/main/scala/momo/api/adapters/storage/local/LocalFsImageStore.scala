@@ -8,9 +8,8 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.Async
 import cats.effect.std.Random
 import cats.syntax.all.*
-import fs2.Stream
+import fs2.{Chunk, Stream}
 
-import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.*
 import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.{AppError, AppException}
@@ -58,11 +57,11 @@ final class LocalFsImageStore[F[_]: Async: Random](root: Path)
           metadata.sha256.value == image.sha256
         then Async[F].pure(stored.bytes)
         else
-          Async[F].raiseError[Array[Byte]](storageError(
+          Async[F].raiseError[Chunk[Byte]](storageError(
             SourceImageObjectFailure.IntegrityViolation
           ))
       }
-  }.flatMap(bytes => Stream.emits(bytes).covary[F])
+  }.flatMap(Stream.chunk)
 
   override def delete(imageId: ImageId): F[Boolean] = Async[F].blocking {
     imagePaths(imageId).foldLeft(false)((deleted, path) => Files.deleteIfExists(path) || deleted)

@@ -19,8 +19,8 @@ import software.amazon.awssdk.retries.DefaultRetryStrategy
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
 
-import momo.api.adapters.storage.ImageValidation
 import momo.api.ports.storage.{
+  ImageValidation,
   Sha256Hex,
   SourceImageObject,
   SourceImageObjectFailure,
@@ -204,15 +204,7 @@ object R2SourceImageObjectStorage:
     response.contentLength(),
     response.metadata(),
     response.eTag(),
-  ).flatMap { objectMetadata =>
-    val bytes = input.readNBytes(ImageValidation.MaxBytes + 1)
-    Either.cond(
-      bytes.length.toLong == objectMetadata.sizeBytes &&
-        Sha256Hex.digest(bytes) == objectMetadata.sha256,
-      SourceImageObject(objectMetadata, bytes),
-      SourceImageObjectFailure.IntegrityViolation,
-    )
-  }
+  ).flatMap(objectMetadata => SourceImageObject.read(key, input, Some(objectMetadata)))
 
   private def failureFor(error: Throwable): SourceImageObjectFailure = error match
     case _: NoSuchKeyException => SourceImageObjectFailure.NotFound

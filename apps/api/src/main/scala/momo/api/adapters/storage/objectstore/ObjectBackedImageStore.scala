@@ -4,10 +4,9 @@ import java.time.Instant
 
 import cats.effect.Async
 import cats.syntax.all.*
-import fs2.Stream
+import fs2.{Chunk, Stream}
 import org.slf4j.LoggerFactory
 
-import momo.api.adapters.storage.ImageValidation
 import momo.api.domain.ids.{AccountId, ImageId}
 import momo.api.domain.{StoredImage, StoredImageLocation}
 import momo.api.errors.{AppError, AppException}
@@ -57,7 +56,7 @@ final class ObjectBackedImageStore[F[_]: Async](
   }
 
   override def readStream(image: StoredImage): Stream[F, Byte] = Stream.eval(read(image)).flatMap {
-    case Right(bytes) => Stream.emits(bytes).covary[F]
+    case Right(bytes) => Stream.chunk(bytes)
     case Left(error) => Stream.raiseError[F](AppException(error))
   }
 
@@ -191,7 +190,7 @@ final class ObjectBackedImageStore[F[_]: Async](
     sourceImages.markUploadFailed(imageId, failureCode, timestamp).as(Left(StorageUnavailable))
   )
 
-  private def read(image: StoredImage): F[Either[AppError, Array[Byte]]] = sourceImages
+  private def read(image: StoredImage): F[Either[AppError, Chunk[Byte]]] = sourceImages
     .find(image.imageId).flatMap {
       case None => Async[F].pure(Left(AppError.NotFound("source image", image.imageId.value)))
       case Some(record) if record.status != SourceImageStatus.Available =>

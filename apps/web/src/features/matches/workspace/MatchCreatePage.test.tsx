@@ -22,6 +22,7 @@ import type { ConfirmMatchRequest } from "@/shared/api/matches";
 import { heldEventsQueryOptions } from "@/shared/api/queryOptions";
 import { authMeQueryKeyFor } from "@/shared/auth/authQueries";
 import { heldEventPickerPageSize } from "@/shared/heldEvents/useHeldEventPickerDirectory";
+import { toLocalDateTimeInputValue } from "@/shared/lib/dateTime";
 import { ToastHost } from "@/shared/ui/feedback/ToastHost";
 import { setDevUser, testDevUserAccountId } from "@/test/auth";
 import { createDeferred } from "@/test/deferred";
@@ -186,11 +187,13 @@ describe("MatchCreatePage", () => {
     },
   );
 
-  it("initializes from the latest picker page without fetching a second directory", async () => {
+  it("loads the latest event and reads the first directory page only when choosing an event", async () => {
     setDevUser();
     queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 10_000 } });
     const requests: URLSearchParams[] = [];
+    const latest = vi.fn(() => HttpResponse.json({ latestHeldEventId: "held-latest" }));
     server.use(
+      http.get("/api/held-events/lookup/latest", latest),
       http.get("/api/held-events", ({ request }) => {
         requests.push(new URL(request.url).searchParams);
         return HttpResponse.json({
@@ -238,12 +241,23 @@ describe("MatchCreatePage", () => {
     );
     await waitForMatchCreateReady();
     await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("9"));
-    // The newest event is read on its own for its number and previous match, not a second page.
+    expect(latest).toHaveBeenCalledTimes(1);
     expect(contextReads).toEqual(["held-latest"]);
-    expect(requests).toHaveLength(1);
+    expect(requests).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "開催（必須）を変更" }));
+    await waitFor(() => expect(requests).toHaveLength(1));
     expect(requests[0]?.get("page")).toBe("1");
     expect(requests[0]?.get("pageSize")).toBe("20");
     expect(requests[0]?.has("limit")).toBe(false);
+    const empty = screen.getByRole("radio", { name: /未選択/u });
+    await waitFor(() => expect(empty).toBeEnabled());
+    await user.click(empty);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "開催（必須）を変更" })).toHaveAccessibleDescription(
+      /未選択/u,
+    );
+    expect(latest).toHaveBeenCalledTimes(1);
+    expect(contextReads).toEqual(["held-latest"]);
   });
 
   it("restores input on native Back and saves it again before native Forward without discarding", async () => {
@@ -493,22 +507,11 @@ describe("MatchCreatePage", () => {
 
   it("prefills the requested held event with its server-supplied next match number", async () => {
     setDevUser();
-    const summary = vi.fn(() => new HttpResponse(null, { status: 500 }));
+    const unrelatedRead = vi.fn(() => new HttpResponse(null, { status: 500 }));
     server.use(
-      http.get("/api/held-events/held-requested/summary", summary),
-      http.get("/api/held-events", () =>
-        HttpResponse.json({
-          items: [
-            {
-              draftCount: 0,
-              heldAt: "2026-02-01T00:00:00.000Z",
-              id: "held-latest",
-              matchCount: 1,
-              nextMatchNo: 2,
-            },
-          ],
-        }),
-      ),
+      http.get("/api/held-events/held-requested/summary", unrelatedRead),
+      http.get("/api/held-events/lookup/latest", unrelatedRead),
+      http.get("/api/held-events", unrelatedRead),
       http.get("/api/held-events/:heldEventId/record-context", ({ params }) =>
         HttpResponse.json(
           makeHeldEventRecordContext({
@@ -537,7 +540,53 @@ describe("MatchCreatePage", () => {
       expect(screen.getByText(/確定済み3試合・未確定下書き2件/u)).toBeInTheDocument();
       expect(screen.getByLabelText("試合番号")).toHaveValue("8");
     });
-    expect(summary).not.toHaveBeenCalled();
+    expect(unrelatedRead).not.toHaveBeenCalled();
+  });
+
+  it("retries the requested event and uses the latest only when it was deleted", async () => {
+    setDevUser();
+    const reads: string[] = [];
+    let deleted = false;
+    server.use(
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) => {
+        const id = String(params["heldEventId"]);
+        reads.push(id);
+        if (id === "held-requested") {
+          return deleted
+            ? HttpResponse.json(
+                {
+                  type: "about:blank",
+                  title: "Not Found",
+                  detail: "Held event not found",
+                  status: 404,
+                  code: "NOT_FOUND",
+                },
+                { status: 404 },
+              )
+            : HttpResponse.json({ detail: "temporarily unavailable" }, { status: 503 });
+        }
+        return HttpResponse.json(makeHeldEventRecordContext({ id, nextMatchNo: 6 }));
+      }),
+      http.get("/api/held-events/lookup/latest", () => {
+        reads.push("latest");
+        return HttpResponse.json({ latestHeldEventId: "held-fallback" });
+      }),
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/matches/new?heldEventId=held-requested"]}>
+          <MatchCreatePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const retry = await screen.findByRole("button", { name: "失敗したデータを再読み込み" });
+    expect(reads).toEqual(["held-requested"]);
+    deleted = true;
+    await user.click(retry);
+    await waitForMatchCreateReady();
+    expect(screen.getByLabelText("試合番号")).toHaveValue("6");
+    expect(reads).toEqual(["held-requested", "held-requested", "latest", "held-fallback"]);
   });
 
   it("numbers the match from a fresh read of its held event, not an older list entry", async () => {
@@ -791,11 +840,16 @@ describe("MatchCreatePage", () => {
   it("initializes from a draft summary after its initial request is retried", async () => {
     setDevUser();
     let failDraftDetail = true;
+    const draft = makeMatchDraftReviewResponse("draft-retry", {
+      matchNoInEvent: 7,
+      playedAt: "2026-04-08T12:00:00.000Z",
+    });
+    delete draft.draft.heldEventId;
     server.use(
       http.get("/api/match-drafts/draft-retry/review", () =>
         failDraftDetail
           ? HttpResponse.json({ detail: "draft unavailable" }, { status: 500 })
-          : HttpResponse.json(makeMatchDraftReviewResponse("draft-retry", { matchNoInEvent: 7 })),
+          : HttpResponse.json(draft),
       ),
     );
 
@@ -816,14 +870,27 @@ describe("MatchCreatePage", () => {
     await user.click(screen.getByRole("button", { name: "失敗したデータを再読み込み" }));
 
     await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue("7"));
+    expect(screen.getByLabelText("対戦日時（必須）")).toHaveValue(
+      toLocalDateTimeInputValue(draft.draft.playedAt),
+    );
     expect(screen.queryByText("画面データを読み込めません")).not.toBeInTheDocument();
   });
 
-  it("shows a held-event API failure beside the creation operation", async () => {
+  it("can create its first held event after a failed attempt", async () => {
     setDevUser();
+    const reads: string[] = [];
+    let failCreation = true;
     server.use(
+      http.get("/api/held-events/lookup/latest", () => HttpResponse.json({})),
+      http.get("/api/held-events/:heldEventId/record-context", ({ params }) => {
+        const id = String(params["heldEventId"]);
+        reads.push(id);
+        return HttpResponse.json(makeHeldEventRecordContext({ id, nextMatchNo: 1 }));
+      }),
       http.post("/api/held-events", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
+        failCreation
+          ? HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 })
+          : HttpResponse.json(makeHeldEventListItem({ id: "held-created", nextMatchNo: 1 })),
       ),
     );
 
@@ -838,6 +905,7 @@ describe("MatchCreatePage", () => {
     );
 
     await waitForMatchCreateReady();
+    expect(reads).toEqual([]);
     const eventDisclosure = screen.getByText("一覧にない開催を追加する");
     await user.click(eventDisclosure);
     await user.click(screen.getByRole("button", { name: "作成して選択" }));
@@ -847,5 +915,9 @@ describe("MatchCreatePage", () => {
     expect(notice).toHaveTextContent("試合条件も変更していません");
     expect(notice).toHaveTextContent("もう一度作成してください");
     expect(screen.getByRole("button", { name: "作成して選択" })).toBeEnabled();
+    failCreation = false;
+    await user.click(screen.getByRole("button", { name: "作成して選択" }));
+    await waitFor(() => expect(reads).toEqual(["held-created"]));
+    expect(screen.getByLabelText("試合番号")).toHaveValue("1");
   });
 });

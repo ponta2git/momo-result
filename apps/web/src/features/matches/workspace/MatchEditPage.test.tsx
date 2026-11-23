@@ -80,12 +80,11 @@ describe("MatchEditPage", () => {
     );
 
     await waitFor(() =>
-      expect(requested).toEqual(
-        new Set(["held-events", "game-titles", "member-aliases", "match-detail"]),
-      ),
+      expect(requested).toEqual(new Set(["game-titles", "member-aliases", "match-detail"])),
     );
     directoryGate.resolve();
     await waitForMatchEditReady();
+    expect(requested.has("held-events")).toBe(false);
   });
 
   it("keeps save unavailable until the saved match has loaded", async () => {

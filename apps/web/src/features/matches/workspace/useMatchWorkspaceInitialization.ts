@@ -6,7 +6,6 @@ import type {
 } from "@/features/matches/workspace/matchFormTypes";
 import {
   buildWorkspaceInitialData,
-  initialWorkspaceHeldEventPatch,
   isWorkspaceInitialDataReady,
 } from "@/features/matches/workspace/matchWorkspaceInitialization";
 import type {
@@ -28,13 +27,11 @@ export type MatchWorkspaceInitializationState =
   | { status: "ready"; snapshot: InitializedWorkspaceSnapshot };
 
 export type MatchWorkspaceInitializationOptions = MatchWorkspaceInitializationSource & {
-  onSelectHeldEvent: (id: string, event: HeldEventResponse | undefined) => void;
+  initialHeldEvent: HeldEventResponse | undefined;
+  initializationFailed: boolean;
   onFillSetup: (patch: Partial<RecordSetupChoice>) => void;
   initialized: boolean;
-  heldEventId: string;
-  heldEvents: readonly HeldEventResponse[];
   onInitialize: (values: MatchFormValues, workspaceData: MatchWorkspaceInitialData | null) => void;
-  preferredHeldEventId: string | undefined;
   recordContextPending: boolean;
   readNowIso: () => string;
   setup: RecordSetupChoice;
@@ -49,41 +46,34 @@ export type MatchWorkspaceInitializationOptions = MatchWorkspaceInitializationSo
 export function useMatchWorkspaceInitialization(
   params: MatchWorkspaceInitializationOptions,
 ): MatchWorkspaceInitializationState {
-  const { onFillSetup, onSelectHeldEvent, onInitialize, readNowIso, recordContextPending } = params;
+  const { onFillSetup, onInitialize, readNowIso, recordContextPending } = params;
   const [initial, setInitial] = useState<ReturnType<typeof buildWorkspaceInitialData> | null>(null);
-  if (initial === null && isWorkspaceInitialDataReady(params)) {
-    setInitial(buildWorkspaceInitialData(params, readNowIso()));
+  if (
+    initial === null &&
+    !recordContextPending &&
+    !params.initializationFailed &&
+    isWorkspaceInitialDataReady(params)
+  ) {
+    const data = buildWorkspaceInitialData(params, readNowIso());
+    const event = params.initialHeldEvent;
+    if (event && !data.values.heldEventId) {
+      data.values = {
+        ...data.values,
+        heldEventId: event.id,
+        matchNoInEvent: params.draftDetail?.matchNoInEvent ?? event.nextMatchNo,
+        playedAt: params.draftDetail?.playedAt ?? event.heldAt,
+      };
+    }
+    setInitial(data);
   }
   useLayoutEffect(() => {
     if (initial && !params.initialized) onInitialize(initial.values, initial.workspaceData);
   }, [initial, onInitialize, params.initialized]);
   const initializedSnapshot = params.initialized ? (initial?.snapshot ?? null) : null;
 
-  const initialHeldEventPatch = initialWorkspaceHeldEventPatch({
-    initialized: initializedSnapshot !== null,
-    mode: params.mode,
-    heldEventId: params.heldEventId,
-    heldEvents: params.heldEvents,
-    preferredHeldEventId: params.preferredHeldEventId,
-    preferredHeldEventPending: recordContextPending,
-  });
-  useEffect(() => {
-    if (!initialHeldEventPatch) return;
-    const id = initialHeldEventPatch.heldEventId;
-    if (id)
-      onSelectHeldEvent(
-        id,
-        params.heldEvents.find((event) => event.id === id),
-      );
-  }, [onSelectHeldEvent, initialHeldEventPatch, params.heldEvents]);
-
   // Once the held event is chosen, its previous match or a lone candidate fills the conditions
   // still empty; this also applies after a change of 作品 clears シーズン and マップ.
-  const settingUp =
-    initializedSnapshot !== null &&
-    params.mode !== "edit" &&
-    !initialHeldEventPatch &&
-    !recordContextPending;
+  const settingUp = initializedSnapshot !== null && params.mode !== "edit" && !recordContextPending;
   const setupFill = settingUp
     ? fillRecordSetup({
         value: params.setup,
@@ -105,7 +95,7 @@ export function useMatchWorkspaceInitialization(
 
   // Ready is reached once: defaults filled after the user's own changes do not reopen setup,
   // which would reset the baseline that tells the user's input apart.
-  const settled = !(recordContextPending || initialHeldEventPatch || fillKey || awaitingCandidates);
+  const settled = !(recordContextPending || fillKey || awaitingCandidates);
   const [readySnapshot, setReadySnapshot] = useState<InitializedWorkspaceSnapshot | null>(null);
   if (initializedSnapshot && settled && readySnapshot !== initializedSnapshot) {
     setReadySnapshot(initializedSnapshot);

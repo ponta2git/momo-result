@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  mergeHeldEventItems,
+  preferHeldEventItem,
   syncHeldEventCreatedCache,
   syncHeldEventDeletedCache,
 } from "@/shared/api/heldEventCache";
@@ -27,10 +27,10 @@ const newerEvent: HeldEventResponse = {
 };
 
 describe("held event cache contract", () => {
-  it("prepends an individually loaded event only when the list does not contain it", () => {
-    expect(mergeHeldEventItems([newerEvent], olderEvent)).toEqual([olderEvent, newerEvent]);
-    expect(mergeHeldEventItems([newerEvent], { ...newerEvent, matchCount: 9 })).toEqual([
-      newerEvent,
+  it("uses the individual event for an off-page selection and a stale page entry", () => {
+    expect(preferHeldEventItem([newerEvent], olderEvent)).toEqual([olderEvent, newerEvent]);
+    expect(preferHeldEventItem([newerEvent], { ...newerEvent, matchCount: 9 })).toEqual([
+      { ...newerEvent, matchCount: 9 },
     ]);
   });
 

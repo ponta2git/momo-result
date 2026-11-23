@@ -38,7 +38,7 @@ export type MatchWorkspaceSetupFieldsView = {
   };
   options: {
     gameTitleItems: GameTitleResponse[];
-    heldEventPicker: HeldEventPickerDirectory;
+    heldEventPicker: HeldEventPickerDirectory & { onOpenChange: (open: boolean) => void };
     heldEvents: HeldEventResponse[];
     mapItems: MapMasterResponse[];
     /** The selected title's seasons or maps are still being fetched for the first time. */

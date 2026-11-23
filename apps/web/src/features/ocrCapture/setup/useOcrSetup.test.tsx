@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { OcrSetupPanel } from "@/features/ocrCapture/setup/OcrSetupPanel";
 import type { OcrSetupValues } from "@/features/ocrCapture/setup/ocrSetupSchema";
@@ -115,14 +115,21 @@ describe("useOcrSetup", () => {
     },
   );
 
-  it("shares the first picker page and retries a failed request only once", async () => {
+  it("keeps an unscoped capture unassigned and reads the directory only on opening and retry", async () => {
     const user = userEvent.setup();
     const requests: URLSearchParams[] = [];
+    const eventRead = vi.fn(() => HttpResponse.error());
+    const event = makeHeldEventResponse({ id: "held-picked", nextMatchNo: 2 });
+    const recordContext = vi.fn(() =>
+      HttpResponse.json(makeHeldEventRecordContext({ ...event, nextMatchNo: 8 })),
+    );
     server.use(
       http.get("/api/held-events", ({ request }) => {
         requests.push(new URL(request.url).searchParams);
-        return requests.length === 1 ? HttpResponse.error() : HttpResponse.json({ items: [] });
+        return requests.length === 1 ? HttpResponse.error() : HttpResponse.json({ items: [event] });
       }),
+      http.get("/api/held-events/held-picked/record-context", recordContext),
+      http.get("/api/held-events/*", eventRead),
     );
     const queryClient = createTestQueryClient();
     render(
@@ -138,20 +145,28 @@ describe("useOcrSetup", () => {
       </QueryClientProvider>,
     );
     await waitFor(() =>
-      expect(screen.getByLabelText("setup value")).toHaveAttribute(
-        "data-error",
-        "応答を受け取れませんでした。",
-      ),
+      expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled(),
     );
+    expect(readSetupValue().heldEventId).toBeUndefined();
+    expect(requests).toHaveLength(0);
+    expect(eventRead).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "開催（任意）を変更" }));
+    const retry = await screen.findByRole("button", { name: "開催候補を再取得" });
     expect(requests).toHaveLength(1);
     expect(requests[0]?.get("page")).toBe("1");
     expect(requests[0]?.get("pageSize")).toBe("20");
     expect(requests[0]?.has("limit")).toBe(false);
-    await user.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+    await user.click(retry);
     await waitFor(() =>
-      expect(screen.getByLabelText("setup value")).toHaveAttribute("data-error", ""),
+      expect(screen.queryByRole("button", { name: "開催候補を再取得" })).not.toBeInTheDocument(),
     );
     expect(requests).toHaveLength(2);
+    expect(recordContext).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("radio", { name: "2026/01/01 09:00" }));
+    await waitFor(() => expect(screen.getByLabelText("試合番号")).toHaveValue(8));
+    expect(readSetupValue().heldEventId).toBe("held-picked");
+    expect(recordContext).toHaveBeenCalledOnce();
+    expect(eventRead).not.toHaveBeenCalled();
   });
 
   it("fills both missing selections from the shared directories", async () => {
@@ -272,6 +287,7 @@ describe("useOcrSetup", () => {
       value: makeHeldEventRecordContext(heldEvent),
     });
 
+    const directory = vi.fn(() => HttpResponse.error());
     const refreshStarted = createDeferred();
     const refreshResponse = createDeferred();
     server.use(
@@ -288,10 +304,7 @@ describe("useOcrSetup", () => {
         await refreshResponse.promise;
         return HttpResponse.json({ items: [seasonMaster, otherSeason] });
       }),
-      http.get("/api/held-events", async () => {
-        await refreshResponse.promise;
-        return HttpResponse.json({ items: [{ ...heldEvent, nextMatchNo: 9 }] });
-      }),
+      http.get("/api/held-events", directory),
       http.get(`/api/held-events/${heldEvent.id}/record-context`, async () => {
         await refreshResponse.promise;
         return HttpResponse.json(makeHeldEventRecordContext({ ...heldEvent, nextMatchNo: 9 }));
@@ -329,6 +342,7 @@ describe("useOcrSetup", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("setup value")).toHaveAttribute("data-refreshing", "false"),
     );
+    expect(directory).not.toHaveBeenCalled();
     expect(readSetupValue()).toEqual({
       gameTitleId: gameTitle.id,
       heldEventId: heldEvent.id,
@@ -340,7 +354,83 @@ describe("useOcrSetup", () => {
     expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled();
   });
 
-  it("preserves the selected held event when its detail request fails transiently", async () => {
+  it.each([
+    { cached: "found", status: 500 },
+    { cached: "notFound", status: 404 },
+  ] as const)(
+    "waits for a successful context read after a cached $cached and a non-authoritative $status",
+    async ({ cached, status }) => {
+      const user = userEvent.setup();
+      const queryClient = createTestQueryClient();
+      const event = makeHeldEventResponse({ id: "held-requested", nextMatchNo: 3 });
+      queryClient.setQueryData(
+        heldEventKeys.recordContext(event.id),
+        cached === "found"
+          ? { kind: "found", value: makeHeldEventRecordContext(event) }
+          : { kind: "notFound" },
+      );
+      queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [event] });
+      const firstRequest = createDeferred();
+      const firstResponse = createDeferred();
+      server.use(
+        http.get(
+          "/api/held-events/held-requested/record-context",
+          async () => {
+            firstRequest.resolve();
+            await firstResponse.promise;
+            return HttpResponse.json({ detail: "temporarily unavailable" }, { status });
+          },
+          { once: true },
+        ),
+        http.get("/api/held-events/held-requested/record-context", () =>
+          HttpResponse.json(makeHeldEventRecordContext({ ...event, nextMatchNo: 8 })),
+        ),
+      );
+      render(
+        <QueryClientProvider client={queryClient}>
+          <SetupOptionsHarness
+            initialValue={{
+              gameTitleId: gameTitle.id,
+              heldEventId: event.id,
+              mapMasterId: mapMaster.id,
+              ownerMemberId: "member_ponta",
+              seasonMasterId: seasonMaster.id,
+            }}
+          />
+        </QueryClientProvider>,
+      );
+
+      try {
+        await firstRequest.promise;
+        expect(readSetupValue().heldEventId).toBe(event.id);
+        expect(readSetupValue().matchNoInEvent).toBeUndefined();
+        expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
+      } finally {
+        firstResponse.resolve();
+      }
+      await waitFor(() =>
+        expect(screen.getByLabelText("setup value")).toHaveAttribute(
+          "data-error",
+          "応答を受け取れませんでした。",
+        ),
+      );
+      expect(readSetupValue().heldEventId).toBe(event.id);
+      expect(readSetupValue().matchNoInEvent).toBeUndefined();
+      if (cached === "found") {
+        await user.type(screen.getByLabelText("試合番号"), "12");
+      }
+      expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeDisabled();
+
+      await user.click(screen.getByRole("button", { name: "選択肢を再取得" }));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "読み取りを開始" })).toBeEnabled(),
+      );
+      expect(readSetupValue().heldEventId).toBe(event.id);
+      expect(readSetupValue().matchNoInEvent).toBe(cached === "found" ? 12 : 8);
+    },
+  );
+
+  it("clears a missing event even if it remains on a cached directory page", async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
     queryClient.setQueryDefaults(heldEventKeys.all(), {
@@ -354,54 +444,21 @@ describe("useOcrSetup", () => {
     queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
       items: [seasonMaster],
     });
-    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
-    server.use(
-      http.get("/api/held-events/held-requested/record-context", () =>
-        HttpResponse.json({ detail: "temporarily unavailable" }, { status: 500 }),
-      ),
-    );
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <SetupOptionsHarness
-          initialValue={{
-            gameTitleId: gameTitle.id,
-            heldEventId: "held-requested",
-            mapMasterId: mapMaster.id,
-            ownerMemberId: "member_ponta",
-            seasonMasterId: seasonMaster.id,
-          }}
-        />
-      </QueryClientProvider>,
-    );
-
-    await waitFor(() =>
-      expect(screen.getByLabelText("setup value")).toHaveAttribute(
-        "data-error",
-        "応答を受け取れませんでした。",
-      ),
-    );
-    expect(readSetupValue().heldEventId).toBe("held-requested");
-  });
-
-  it("clears the selected held event only after an authoritative 404", async () => {
-    const queryClient = createTestQueryClient();
-    queryClient.setQueryDefaults(masterKeys.all(), { staleTime: Number.POSITIVE_INFINITY });
-    queryClient.setQueryDefaults(heldEventKeys.all(), {
-      retry: false,
-      staleTime: Number.POSITIVE_INFINITY,
+    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), {
+      items: [makeHeldEventResponse({ id: "held-missing" })],
     });
-    queryClient.setQueryData(masterKeys.gameTitles.list(), { items: [gameTitle] });
-    queryClient.setQueryData(masterKeys.mapMasters.list(gameTitle.id), {
-      items: [mapMaster],
-    });
-    queryClient.setQueryData(masterKeys.seasonMasters.list(gameTitle.id), {
-      items: [seasonMaster],
-    });
-    queryClient.setQueryData(heldEventKeys.list({ page: 1, pageSize: 20 }), { items: [] });
     server.use(
       http.get("/api/held-events/held-missing/record-context", () =>
-        HttpResponse.json({ code: "NOT_FOUND", detail: "not found" }, { status: 404 }),
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Not Found",
+            status: 404,
+            detail: "Held event not found",
+            code: "NOT_FOUND",
+          },
+          { status: 404 },
+        ),
       ),
     );
 

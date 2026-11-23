@@ -9,17 +9,28 @@ test("opens the latest event and starts manual and OCR records with its current 
   await installUiAuth(page);
   await page.goto("/");
   await expect(page).toHaveURL(`/held-events/${confirmedContext.heldEventId}`);
+  let directoryReads = 0;
+  page.on("request", (request) => {
+    if (request.method() === "GET" && new URL(request.url()).pathname === "/api/held-events") {
+      directoryReads += 1;
+    }
+  });
   await page.getByRole("link", { name: "手入力", exact: true }).click();
   await expect(page.getByLabel("試合番号", { exact: true })).toHaveValue("5");
   await expect(page.getByRole("combobox", { name: "マップ（必須）" })).toHaveText(
     confirmedContext.mapName,
   );
+  expect(directoryReads).toBe(0);
   await page.goBack();
   await page.getByRole("link", { name: "OCR取り込み", exact: true }).click();
   await expect(page.getByLabel("試合番号", { exact: true })).toHaveValue("5");
   await expect(page.getByRole("combobox", { name: "マップ", exact: true })).toHaveText(
     confirmedContext.mapName,
   );
+  expect(directoryReads).toBe(0);
+  await page.getByRole("button", { name: "開催（任意）を変更" }).click();
+  await expect(page.getByRole("dialog", { name: "開催を選択" })).toBeVisible();
+  await expect.poll(() => directoryReads).toBe(1);
 });
 
 test("keeps keyboard filtering usable while stale held events are protected and the request is retried", async ({

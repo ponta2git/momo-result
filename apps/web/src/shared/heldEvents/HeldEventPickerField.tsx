@@ -23,6 +23,8 @@ type HeldEventPickerFieldProps = Omit<
   selectedHeldEvent?: HeldEventResponse | undefined;
   unavailableLabel?: string | undefined;
   value: string;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  onRetry?: (() => void) | undefined;
   onPageChange?: ((page: number) => void) | undefined;
   onValueChange: (value: string, event: HeldEventResponse | undefined) => void;
 };

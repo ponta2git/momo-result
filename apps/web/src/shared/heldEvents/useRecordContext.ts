@@ -13,9 +13,10 @@ export function useRecordContext(heldEventId: string | undefined, enabled = true
   const query = useQuery(heldEventRecordContextQueryOptions(heldEventId, active));
   const context = query.data?.kind === "found" ? query.data.value : undefined;
   return {
+    confirmed: active && query.isSuccess && query.fetchStatus === "idle",
     event: context?.event,
     previous: context?.previousMatch,
-    pending: active && query.isFetching && (query.isStale || query.data === undefined),
+    pending: active && query.fetchStatus !== "idle" && (query.isStale || query.data === undefined),
     fetching: active && query.isFetching,
     notFound: query.data?.kind === "notFound",
     error: query.error,

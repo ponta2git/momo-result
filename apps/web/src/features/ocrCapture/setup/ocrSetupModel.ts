@@ -9,13 +9,11 @@ import type {
 import { fillRecordSetup } from "@/shared/heldEvents/recordContext";
 import type { RecordSetupChoice } from "@/shared/heldEvents/recordContext";
 
-export type HeldEventContextState = "idle" | "pending" | "resolved" | "notFound" | "failed";
-
 export type OcrSetupResolution = { kind: "ready"; value: OcrSetupValues } | { kind: "blocked" };
 
 export type OcrSetupChange =
   | { kind: "gameTitle"; id: string }
-  | { kind: "heldEvent"; id: string; nextMatchNo: number | undefined }
+  | { kind: "heldEvent"; id: string }
   | { kind: "map"; id: string }
   | { kind: "season"; id: string }
   | { kind: "owner"; id: string }
@@ -27,7 +25,9 @@ export function changeOcrSetupValue(value: OcrSetupValues, change: OcrSetupChang
     case "gameTitle":
       return { ...value, gameTitleId: change.id, mapMasterId: "", seasonMasterId: "" };
     case "heldEvent":
-      return { ...value, heldEventId: change.id, matchNoInEvent: change.nextMatchNo };
+      return change.id === (value.heldEventId ?? "")
+        ? value
+        : { ...value, heldEventId: change.id, matchNoInEvent: undefined };
     case "map":
       return { ...value, mapMasterId: change.id };
     case "season":
@@ -66,7 +66,7 @@ export function areOcrSetupChoicesReady({
   enabled,
   loading,
   failed,
-  heldEventContext,
+  recordContextReady,
   selectedGameTitle,
   mapMasters,
   seasonMasters,
@@ -75,7 +75,7 @@ export function areOcrSetupChoicesReady({
   enabled: boolean;
   loading: boolean;
   failed: boolean;
-  heldEventContext: HeldEventContextState;
+  recordContextReady: boolean;
   selectedGameTitle: GameTitleResponse | undefined;
   mapMasters: readonly MapMasterResponse[];
   seasonMasters: readonly SeasonMasterResponse[];
@@ -85,8 +85,7 @@ export function areOcrSetupChoicesReady({
     enabled &&
     !loading &&
     !failed &&
-    heldEventContext !== "notFound" &&
-    heldEventContext !== "failed" &&
+    recordContextReady &&
     Boolean(selectedGameTitle && value.ownerMemberId) &&
     mapMasters.some(
       (item) => item.id === value.mapMasterId && item.gameTitleId === value.gameTitleId,
@@ -95,24 +94,6 @@ export function areOcrSetupChoicesReady({
       (item) => item.id === value.seasonMasterId && item.gameTitleId === value.gameTitleId,
     )
   );
-}
-
-export function resolveHeldEventContext(input: {
-  detailErrorStatus?: number | undefined;
-  detailFailed: boolean;
-  directoryFailed: boolean;
-  enabled: boolean;
-  fetching: boolean;
-  selected: boolean;
-  selectedId?: string | undefined;
-}): HeldEventContextState {
-  if (!input.enabled || !input.selectedId) return "idle";
-  if (input.selected) return "resolved";
-  if (input.fetching) return "pending";
-  if (input.detailErrorStatus === 404) return "notFound";
-  if (input.detailFailed || input.directoryFailed) return "failed";
-  // A completed lookup without a resource or authoritative 404 is still a failed resolution.
-  return "failed";
 }
 
 export function sameSetupValue(left: OcrSetupValues, right: OcrSetupValues): boolean {
@@ -135,26 +116,26 @@ export function sameSetupValue(left: OcrSetupValues, right: OcrSetupValues): boo
 export function deriveValidSetupValue(args: {
   gameTitles: GameTitleResponse[];
   heldEventNotFound: boolean;
-  heldEvents: HeldEventResponse[];
+  selectedHeldEvent: HeldEventResponse | undefined;
   mapMasters: MapMasterResponse[];
   previousMatchSetup: RecordSetupChoice | undefined;
-  recordContextPending: boolean;
+  canFillDefaults: boolean;
   seasonMasters: SeasonMasterResponse[];
   value: OcrSetupValues;
 }): OcrSetupValues {
-  const { gameTitles, heldEventNotFound, heldEvents, mapMasters, seasonMasters, value } = args;
+  const { gameTitles, heldEventNotFound, selectedHeldEvent, mapMasters, seasonMasters, value } =
+    args;
   let next = value;
   const patch = (partial: Partial<OcrSetupValues>) => {
     next = { ...next, ...partial };
   };
 
   if (next.heldEventId) {
-    const selectedHeldEvent = heldEvents.find((event) => event.id === next.heldEventId);
     if (heldEventNotFound) {
       patch({ heldEventId: "", matchNoInEvent: undefined });
     } else if (
-      selectedHeldEvent &&
-      !args.recordContextPending &&
+      selectedHeldEvent?.id === next.heldEventId &&
+      args.canFillDefaults &&
       (!next.matchNoInEvent || next.matchNoInEvent < 1)
     ) {
       patch({ matchNoInEvent: selectedHeldEvent.nextMatchNo });
@@ -187,7 +168,7 @@ export function deriveValidSetupValue(args: {
     }
   }
 
-  if (!args.recordContextPending) {
+  if (args.canFillDefaults) {
     patch(
       fillRecordSetup({
         value: next,
